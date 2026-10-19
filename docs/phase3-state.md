@@ -8,13 +8,17 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP0 | Baseline & workspace | done | md5 ✓ `fe884d...`; assemble_all REBUILD BYTE-MATCH 37344 B ✓; map 1299 functions; 1299 slices + `_prologue.asm`; jwasm v2.21 vendored and verified (`-bin -Fo` smoke test OK); state + impl log created | 2026-10-20 |
 | CP1 | check_func.py harness + asm-style.md | done | harness proven on 1299/1299 mechanical slices + 3 cleaned seeds (0133 straight-line, 2B8F inline string, 0D21 far externals); style guide committed | 2026-10-20 |
 | CP2 | Pilot: cmd_A..Z + str_out (27) | done | 27/27 check_func green; new tools preclean.py + decode_str.py (str_out-aware re-decode fixed all 5 mis-decode defects); per-function log in impl doc | 2026-10-20 |
-| CP3 | Style gate 🔒 | awaiting-gate | pilot package ready for owner review 2026-10-20 (see Gate log) | 2026-10-20 |
+| CP3 | Style gate 🔒 | done (owner-approved 2026-10-20) | owner: AFTER style = goal; max accurate comments; honest naming, improve in later passes | 2026-10-20 |
 | CP4 | Bulk wave 1: execution-confirmed code | todo | | |
 | CP5 | Bulk wave 2 + dispositions + jwasm dialect | todo | | |
 | CP6 | Full-tree rebuild + sign-off 🔒 | todo | | |
 
 ## Gate log
 
+- **2026-10-20 (owner):** CP3 **approved**. Owner verdict: AFTER style is the
+  goal; directive "more comments the better, as long as they're accurate";
+  naming as honest as possible (proven names only; `sub_<seg>` default;
+  better names in later passes). Bulk waves proceed under these rules.
 - **2026-10-20 — CP3 🔒 AWAITING OWNER REVIEW.** Pilot = 27 files in `asm/`
   (26 `cmd_*` + `str_out`), all `check_func.py` green. Decisions needing
   owner sign-off: (1) `#` comments + `db`/`dw` data dialect normalized by the
