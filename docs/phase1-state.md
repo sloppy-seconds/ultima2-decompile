@@ -11,10 +11,15 @@ checkpoint. See `phase1-plan.md` for the full work order.
 | CP3 | Segment map & memory-dump inventory | done | `disasm/segment-map.md`: CS=017D, DS=0x08BE, 0x0741→0x08BE fixup caveat, +0x200 map; live-ds dump 4096 B, `TEST` @ DS:0x36 confirms layout | 2026-10-19 |
 | CP4 | Seeded Ghidra decompilation | done* | v2 (1125 seeds): 1116 rows, 497 ok = **44.5%** (bar 60% — missed; new seeds are harder fragments; flow-runaway contamination in 134/497 ok bodies flagged) | 2026-10-19 |
 | CP5 | Seeded Reko decompilation | done | v2: 1125/1125 seeds + 169 discovered (1294 defines); 3 contained per-proc failures; original/ byte-clean | 2026-10-19 |
-| CP6 | Byte-check verification 🔒 | in-progress → **awaiting gate** | Sample 44 refreshed + **full-corpus** `bytecheck-full.tsv`: Reko 2 fabrications total; Ghidra fabs all flow-runaway bodies; asm ground truth byte-matches whole file. Zero unflagged. **Awaiting user ratification** | 2026-10-19 |
-| CP7 | Function inventory & sign-off 🔒 | draft ready | `disasm/functions.tsv` (1125 rows) + `disasm/phase1-summary.md` drafted; awaiting CP6 gate decision | 2026-10-19 |
+| CP6 | Byte-check verification 🔒 | **done (owner-approved 2026-10-19)** | Sample 44 + full-corpus `bytecheck-full.tsv`: zero unflagged mismatches; Reko 2 fabrications total; Ghidra fabs all flow-runaway (moot after Ghidra demotion). Owner ratified | 2026-10-19 |
+| CP7 | Function inventory & sign-off 🔒 | **done (owner sign-off 2026-10-19)** | `disasm/functions.tsv` (1125 rows) + `disasm/phase1-summary.md` approved; Phase 1 complete, Phase 2 authorized | 2026-10-19 |
 
 Status values: `todo` / `in-progress` / `done` / `blocked`.
+
+- **2026-10-19 (owner decisions, final):** (1) handler gap **accepted** — no further playthrough
+  now; targeted 5-minute captures on demand if Phase 2 hits boundary ambiguity in one of the 12
+  unexecuted handlers. (3) bytecheck **ratified** — CP6 closed. With (2) above (Ghidra bar
+  retired), **Phase 1 is complete and Phase 2 is authorized**.
 
 ## Open questions / blockers
 

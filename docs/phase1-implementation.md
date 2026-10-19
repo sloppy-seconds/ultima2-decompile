@@ -300,3 +300,11 @@ decompiles, get as much asm as possible, and attempt build + validation of pseud
   flow-runaways, startup-region heavy). Reko fabs: 2 total (0x0A5F, 0x4FA5).
 - CP6 sample report regenerated on v2 data + v2 cause-annotation section appended.
 - functions.tsv regenerated (1125 rows). phase1-summary.md drafted (CP7 gate pending).
+
+## CP6/CP7 — GATES CLEARED (owner decisions 2026-10-19)
+- (1) Handler gap ACCEPTED: no further playthrough; targeted captures on demand in Phase 2.
+- (2) Ghidra >=60% bar RETIRED: Reko designated primary pseudo-C engine; quality gate is the
+  asm byte-match (`tools/verify_asm.sh`) + full-corpus bytecheck (`bytecheck-full.tsv`).
+- (3) Bytecheck RATIFIED: zero unflagged mismatches across 1125 procedures; the 2 isolated Reko
+  fabrications (0x0A5F stack-model, 0x4FA5 phantom compare) carried into Phase 2 explicitly.
+- Phase 1 status: COMPLETE. All §4 global criteria met (see phase1-summary.md).

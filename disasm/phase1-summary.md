@@ -1,7 +1,7 @@
-# Phase 1 Summary — Evidence Capture (draft for sign-off)
+# Phase 1 Summary — Evidence Capture (SIGNED OFF)
 
-Prepared 2026-10-19 (night). All artifacts regenerated from `original/` + runtime captures;
-see §Provenance for the one owner-authorized external input.
+Owner sign-off 2026-10-19: handler gap accepted, Ghidra 60% bar retired (Reko primary),
+bytecheck ratified. **Phase 1 complete; Phase 2 authorized.**
 
 ## What was captured / produced
 
@@ -30,13 +30,13 @@ see §Provenance for the one owner-authorized external input.
   bytes). This is the strongest artifact: any later claim can now be checked against a
   re-buildable, byte-exact asm listing.
 
-## Known gaps
+## Known gaps (all owner-accepted at the CP6/CP7 gates)
 
 - Code never executed by any capture is absent from the entry list (absence ≠ non-code).
-- Ghidra decompile rate 44.5% (< 60% plan bar): structural varnodes/timeout failures; every
-  recovery mechanism in the plan was run to exhaustion (0 yield). Owner decision pending.
-- 12 command handlers still lack runtime confirmation; a playthrough using them (with
-  arguments/directions — see the command table in the implementation log) would close this.
+- Ghidra decompile rate 44.5%: bar retired by owner decision; the asm byte-match + full-corpus
+  bytecheck are the quality gate instead.
+- 12 command handlers lack runtime confirmation (jump-table-seeded only); targeted re-capture
+  on demand if Phase 2 finds their boundaries ambiguous.
 - Community-patch provenance of the binary (AGENTS.md §0) — byte-match is against this pack.
 
 ## What Phase 2 must resolve
