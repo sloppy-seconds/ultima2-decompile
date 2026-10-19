@@ -1,693 +1,1113 @@
-0100  # block=96
-0133  # block=194
-013B  # block=266
-013E  # block=298
-0142  # block=303
-014B  # block=327
-0155  # block=438
-015E  # block=445
-0172  # block=448
-0175  # block=564
-0178  # block=567
-017D  # block=571
-0180  # block=569
-0184  # block=580
-018D  # block=587
-0198  # block=590
-01A1  # block=597
-01BB  # block=600
-01C4  # block=607
-01E1  # block=610
-01EA  # block=617
-01FD  # block=620
-0200  # block=623
-0203  # block=626
-0208  # block=630
-020B  # block=628
-020F  # block=691
-0222  # block=847
-0225  # block=850
-0228  # block=868
-022B  # block=854
-022E  # block=856
-0234  # block=866
-0237  # block=870
-023F  # block=875
-0242  # block=553
-0246  # block=888
-025D  # block=897
-0272  # block=906
-0287  # block=915
-02A0  # block=924
-02CB  # block=935
-02E3  # block=944
-02F7  # block=955
-031E  # block=964
-034A  # block=973
-0374  # block=982
-0389  # block=991
-038C  # block=998
-038F  # block=996
-0394  # block=1000
-0397  # block=1114
-039B  # block=1118
-039E  # block=1116
-03A2  # block=1124
-03AC  # block=1122
-0688  # block=449
-068E  # block=561
-0696  # block=452
-069C  # block=484
-069F  # block=542
-06A4  # block=546
-06A8  # block=544
-06AB  # block=551
-06AC  # block=197
-06B0  # block=210
-06BE  # block=226
-06C2  # block=220
-06C6  # block=223
-06CC  # block=228
-06D0  # block=237
-06D4  # block=240
-06D7  # block=244
-06DA  # block=246
-06EC  # block=253
-06ED  # block=267
-06F0  # block=283
-06F9  # block=274
-06FF  # block=272
-0707  # block=279
-0710  # block=285
-0711  # block=455
-0715  # block=469
-0718  # block=461
-071B  # block=465
-071E  # block=467
-0720  # block=459
-0764  # block=1126
-0767  # block=1144
-0776  # block=1159
-0796  # block=1160
-07AA  # block=1171
-07B1  # block=1176
-07E6  # block=1174
-07ED  # block=1182
-07F0  # block=1180
-07F3  # block=1192
-0807  # block=1201
-080A  # block=1243
-080D  # block=1246
-0839  # block=1265
-0850  # block=1263
-0859  # block=1284
-0864  # block=1286
-0867  # block=1781
-086F  # block=1961
-087A  # block=1968
-087D  # block=1966
-0887  # block=1991
-088A  # block=2050
-088D  # block=2053
-0890  # block=2056
-0893  # block=2059
-0896  # block=2073
-08A7  # block=2082
-08C8  # block=2080
-08CE  # block=2098
-08D1  # block=2101
-08D6  # block=2105
-08DC  # block=2111
-08E3  # block=2124
-08E6  # block=2122
-08EA  # block=2321
-08ED  # block=2324
-08F0  # block=2327
-08F3  # block=2330
-08F6  # block=2333
-08F9  # block=2336
-08FF  # block=2339
-090C  # block=3255
-0930  # block=3277
-0933  # block=3275
-0936  # block=2103
-0940  # block=2117
-094D  # block=5003
-094F  # block=2115
-0955  # block=2128
-0962  # block=4006
-0968  # block=4011
-096C  # block=4015
-0973  # block=4013
-0976  # block=2126
-097C  # block=2141
-0989  # block=4382
-098F  # block=4387
-0993  # block=4391
-099A  # block=4389
-099D  # block=2139
-09A3  # block=2153
-09AF  # block=5017
-09B5  # block=5022
-09B9  # block=5026
-09C0  # block=5024
-09C3  # block=2151
-09C9  # block=2163
-09D5  # block=3337
-09DB  # block=3810
-09DF  # block=3814
-09E6  # block=3812
-09E9  # block=3816
-09F4  # block=2161
-09FF  # block=2184
-0A02  # block=3820
-0A15  # block=5480
-0A18  # block=2182
-0A1C  # block=2195
-0A1F  # block=2193
-0A30  # block=4336
-0A33  # block=2378
-0A38  # block=2408
-0A4A  # block=2417
-0A4E  # block=2424
-0A51  # block=2422
-0A6D  # block=2415
-0A74  # block=2462
-0A7C  # block=2449
-0A83  # block=2475
-0AA1  # block=2447
-0AA4  # block=2464
-0AA7  # block=2473
-0AAA  # block=2696
-0AB6  # block=2711
-0ABA  # block=2715
-0AC0  # block=2728
-0AC4  # block=2731
-0AFC  # block=2713
-0B07  # block=2771
-0B0F  # block=2776
-0B25  # block=2774
-0B36  # block=2790
-0B39  # block=2788
-0B4A  # block=2814
-0B4D  # block=2812
-0BAF  # block=2554
-0BB2  # block=3104
-0BB9  # block=3109
-0BD1  # block=3107
-0BD8  # block=3118
-0C1C  # block=3116
-0C1F  # block=3157
-0C2B  # block=3164
-0C33  # block=3162
-0C3A  # block=3172
-0C3E  # block=3170
-0C45  # block=3183
-0C49  # block=3181
-0C50  # block=3199
-0C54  # block=3197
-0C5B  # block=3209
-0C5F  # block=3207
-0C9C  # block=2471
-0CA2  # block=2536
-0CAA  # block=2519
-0CAD  # block=2538
-0CB0  # block=2517
-0CB9  # block=4724
-0CBD  # block=4728
-0CC0  # block=4726
-0CD2  # block=4745
-0CD4  # block=4748
-0CD9  # block=4746
-0CDC  # block=4752
-0CEE  # block=4769
-0D06  # block=4780
-0D09  # block=4778
-0D0E  # block=4789
-0D11  # block=4787
-0D44  # block=4783
-0D4C  # block=4797
-0D4F  # block=4795
-0D64  # block=4793
-0D6C  # block=4816
-0D6F  # block=4814
-0DC4  # block=4802
-1013  # block=2428
-1014  # block=2438
-1015  # block=2452
-101C  # block=2598
-102B  # block=2515
-1033  # block=2550
-1035  # block=2562
-1039  # block=2584
-103D  # block=2607
-1040  # block=2513
-1048  # block=2547
-106D  # block=2545
-1078  # block=2600
-107B  # block=2605
-107F  # block=5291
-1082  # block=2615
-1086  # block=2582
-10A0  # block=5151
-10A4  # block=5155
-10A7  # block=5259
-10AA  # block=5262
-10BC  # block=5275
-10BF  # block=5278
-10CE  # block=5153
-10E9  # block=5170
-10EC  # block=5168
-10F0  # block=5176
-10F3  # block=5174
-10F9  # block=5182
-10FC  # block=5180
-110E  # block=5193
-1111  # block=5191
-1115  # block=5199
-1118  # block=5197
-111E  # block=5205
-1121  # block=5203
-1124  # block=5238
-1128  # block=5242
-112C  # block=5248
-112F  # block=5240
-2028  # block=4189
-202C  # block=4196
-2031  # block=4199
-2035  # block=4203
-2039  # block=4207
-2048  # block=4233
-204D  # block=4238
-2122  # block=2794
-212A  # block=2806
-212E  # block=2804
-214D  # block=2888
-2150  # block=2996
-2152  # block=2999
-2155  # block=2997
-215C  # block=3008
-2166  # block=3058
-2169  # block=3061
-216B  # block=3063
-216E  # block=3006
-2186  # block=3075
-2189  # block=3078
-218B  # block=3032
-2192  # block=3044
-2195  # block=3042
-2199  # block=2889
-21A3  # block=2896
-21A6  # block=2894
-21AE  # block=2905
-21B2  # block=2912
-21B6  # block=2922
-21BD  # block=2920
-21C5  # block=2940
-21C9  # block=2949
-21CD  # block=2955
-21D1  # block=2961
-21D5  # block=2965
-21D8  # block=2903
-21DF  # block=2915
-21E2  # block=2918
-21E9  # block=2932
-21F0  # block=2946
-21F7  # block=2930
-21FC  # block=2899
-2201  # block=3002
-220A  # block=3015
-2213  # block=3028
-2216  # block=3013
-2233  # block=3854
-225A  # block=3881
-226F  # block=3890
-2272  # block=3888
-2275  # block=2189
-228A  # block=4377
-2290  # block=1202
-22BF  # block=1231
-22D1  # block=1238
-22D4  # block=1240
-22D5  # block=5063
-22FC  # block=5087
-22FD  # block=4581
-2304  # block=4587
-2305  # block=4585
-2340  # block=4631
-2352  # block=4638
-2361  # block=4642
-2362  # block=5346
-2370  # block=5391
-2373  # block=5361
-2378  # block=5365
-2383  # block=5393
-2389  # block=5403
-2392  # block=5432
-2395  # block=5363
-239C  # block=5373
-23A2  # block=5381
-23A8  # block=5389
-23AE  # block=5400
-23B0  # block=5371
-23BE  # block=5379
-23CC  # block=5387
-23D9  # block=5398
-2423  # block=3339
-242D  # block=3346
-2434  # block=3355
-243B  # block=3370
-243E  # block=3353
-248B  # block=3344
-2495  # block=3362
-24B1  # block=3360
-24B5  # block=3374
-2520  # block=3372
-2527  # block=3389
-253B  # block=3387
-2542  # block=3407
-2545  # block=3405
-2549  # block=3416
-254C  # block=3414
-2550  # block=3428
-2553  # block=3426
-2557  # block=3441
-2575  # block=3439
-2578  # block=3629
-257E  # block=3655
-2584  # block=3637
-2587  # block=3639
-258D  # block=3653
-2590  # block=3657
-2593  # block=3663
-2599  # block=3668
-25BD  # block=3690
-25C0  # block=3688
-25C9  # block=3698
-25CC  # block=3696
-25D0  # block=3704
-25D4  # block=3710
-25D8  # block=3716
-25DC  # block=3722
-25E0  # block=3727
-25E4  # block=3731
-25E8  # block=3735
-25EC  # block=3739
-25F0  # block=3743
-25F4  # block=3747
-25F8  # block=3751
-25FF  # block=3418
-2604  # block=3453
-2664  # block=3458
-2677  # block=3701
-268C  # block=4413
-269F  # block=4430
-26A8  # block=4576
-26B7  # block=4645
-26C3  # block=4652
-26C6  # block=4650
-26CC  # block=4667
-26F2  # block=4696
-26F5  # block=4699
-26F9  # block=3174
-2700  # block=3187
-2701  # block=3185
-2707  # block=3195
-2708  # block=3193
-2731  # block=3919
-2735  # block=3923
-2744  # block=3921
-2776  # block=3973
-277A  # block=3977
-277B  # block=3975
-3389  # block=4023
-3392  # block=4026
-3399  # block=4031
-33A6  # block=4029
-33AE  # block=4039
-33C3  # block=4037
-33D1  # block=4052
-33D4  # block=4050
-33DA  # block=4062
-33DD  # block=4060
-33E3  # block=4072
-33E6  # block=4070
-33EC  # block=4082
-33EF  # block=4080
-33F5  # block=4092
-33F8  # block=4090
-33FE  # block=4102
-3401  # block=4100
-340F  # block=4055
-341B  # block=5036
-342A  # block=5047
-343C  # block=5062
-343F  # block=5090
-3525  # block=4105
-353A  # block=4147
-3546  # block=4154
-3565  # block=4152
-3577  # block=4182
-3BCE  # block=5435
-3BDD  # block=5438
-3BE4  # block=5443
-3C01  # block=5458
-3C04  # block=5441
-3DBC  # block=2374
-3DC4  # block=2377
-3DC7  # block=5306
-3DDD  # block=5309
-3DE4  # block=5314
-3DF7  # block=5336
-3DFA  # block=5312
-3E50  # block=4185
-3E9F  # block=4188
-3EA2  # block=4244
-3EAB  # block=4298
-3EBB  # block=4306
-3EC2  # block=4314
-3ED1  # block=4335
-3ED4  # block=4304
-3F25  # block=5461
-3F36  # block=5464
-4050  # block=5342
-405D  # block=5345
-4A1C  # block=113
-4A22  # block=142
-4A2F  # block=179
-4A3C  # block=190
-4A3E  # block=634
-4A46  # block=649
-4A4E  # block=657
-4A56  # block=665
-4A5E  # block=670
-4A64  # block=676
-4A71  # block=678
-4A74  # block=1538
-4A89  # block=1581
-4AA6  # block=1583
-4AAD  # block=1476
-4AB8  # block=1547
-4ABB  # block=1534
-4AC3  # block=1521
-4ACE  # block=1519
-4AD7  # block=1536
-4AE0  # block=1549
-4AE6  # block=1992
-4AEF  # block=2046
-4AF1  # block=2060
-4AFA  # block=2069
-4AFC  # block=1996
-4B08  # block=2011
-4B1B  # block=2013
-4F11  # block=2627
-4F20  # block=2751
-4F32  # block=2767
-4F36  # block=2483
-4F4D  # block=485
-4F52  # block=519
-4F56  # block=523
-4F58  # block=1012
-4F5C  # block=1016
-4F60  # block=1023
-4F64  # block=1014
-4F69  # block=1027
-4F6A  # block=4402
-4F6E  # block=1041
-4F70  # block=1044
-4F74  # block=4401
-4F76  # block=1042
-4F7B  # block=1051
-4F85  # block=1049
-4F89  # block=1056
-4F8E  # block=1063
-4FA0  # block=1061
-4FA5  # block=1069
-4FBB  # block=1067
-4FBE  # block=1101
-4FC5  # block=1083
-4FCA  # block=1097
-4FCC  # block=1081
-4FD1  # block=1020
-4FD3  # block=521
-4FD7  # block=528
-4FDB  # block=533
-4FDD  # block=526
-4FDF  # block=328
-4FE2  # block=333
-4FEC  # block=430
-4FF0  # block=337
-4FFB  # block=344
-4FFE  # block=429
-5000  # block=342
-5003  # block=347
-500D  # block=358
-5016  # block=356
-501A  # block=364
-5025  # block=375
-5036  # block=2401
-503D  # block=362
-504A  # block=408
-5057  # block=373
-505A  # block=419
-508C  # block=4248
-5093  # block=4264
-509B  # block=4256
-509E  # block=4254
-50A1  # block=4262
-50A3  # block=4260
-50AD  # block=4272
-50B0  # block=4294
-50B2  # block=4270
-50B3  # block=1276
-50D8  # block=2653
-50DC  # block=2659
-50DE  # block=2664
-50E1  # block=2662
-50E3  # block=2622
-50EF  # block=2602
-50F3  # block=2624
-50F9  # block=1784
-5111  # block=1801
-5120  # block=1809
-5123  # block=1807
-5126  # block=1874
-5129  # block=1877
-513C  # block=1886
-514B  # block=1894
-514E  # block=1892
-5151  # block=1905
-5154  # block=1908
-5167  # block=1917
-5175  # block=1928
-5188  # block=1937
-5196  # block=1948
-51A4  # block=1958
-51A5  # block=1811
-51A9  # block=1865
-51AE  # block=1870
-51EB  # block=306
-51FB  # block=323
-51FD  # block=145
-5212  # block=169
-5217  # block=2552
-522B  # block=2649
-5236  # block=2651
-52CA  # block=695
-52E7  # block=712
-52EF  # block=714
-52F6  # block=722
-5300  # block=724
-5317  # block=788
-531B  # block=792
-5343  # block=790
-5351  # block=800
-5356  # block=798
-535A  # block=815
-5371  # block=827
-5379  # block=833
-53B5  # block=1817
-53C5  # block=1852
-53CE  # block=1861
-53D9  # block=182
-53F4  # block=2381
-53F7  # block=2405
-5AB1  # block=1289
-5AB8  # block=1296
-5ABB  # block=1294
-5AE1  # block=1408
-5AED  # block=1357
-5AF9  # block=1355
-5AFF  # block=1378
-5B33  # block=1363
-5B39  # block=1372
-5B3D  # block=1385
-5B47  # block=1383
-5B4B  # block=1396
-5B4D  # block=1370
-5B5D  # block=1410
-5B6E  # block=1431
-5B71  # block=1429
-5B98  # block=1300
-5BC2  # block=1500
-5C11  # block=1470
-5C15  # block=1481
-5C1C  # block=1493
-5C1F  # block=1479
-5C23  # block=1490
-5C25  # block=1468
-5C35  # block=1502
-5C46  # block=1517
-5C49  # block=1515
-5C6D  # block=1472
-5C70  # block=1756
-5C76  # block=1766
-5C88  # block=1768
-5C95  # block=4338
-5C9C  # block=4343
-5CA5  # block=4359
-5CAB  # block=4364
-5CAE  # block=4367
-5CB1  # block=4341
-5CB2  # block=2203
-5CCC  # block=2223
-5CD0  # block=2221
-5CD2  # block=3570
-5CDA  # block=3584
-5CDD  # block=3579
-5CE0  # block=3581
-5CE3  # block=3586
-5CE4  # block=3558
-5D09  # block=2159
-5D14  # block=2180
-5D22  # block=3550
-5D2D  # block=3556
-5D37  # block=3566
-5D3A  # block=3606
-5D3D  # block=3564
-5D50  # block=3607
-5D55  # block=3554
-5D58  # block=2178
-5DA9  # block=3130
-5DB0  # block=3135
-5DB3  # block=3133
-5DCD  # block=4473
-5DD7  # block=4478
-5DDE  # block=4476
-5DE6  # block=4541
-5DF0  # block=4532
-5DF3  # block=4535
-5E07  # block=4483
-5E0F  # block=4514
-5E19  # block=4503
-5E1C  # block=4507
-5E30  # block=4516
-5E32  # block=4505
-5E35  # block=4552
-5E3A  # block=3138
-5EC7  # block=2132
-5ECE  # block=2146
-5ED5  # block=3625
-5ED6  # block=2144
-5FA6  # block=4433
-5FBD  # block=4564
+0100  # block=96 src=spice86-cfg
+0133  # block=194 src=spice86-cfg
+013B  # block=266 src=spice86-cfg
+013E  # block=298 src=spice86-cfg
+0142  # block=303 src=spice86-cfg
+014B  # block=327 src=spice86-cfg
+0155  # block=438 src=spice86-cfg
+015E  # block=445 src=spice86-cfg
+0172  # block=448 src=spice86-cfg
+0175  # block=564 src=spice86-cfg
+0178  # block=567 src=spice86-cfg
+017D  # block=571 src=spice86-cfg
+0180  # block=569 src=spice86-cfg
+0184  # block=580 src=spice86-cfg
+018D  # block=587 src=spice86-cfg
+0198  # block=590 src=spice86-cfg
+01A1  # block=597 src=spice86-cfg
+01BB  # block=600 src=spice86-cfg
+01C4  # block=607 src=spice86-cfg
+01E1  # block=610 src=spice86-cfg
+01EA  # block=617 src=spice86-cfg
+01FD  # block=620 src=spice86-cfg
+0200  # block=623 src=spice86-cfg
+0203  # block=626 src=spice86-cfg
+0208  # block=630 src=spice86-cfg
+020B  # block=628 src=spice86-cfg
+020F  # block=691 src=spice86-cfg
+0222  # block=847 src=spice86-cfg
+0225  # block=850 src=spice86-cfg
+0228  # block=868 src=spice86-cfg
+022B  # block=854 src=spice86-cfg
+022E  # block=856 src=spice86-cfg
+0234  # block=866 src=spice86-cfg
+0237  # block=870 src=spice86-cfg
+023F  # block=875 src=spice86-cfg
+0242  # block=553 src=spice86-cfg
+0246  # block=888 src=spice86-cfg
+025D  # block=897 src=spice86-cfg
+0272  # block=906 src=spice86-cfg
+0287  # block=915 src=spice86-cfg
+02A0  # block=924 src=spice86-cfg
+02CB  # block=935 src=spice86-cfg
+02E3  # block=944 src=spice86-cfg
+02F7  # block=955 src=spice86-cfg
+031E  # block=964 src=spice86-cfg
+034A  # block=973 src=spice86-cfg
+0374  # block=982 src=spice86-cfg
+0389  # block=991 src=spice86-cfg
+038C  # block=998 src=spice86-cfg
+038F  # block=996 src=spice86-cfg
+0394  # block=1000 src=spice86-cfg
+0397  # block=1114 src=spice86-cfg
+039B  # block=1118 src=spice86-cfg
+039E  # block=1116 src=spice86-cfg
+03A2  # block=1124 src=spice86-cfg
+03A6  # block=1137 src=20261019-201302
+03A9  # block=1135 src=20261019-201302
+03AC  # block=1122 src=spice86-cfg
+0688  # block=449 src=spice86-cfg
+068E  # block=561 src=spice86-cfg
+0696  # block=452 src=spice86-cfg
+069C  # block=484 src=spice86-cfg
+069F  # block=542 src=spice86-cfg
+06A4  # block=546 src=spice86-cfg
+06A8  # block=544 src=spice86-cfg
+06AB  # block=551 src=spice86-cfg
+06AC  # block=197 src=spice86-cfg
+06B0  # block=210 src=spice86-cfg
+06BE  # block=226 src=spice86-cfg
+06C2  # block=220 src=spice86-cfg
+06C6  # block=223 src=spice86-cfg
+06CC  # block=228 src=spice86-cfg
+06D0  # block=237 src=spice86-cfg
+06D4  # block=240 src=spice86-cfg
+06D7  # block=244 src=spice86-cfg
+06DA  # block=246 src=spice86-cfg
+06EC  # block=253 src=spice86-cfg
+06ED  # block=267 src=spice86-cfg
+06F0  # block=283 src=spice86-cfg
+06F9  # block=274 src=spice86-cfg
+06FF  # block=272 src=spice86-cfg
+0707  # block=279 src=spice86-cfg
+0710  # block=285 src=spice86-cfg
+0711  # block=455 src=spice86-cfg
+0715  # block=469 src=spice86-cfg
+0718  # block=461 src=spice86-cfg
+071B  # block=465 src=spice86-cfg
+071E  # block=467 src=spice86-cfg
+0720  # block=459 src=spice86-cfg
+0764  # block=1126 src=spice86-cfg
+0767  # block=1144 src=spice86-cfg
+0776  # block=1159 src=spice86-cfg
+0796  # block=1160 src=spice86-cfg
+07AA  # block=1171 src=spice86-cfg
+07B1  # block=1176 src=spice86-cfg
+07B4  # block=1201 src=20261019-201302
+07C3  # block=1216 src=20261019-201302
+07DB  # block=1219 src=20261019-201302
+07DE  # block=1222 src=20261019-201302
+07E3  # block=1225 src=20261019-201302
+07E6  # block=1174 src=spice86-cfg
+07ED  # block=1182 src=spice86-cfg
+07F0  # block=1180 src=spice86-cfg
+07F3  # block=1192 src=spice86-cfg
+0807  # block=1201 src=spice86-cfg
+080A  # block=1243 src=spice86-cfg
+080D  # block=1246 src=spice86-cfg
+0839  # block=1265 src=spice86-cfg
+0850  # block=1263 src=spice86-cfg
+0859  # block=1284 src=spice86-cfg
+0864  # block=1286 src=spice86-cfg
+0867  # block=1781 src=spice86-cfg
+086F  # block=1961 src=spice86-cfg
+087A  # block=1968 src=spice86-cfg
+087D  # block=1966 src=spice86-cfg
+0887  # block=1991 src=spice86-cfg
+088A  # block=2050 src=spice86-cfg
+088D  # block=2053 src=spice86-cfg
+0890  # block=2056 src=spice86-cfg
+0893  # block=2059 src=spice86-cfg
+0896  # block=2073 src=spice86-cfg
+08A7  # block=2082 src=spice86-cfg
+08C8  # block=2080 src=spice86-cfg
+08CE  # block=2098 src=spice86-cfg
+08D1  # block=2101 src=spice86-cfg
+08D6  # block=2105 src=spice86-cfg
+08DC  # block=2111 src=spice86-cfg
+08E3  # block=2124 src=spice86-cfg
+08E6  # block=2122 src=spice86-cfg
+08EA  # block=2321 src=spice86-cfg
+08ED  # block=2324 src=spice86-cfg
+08F0  # block=2327 src=spice86-cfg
+08F3  # block=2330 src=spice86-cfg
+08F6  # block=2333 src=spice86-cfg
+08F9  # block=2336 src=spice86-cfg
+08FF  # block=2339 src=spice86-cfg
+090C  # block=3255 src=spice86-cfg
+0930  # block=3277 src=spice86-cfg
+0933  # block=3275 src=spice86-cfg
+0936  # block=2103 src=spice86-cfg
+0940  # block=2117 src=spice86-cfg
+094D  # block=5003 src=spice86-cfg
+094F  # block=2115 src=spice86-cfg
+0955  # block=2128 src=spice86-cfg
+0962  # block=4006 src=spice86-cfg
+0968  # block=4011 src=spice86-cfg
+096C  # block=4015 src=spice86-cfg
+0973  # block=4013 src=spice86-cfg
+0976  # block=2126 src=spice86-cfg
+097C  # block=2141 src=spice86-cfg
+0989  # block=3661 src=cfg-20261019-bonifice-shop
+098F  # block=3666 src=cfg-20261019-bonifice-shop
+0993  # block=3670 src=cfg-20261019-bonifice-shop
+099A  # block=3668 src=cfg-20261019-bonifice-shop
+099D  # block=2139 src=spice86-cfg
+09A3  # block=2153 src=spice86-cfg
+09AF  # block=3687 src=cfg-20261019-bonifice-shop
+09B5  # block=3692 src=cfg-20261019-bonifice-shop
+09B9  # block=3696 src=cfg-20261019-bonifice-shop
+09C0  # block=3694 src=cfg-20261019-bonifice-shop
+09C3  # block=2151 src=spice86-cfg
+09C9  # block=2163 src=spice86-cfg
+09D5  # block=2382 src=cfg-20261019-bonifice-shop
+09DB  # block=2869 src=cfg-20261019-bonifice-shop
+09DF  # block=2873 src=cfg-20261019-bonifice-shop
+09E6  # block=2871 src=cfg-20261019-bonifice-shop
+09E9  # block=2875 src=cfg-20261019-bonifice-shop
+09F4  # block=2161 src=spice86-cfg
+09FF  # block=2184 src=spice86-cfg
+0A02  # block=2879 src=cfg-20261019-bonifice-shop
+0A15  # block=5458 src=cfg-20261019-bonifice-shop
+0A18  # block=2182 src=spice86-cfg
+0A1C  # block=2195 src=spice86-cfg
+0A1F  # block=2193 src=spice86-cfg
+0A30  # block=4336 src=spice86-cfg
+0A33  # block=2378 src=spice86-cfg
+0A38  # block=2408 src=spice86-cfg
+0A4A  # block=2417 src=spice86-cfg
+0A4E  # block=2424 src=spice86-cfg
+0A51  # block=2422 src=spice86-cfg
+0A55  # block=2945 src=cfg-20261019-bonifice-shop
+0A58  # block=2943 src=cfg-20261019-bonifice-shop
+0A5C  # block=2956 src=cfg-20261019-bonifice-shop
+0A5F  # block=2954 src=cfg-20261019-bonifice-shop
+0A6D  # block=2415 src=spice86-cfg
+0A74  # block=2462 src=spice86-cfg
+0A7C  # block=2449 src=spice86-cfg
+0A83  # block=2475 src=spice86-cfg
+0AA1  # block=2447 src=spice86-cfg
+0AA4  # block=2464 src=spice86-cfg
+0AA7  # block=2473 src=spice86-cfg
+0AAA  # block=2696 src=spice86-cfg
+0AB6  # block=2711 src=spice86-cfg
+0ABA  # block=2715 src=spice86-cfg
+0AC0  # block=2728 src=spice86-cfg
+0AC4  # block=2731 src=spice86-cfg
+0AC7  # block=4343 src=cfg-20261019-bonifice-shop
+0AD3  # block=4349 src=cfg-20261019-bonifice-shop
+0ADB  # block=4355 src=cfg-20261019-death
+0AE1  # block=4353 src=cfg-20261019-death
+0AE5  # block=4362 src=cfg-20261019-death
+0AEB  # block=4360 src=cfg-20261019-death
+0AEF  # block=4370 src=cfg-20261019-death
+0AF5  # block=4368 src=cfg-20261019-death
+0AF9  # block=4377 src=cfg-20261019-death
+0AFC  # block=2713 src=spice86-cfg
+0B07  # block=2771 src=spice86-cfg
+0B0F  # block=2776 src=spice86-cfg
+0B25  # block=2774 src=spice86-cfg
+0B36  # block=2790 src=spice86-cfg
+0B39  # block=2788 src=spice86-cfg
+0B4A  # block=2814 src=spice86-cfg
+0B4D  # block=2812 src=spice86-cfg
+0B5F  # block=3835 src=cfg-20261019-death
+0B62  # block=3833 src=cfg-20261019-death
+0B65  # block=7612 src=cfg-20261019-death
+0B71  # block=7619 src=cfg-20261019-death
+0B79  # block=7627 src=cfg-20261019-death
+0B9B  # block=7651 src=cfg-20261019-death
+0B9D  # block=7649 src=cfg-20261019-death
+0BA0  # block=7617 src=cfg-20261019-death
+0BA8  # block=7631 src=cfg-20261019-death
+0BAB  # block=7629 src=cfg-20261019-death
+0BAF  # block=2554 src=spice86-cfg
+0BB2  # block=3104 src=spice86-cfg
+0BB9  # block=3109 src=spice86-cfg
+0BBC  # block=7689 src=cfg-20261019-death
+0BC6  # block=7693 src=cfg-20261019-death
+0BC9  # block=7818 src=cfg-20261019-death
+0BCC  # block=7852 src=cfg-20261019-death
+0BCF  # block=7855 src=cfg-20261019-death
+0BD1  # block=3107 src=spice86-cfg
+0BD8  # block=3118 src=spice86-cfg
+0BDB  # block=7859 src=cfg-20261019-death
+0C02  # block=7879 src=cfg-20261019-death
+0C09  # block=7884 src=cfg-20261019-death
+0C1C  # block=3116 src=spice86-cfg
+0C1F  # block=3157 src=spice86-cfg
+0C2B  # block=3164 src=spice86-cfg
+0C33  # block=3162 src=spice86-cfg
+0C3A  # block=3172 src=spice86-cfg
+0C3E  # block=3170 src=spice86-cfg
+0C45  # block=3183 src=spice86-cfg
+0C49  # block=3181 src=spice86-cfg
+0C50  # block=3199 src=spice86-cfg
+0C54  # block=3197 src=spice86-cfg
+0C5B  # block=3209 src=spice86-cfg
+0C5F  # block=3207 src=spice86-cfg
+0C62  # block=2497 src=cfg-20261019-death
+0C82  # block=8092 src=cfg-20261019-death
+0C89  # block=8095 src=cfg-20261019-death
+0C8C  # block=8098 src=cfg-20261019-death
+0C9A  # block=8101 src=cfg-20261019-death
+0C9C  # block=2471 src=spice86-cfg
+0CA2  # block=2536 src=spice86-cfg
+0CAA  # block=2519 src=spice86-cfg
+0CAD  # block=2538 src=spice86-cfg
+0CB0  # block=2517 src=spice86-cfg
+0CB9  # block=3224 src=cfg-20261019-bonifice-shop
+0CBD  # block=3228 src=cfg-20261019-bonifice-shop
+0CC0  # block=3226 src=cfg-20261019-bonifice-shop
+0CD2  # block=3245 src=cfg-20261019-bonifice-shop
+0CD4  # block=3248 src=cfg-20261019-bonifice-shop
+0CD9  # block=3246 src=cfg-20261019-bonifice-shop
+0CDC  # block=3252 src=cfg-20261019-bonifice-shop
+0CEE  # block=3286 src=cfg-20261019-bonifice-shop
+0D06  # block=3297 src=cfg-20261019-bonifice-shop
+0D09  # block=3295 src=cfg-20261019-bonifice-shop
+0D0E  # block=3306 src=cfg-20261019-bonifice-shop
+0D11  # block=3304 src=cfg-20261019-bonifice-shop
+0D16  # block=3323 src=cfg-20261019-bonifice-shop
+0D19  # block=3321 src=cfg-20261019-bonifice-shop
+0D1E  # block=3344 src=cfg-20261019-bonifice-shop
+0D21  # block=3342 src=cfg-20261019-bonifice-shop
+0D44  # block=3300 src=cfg-20261019-bonifice-shop
+0D4C  # block=3314 src=cfg-20261019-bonifice-shop
+0D4F  # block=3312 src=cfg-20261019-bonifice-shop
+0D64  # block=3310 src=cfg-20261019-bonifice-shop
+0D6C  # block=3333 src=cfg-20261019-bonifice-shop
+0D6F  # block=3331 src=cfg-20261019-bonifice-shop
+0DA4  # block=3350 src=cfg-20261019-bonifice-shop
+0DAC  # block=3376 src=cfg-20261019-bonifice-shop
+0DAF  # block=3374 src=cfg-20261019-bonifice-shop
+0DC4  # block=3319 src=cfg-20261019-bonifice-shop
+1013  # block=2428 src=spice86-cfg
+1014  # block=2438 src=spice86-cfg
+1015  # block=2452 src=spice86-cfg
+101C  # block=2598 src=spice86-cfg
+102B  # block=2515 src=spice86-cfg
+1033  # block=2550 src=spice86-cfg
+1035  # block=2562 src=spice86-cfg
+1039  # block=2584 src=spice86-cfg
+103D  # block=2607 src=spice86-cfg
+1040  # block=2513 src=spice86-cfg
+1048  # block=2547 src=spice86-cfg
+106D  # block=2545 src=spice86-cfg
+1078  # block=2600 src=spice86-cfg
+107B  # block=2605 src=spice86-cfg
+107F  # block=4836 src=cfg-20261019-bonifice-shop
+1082  # block=2615 src=spice86-cfg
+1086  # block=2582 src=spice86-cfg
+10A0  # block=4681 src=cfg-20261019-bonifice-shop
+10A4  # block=4685 src=cfg-20261019-bonifice-shop
+10A7  # block=4797 src=cfg-20261019-bonifice-shop
+10AA  # block=4800 src=cfg-20261019-bonifice-shop
+10BC  # block=4813 src=cfg-20261019-bonifice-shop
+10BF  # block=4816 src=cfg-20261019-bonifice-shop
+10CE  # block=4683 src=cfg-20261019-bonifice-shop
+10E9  # block=4700 src=cfg-20261019-bonifice-shop
+10EC  # block=4698 src=cfg-20261019-bonifice-shop
+10F0  # block=4706 src=cfg-20261019-bonifice-shop
+10F3  # block=4704 src=cfg-20261019-bonifice-shop
+10F9  # block=4712 src=cfg-20261019-bonifice-shop
+10FC  # block=4710 src=cfg-20261019-bonifice-shop
+110E  # block=4723 src=cfg-20261019-bonifice-shop
+1111  # block=4721 src=cfg-20261019-bonifice-shop
+1115  # block=4729 src=cfg-20261019-bonifice-shop
+1118  # block=4727 src=cfg-20261019-bonifice-shop
+111E  # block=4735 src=cfg-20261019-bonifice-shop
+1121  # block=4733 src=cfg-20261019-bonifice-shop
+1124  # block=4768 src=cfg-20261019-bonifice-shop
+1128  # block=4772 src=cfg-20261019-bonifice-shop
+112C  # block=4778 src=cfg-20261019-bonifice-shop
+112F  # block=4770 src=cfg-20261019-bonifice-shop
+113A  # block=7243 src=cfg-20261019-death
+1141  # block=7249 src=cfg-20261019-death
+1142  # block=7247 src=cfg-20261019-death
+114A  # block=7257 src=cfg-20261019-death
+1151  # block=7259 src=cfg-20261019-death
+154E  # block=5090 src=cfg-20261019-bonifice-shop
+1564  # block=5123 src=cfg-20261019-bonifice-shop
+156B  # block=5137 src=cfg-20261019-bonifice-shop
+156E  # block=5135 src=cfg-20261019-bonifice-shop
+1571  # block=5149 src=cfg-20261019-bonifice-shop
+1573  # block=5147 src=cfg-20261019-bonifice-shop
+157B  # block=5164 src=cfg-20261019-bonifice-shop
+157E  # block=6268 src=cfg-20261019-bonifice-shop
+1580  # block=5162 src=cfg-20261019-bonifice-shop
+1590  # block=6604 src=cfg-20261019-bonifice-shop
+1598  # block=6611 src=cfg-20261019-bonifice-shop
+159F  # block=6623 src=cfg-20261019-bonifice-shop
+15A2  # block=6609 src=cfg-20261019-bonifice-shop
+15A9  # block=6619 src=cfg-20261019-bonifice-shop
+15AC  # block=6621 src=cfg-20261019-bonifice-shop
+15B4  # block=6646 src=cfg-20261019-bonifice-shop
+15B7  # block=6644 src=cfg-20261019-bonifice-shop
+15BA  # block=6617 src=cfg-20261019-bonifice-shop
+15C8  # block=6629 src=cfg-20261019-bonifice-shop
+15D0  # block=6663 src=cfg-20261019-bonifice-shop
+15D3  # block=6661 src=cfg-20261019-bonifice-shop
+15D6  # block=6626 src=cfg-20261019-bonifice-shop
+15DE  # block=6655 src=cfg-20261019-bonifice-shop
+15E1  # block=6653 src=cfg-20261019-bonifice-shop
+1799  # block=6657 src=cfg-20261019-bonifice-shop
+17B2  # block=6769 src=cfg-20261019-bonifice-shop
+17B7  # block=6882 src=cfg-20261019-bonifice-shop
+17C5  # block=6893 src=cfg-20261019-bonifice-shop
+17DD  # block=6896 src=cfg-20261019-bonifice-shop
+17E0  # block=6899 src=cfg-20261019-bonifice-shop
+17E5  # block=6902 src=cfg-20261019-bonifice-shop
+17E9  # block=6907 src=cfg-20261019-bonifice-shop
+17EF  # block=6916 src=cfg-20261019-bonifice-shop
+17F2  # block=6905 src=cfg-20261019-bonifice-shop
+1817  # block=6920 src=cfg-20261019-bonifice-shop
+181A  # block=6923 src=cfg-20261019-bonifice-shop
+183E  # block=6936 src=cfg-20261019-bonifice-shop
+1841  # block=6673 src=cfg-20261019-bonifice-shop
+1849  # block=6692 src=cfg-20261019-bonifice-shop
+184C  # block=6718 src=cfg-20261019-bonifice-shop
+1866  # block=6721 src=cfg-20261019-bonifice-shop
+1869  # block=6690 src=cfg-20261019-bonifice-shop
+19AF  # block=6667 src=cfg-20261019-bonifice-shop
+19B3  # block=6741 src=cfg-20261019-bonifice-shop
+19BA  # block=6746 src=cfg-20261019-bonifice-shop
+19D4  # block=6755 src=cfg-20261019-bonifice-shop
+19D7  # block=6744 src=cfg-20261019-bonifice-shop
+2028  # block=4189 src=spice86-cfg
+202C  # block=4196 src=spice86-cfg
+2031  # block=4199 src=spice86-cfg
+2035  # block=4203 src=spice86-cfg
+2039  # block=4207 src=spice86-cfg
+2048  # block=4233 src=spice86-cfg
+204D  # block=4238 src=spice86-cfg
+2052  # block=5269 src=cfg-20261019-bonifice-shop
+2070  # block=5287 src=cfg-20261019-bonifice-shop
+20A4  # block=5333 src=cfg-20261019-bonifice-shop
+20A7  # block=5285 src=cfg-20261019-bonifice-shop
+20AB  # block=6771 src=cfg-20261019-bonifice-shop
+20CF  # block=6792 src=cfg-20261019-bonifice-shop
+20D7  # block=6794 src=cfg-20261019-bonifice-shop
+20EB  # block=6825 src=cfg-20261019-bonifice-shop
+2121  # block=6827 src=cfg-20261019-bonifice-shop
+2122  # block=2794 src=spice86-cfg
+212A  # block=2806 src=spice86-cfg
+212E  # block=2804 src=spice86-cfg
+214D  # block=2888 src=spice86-cfg
+2150  # block=2996 src=spice86-cfg
+2152  # block=2999 src=spice86-cfg
+2155  # block=2997 src=spice86-cfg
+215C  # block=3008 src=spice86-cfg
+2166  # block=3058 src=spice86-cfg
+2169  # block=3061 src=spice86-cfg
+216B  # block=3063 src=spice86-cfg
+216E  # block=3006 src=spice86-cfg
+2186  # block=3075 src=spice86-cfg
+2189  # block=3078 src=spice86-cfg
+218B  # block=3032 src=spice86-cfg
+2192  # block=3044 src=spice86-cfg
+2195  # block=3042 src=spice86-cfg
+2199  # block=2889 src=spice86-cfg
+21A3  # block=2896 src=spice86-cfg
+21A6  # block=2894 src=spice86-cfg
+21AE  # block=2905 src=spice86-cfg
+21B2  # block=2912 src=spice86-cfg
+21B6  # block=2922 src=spice86-cfg
+21BD  # block=2920 src=spice86-cfg
+21C5  # block=2940 src=spice86-cfg
+21C9  # block=2949 src=spice86-cfg
+21CD  # block=2955 src=spice86-cfg
+21D1  # block=2961 src=spice86-cfg
+21D5  # block=2965 src=spice86-cfg
+21D8  # block=2903 src=spice86-cfg
+21DF  # block=2915 src=spice86-cfg
+21E2  # block=2918 src=spice86-cfg
+21E9  # block=2932 src=spice86-cfg
+21F0  # block=2946 src=spice86-cfg
+21F7  # block=2930 src=spice86-cfg
+21FC  # block=2899 src=spice86-cfg
+2201  # block=3002 src=spice86-cfg
+220A  # block=3015 src=spice86-cfg
+2213  # block=3028 src=spice86-cfg
+2216  # block=3013 src=spice86-cfg
+2233  # block=3854 src=spice86-cfg
+225A  # block=3881 src=spice86-cfg
+226F  # block=3890 src=spice86-cfg
+2272  # block=3888 src=spice86-cfg
+2275  # block=2189 src=spice86-cfg
+228A  # block=4377 src=spice86-cfg
+2290  # block=1202 src=spice86-cfg
+22BF  # block=1231 src=spice86-cfg
+22D1  # block=1238 src=spice86-cfg
+22D4  # block=1240 src=spice86-cfg
+22D5  # block=4615 src=cfg-20261019-bonifice-shop
+22FC  # block=4639 src=cfg-20261019-bonifice-shop
+22FD  # block=4535 src=cfg-20261019-bonifice-shop
+2304  # block=4541 src=cfg-20261019-bonifice-shop
+2305  # block=4539 src=cfg-20261019-bonifice-shop
+2340  # block=4585 src=cfg-20261019-bonifice-shop
+2352  # block=4592 src=cfg-20261019-bonifice-shop
+2361  # block=4596 src=cfg-20261019-bonifice-shop
+2362  # block=4897 src=cfg-20261019-bonifice-shop
+2370  # block=4942 src=cfg-20261019-bonifice-shop
+2373  # block=4912 src=cfg-20261019-bonifice-shop
+2378  # block=4916 src=cfg-20261019-bonifice-shop
+2383  # block=4944 src=cfg-20261019-bonifice-shop
+2389  # block=4954 src=cfg-20261019-bonifice-shop
+2392  # block=5432 src=spice86-cfg
+2395  # block=4914 src=cfg-20261019-bonifice-shop
+239C  # block=4924 src=cfg-20261019-bonifice-shop
+23A2  # block=4932 src=cfg-20261019-bonifice-shop
+23A8  # block=4940 src=cfg-20261019-bonifice-shop
+23AE  # block=4951 src=cfg-20261019-bonifice-shop
+23B0  # block=4922 src=cfg-20261019-bonifice-shop
+23B9  # block=5226 src=cfg-20261019-bonifice-shop
+23BE  # block=4930 src=cfg-20261019-bonifice-shop
+23C7  # block=5464 src=cfg-20261019-bonifice-shop
+23CC  # block=4938 src=cfg-20261019-bonifice-shop
+23D4  # block=4979 src=cfg-20261019-bonifice-shop
+23D9  # block=4949 src=cfg-20261019-bonifice-shop
+23E1  # block=5194 src=cfg-20261019-bonifice-shop
+23E6  # block=4984 src=cfg-20261019-bonifice-shop
+2402  # block=5005 src=cfg-20261019-bonifice-shop
+240A  # block=5001 src=cfg-20261019-bonifice-shop
+2414  # block=5011 src=cfg-20261019-bonifice-shop
+241E  # block=5016 src=cfg-20261019-bonifice-shop
+241F  # block=4999 src=cfg-20261019-bonifice-shop
+2422  # block=5007 src=cfg-20261019-bonifice-shop
+2423  # block=2384 src=cfg-20261019-bonifice-shop
+242D  # block=2391 src=cfg-20261019-bonifice-shop
+2434  # block=2400 src=cfg-20261019-bonifice-shop
+243B  # block=2415 src=cfg-20261019-bonifice-shop
+243E  # block=2398 src=cfg-20261019-bonifice-shop
+2453  # block=6519 src=cfg-20261019-bonifice-shop
+245A  # block=6524 src=cfg-20261019-bonifice-shop
+2474  # block=6522 src=cfg-20261019-bonifice-shop
+2488  # block=6542 src=cfg-20261019-bonifice-shop
+248B  # block=2389 src=cfg-20261019-bonifice-shop
+2495  # block=2407 src=cfg-20261019-bonifice-shop
+24B1  # block=2405 src=cfg-20261019-bonifice-shop
+24B5  # block=2419 src=cfg-20261019-bonifice-shop
+2520  # block=2417 src=cfg-20261019-bonifice-shop
+2527  # block=2434 src=cfg-20261019-bonifice-shop
+253B  # block=2432 src=cfg-20261019-bonifice-shop
+2542  # block=2452 src=cfg-20261019-bonifice-shop
+2545  # block=2450 src=cfg-20261019-bonifice-shop
+2549  # block=2461 src=cfg-20261019-bonifice-shop
+254C  # block=2459 src=cfg-20261019-bonifice-shop
+2550  # block=2473 src=cfg-20261019-bonifice-shop
+2553  # block=2471 src=cfg-20261019-bonifice-shop
+2557  # block=2486 src=cfg-20261019-bonifice-shop
+2575  # block=2484 src=cfg-20261019-bonifice-shop
+2578  # block=2688 src=cfg-20261019-bonifice-shop
+257E  # block=2714 src=cfg-20261019-bonifice-shop
+2584  # block=2696 src=cfg-20261019-bonifice-shop
+2587  # block=2698 src=cfg-20261019-bonifice-shop
+258D  # block=2712 src=cfg-20261019-bonifice-shop
+2590  # block=2716 src=cfg-20261019-bonifice-shop
+2593  # block=2722 src=cfg-20261019-bonifice-shop
+2599  # block=2727 src=cfg-20261019-bonifice-shop
+25BD  # block=2749 src=cfg-20261019-bonifice-shop
+25C0  # block=2747 src=cfg-20261019-bonifice-shop
+25C9  # block=2757 src=cfg-20261019-bonifice-shop
+25CC  # block=2755 src=cfg-20261019-bonifice-shop
+25D0  # block=2763 src=cfg-20261019-bonifice-shop
+25D4  # block=2769 src=cfg-20261019-bonifice-shop
+25D8  # block=2775 src=cfg-20261019-bonifice-shop
+25DC  # block=2781 src=cfg-20261019-bonifice-shop
+25E0  # block=2786 src=cfg-20261019-bonifice-shop
+25E4  # block=2790 src=cfg-20261019-bonifice-shop
+25E8  # block=2794 src=cfg-20261019-bonifice-shop
+25EC  # block=2798 src=cfg-20261019-bonifice-shop
+25F0  # block=2802 src=cfg-20261019-bonifice-shop
+25F4  # block=2806 src=cfg-20261019-bonifice-shop
+25F8  # block=2810 src=cfg-20261019-bonifice-shop
+25FF  # block=2463 src=cfg-20261019-bonifice-shop
+2604  # block=2499 src=cfg-20261019-bonifice-shop
+2619  # block=2480 src=cfg-20261019-death
+2620  # block=2501 src=cfg-20261019-death
+2664  # block=2505 src=cfg-20261019-bonifice-shop
+2677  # block=3701 src=spice86-cfg
+268C  # block=4413 src=spice86-cfg
+269F  # block=4430 src=spice86-cfg
+26A8  # block=4576 src=spice86-cfg
+26B7  # block=4645 src=spice86-cfg
+26C3  # block=4652 src=spice86-cfg
+26C6  # block=4650 src=spice86-cfg
+26CC  # block=4667 src=spice86-cfg
+26F2  # block=4696 src=spice86-cfg
+26F5  # block=4699 src=spice86-cfg
+26F9  # block=3174 src=spice86-cfg
+2700  # block=3187 src=spice86-cfg
+2701  # block=3185 src=spice86-cfg
+2707  # block=3195 src=spice86-cfg
+2708  # block=3193 src=spice86-cfg
+2731  # block=3919 src=spice86-cfg
+2735  # block=3923 src=spice86-cfg
+2744  # block=3921 src=spice86-cfg
+2776  # block=3973 src=spice86-cfg
+277A  # block=3977 src=spice86-cfg
+277B  # block=3975 src=spice86-cfg
+2B8F  # block=6948 src=cfg-20261019-death
+2B9B  # block=6951 src=cfg-20261019-death
+2BA2  # block=6956 src=cfg-20261019-death
+2BA5  # block=6954 src=cfg-20261019-death
+2BAD  # block=6968 src=cfg-20261019-death
+2BBE  # block=6966 src=cfg-20261019-death
+2BC1  # block=6991 src=cfg-20261019-death
+2BC4  # block=7092 src=cfg-20261019-death
+2BC7  # block=7095 src=cfg-20261019-death
+2BD4  # block=7102 src=cfg-20261019-death
+2BD7  # block=7100 src=cfg-20261019-death
+2BDA  # block=7114 src=cfg-20261019-death
+2BE3  # block=7120 src=cfg-20261019-death
+2BE6  # block=7118 src=cfg-20261019-death
+2BE9  # block=7242 src=cfg-20261019-death
+2BEC  # block=7281 src=cfg-20261019-death
+2BF8  # block=7284 src=cfg-20261019-death
+2BFB  # block=7345 src=cfg-20261019-death
+2C19  # block=8062 src=cfg-20261019-death
+2C26  # block=7366 src=cfg-20261019-death
+2C2D  # block=7932 src=cfg-20261019-death
+2C35  # block=7937 src=cfg-20261019-death
+2C38  # block=7935 src=cfg-20261019-death
+2CA4  # block=7364 src=cfg-20261019-death
+2CB5  # block=7399 src=cfg-20261019-death
+2CCD  # block=7410 src=cfg-20261019-death
+2CD3  # block=7408 src=cfg-20261019-death
+2CD8  # block=7419 src=cfg-20261019-death
+2CE5  # block=7417 src=cfg-20261019-death
+2CE9  # block=7427 src=cfg-20261019-death
+2CF2  # block=7479 src=cfg-20261019-death
+2CF6  # block=7483 src=cfg-20261019-death
+2D00  # block=7481 src=cfg-20261019-death
+2D03  # block=7494 src=cfg-20261019-death
+2D07  # block=7498 src=cfg-20261019-death
+2D17  # block=7496 src=cfg-20261019-death
+2D22  # block=7425 src=cfg-20261019-death
+2D8C  # block=7448 src=cfg-20261019-death
+2DB4  # block=7531 src=cfg-20261019-death
+2DB7  # block=7534 src=cfg-20261019-death
+2DC1  # block=7543 src=cfg-20261019-death
+2DE1  # block=7564 src=cfg-20261019-death
+2DE4  # block=7567 src=cfg-20261019-death
+2DEE  # block=7576 src=cfg-20261019-death
+2E06  # block=7597 src=cfg-20261019-death
+2E09  # block=7105 src=cfg-20261019-death
+2E13  # block=7972 src=cfg-20261019-death
+2F6F  # block=7699 src=cfg-20261019-death
+2F78  # block=7702 src=cfg-20261019-death
+2F7F  # block=7707 src=cfg-20261019-death
+2F96  # block=7705 src=cfg-20261019-death
+2F9E  # block=7714 src=cfg-20261019-death
+2FAD  # block=7733 src=cfg-20261019-death
+2FB4  # block=7738 src=cfg-20261019-death
+2FB8  # block=7744 src=cfg-20261019-death
+2FCD  # block=7742 src=cfg-20261019-death
+2FD6  # block=7736 src=cfg-20261019-death
+2FF6  # block=7746 src=cfg-20261019-death
+2FFE  # block=7766 src=cfg-20261019-death
+3035  # block=7796 src=cfg-20261019-death
+3038  # block=7764 src=cfg-20261019-death
+3045  # block=7977 src=cfg-20261019-death
+3389  # block=4023 src=spice86-cfg
+3392  # block=4026 src=spice86-cfg
+3399  # block=4031 src=spice86-cfg
+33A6  # block=4029 src=spice86-cfg
+33AE  # block=4039 src=spice86-cfg
+33C3  # block=4037 src=spice86-cfg
+33D1  # block=4052 src=spice86-cfg
+33D4  # block=4050 src=spice86-cfg
+33DA  # block=4062 src=spice86-cfg
+33DD  # block=4060 src=spice86-cfg
+33E3  # block=4072 src=spice86-cfg
+33E6  # block=4070 src=spice86-cfg
+33EC  # block=4082 src=spice86-cfg
+33EF  # block=4080 src=spice86-cfg
+33F5  # block=4092 src=spice86-cfg
+33F8  # block=4090 src=spice86-cfg
+33FE  # block=4102 src=spice86-cfg
+3401  # block=4100 src=spice86-cfg
+340F  # block=4055 src=spice86-cfg
+341B  # block=5036 src=spice86-cfg
+342A  # block=5047 src=spice86-cfg
+343C  # block=5062 src=spice86-cfg
+343F  # block=5090 src=spice86-cfg
+34B5  # block=4476 src=cfg-20261019-bonifice-shop
+34C0  # block=4530 src=cfg-20261019-bonifice-shop
+34CF  # block=4599 src=cfg-20261019-bonifice-shop
+34E1  # block=4614 src=cfg-20261019-bonifice-shop
+34E4  # block=4642 src=cfg-20261019-bonifice-shop
+3525  # block=4105 src=spice86-cfg
+353A  # block=4147 src=spice86-cfg
+3546  # block=4154 src=spice86-cfg
+3565  # block=4152 src=spice86-cfg
+3577  # block=4182 src=spice86-cfg
+35C1  # block=8004 src=cfg-20261019-death
+35C9  # block=8007 src=cfg-20261019-death
+35D0  # block=8012 src=cfg-20261019-death
+35DD  # block=8010 src=cfg-20261019-death
+35EA  # block=8022 src=cfg-20261019-death
+35ED  # block=8025 src=cfg-20261019-death
+35F0  # block=8028 src=cfg-20261019-death
+35F3  # block=8031 src=cfg-20261019-death
+3600  # block=8038 src=cfg-20261019-death
+3603  # block=8036 src=cfg-20261019-death
+3606  # block=8048 src=cfg-20261019-death
+360E  # block=8055 src=cfg-20261019-death
+3611  # block=8058 src=cfg-20261019-death
+3794  # block=6356 src=cfg-20261019-bonifice-shop
+37A4  # block=6359 src=cfg-20261019-bonifice-shop
+37AB  # block=6364 src=cfg-20261019-bonifice-shop
+37AE  # block=6362 src=cfg-20261019-bonifice-shop
+3BCE  # block=5435 src=spice86-cfg
+3BDD  # block=5438 src=spice86-cfg
+3BE4  # block=5443 src=spice86-cfg
+3C01  # block=5458 src=spice86-cfg
+3C04  # block=5441 src=spice86-cfg
+3DBC  # block=2374 src=spice86-cfg
+3DC4  # block=2377 src=spice86-cfg
+3DC7  # block=5306 src=spice86-cfg
+3DDD  # block=5309 src=spice86-cfg
+3DE4  # block=5314 src=spice86-cfg
+3DF7  # block=5336 src=spice86-cfg
+3DFA  # block=5312 src=spice86-cfg
+3E50  # block=4185 src=spice86-cfg
+3E9F  # block=4188 src=spice86-cfg
+3EA2  # block=4244 src=spice86-cfg
+3EAB  # block=4298 src=spice86-cfg
+3EBB  # block=4306 src=spice86-cfg
+3EC2  # block=4314 src=spice86-cfg
+3ED1  # block=4335 src=spice86-cfg
+3ED4  # block=4304 src=spice86-cfg
+3F25  # block=5461 src=spice86-cfg
+3F36  # block=5464 src=spice86-cfg
+4050  # block=4893 src=cfg-20261019-bonifice-shop
+405D  # block=4896 src=cfg-20261019-bonifice-shop
+4060  # block=4983 src=cfg-20261019-bonifice-shop
+4063  # block=5042 src=cfg-20261019-bonifice-shop
+406E  # block=5051 src=cfg-20261019-bonifice-shop
+4075  # block=5056 src=cfg-20261019-bonifice-shop
+407C  # block=5063 src=cfg-20261019-bonifice-shop
+407F  # block=5200 src=cfg-20261019-bonifice-shop
+4081  # block=5203 src=cfg-20261019-bonifice-shop
+4085  # block=5201 src=cfg-20261019-bonifice-shop
+409F  # block=6599 src=cfg-20261019-bonifice-shop
+40A3  # block=6602 src=cfg-20261019-bonifice-shop
+40A6  # block=5054 src=cfg-20261019-bonifice-shop
+40BD  # block=5222 src=cfg-20261019-bonifice-shop
+40C0  # block=5061 src=cfg-20261019-bonifice-shop
+40C8  # block=5070 src=cfg-20261019-bonifice-shop
+40CB  # block=5068 src=cfg-20261019-bonifice-shop
+40D4  # block=5081 src=cfg-20261019-bonifice-shop
+40D7  # block=5079 src=cfg-20261019-bonifice-shop
+40E0  # block=5097 src=cfg-20261019-bonifice-shop
+4101  # block=5231 src=cfg-20261019-bonifice-shop
+4104  # block=5095 src=cfg-20261019-bonifice-shop
+4108  # block=5105 src=cfg-20261019-bonifice-shop
+4125  # block=5188 src=cfg-20261019-bonifice-shop
+4128  # block=5103 src=cfg-20261019-bonifice-shop
+412C  # block=5113 src=cfg-20261019-bonifice-shop
+415B  # block=5111 src=cfg-20261019-bonifice-shop
+415F  # block=5121 src=cfg-20261019-bonifice-shop
+4181  # block=5482 src=cfg-20261019-bonifice-shop
+4184  # block=5119 src=cfg-20261019-bonifice-shop
+4188  # block=5130 src=cfg-20261019-bonifice-shop
+41A3  # block=6238 src=cfg-20261019-bonifice-shop
+41A6  # block=5128 src=cfg-20261019-bonifice-shop
+41AA  # block=5141 src=cfg-20261019-bonifice-shop
+41D2  # block=6759 src=cfg-20261019-bonifice-shop
+41D5  # block=5139 src=cfg-20261019-bonifice-shop
+41D9  # block=5154 src=cfg-20261019-bonifice-shop
+4206  # block=5152 src=cfg-20261019-bonifice-shop
+4209  # block=5073 src=cfg-20261019-bonifice-shop
+4211  # block=6273 src=cfg-20261019-bonifice-shop
+4214  # block=6291 src=cfg-20261019-bonifice-shop
+4217  # block=6277 src=cfg-20261019-bonifice-shop
+421A  # block=6279 src=cfg-20261019-bonifice-shop
+4220  # block=6289 src=cfg-20261019-bonifice-shop
+4223  # block=6293 src=cfg-20261019-bonifice-shop
+4232  # block=6302 src=cfg-20261019-bonifice-shop
+4246  # block=6300 src=cfg-20261019-bonifice-shop
+4249  # block=5085 src=cfg-20261019-bonifice-shop
+425F  # block=5237 src=cfg-20261019-bonifice-shop
+4262  # block=5261 src=cfg-20261019-bonifice-shop
+4281  # block=5264 src=cfg-20261019-bonifice-shop
+428E  # block=5376 src=cfg-20261019-bonifice-shop
+42AA  # block=5379 src=cfg-20261019-bonifice-shop
+42B7  # block=5387 src=cfg-20261019-bonifice-shop
+42C1  # block=5399 src=cfg-20261019-bonifice-shop
+42CB  # block=5408 src=cfg-20261019-bonifice-shop
+42D1  # block=5385 src=cfg-20261019-bonifice-shop
+42E2  # block=5439 src=cfg-20261019-bonifice-shop
+42F1  # block=6388 src=cfg-20261019-bonifice-shop
+4306  # block=6391 src=cfg-20261019-bonifice-shop
+4309  # block=6399 src=cfg-20261019-bonifice-shop
+4310  # block=6404 src=cfg-20261019-bonifice-shop
+4326  # block=6402 src=cfg-20261019-bonifice-shop
+433A  # block=6424 src=cfg-20261019-bonifice-shop
+433E  # block=6427 src=cfg-20261019-bonifice-shop
+4345  # block=6433 src=cfg-20261019-bonifice-shop
+435B  # block=6457 src=cfg-20261019-bonifice-shop
+435E  # block=6431 src=cfg-20261019-bonifice-shop
+4542  # block=6326 src=cfg-20261019-bonifice-shop
+4551  # block=6329 src=cfg-20261019-bonifice-shop
+4554  # block=6332 src=cfg-20261019-bonifice-shop
+4559  # block=6335 src=cfg-20261019-bonifice-shop
+455D  # block=6340 src=cfg-20261019-bonifice-shop
+4560  # block=6349 src=cfg-20261019-bonifice-shop
+4562  # block=6338 src=cfg-20261019-bonifice-shop
+4565  # block=6353 src=cfg-20261019-bonifice-shop
+4568  # block=5485 src=cfg-20261019-bonifice-shop
+456B  # block=5488 src=cfg-20261019-bonifice-shop
+457D  # block=5497 src=cfg-20261019-bonifice-shop
+4580  # block=5500 src=cfg-20261019-bonifice-shop
+458D  # block=5503 src=cfg-20261019-bonifice-shop
+4593  # block=5508 src=cfg-20261019-bonifice-shop
+4598  # block=5513 src=cfg-20261019-bonifice-shop
+459E  # block=5533 src=cfg-20261019-bonifice-shop
+45A3  # block=5538 src=cfg-20261019-bonifice-shop
+45AC  # block=5592 src=cfg-20261019-bonifice-shop
+45B1  # block=5597 src=cfg-20261019-bonifice-shop
+45BA  # block=5606 src=cfg-20261019-bonifice-shop
+45BF  # block=5611 src=cfg-20261019-bonifice-shop
+45C4  # block=5616 src=cfg-20261019-bonifice-shop
+45D1  # block=5619 src=cfg-20261019-bonifice-shop
+45DA  # block=5628 src=cfg-20261019-bonifice-shop
+45E9  # block=5643 src=cfg-20261019-bonifice-shop
+45F5  # block=5646 src=cfg-20261019-bonifice-shop
+45FB  # block=5651 src=cfg-20261019-bonifice-shop
+460A  # block=5666 src=cfg-20261019-bonifice-shop
+4617  # block=5669 src=cfg-20261019-bonifice-shop
+4620  # block=5678 src=cfg-20261019-bonifice-shop
+462F  # block=5693 src=cfg-20261019-bonifice-shop
+4638  # block=5696 src=cfg-20261019-bonifice-shop
+463E  # block=5701 src=cfg-20261019-bonifice-shop
+464D  # block=5716 src=cfg-20261019-bonifice-shop
+4657  # block=5719 src=cfg-20261019-bonifice-shop
+4660  # block=5728 src=cfg-20261019-bonifice-shop
+466F  # block=5743 src=cfg-20261019-bonifice-shop
+4679  # block=5746 src=cfg-20261019-bonifice-shop
+467F  # block=5751 src=cfg-20261019-bonifice-shop
+468E  # block=5766 src=cfg-20261019-bonifice-shop
+4693  # block=5771 src=cfg-20261019-bonifice-shop
+4698  # block=5776 src=cfg-20261019-bonifice-shop
+469E  # block=5781 src=cfg-20261019-bonifice-shop
+46AD  # block=5796 src=cfg-20261019-bonifice-shop
+46B2  # block=5801 src=cfg-20261019-bonifice-shop
+46B7  # block=5806 src=cfg-20261019-bonifice-shop
+46BD  # block=5811 src=cfg-20261019-bonifice-shop
+46CC  # block=5826 src=cfg-20261019-bonifice-shop
+46D1  # block=5831 src=cfg-20261019-bonifice-shop
+46D6  # block=5836 src=cfg-20261019-bonifice-shop
+46DC  # block=5841 src=cfg-20261019-bonifice-shop
+46EB  # block=5856 src=cfg-20261019-bonifice-shop
+46F0  # block=5861 src=cfg-20261019-bonifice-shop
+46F5  # block=5866 src=cfg-20261019-bonifice-shop
+46FB  # block=5871 src=cfg-20261019-bonifice-shop
+470A  # block=5886 src=cfg-20261019-bonifice-shop
+470F  # block=5891 src=cfg-20261019-bonifice-shop
+4714  # block=5896 src=cfg-20261019-bonifice-shop
+471A  # block=5901 src=cfg-20261019-bonifice-shop
+4729  # block=5916 src=cfg-20261019-bonifice-shop
+472E  # block=5921 src=cfg-20261019-bonifice-shop
+4733  # block=5926 src=cfg-20261019-bonifice-shop
+4739  # block=5931 src=cfg-20261019-bonifice-shop
+4748  # block=5946 src=cfg-20261019-bonifice-shop
+4755  # block=5949 src=cfg-20261019-bonifice-shop
+475B  # block=5965 src=cfg-20261019-bonifice-shop
+4763  # block=5957 src=cfg-20261019-bonifice-shop
+4771  # block=5995 src=cfg-20261019-bonifice-shop
+4777  # block=5998 src=cfg-20261019-bonifice-shop
+4786  # block=6009 src=cfg-20261019-bonifice-shop
+478B  # block=5955 src=cfg-20261019-bonifice-shop
+4793  # block=5967 src=cfg-20261019-bonifice-shop
+47A2  # block=6021 src=cfg-20261019-bonifice-shop
+47AE  # block=6024 src=cfg-20261019-bonifice-shop
+47B4  # block=6040 src=cfg-20261019-bonifice-shop
+47BC  # block=6032 src=cfg-20261019-bonifice-shop
+47CA  # block=6070 src=cfg-20261019-bonifice-shop
+47CF  # block=6073 src=cfg-20261019-bonifice-shop
+47DE  # block=6084 src=cfg-20261019-bonifice-shop
+47E3  # block=6030 src=cfg-20261019-bonifice-shop
+47EB  # block=6042 src=cfg-20261019-bonifice-shop
+47FA  # block=6096 src=cfg-20261019-bonifice-shop
+4806  # block=6099 src=cfg-20261019-bonifice-shop
+480C  # block=6115 src=cfg-20261019-bonifice-shop
+4814  # block=6107 src=cfg-20261019-bonifice-shop
+4822  # block=6145 src=cfg-20261019-bonifice-shop
+4828  # block=6148 src=cfg-20261019-bonifice-shop
+4837  # block=6159 src=cfg-20261019-bonifice-shop
+483C  # block=6105 src=cfg-20261019-bonifice-shop
+4844  # block=6117 src=cfg-20261019-bonifice-shop
+4853  # block=6171 src=cfg-20261019-bonifice-shop
+485E  # block=6174 src=cfg-20261019-bonifice-shop
+4864  # block=6190 src=cfg-20261019-bonifice-shop
+486C  # block=6182 src=cfg-20261019-bonifice-shop
+487A  # block=6466 src=cfg-20261019-bonifice-shop
+4881  # block=6470 src=cfg-20261019-bonifice-shop
+4886  # block=6468 src=cfg-20261019-bonifice-shop
+488B  # block=6478 src=cfg-20261019-bonifice-shop
+489A  # block=6489 src=cfg-20261019-bonifice-shop
+489F  # block=6180 src=cfg-20261019-bonifice-shop
+48A7  # block=6192 src=cfg-20261019-bonifice-shop
+48BC  # block=6223 src=cfg-20261019-bonifice-shop
+48BF  # block=6221 src=cfg-20261019-bonifice-shop
+48C4  # block=6225 src=cfg-20261019-bonifice-shop
+48C7  # block=6231 src=cfg-20261019-bonifice-shop
+48CA  # block=6234 src=cfg-20261019-bonifice-shop
+4A1C  # block=113 src=spice86-cfg
+4A22  # block=142 src=spice86-cfg
+4A2F  # block=179 src=spice86-cfg
+4A3C  # block=190 src=spice86-cfg
+4A3E  # block=634 src=spice86-cfg
+4A46  # block=649 src=spice86-cfg
+4A4E  # block=657 src=spice86-cfg
+4A56  # block=665 src=spice86-cfg
+4A5E  # block=670 src=spice86-cfg
+4A64  # block=676 src=spice86-cfg
+4A71  # block=678 src=spice86-cfg
+4A74  # block=1538 src=spice86-cfg
+4A89  # block=1581 src=spice86-cfg
+4AA6  # block=1583 src=spice86-cfg
+4AAD  # block=1476 src=spice86-cfg
+4AB8  # block=1547 src=spice86-cfg
+4ABB  # block=1534 src=spice86-cfg
+4AC3  # block=1521 src=spice86-cfg
+4ACE  # block=1519 src=spice86-cfg
+4AD7  # block=1536 src=spice86-cfg
+4AE0  # block=1549 src=spice86-cfg
+4AE6  # block=1992 src=spice86-cfg
+4AEF  # block=2046 src=spice86-cfg
+4AF1  # block=2060 src=spice86-cfg
+4AFA  # block=2069 src=spice86-cfg
+4AFC  # block=1996 src=spice86-cfg
+4B08  # block=2011 src=spice86-cfg
+4B1B  # block=2013 src=spice86-cfg
+4C1E  # block=7146 src=cfg-20261019-death
+4C31  # block=7186 src=cfg-20261019-death
+4C50  # block=7188 src=cfg-20261019-death
+4F11  # block=2627 src=spice86-cfg
+4F20  # block=2751 src=spice86-cfg
+4F32  # block=2767 src=spice86-cfg
+4F36  # block=2483 src=spice86-cfg
+4F4D  # block=485 src=spice86-cfg
+4F52  # block=519 src=spice86-cfg
+4F56  # block=523 src=spice86-cfg
+4F58  # block=1012 src=spice86-cfg
+4F5C  # block=1016 src=spice86-cfg
+4F60  # block=1023 src=spice86-cfg
+4F64  # block=1014 src=spice86-cfg
+4F69  # block=1027 src=spice86-cfg
+4F6A  # block=4402 src=spice86-cfg
+4F6E  # block=1041 src=spice86-cfg
+4F70  # block=1044 src=spice86-cfg
+4F74  # block=4401 src=spice86-cfg
+4F76  # block=1042 src=spice86-cfg
+4F7B  # block=1051 src=spice86-cfg
+4F85  # block=1049 src=spice86-cfg
+4F89  # block=1056 src=spice86-cfg
+4F8E  # block=1063 src=spice86-cfg
+4FA0  # block=1061 src=spice86-cfg
+4FA5  # block=1069 src=spice86-cfg
+4FBB  # block=1067 src=spice86-cfg
+4FBE  # block=1101 src=spice86-cfg
+4FC5  # block=1083 src=spice86-cfg
+4FCA  # block=1097 src=spice86-cfg
+4FCC  # block=1081 src=spice86-cfg
+4FD1  # block=1020 src=spice86-cfg
+4FD3  # block=521 src=spice86-cfg
+4FD7  # block=528 src=spice86-cfg
+4FDB  # block=533 src=spice86-cfg
+4FDD  # block=526 src=spice86-cfg
+4FDF  # block=328 src=spice86-cfg
+4FE2  # block=333 src=spice86-cfg
+4FEC  # block=430 src=spice86-cfg
+4FF0  # block=337 src=spice86-cfg
+4FFB  # block=344 src=spice86-cfg
+4FFE  # block=429 src=spice86-cfg
+5000  # block=342 src=spice86-cfg
+5003  # block=347 src=spice86-cfg
+500D  # block=358 src=spice86-cfg
+5016  # block=356 src=spice86-cfg
+501A  # block=364 src=spice86-cfg
+5025  # block=375 src=spice86-cfg
+5036  # block=2401 src=spice86-cfg
+503D  # block=362 src=spice86-cfg
+504A  # block=408 src=spice86-cfg
+5057  # block=373 src=spice86-cfg
+505A  # block=419 src=spice86-cfg
+505F  # block=5515 src=cfg-20261019-bonifice-shop
+5066  # block=5521 src=cfg-20261019-bonifice-shop
+506E  # block=5530 src=cfg-20261019-bonifice-shop
+506F  # block=5519 src=cfg-20261019-bonifice-shop
+507A  # block=5238 src=cfg-20261019-bonifice-shop
+507D  # block=5256 src=cfg-20261019-bonifice-shop
+5085  # block=5245 src=cfg-20261019-bonifice-shop
+5088  # block=5254 src=cfg-20261019-bonifice-shop
+508B  # block=5243 src=cfg-20261019-bonifice-shop
+508C  # block=4248 src=spice86-cfg
+5093  # block=4264 src=spice86-cfg
+509B  # block=4256 src=spice86-cfg
+509E  # block=4254 src=spice86-cfg
+50A1  # block=4262 src=spice86-cfg
+50A3  # block=4260 src=spice86-cfg
+50AD  # block=4272 src=spice86-cfg
+50B0  # block=4294 src=spice86-cfg
+50B2  # block=4270 src=spice86-cfg
+50B3  # block=1276 src=spice86-cfg
+50D8  # block=2653 src=spice86-cfg
+50DC  # block=2659 src=spice86-cfg
+50DE  # block=2664 src=spice86-cfg
+50E1  # block=2662 src=spice86-cfg
+50E3  # block=2622 src=spice86-cfg
+50EF  # block=2602 src=spice86-cfg
+50F3  # block=2624 src=spice86-cfg
+50F9  # block=1784 src=spice86-cfg
+5111  # block=1801 src=spice86-cfg
+5120  # block=1809 src=spice86-cfg
+5123  # block=1807 src=spice86-cfg
+5126  # block=1874 src=spice86-cfg
+5129  # block=1877 src=spice86-cfg
+513C  # block=1886 src=spice86-cfg
+514B  # block=1894 src=spice86-cfg
+514E  # block=1892 src=spice86-cfg
+5151  # block=1905 src=spice86-cfg
+5154  # block=1908 src=spice86-cfg
+5167  # block=1917 src=spice86-cfg
+5175  # block=1928 src=spice86-cfg
+5188  # block=1937 src=spice86-cfg
+5196  # block=1948 src=spice86-cfg
+51A4  # block=1958 src=spice86-cfg
+51A5  # block=1811 src=spice86-cfg
+51A9  # block=1865 src=spice86-cfg
+51AE  # block=1870 src=spice86-cfg
+51EB  # block=306 src=spice86-cfg
+51FB  # block=323 src=spice86-cfg
+51FD  # block=145 src=spice86-cfg
+5212  # block=169 src=spice86-cfg
+5217  # block=2552 src=spice86-cfg
+522B  # block=2649 src=spice86-cfg
+5236  # block=2651 src=spice86-cfg
+523E  # block=7122 src=cfg-20261019-death
+5246  # block=7130 src=cfg-20261019-death
+524A  # block=7137 src=cfg-20261019-death
+5251  # block=7151 src=cfg-20261019-death
+5255  # block=7160 src=cfg-20261019-death
+525E  # block=7128 src=cfg-20261019-death
+5267  # block=7135 src=cfg-20261019-death
+5270  # block=7149 src=cfg-20261019-death
+5279  # block=7158 src=cfg-20261019-death
+527F  # block=7139 src=cfg-20261019-death
+5287  # block=7239 src=cfg-20261019-death
+52CA  # block=695 src=spice86-cfg
+52E7  # block=712 src=spice86-cfg
+52EF  # block=714 src=spice86-cfg
+52F6  # block=722 src=spice86-cfg
+5300  # block=724 src=spice86-cfg
+5317  # block=788 src=spice86-cfg
+531B  # block=792 src=spice86-cfg
+5343  # block=790 src=spice86-cfg
+5351  # block=800 src=spice86-cfg
+5356  # block=798 src=spice86-cfg
+535A  # block=815 src=spice86-cfg
+5371  # block=827 src=spice86-cfg
+5379  # block=833 src=spice86-cfg
+53B5  # block=1817 src=spice86-cfg
+53C5  # block=1852 src=spice86-cfg
+53CE  # block=1861 src=spice86-cfg
+53D9  # block=182 src=spice86-cfg
+53DF  # block=1824 src=cfg-20261019-death
+53E6  # block=1832 src=cfg-20261019-death
+53EE  # block=1830 src=cfg-20261019-death
+53F3  # block=1838 src=cfg-20261019-death
+53F4  # block=2381 src=spice86-cfg
+53F7  # block=2405 src=spice86-cfg
+5AB1  # block=1289 src=spice86-cfg
+5AB8  # block=1296 src=spice86-cfg
+5ABB  # block=1294 src=spice86-cfg
+5AE1  # block=1408 src=spice86-cfg
+5AED  # block=1357 src=spice86-cfg
+5AF9  # block=1355 src=spice86-cfg
+5AFF  # block=1378 src=spice86-cfg
+5B33  # block=1363 src=spice86-cfg
+5B39  # block=1372 src=spice86-cfg
+5B3D  # block=1385 src=spice86-cfg
+5B44  # block=1410 src=cfg-20261019-bonifice-shop
+5B47  # block=1383 src=spice86-cfg
+5B4B  # block=1396 src=spice86-cfg
+5B4D  # block=1370 src=spice86-cfg
+5B5D  # block=1410 src=spice86-cfg
+5B6E  # block=1431 src=spice86-cfg
+5B71  # block=1429 src=spice86-cfg
+5B98  # block=1300 src=spice86-cfg
+5BC2  # block=1500 src=spice86-cfg
+5C11  # block=1470 src=spice86-cfg
+5C15  # block=1481 src=spice86-cfg
+5C1C  # block=1493 src=spice86-cfg
+5C1F  # block=1479 src=spice86-cfg
+5C23  # block=1490 src=spice86-cfg
+5C25  # block=1468 src=spice86-cfg
+5C35  # block=1502 src=spice86-cfg
+5C46  # block=1517 src=spice86-cfg
+5C49  # block=1515 src=spice86-cfg
+5C6D  # block=1472 src=spice86-cfg
+5C70  # block=1756 src=spice86-cfg
+5C76  # block=1766 src=spice86-cfg
+5C88  # block=1768 src=spice86-cfg
+5C95  # block=4338 src=spice86-cfg
+5C9C  # block=4343 src=spice86-cfg
+5CA5  # block=4359 src=spice86-cfg
+5CAB  # block=4364 src=spice86-cfg
+5CAE  # block=4367 src=spice86-cfg
+5CB1  # block=4341 src=spice86-cfg
+5CB2  # block=2203 src=spice86-cfg
+5CCC  # block=2223 src=spice86-cfg
+5CD0  # block=2221 src=spice86-cfg
+5CD2  # block=2629 src=cfg-20261019-bonifice-shop
+5CDA  # block=2643 src=cfg-20261019-bonifice-shop
+5CDD  # block=2638 src=cfg-20261019-bonifice-shop
+5CE0  # block=2640 src=cfg-20261019-bonifice-shop
+5CE3  # block=2645 src=cfg-20261019-bonifice-shop
+5CE4  # block=2617 src=cfg-20261019-bonifice-shop
+5D09  # block=2159 src=spice86-cfg
+5D14  # block=2180 src=spice86-cfg
+5D22  # block=2609 src=cfg-20261019-bonifice-shop
+5D2D  # block=2615 src=cfg-20261019-bonifice-shop
+5D37  # block=2625 src=cfg-20261019-bonifice-shop
+5D3A  # block=2665 src=cfg-20261019-bonifice-shop
+5D3D  # block=2623 src=cfg-20261019-bonifice-shop
+5D50  # block=2666 src=cfg-20261019-bonifice-shop
+5D55  # block=2613 src=cfg-20261019-bonifice-shop
+5D58  # block=2178 src=spice86-cfg
+5DA9  # block=3130 src=spice86-cfg
+5DB0  # block=3135 src=spice86-cfg
+5DB3  # block=3133 src=spice86-cfg
+5DCD  # block=4473 src=spice86-cfg
+5DD7  # block=4478 src=spice86-cfg
+5DDE  # block=4476 src=spice86-cfg
+5DE6  # block=4541 src=spice86-cfg
+5DF0  # block=4532 src=spice86-cfg
+5DF3  # block=4535 src=spice86-cfg
+5E07  # block=4483 src=spice86-cfg
+5E0F  # block=4514 src=spice86-cfg
+5E19  # block=4503 src=spice86-cfg
+5E1C  # block=4507 src=spice86-cfg
+5E30  # block=4516 src=spice86-cfg
+5E32  # block=4505 src=spice86-cfg
+5E35  # block=4552 src=spice86-cfg
+5E3A  # block=3138 src=spice86-cfg
+5EAC  # block=3519 src=cfg-20261019-death
+5EC2  # block=7679 src=cfg-20261019-death
+5EC7  # block=2132 src=spice86-cfg
+5ECE  # block=2146 src=spice86-cfg
+5ED5  # block=2684 src=cfg-20261019-bonifice-shop
+5ED6  # block=2144 src=spice86-cfg
+5ED7  # block=7285 src=cfg-20261019-death
+5EED  # block=7335 src=cfg-20261019-death
+5EF2  # block=7819 src=cfg-20261019-death
+5F08  # block=7842 src=cfg-20261019-death
+5FA6  # block=4433 src=spice86-cfg
+5FBD  # block=4564 src=spice86-cfg
+5FE0  # block=6964 src=cfg-20261019-death
+5FF7  # block=7080 src=cfg-20261019-death

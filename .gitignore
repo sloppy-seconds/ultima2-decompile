@@ -30,3 +30,11 @@ build/
 # OS / editor noise.
 .DS_Store
 *.swp
+
+# User-authorized external raw runtime captures (see captures/external-20261019/PROVENANCE.md).
+# Raw dumps stay out of git per the licensing policy; the provenance note is committed.
+captures/external-20261019/**/*.json
+
+# Full linear asm dumps are bulky derived artefacts of the copyrighted
+# binary (regenerable via tools/extract_asm.py); keep out of git like decompiled/.
+disasm/*.asm

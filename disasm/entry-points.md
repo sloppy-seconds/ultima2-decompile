@@ -66,3 +66,19 @@ for `objdump -d -b binary --start-address=...` to emit instructions (see impleme
 
 All three decode as plausible routine starts (absolute `mov`, register init, DOS `int 0x1a`),
 not mid-string garbage.
+
+---
+
+## v2 — merged with user-authorized external captures (2026-10-19 night)
+
+The project owner explicitly authorized raw runtime CFG exports from
+`/var/home/paul/Projects/ultima2/references/extracted/live-capture/` (see
+`captures/external-20261019/PROVENANCE.md`; only raw captures were imported, no prior
+analysis). The extractor now merges all 45 sources (in-project CFG + 44 external harvests:
+shops, death loop, frigate, Lord British, Port Bonifice, cumulative watch-* series).
+
+- Byte-verified first: 40,162 external block checks against `original/ultimaii.exe`;
+  only mismatch = the known `0100` relocation fixup. Same binary confirmed.
+- Merged unique entries: **1113** (was 693). New seed union with jump table: **1125**
+  (12 handlers still CFG-uncovered: C D G H J K L M O R T V W X).
+- Handler coverage from runtime evidence: 14/26 (was 7/26).
