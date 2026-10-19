@@ -244,6 +244,23 @@ public class DecompileMz extends GhidraScript {
                 }
                 Function owner = currentProgram.getFunctionManager().getFunctionContaining(a);
                 if (owner == null) {
+                    // The caller's independent evidence (runtime CFG / jump table) says this
+                    // is a routine start; Ghidra simply never claimed the area as a function.
+                    // Create the function outright instead of skipping the seed.
+                    try {
+                        disassemble(a);
+                        createFunction(a, null);
+                        Function fresh = currentProgram.getFunctionManager().getFunctionAt(a);
+                        if (fresh != null) {
+                            reparented++;
+                            println("ENTRY " + label + " 0x" + Long.toHexString(entryIp)
+                                    + " created fresh function (" + fresh.getName() + ")");
+                            continue;
+                        }
+                    } catch (Throwable e) {
+                        println("ENTRY " + label + " 0x" + Long.toHexString(entryIp)
+                                + " CREATE FAILED: " + e);
+                    }
                     println("ENTRY " + label + " 0x" + Long.toHexString(entryIp)
                             + " not inside any body");
                     continue;

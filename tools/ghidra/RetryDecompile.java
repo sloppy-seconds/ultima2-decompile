@@ -30,6 +30,7 @@ public class RetryDecompile extends GhidraScript {
     public void run() throws Exception {
         String addrPath = null;
         String outPath = null;
+        int timeoutSec = 90;
         for (String arg : getScriptArgs()) {
             int eq = arg.indexOf('=');
             if (eq < 0) {
@@ -41,6 +42,8 @@ public class RetryDecompile extends GhidraScript {
                 addrPath = val;
             } else if (key.equals("out")) {
                 outPath = val;
+            } else if (key.equals("timeout")) {
+                timeoutSec = Integer.parseInt(val);
             }
         }
         if (addrPath == null) {
@@ -93,7 +96,7 @@ public class RetryDecompile extends GhidraScript {
                         continue;
                     }
                     try {
-                        DecompileResults res = di.decompileFunction(fn, 90, getMonitor());
+                        DecompileResults res = di.decompileFunction(fn, timeoutSec, getMonitor());
                         boolean ok = res != null && res.decompileCompleted()
                                 && res.getDecompiledFunction() != null;
                         String label = style + "/" + (simplify ? "simp" : "raw");

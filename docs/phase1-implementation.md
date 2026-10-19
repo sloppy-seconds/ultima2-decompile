@@ -175,3 +175,25 @@ Format per checkpoint:
 - Deviations: parallelized CP5 ahead of CP4 completion (pure wall-time optimization, no
   dependency); noted here for audit order.
 - Commit: `phase1: CP5 Reko seeded (712/712 emitted, 839 defines, 3 per-proc failures)`
+
+## CP4 — Seeded Ghidra decompilation   (session: phase1-run-A)
+- What I did (attempt 1, dead-end): ran the plan's exact command (both postScripts in one
+  invocation — both honoured: MarkInlineData wrote inline.tsv at 13:12, DecompileMz then ran).
+  Seeded with `disasm/seed-entries.txt` (712). Killed after 35 min at ~14% progress.
+- Measured outputs (attempt 1):
+  - Not stuck, but pathologically slow: the native `decompile` child pegs 99% CPU and balloons
+    to 14-19 GB RSS on bad functions, hits the script's 60 s timeout, gets silently restarted,
+    repeats. Java side sits at 0% CPU blocked on the pipe (looks hung, isn't).
+  - Ruled out memory/paging: 123 GiB RAM, 83 GiB available, PSI memory ~0.00, no swap thrash.
+  - True progress signal: the index TSV flushes at buffer boundaries (8192 B blocks); 124 rows
+    by 13:45, zero delta over a 2-minute sample. Projected 4+ h.
+- Decisions & reasoning:
+  - Killed and relaunched with two changes: `only=disasm/seed-entries.txt` (decompile exactly
+    the 712 seeds; skips Ghidra's auto-discovered junk/thunks entirely) and `timeout=10`
+    (bounds each runaway to 10 s instead of 60 s). Functions that legitimately need >10 s are
+    recovered later by RetryDecompile.java with a long timeout — that is the plan's own
+    recovery path, so no acceptance criterion is weakened.
+  - Attempt 1 scratch kept at /var/tmp/u2-ghidra.run/; attempt 2 at /var/tmp/u2-ghidra.run2/.
+- Dead-ends: attempt 1 timing (documented above).
+- Deviations: `only=` + `timeout=10` vs plan's bare command — performance, not scope; same
+  outputs, same seeds. Will record residual failure counts honestly.
