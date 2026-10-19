@@ -159,3 +159,4 @@ lands in CP4/CP5 functions.
 
 Committed `phase3: CP2 pilot 27/27 green (26 cmd handlers + str_out); preclean.py + decode_str.py`.
 - **CP4 wave-1 batch 1** (0100..020F, 25): all check_func green.
+- **CP4 wave-1 batch 2** (0222..0375, 25): all check_func green.
