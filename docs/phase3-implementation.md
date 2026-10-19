@@ -188,3 +188,4 @@ Committed `phase3: CP2 pilot 27/27 green (26 cmd handlers + str_out); preclean.p
 - **CP4 wave-1 batch 28** (4306..45BA, 25): all check_func green.
 - **CP4 wave-1 batch 29** (45BF..4698, 25): all check_func green.
 - **CP4 wave-1 batch 30** (469E..475C, 25): all check_func green.
+- **CP4 wave-1 batch 31** (4763..4837, 25): all check_func green.
