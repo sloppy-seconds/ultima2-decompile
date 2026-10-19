@@ -54,3 +54,26 @@ Created this log and `docs/phase2-state.md`. No deviations.
   handler C = derived 496 (Reko flow covers it) + string 96 + code 83 + unclass 82. Plausible.
 - Deviation note: plan said "db directives"; used `.byte` (GNU as equivalent) to keep the
   existing assemble pipeline unchanged.
+
+## CP3 — Per-function asm slices (2026-10-19)
+
+- First slice attempt exposed a real defect in the Phase 1 linear asm: **106 of 1299 function
+  starts had no asm label** (linear decode mis-aligned across them; e.g. program entry file
+  0x300 was swallowed by a straddling instruction at 0x2ff). Slicing the linear asm would have
+  baked in wrong instruction boundaries.
+- Fix: `tools/emit_map_asm.py` — map-driven regeneration: objdump decodes EACH function from
+  its own start (aligned by construction), data-region bytes emitted as `.byte` with kind
+  comments, MZ/PSP as blobs. New edge cases found and handled:
+  * objdump truncates a row at stop-address but prints full text -> gas re-encodes PC-rel ops
+    LONGER than the bytes present (stop-trunc force rule added);
+  * rows straddling a function boundary -> `.byte` prefix + `straddle-trunc` so the next
+    function still starts at its own label;
+  * gap/tail pads for bytes no row covers.
+  - `disasm/ultimaii-mapped.asm`: **MAPPED BYTE-MATCH: 37,344 bytes identical** (2,241 forced;
+    +170 vs linear, all from boundary handling). All 1299 starts have labels (verified).
+- `tools/make_slices.py` -> `disasm/functions/<SEG>.asm` (1299 slices + `_prologue.asm`;
+  slice = function label .. next function label; gitignored, regenerable).
+- `tools/assemble_all.sh` rebuilds from prologue+slices in address order:
+  **REBUILD BYTE-MATCH: 37,344 bytes identical**. Acceptance met (4/4 clauses).
+- Canonical asm for Phase 2+ is now `ultimaii-mapped.asm` (per-function aligned);
+  `ultimaii.asm` (linear) kept as the Phase 1 artifact.

@@ -38,3 +38,6 @@ captures/external-20261019/**/*.json
 # Full linear asm dumps are bulky derived artefacts of the copyrighted
 # binary (regenerable via tools/extract_asm.py); keep out of git like decompiled/.
 disasm/*.asm
+
+# per-function asm slices (regenerable via tools/make_slices.py)
+disasm/functions/
