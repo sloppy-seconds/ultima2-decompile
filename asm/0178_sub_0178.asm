@@ -1,0 +1,9 @@
+# sub_0178 — mechanical clean (bulk wave); behavior not yet reviewed
+# func 0178..017C  len 0005 B  evidence: seed+reko
+# confidence: low (bytes proven by check_func.py)
+# bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+sub_0178:
+L_000378:
+        cmp    $0xff1b,%ax
+L_00037b:
+        jne L_000380
