@@ -1,0 +1,7 @@
+# cmd_B — command handler 'B': prints "BOARD" then falls
+#           through into the following map fragment
+# func 2F6F..2F77  len 009 B  evidence: seed+reko (jump table cs:0730 entry B)
+# confidence: high (handler role proven; message literal)
+cmd_B:
+        call L_0051df          # str_out — prints the inline string below
+        db "BOARD",0        # string

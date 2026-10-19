@@ -1,0 +1,78 @@
+# cmd_V — command handler 'V' (VIEW): "VIEW WHAT?"; with magical helm shows
+#           "VIEW\x8dWITH MAGICAL HELM!" variant.
+# func 437E..43F2  len 0075 B  evidence: seed+reko (jump table cs:0730 entry V)
+# confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
+# notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
+#        kept as .byte (disp8/disp16 and reg-op form choices)
+cmd_V:
+cmd_V:
+L_00457e:
+        .byte 0xa0,0xdb,0x00  # forced-kept: gas re-encodes 'mov    0xdb,%al' differently
+L_004581:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_004583:
+        jne L_004596
+L_004585:
+        call L_0051df
+        db "VIEW WHAT?",0x00        # string
+L_004593:
+        jmp L_000c33
+L_004596:
+        .byte 0xa0,0x4a,0x00  # forced-kept: gas re-encodes 'mov    0x4a,%al' differently
+L_004599:
+        .byte 0x3c,0x04  # forced-kept: gas re-encodes 'cmp    $0x4,%al' differently
+L_00459b:
+        jae L_004585
+L_00459d:
+        call L_0051df
+        db "VIEW",0x8d,"WITH MAGICAL HELM!",0x00        # string
+L_0045b8:
+        .byte 0xf9  # forced-kept: gas re-encodes 'stc' differently
+L_0045b9:
+        .byte 0xa0,0xdb,0x00  # forced-kept: gas re-encodes 'mov    0xdb,%al' differently
+L_0045bc:
+        .byte 0xf5  # forced-kept: gas re-encodes 'cmc' differently
+L_0045bd:
+        .byte 0x1c,0x01  # forced-kept: gas re-encodes 'sbb    $0x1,%al' differently
+L_0045bf:
+        .byte 0x2f  # forced-kept: gas re-encodes 'das' differently
+L_0045c0:
+        .byte 0xf5  # forced-kept: gas re-encodes 'cmc' differently
+L_0045c1:
+        .byte 0xa2,0xdb,0x00  # forced-kept: gas re-encodes 'mov    %al,0xdb' differently
+L_0045c4:
+        .byte 0xb0,0x20  # forced-kept: gas re-encodes 'mov    $0x20,%al' differently
+L_0045c6:
+        .byte 0xa2,0x23,0x00  # forced-kept: gas re-encodes 'mov    %al,0x23' differently
+L_0045c9:
+        .byte 0xa2,0x24,0x00  # forced-kept: gas re-encodes 'mov    %al,0x24' differently
+L_0045cc:
+        call L_002bd2
+L_0045cf:
+        call L_00514d
+L_0045d2:
+        .byte 0x80,0xfc,0xff  # forced-kept: gas re-encodes 'cmp    $0xff,%ah' differently
+L_0045d5:
+        jne L_0045cf
+L_0045d7:
+        .byte 0xb7,0x00  # forced-kept: gas re-encodes 'mov    $0x0,%bh' differently
+L_0045d9:
+        .byte 0xb3,0xff  # forced-kept: gas re-encodes 'mov    $0xff,%bl' differently
+L_0045db:
+        .byte 0x8b,0xfb  # forced-kept: gas re-encodes 'mov    %bx,%di' differently
+L_0045dd:
+        .byte 0xb0,0xff  # forced-kept: gas re-encodes 'mov    $0xff,%al' differently
+L_0045df:
+        .byte 0x88,0x85,0x72,0x02  # forced-kept: gas re-encodes 'mov    %al,0x272(%di)' differently
+L_0045e3:
+        .byte 0x88,0x85,0x72,0x03  # forced-kept: gas re-encodes 'mov    %al,0x372(%di)' differently
+L_0045e7:
+        .byte 0x4f  # forced-kept: gas re-encodes 'dec    %di' differently
+L_0045e8:
+        jne L_0045df
+L_0045ea:
+        .byte 0xa2,0x72,0x02  # forced-kept: gas re-encodes 'mov    %al,0x272' differently
+L_0045ed:
+        .byte 0xa2,0x72,0x03  # forced-kept: gas re-encodes 'mov    %al,0x372' differently
+L_0045f0:
+        jmp L_000c33

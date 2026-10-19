@@ -81,3 +81,80 @@ change, check_func green before commit, assemble_all stays green).
 
 `assemble_all.sh` re-checked green after CP1 (mechanical tree untouched).
 Committed `phase3: CP1 check_func.py harness (1299/1299 slices + 3 seeds) + asm-style.md`.
+
+---
+
+## CP2 — Pilot: 26 cmd handlers + str_out — done 2026-10-20
+
+**Result: 27/27 `check_func.py` green** (each file in `asm/`), `assemble_all.sh`
+still byte-identical.
+
+Two new tools were needed to do this honestly at scale:
+
+* **`tools/preclean.py`** — mechanical transforms from a Phase 2 slice:
+  string/zeros/pad `.byte` runs merged into `db` items (printable runs become
+  `db "text",0`; label-interleaved runs merged when the inner labels are
+  unreferenced corpus-wide); `# forced:` lines restored to instructions ONLY
+  after batch-verifying gas reproduces the exact original bytes (catches
+  `or %al,%al`→0ac0 vs 08c0, `mov %ax,%di` form choice, `shr %cl,%al`
+  stop-trunc length); rel-op forces restored with length-fit checks;
+  `stop-trunc` kept as `.byte`.
+* **`tools/decode_str.py`** — the keystone discovery of the pilot: Phase 2's
+  forced-`.byte` clusters around `call str_out` are objdump desyncs (string
+  bytes decoded as instructions). This decoder re-runs objdump per range and,
+  at every `call 0x51df`, consumes the raw bytes up to the NUL as `db "..."`
+  and RESTARTS decoding after the terminator. Every mis-decode site in the
+  pilot resolved into clean code this way (e.g. cmd_G's "ja L_003881 into a
+  BCD increment" was really `jmp 0xc33; call str_out; " WEAPON\0"`). Plain
+  instructions are byte-verified (same machinery as preclean) and kept as
+  `.byte # forced-kept: gas re-encodes ...` where gas would optimize
+  disp16→disp8 or pick another form. `jns`/full REL_OPS set matters (missed
+  it first, got a silent rel16 widening).
+
+**Per-function log (what was cleaned):**
+
+| fn | file | cleaning |
+| --- | --- | --- |
+| str_out | `4FDF_str_out.asm` | named entry + `L_0051df` anchor kept (57 external refs); wrapper to 0x53fd documented |
+| cmd_A | `2B8F_cmd_A.asm` | CP1 seed: `call str_out` + `db "ATTACK--",0` |
+| cmd_B | `2F6F_cmd_B.asm` | "BOARD" inline string |
+| cmd_C | `310B_cmd_C.asm` | CAST: hand-re-decoded; slice mis-decode (cmp $0xb890…) → `jmp 0x3353`, ES=0xB800/0xBA00 setup + calls to 0x3339, timed wait via 0x54ca, "PICXXX  " |
+| cmd_D | `334D_cmd_D.asm` | DESCEND: mis-decode fixed; NUL+`jmp 0xc33` tails; resume label at 0x3570 documented as defect site |
+| cmd_E | `3389_cmd_E.asm` | "ENTER" |
+| cmd_F | `35C1_cmd_F.asm` | "FIRE" |
+| cmd_G | `363B_cmd_G.asm` | GET: full decode_str re-decode; WEAPON/ARMOUR/CHEST/gold/TRI-LITHIUM paths, BCD increments at [di+0x76]/[di+0x96] now real instructions |
+| cmd_H | `3782_cmd_H.asm` | "HYPER WHAT?" + `jmp 0xc33` (slice had add/lahf/d2 garbage) |
+| cmd_I | `3794_cmd_I.asm` | 1-byte stop-trunc call, kept `.byte` with warning comment |
+| cmd_J | `37DC_cmd_J.asm` | "JUMP...WHEE..." + `jmp 0xc33` |
+| cmd_K | `37F1_cmd_K.asm` | 1-byte stop-trunc call |
+| cmd_L | `38B0_cmd_L.asm` | LAUNCH: decode_str re-decode of 738 B; rocket/plane flows, direction words + "CMD: " prompts |
+| cmd_M | `3B92_cmd_M.asm` | hand-re-decoded: NUL + `call 0x2228` (slice's jl→0x3d90 was a desync artifact; that stale external ref is gone) |
+| cmd_N | `3BCE_cmd_N.asm` | "NEGATE TIME" |
+| cmd_O | `3C2E_cmd_O.asm` | OFFER: decode_str re-decode; ENILNO/RING quest messages |
+| cmd_P | `3DBC_cmd_P.asm` | "PASS" |
+| cmd_Q | `3DC7_cmd_Q.asm` | "QUIT OR SAVE GAME." |
+| cmd_R | `3E50_cmd_R.asm` | READY WEAPON menu |
+| cmd_S | `3F25_cmd_S.asm` | "STEAL DIRECT-" |
+| cmd_T | `4050_cmd_T.asm` | "TRANSACT-" |
+| cmd_U | `42F1_cmd_U.asm` | "UNLOCK DIRECTION-" |
+| cmd_V | `437E_cmd_V.asm` | VIEW + magical-helm variant |
+| cmd_W | `43F3_cmd_W.asm` | WEAR ARMOUR menu + error paths |
+| cmd_X | `44D4_cmd_X.asm` | X-IT destroy-item paths |
+| cmd_Y | `4542_cmd_Y.asm` | "YELL WHAT?" + 0x8d glyph (NUL lands exactly on range end) |
+| cmd_Z | `4568_cmd_Z.asm` | tail `call 0x4c1c` |
+
+Every file carries the style-guide header (what/range/evidence/confidence/
+notes). Big handlers keep mechanical `L_<addr>` labels as cross-reference
+anchors (renamed only where a meaningful name is proven); small ones use the
+`cmd_*` entry name + `L_` anchors. INT-stub seams: none of the 27 contain
+`int` sites (handlers call out to the wrapper routines), so the seam work
+lands in CP4/CP5 functions.
+
+**Known-limitation notes found:**
+* gas `.byte "multi-char"` silently emits only the first char — harness
+  expands string items to hex itself (never trust raw `db` passthrough).
+* `;` is NOT a gas comment (statement separator) — style guide rule.
+* cmd_L range ends 0x3d91; the stale `L_003d90` ref existed only in the
+  mis-decoded cmd_M slice and is gone from the cleaned tree.
+
+Committed `phase3: CP2 pilot 27/27 green (26 cmd handlers + str_out); preclean.py + decode_str.py`.
