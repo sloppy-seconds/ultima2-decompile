@@ -9,8 +9,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP1 | check_func.py harness + asm-style.md | done | harness proven on 1299/1299 mechanical slices + 3 cleaned seeds (0133 straight-line, 2B8F inline string, 0D21 far externals); style guide committed | 2026-10-20 |
 | CP2 | Pilot: cmd_A..Z + str_out (27) | done | 27/27 check_func green; new tools preclean.py + decode_str.py (str_out-aware re-decode fixed all 5 mis-decode defects); per-function log in impl doc | 2026-10-20 |
 | CP3 | Style gate 🔒 | done (owner-approved 2026-10-20) | owner: AFTER style = goal; max accurate comments; honest naming, improve in later passes | 2026-10-20 |
-| CP4 | Bulk wave 1: execution-confirmed code | todo | | |
-| CP5 | Bulk wave 2 + dispositions + jwasm dialect | todo | | |
+| CP4 | Bulk wave 1: execution-confirmed code | done | 1052/1052 green (majority-execution-confirmed cut); 42 batch commits; auto INT/port seams; verify_encodings fix | 2026-10-20 |
+| CP5 | Bulk wave 2 + dispositions + jwasm dialect | in-progress | | |
 | CP6 | Full-tree rebuild + sign-off 🔒 | todo | | |
 
 ## Gate log
