@@ -5,7 +5,7 @@ checkpoint. See `phase1-plan.md` for the full work order.
 
 | CP | Checkpoint | Status | Result / artifact paths | Updated |
 | --- | --- | --- | --- | --- |
-| CP0 | Environment & isolation verification (+ git init) | todo | | |
+| CP0 | Environment & isolation verification (+ git init) | done | All 4 tools OK; binary 37,344 B; git repo initialised, initial commit b045523; ignore-policy verified | 2026-10-19 |
 | CP1 | Entry points from runtime CFG | todo | | |
 | CP2 | Command jump table (26 handlers) | todo | | |
 | CP3 | Segment map & memory-dump inventory | todo | | |
