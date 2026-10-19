@@ -200,3 +200,37 @@ Committed `phase3: CP2 pilot 27/27 green (26 cmd handlers + str_out); preclean.p
 - **CP4 wave-1 batch 40** (5B6E..5CD0, 25): all check_func green.
 - **CP4 wave-1 batch 41** (5CD2..5E0F, 25): all check_func green.
 - **CP4 wave-1 batch 42** (5E19..5FF7, 25): all check_func green.
+
+---
+
+## CP4 — Bulk wave 1: execution-confirmed code — done 2026-10-20
+
+Wave definition (objective): functions whose bytes are MAJORITY
+execution-confirmed (`classify_data.code_confirmed()` from the Spice86 runtime
+CFG) = **1052 functions** (plan guessed "several hundred"; the honest
+majority-execution cut is 1052 of 1299).
+
+Pipeline `tools/clean_wave.py` (per function):
+1. `decode_str.py` skeleton → `check_func` → fallback `preclean.py` → else DEFER.
+2. Style-guide header: name, range, evidence, `confidence: low`, plus
+   ACCURATE derived facts only (owner CP3 directive): inline strings found,
+   call-target list (str_out annotated), seam list.
+3. Auto **INT/port seams**: `video_int10:` / `key_int16:` / `clock_int1a:` /
+   `dos_int21:` label + comment inserted at each `int $0xNN` site (numbered
+   `_2`, `_3` for repeats); `speaker_tone:` at `out` to ports 0x61/0x42/0x43.
+   Zero byte cost; check_func proves it.
+4. Final `check_func` on the written file; failures auto-reverted to slice.
+
+Result: **1052/1052 green** (first pass 1043; 9 defers were a real harness
+bug — `verify_encodings` zero-tail heuristic accepted a 3-byte gas encoding of
+a stop-truncated 1-byte opcode; fixed with exact symbol-measured lengths, all
+9 then passed). Committed in 42 batches of 25 (`phase3: CP4 wave1 batch N`).
+
+Naming honesty (CP3 directive): all wave-1 functions carry `sub_<seg>` or
+their map `name_hint`; meaningful names deferred to later passes.
+
+Invariants: `assemble_all.sh` byte-identical after the wave; full
+`check_func` sweep over ALL 1299 functions: 0 FAIL (cleaned files where they
+exist, mechanical slices elsewhere). Cleaned tree now 1081 files.
+
+**Acceptance:** wave-1 1052/1052 green + assemble_all green → **met**.

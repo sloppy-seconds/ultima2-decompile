@@ -85,13 +85,16 @@ def emit_run(kind, bs):
 
 def verify_encodings(cands):
     """Batch-assemble plain (label-free) candidate instructions; return the set
-    whose gas encoding equals the original bytes exactly (length included)."""
+    whose gas encoding equals the original bytes EXACTLY (length included).
+    Lengths are measured with end-symbols, not zero-scan heuristics."""
     if not cands:
         return set()
     lines = ["        .code16", "        .text"]
     for idx, (text, _) in enumerate(cands):
         lines.append(f"        .org {idx * 32}")
+        lines.append(f"__v{idx}:")
         lines.append("        " + text)
+        lines.append(f"__v{idx}_end:")
     with tempfile.TemporaryDirectory() as d:
         s = f"{d}/v.s"
         open(s, "w").write("\n".join(lines) + "\n")
@@ -102,11 +105,17 @@ def verify_encodings(cands):
         subprocess.run(["objcopy", "-j", ".text", "-O", "binary",
                         f"{d}/v.o", f"{d}/v.bin"], check=True)
         blob = open(f"{d}/v.bin", "rb").read()
+        nm = subprocess.run(["nm", f"{d}/v.o"], capture_output=True,
+                            text=True).stdout
+    pos = {}
+    for m in re.finditer(r"([0-9a-f]{8}) [tTbBdD] (__v\d+(?:_end)?)", nm):
+        pos[m.group(2)] = int(m.group(1), 16)
     ok = set()
     for idx, (text, orig_bs) in enumerate(cands):
-        enc = blob[idx * 32: idx * 32 + len(orig_bs)]
-        tail = blob[idx * 32 + len(orig_bs): idx * 32 + len(orig_bs) + 1]
-        if list(enc) == orig_bs and tail in (b"\x00", b""):
+        a, b = pos.get(f"__v{idx}"), pos.get(f"__v{idx}_end")
+        if a is None or b is None:
+            continue
+        if list(blob[a:b]) == orig_bs:
             ok.add(text)
     return ok
 
