@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Commit policy (see AGENTS.md "Licensing & Commit Policy" and LICENSE):
+# This repo is Apache-2.0 and must NOT redistribute copyrighted game assets or
+# GPL/AGPL-incompatible tool builds. Only our own authored source, docs, scripts,
+# and curated analysis notes are committed.
+# ---------------------------------------------------------------------------
+
+# Copyrighted game binaries/data — never committed. Users supply their own copy.
+original/
+references/
+
+# Raw runtime dumps of the copyrighted binary (regenerable, derived, bulky).
+captures/spice86/*.bin
+captures/spice86/*.json
+
+# Full decompiler dumps — bulky derivative working output; regenerate locally.
+# (Curated analysis in disasm/*.md|tsv|txt IS committed.)
+decompiled/
+
+# Vendored third-party tool builds — GPL / re-fetchable, not our source.
+tools/spice86/
+tools/reko/
+
+# Scratch run directories (timestamped Spice86 gameplay runs, captures).
+tmp/
+
+# Build output.
+build/
+
+# OS / editor noise.
+.DS_Store
+*.swp
