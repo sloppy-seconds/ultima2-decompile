@@ -64,6 +64,7 @@ public class RetryDecompile extends GhidraScript {
         }
 
         for (long lin : targets) {
+            boolean recovered = false;
             Address a;
             try {
                 a = ram.getAddress(lin);
@@ -83,7 +84,15 @@ public class RetryDecompile extends GhidraScript {
                     + " fn=" + fn.getName() + " body=" + fn.getBody().getNumAddresses());
 
             for (String style : STYLES) {
-                for (boolean simplify : new boolean[] { true, false }) {
+                if (recovered) {
+                    break;
+                }
+                // The main DecompileMz pass already tried the default "decompile" style
+                // with a generous timeout; retrying it here only doubles the cost.
+                if (style.equals("decompile")) {
+                    continue;
+                }
+                {
                     DecompInterface di = new DecompInterface();
                     DecompileOptions opts = new DecompileOptions();
                     di.setOptions(opts);
@@ -99,8 +108,9 @@ public class RetryDecompile extends GhidraScript {
                         DecompileResults res = di.decompileFunction(fn, timeoutSec, getMonitor());
                         boolean ok = res != null && res.decompileCompleted()
                                 && res.getDecompiledFunction() != null;
-                        String label = style + "/" + (simplify ? "simp" : "raw");
+                        String label = style;
                         if (ok) {
+                            recovered = true;
                             String c = res.getDecompiledFunction().getC();
                             println("  OK   " + label + "  (" + c.split("\n").length + " lines)");
                             if (out != null) {

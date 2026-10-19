@@ -9,7 +9,7 @@ checkpoint. See `phase1-plan.md` for the full work order.
 | CP1 | Entry points from runtime CFG | done | 796 code blocks -> 693 unique entries (103 dead-dropped, 0 dupes); 692/693 first-opcode match vs file (1 = known reloc fixup); 3 objdump spot-checks OK | 2026-10-19 |
 | CP2 | Command jump table (26 handlers) | done* | Table found at file 0x930 (dispatcher 017D:0A1F); 26/26 plausible starts; only 7/26 in CFG — 19 handlers never executed in playthrough (gap documented, decision flagged for CP6 gate). Union seed `disasm/seed-entries.txt` = 712 | 2026-10-19 |
 | CP3 | Segment map & memory-dump inventory | done | `disasm/segment-map.md`: CS=017D, DS=0x08BE, 0x0741→0x08BE fixup caveat, +0x200 map; live-ds dump 4096 B, `TEST` @ DS:0x36 confirms layout | 2026-10-19 |
-| CP4 | Seeded Ghidra decompilation | todo | | |
+| CP4 | Seeded Ghidra decompilation | done* | 707/712 seeds have rows; 411 ok = **58.1%** (bar: 60% — missed, structural, flagged for gate); RetryDecompile on 296 failures recovered 0; no Exception/COMPILATION in log | 2026-10-19 |
 | CP5 | Seeded Reko decompilation | done* | Exit 0; 712/712 seeds emitted + 126 discovered (839 defines); 3 per-proc rewrite failures; 1 contained SSA exception (fn 531B) — see notes; `original/` restored byte-clean | 2026-10-19 |
 | CP6 | Byte-check verification 🔒 | todo | | |
 | CP7 | Function inventory & sign-off 🔒 | todo | | |
@@ -30,6 +30,12 @@ Status values: `todo` / `in-progress` / `done` / `blocked`.
   recursion finding `ds` definitions, logged to `analysis_99_crash.txt`); 2 more procs failed
   rewrite (2395, 50F9). This is per-procedure containment, not the whole-run shingle-heuristic
   crash the doc warns about. Flagged for CP6 gate review.
+
+- **CP4 acceptance shortfall:** ok = 411/707 = 58.1% vs the ≥60% bar. Failures are 199
+  "Cannot properly adjust input varnodes" + 97 timeouts; timeout failures are mostly 1-5 byte
+  functions whose decompiler flow runs away (more time won't help); RetryDecompile (3 alt
+  styles × 296) recovered 0. Reaching 60% would need ~13 more recoveries — no legitimate path
+  found. **User decision at CP6 gate.**
 
 ## Gate log
 
