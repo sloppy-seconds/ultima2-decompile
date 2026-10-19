@@ -4,10 +4,11 @@ This document defines the high-level architecture, compiler selection, automated
 
 > **Executable work orders:** Phase 1 (evidence capture) and Phase 2 (function boundaries,
 > code/data separation, per-function asm corpus) are **complete and signed off** — see
-> `disasm/phase1-summary.md` and `disasm/phase2-summary.md`. Phase 3 (pseudo-C lifting, asm as
-> the oracle) is `docs/phase3-plan.md`; to start a fresh agent on it, paste
-> `docs/phase3-kickoff.md`. A session should read `AGENTS.md` §0, then the phase plan, then the
-> phase state file to resume.
+> `disasm/phase1-summary.md` and `disasm/phase2-summary.md`. Phase 3 (clean byte-exact ASM
+> reconstruction, MASM dialect via jwasm target) is `docs/phase3-plan.md`; to start a fresh
+> agent on it, paste `docs/phase3-kickoff.md`. Phase 4 (C lifting) has a deferred draft in
+> `docs/phase4-draft-c-lift.md`. A session should read `AGENTS.md` §0, then the phase plan,
+> then the phase state file to resume.
 
 ---
 

@@ -11,7 +11,7 @@ written plan. Work the plan to completion, stopping only at the defined gates.
 **Read in this order before doing anything:**
 1. `AGENTS.md` §0 (isolation, licensing) — hard rules.
 2. `docs/phase3-plan.md` — the full work order (CP0–CP6, acceptance criteria, tests).
-3. `disasm/phase2-summary.md` — the signed-off Phase 2 baseline + Phase 3 decision memo.
+3. `disasm/phase2-summary.md` — the signed-off Phase 2 baseline.
 4. `docs/phase3-state.md` — resume at the first non-`done` checkpoint.
 5. `docs/phase3-implementation.md` — the running log you must maintain.
 
@@ -23,21 +23,20 @@ written plan. Work the plan to completion, stopping only at the defined gates.
 - Never write `references/`; never mutate `original/` (md5 fe884d5117971073ac8097cc7a6aca25).
 - Scratch in `tmp/` or `/var/tmp` — never `/tmp`.
 - Commit only Apache-2.0-safe files; `.gitignore` enforces it; never `git add -f` an ignored path.
-- Do NOT install system tooling (compilers etc.) without asking the owner.
+- Do NOT install system tooling (jwasm etc.) — the owner installs on request.
 
-**Critical framing (do not lose this):** the binary is hand-coded 1983 assembly. "Compile the
-lifted C and byte-match the original" is NOT achievable and is explicitly retired as a bar.
-The asm slices (`disasm/functions/`) are the oracle; verification is (a) slice integrity,
-(b) syntax + symbol checks, (c) human semantic review of C against the slice. Never claim a
-compile byte-match.
+**Mission framing (do not lose this):** the game is hand-coded 1983 assembly. Phase 3 produces a
+readable, named, structured assembly reconstruction in which **every byte stays proven**:
+`tools/check_func.py <SEG>` per function and `tools/assemble_all.sh` for the whole tree must
+stay byte-identical at all times. A cleaned function that changes any byte is a failed function.
+C lifting is Phase 4 (draft in `docs/phase4-draft-c-lift.md`); do not start it here.
 
 **How to work:**
-- `source tools/env.sh` for tool paths. Reko drafts: `decompiled/reko-map/ultimaii.c`.
 - Do checkpoints in order; per checkpoint run the steps, its Test, verify Acceptance
-  objectively, update state, append a detailed section to the implementation log, commit
+  objectively, update state, append a detailed implementation-log section, commit
   `phase3: CP<n> <result>`.
 - Be autonomous; escalate only at 🔒 gates (CP3, CP6), genuine blockers after two recovery
-  attempts, scope changes, out-of-project paths, tooling installs, or a forbidden commit.
+  attempts, scope changes, tooling installs, out-of-project paths, or a forbidden commit.
 - Never fabricate a result. If a criterion can only be met by loosening it, stop and ask.
 
 **Begin now:** start at CP0. Report back at the first 🔒 gate (CP3) or if blocked.
@@ -46,8 +45,9 @@ compile byte-match.
 
 ## Notes for the human
 
-- Phase 3 lifts Reko drafts to readable 16-bit C, verified against the byte-exact asm slices.
-- Pilot is the 26 command handlers + `str_out` (CP2); the CP3 gate is your style review before
-  the bulk waves — approve/reject the template there and the agent scales it out.
-- If you want a real period compiler (Open Watcom) for closer C, install it yourself or ask the
-  agent to request it; the plan does not assume it.
+- Pilot = the 26 command handlers + `str_out`; the CP3 gate is your one-time style review
+  (naming, comments, INT-stub seam) before the bulk waves scale it to ~1,200 functions.
+- When you want the MASM-dialect step, install jwasm (`sudo dnf install jwasm` or distrobox)
+  and say so — CP5 picks it up; the phase never blocks on it.
+- The named INT stubs created here (video_int10, key_int16, dos_int21, clock_int1a,
+  speaker_tone) are the exact seam Phase 5's Linux/SDL port will replace.
