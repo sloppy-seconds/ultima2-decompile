@@ -40,7 +40,34 @@ def objdump_range(entry: int, size: int) -> str:
     return out.stdout
 
 
-def literals_from_c(text: str):
+def clean_c(text: str, flavor: str) -> str:
+    """Remove tokens that are not instruction-level claims."""
+    # block comments (Ghidra WARNINGs embed ram addresses; failure stubs are comments)
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    # line comments (Reko headers embed addresses)
+    text = re.sub(r"//[^\n]*", " ", text)
+    # Ghidra inline struct definitions: field layout, not immediates (named and anonymous)
+    text = re.sub(r"\bstruct\s*(?:[\w_]+\s*)?\{.*?\};", " ", text, flags=re.S)
+    text = re.sub(r"\bstruct\s+[\w_]+\s*\{.*?\};", " ", text, flags=re.S)
+    # Reko/Ghidra type tokens: word16/int8/byte32 leak as decimal literals
+    text = re.sub(r"\b(word|dword|qword|int|byte|uint)[0-9]+\b", " ", text)
+    # Ghidra code labels (code_r0x00012383)
+    text = re.sub(r"\bcode_r[0-9a-fA-F_]+", " ", text)
+    # Ghidra/other identifiers that embed addresses
+    text = re.sub(r"\b(FUN|LAB|code|DAT|ram|ds)_?0x?[0-9a-fA-F]+\b", " ", text)
+    # Reko internal type ids Eq_22789 and retsize annotations
+    text = re.sub(r"\bEq_\d+\b", " ", text)
+    text = re.sub(r"retsize:\s*\d+", " ", text)
+    # Reko width tags <16>/<8> are type annotations
+    text = re.sub(r"<\d+>", " ", text)
+    # char and string literals
+    text = re.sub(r"'\\?x?[0-9a-fA-F]*'", " ", text)
+    text = re.sub(r'"[^"]*"', " ", text)
+    return text
+
+
+def literals_from_c(text: str, flavor: str = "ghidra"):
+    text = clean_c(text, flavor)
     lits = set()
     for m in re.finditer(r"0[xX]([0-9a-fA-F]{1,8})\b", text):
         lits.add(int(m.group(1), 16))
@@ -57,6 +84,7 @@ def literals_from_c(text: str):
         lits.add(int(m.group(1), 16))
     lits.discard(0)
     lits.discard(1)
+    lits.discard(2)  # implicit in 16-bit pointer/stack arithmetic (sp -= 2, retsize)
     return sorted(lits)
 
 

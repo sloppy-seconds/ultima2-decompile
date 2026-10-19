@@ -11,7 +11,7 @@ checkpoint. See `phase1-plan.md` for the full work order.
 | CP3 | Segment map & memory-dump inventory | done | `disasm/segment-map.md`: CS=017D, DS=0x08BE, 0x0741→0x08BE fixup caveat, +0x200 map; live-ds dump 4096 B, `TEST` @ DS:0x36 confirms layout | 2026-10-19 |
 | CP4 | Seeded Ghidra decompilation | done* | 707/712 seeds have rows; 411 ok = **58.1%** (bar: 60% — missed, structural, flagged for gate); RetryDecompile on 296 failures recovered 0; no Exception/COMPILATION in log | 2026-10-19 |
 | CP5 | Seeded Reko decompilation | done* | Exit 0; 712/712 seeds emitted + 126 discovered (839 defines); 3 per-proc rewrite failures; 1 contained SSA exception (fn 531B) — see notes; `original/` restored byte-clean | 2026-10-19 |
-| CP6 | Byte-check verification 🔒 | todo | | |
+| CP6 | Byte-check verification 🔒 | in-progress → **awaiting gate** | 44 sampled (26 handlers + 18 stratified): 12 verified, 9 no-claims, 23 mismatch — all flagged & cause-annotated (flow-runaway / Reko lowering / boundary drift / 2 true fabrications). Zero unflagged. **Awaiting user ratification** | 2026-10-19 |
 | CP7 | Function inventory & sign-off 🔒 | todo | | |
 
 Status values: `todo` / `in-progress` / `done` / `blocked`.

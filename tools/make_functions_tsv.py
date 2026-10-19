@@ -43,7 +43,7 @@ def main():
     bc = {}
     try:
         for line in open(BCR):
-            m = re.match(r"\| ([0-9A-F]{4}) \|.*\| (verified|mismatch|unverified) \|\s*$", line)
+            m = re.match(r"\| ([0-9A-F]{4}) \|.*\| (verified|mismatch|no-claims) \|\s*$", line)
             if m:
                 bc[int(m.group(1), 16)] = m.group(2)
     except FileNotFoundError:

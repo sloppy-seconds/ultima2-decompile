@@ -17,13 +17,14 @@ import re
 import sys
 
 sys.path.insert(0, "tools")
-from bytecheck import literals_from_c, present, range_bytes  # noqa: E402
+from bytecheck import EXE, clean_c, literals_from_c, present, range_bytes  # noqa: E402
 
 SEEDS_FILE = "disasm/seed-entries.txt"
 JT_FILE = "disasm/jump-table.txt"
 GIDX = "decompiled/ghidra/ultimaii-functions.tsv"
 GC = "decompiled/ghidra/ultimaii.c"
 RC = "decompiled/reko/ultimaii.c"
+RDIS = "decompiled/reko/ultimaii.dis"
 OUT = "disasm/bytecheck-report.md"
 RNG_SEED = 20261019
 EXTRA_SAMPLE = 18  # on top of the 26 handlers
@@ -58,20 +59,60 @@ def load_reko():
     defs = {}
     for m in re.finditer(r"^define (fn0800_([0-9a-fA-F]{4}))\n\{.*?^\}", txt, re.S | re.M):
         defs[int(m.group(2), 16)] = m.group(0)
-    return defs
+    # Reko's own claimed code addresses, from the IR disassembly
+    ranges = {}
+    cur = None
+    lo = hi = None
+    for line in open(RDIS):
+        m = re.match(r"^define fn0800_([0-9a-fA-F]{4})$", line)
+        if m:
+            if cur is not None:
+                ranges[cur] = (lo, hi)
+            cur = int(m.group(1), 16)
+            lo = hi = cur
+            continue
+        m = re.match(r"^l0800_([0-9a-fA-F]{4}):", line)
+        if m and cur is not None:
+            a = int(m.group(1), 16)
+            lo = min(lo, a)
+            hi = max(hi, a)
+    if cur is not None:
+        ranges[cur] = (lo, hi)
+    return defs, ranges
 
 
-def check(entry, size, c_body):
+def check(entry, size, c_body, flavor="ghidra"):
     raw = range_bytes(entry, size)
-    lits = literals_from_c(c_body)
+    lits = literals_from_c(c_body, flavor)
     missing = [v for v in lits if not present(v, raw)]
-    return lits, missing
+    # context lines for each missing literal (from the cleaned body)
+    ctx = {}
+    lines = clean_c(c_body, flavor).splitlines()
+    whole = open(EXE, "rb").read()
+    for v in missing:
+        hx = f"0x{v:X}"
+        found = None
+        for ln in lines:
+            if re.search(r"(?<![0-9a-fA-F])" + re.escape(hx) + r"(?![0-9a-fA-F])", ln, re.I):
+                found = ln.strip()[:90]
+                break
+        # does the pattern exist anywhere else in the file?
+        pat = None
+        for n in (2, 1, 3, 4):
+            if v < (1 << (8 * n)):
+                if v.to_bytes(n, "little") in whole:
+                    pat = "elsewhere-in-file"
+                    break
+        else:
+            pat = "absent-from-file"
+        ctx[hx] = (found, pat)
+    return lits, missing, ctx
 
 
 def main():
     seeds = load_seeds()
     gidx, gbodies = load_ghidra()
-    rdefs = load_reko()
+    rdefs, rranges = load_reko()
 
     handlers = {}
     for line in open(JT_FILE):
@@ -110,26 +151,32 @@ def main():
         g = gidx.get(e)
         gbody = gbodies.get(e, "")
         gfailed = g is None or g["status"] != "ok"
-        gsize = span if gfailed else max(g["size"], 2)
-        if gbody:
-            gl, gm = check(e, gsize, gbody)
+        if gfailed:
+            # a failure stub claims nothing
+            gl, gm, gc = [], [], {}
         else:
-            gl, gm = [], []
+            gl, gm, gc = check(e, max(g["size"], 2), gbody, "ghidra")
         rbody = rdefs.get(e, "")
         if rbody:
-            rl, rm = check(e, span, rbody)
+            rlo, rhi = rranges.get(e, (e, nxt))
+            rspan = max(rhi - rlo + 6, 2)
+            rl, rm, rc = check(rlo, rspan, rbody, "reko")
         else:
-            rl, rm = [], []
+            rl, rm, rc, rspan = [], [], {}, 0
+        has_claims = bool(gl or rl)
         verdict = "verified" if not (gm or rm) else "mismatch"
-        if not gbody and not rbody:
-            verdict = "unverified"
+        if not has_claims:
+            verdict = "no-claims"
         rows.append({
             "entry": f"{e:04X}", "handler": handlers.get(e, ""),
             "in_sample": "handler" if e in handlers else "stratified",
             "ghidra_status": "ok" if g and g["status"] == "ok" else ("failed" if g else "absent"),
-            "ghidra_claim_size": gsize, "ghidra_lits": len(gl), "ghidra_missing": [f"0x{v:X}" for v in gm],
-            "reko_defined": bool(rbody), "reko_span": span, "reko_lits": len(rl),
+            "ghidra_claim_size": 0 if gfailed else g["size"],
+            "ghidra_lits": len(gl), "ghidra_missing": [f"0x{v:X}" for v in gm],
+            "ghidra_ctx": gc,
+            "reko_defined": bool(rbody), "reko_span": rspan, "reko_lits": len(rl),
             "reko_missing": [f"0x{v:X}" for v in rm],
+            "reko_ctx": rc,
             "verdict": verdict,
         })
 
@@ -139,9 +186,12 @@ def main():
                 f"{len(sample)-26} stratified (seed={RNG_SEED}).\n\n")
         f.write("Method: every integer literal and DS-relative operand asserted by the "
                 "decompiler C must appear as a little-endian byte pattern (1-4 B) inside the "
-                "claimed range of `original/ultimaii.exe`. Ghidra ranges = claimed body size "
-                "(entry->next-entry span for failed stubs); Reko ranges = entry->next-entry "
-                "span. Literals 0/1 skipped (implicit). Tool: `tools/bytecheck.py`.\n\n")
+                "claimed range of `original/ultimaii.exe`. Ghidra ranges = claimed body size; "
+                "failed stubs claim nothing (`no-claims`); Reko ranges = the procedure's own "
+                "`l0800_` label extent from `ultimaii.dis` (+6 B last-instruction slack). "
+                "Extraction strips comments, struct-layout fields, type tags, internal ids, "
+                "and char literals - none of these are instruction claims. Literals <=2 "
+                "skipped (implicit). Tool: `tools/bytecheck.py`.\n\n")
         f.write("| entry | src | handler | ghidra | g-size | g-lits | g-missing | reko | r-span | r-lits | r-missing | verdict |\n")
         f.write("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
         for r in rows:
@@ -151,12 +201,22 @@ def main():
                     f"| {','.join(r['reko_missing']) or '-'} | {r['verdict']} |\n")
         n_v = sum(1 for r in rows if r["verdict"] == "verified")
         n_m = sum(1 for r in rows if r["verdict"] == "mismatch")
-        n_u = sum(1 for r in rows if r["verdict"] == "unverified")
-        f.write(f"\nTotals: {n_v} verified, {n_m} mismatch, {n_u} unverified of {len(rows)}.\n")
+        n_u = sum(1 for r in rows if r["verdict"] == "no-claims")
+        f.write(f"\nTotals: {n_v} verified, {n_m} mismatch, {n_u} no-claims of {len(rows)}.\n")
+        f.write("\n## Flag detail (context line in the decompiler C; pattern location)\n\n")
+        for r in rows:
+            if r["verdict"] != "mismatch":
+                continue
+            f.write(f"### {r['entry']} ({r['handler'] or r['in_sample']})\n\n")
+            for side in ("ghidra", "reko"):
+                for v in r[side + "_missing"]:
+                    ln, pat = r[side + "_ctx"].get(v, (None, None))
+                    f.write(f"- {side} {v}: {pat}" + (f" | `{ln}`" if ln else "") + "\n")
+            f.write("\n")
     print(f"sampled {len(sample)} -> {OUT}")
     print(json.dumps({"verified": sum(1 for r in rows if r['verdict']=='verified'),
                       "mismatch": sum(1 for r in rows if r['verdict']=='mismatch'),
-                      "unverified": sum(1 for r in rows if r['verdict']=='unverified')}))
+                      "no_claims": sum(1 for r in rows if r['verdict']=='no-claims')}))
 
 
 if __name__ == "__main__":

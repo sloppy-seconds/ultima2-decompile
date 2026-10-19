@@ -197,3 +197,55 @@ Format per checkpoint:
 - Dead-ends: attempt 1 timing (documented above).
 - Deviations: `only=` + `timeout=10` vs plan's bare command — performance, not scope; same
   outputs, same seeds. Will record residual failure counts honestly.
+
+## CP4 — Seeded Ghidra decompilation, final numbers   (session: phase1-run-A)
+- Attempt 2 outcome (kept for the record): 506/712 rows, 339 ok = 67% — but 206 seeds silently
+  skipped ("not inside any body"). That violated the plan's "row for nearly every entry", so I
+  patched DecompileMz.java to create functions at unowned seeds (fresh-create) rather than skip.
+- Attempt 3 (patched, only=seeds, timeout=25, project kept): exit 0.
+  - 707/712 seeds have TSV rows (5 missing: 5120,5123,514B,514E,5151 — createFunction failed,
+    not inline-data related; within "nearly every" tolerance).
+  - ok = 411/707 = **58.1%** (bar ≥60% — MISSED, see below). Failures: 199 varnodes, 97 timeout.
+  - No `Exception`/`COMPILATION error` in log. 13 auto-analysis "body repair overlap" ERRORs
+    (analysis-time, documented, not decompiler crashes).
+  - Wall time ~2 h; slow spots: 0c5f-region runaways. Attempt 1 (plan's bare command) projected
+    4+ h and was killed at 14%; attempt 2 ~58 min.
+- RetryDecompile (plan's recovery step), run fairly and completely:
+  - Pass 1 (saved project): 296 targets; 147 had function entries and failed all 3 alternative
+    styles; 149 entries were absent from the SAVED project (the reparent/fresh-create state did
+    not fully persist through headless save — noted as a Ghidra behavior finding). 0 recovered.
+  - Pass 2 (fresh import so all functions exist): varnodes 199 retried with normalize/firstpass/
+    register styles at 15 s: 0 recovered. Timeouts retried at 60 s budget: 35/97 processed,
+    35/35 still timed out; aborted the remainder — outcome clear (timeouts are flow runaways on
+    1-5 byte functions, not slow-but-finite).
+  - Tool fixes made along the way: RetryDecompile gained timeout=, dropped a no-op simplify
+    dimension (label-only), skips the already-tried default style, early-exits on success.
+- **60% criterion: NOT met (58.1%), no legitimate path found.** Need +13 recoveries; every
+  recovery mechanism the plan names has been run to exhaustion with 0 yield. Per guardrails this
+  is flagged for the user at the CP6 gate, not self-loosened.
+- Deviations: only=+timeout perf changes (attempt 2+); fresh-create patch to DecompileMz
+  (changes what gets decompiled — toward the plan's intent, not away from it).
+
+## CP6 — Byte-check verification   (session: phase1-run-A)
+- What I did: built `tools/bytecheck.py` (claimed-constant presence vs raw bytes) and
+  `tools/bytecheck_sample.py` (all 26 handlers + 18 stratified, deterministic seed 20261019;
+  Ghidra bodies vs claimed TSV sizes; Reko defines vs Reko's OWN l0800_ label extents parsed
+  from ultimaii.dis). Report: `disasm/bytecheck-report.md` with per-flag context lines and
+  file-wide presence classification.
+- Measured: 44 sampled -> 12 verified, 9 no-claims, 23 mismatch, 0 unflagged.
+  Mismatch classes: A Ghidra flow-runaway bodies (080D/437E/5B98 — 266 KB bodies claiming
+  constants from outside their own bodies); B Reko lowering artifacts (das/aaa/not/stack
+  modeling: 0xE800, 0x494C, ~0x48F2, sp -= -5975...); C boundary drift (real DS displacements
+  just outside claimed ranges); D two genuine unexplained fabrications (2744 Ghidra 0x2799;
+  4568 Reko 0x739) — carried into Phase 2.
+- Iteration honesty: first sampler run flagged 30/44 with ~1000 bogus literals — traced to my
+  own extraction (failure-stub text "1000:", Ghidra WARNING ram addresses, struct field layout,
+  Reko type tokens word16/int8, Eq_ ids, width tags). Fixed extraction (strip comments/structs/
+  type tokens; skip <=2 as implicit pointer arithmetic), then manually verified each remaining
+  flag class against the actual C/asm/dis text. No decompiler claim was contradicted at the byte
+  level in the sample; all mismatches are boundary/modeling issues plus 2 fabrications.
+- Reko mega-procedure correction: an earlier chat remark that "Reko merged the handler region
+  into one 15k-line procedure" was MY extraction bug (missing end token); true defines are
+  small (fn0800_2B8F = 121 lines). Corrected here for the record.
+- Gate: report + this log committed; STOPPING for user ratification per plan (no self-certify).
+- Commit: `phase1: CP6 bytecheck (44 sampled, 0 unflagged mismatches, 2 true fabrications)`
