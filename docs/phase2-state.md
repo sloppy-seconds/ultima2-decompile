@@ -9,7 +9,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP1 | Function boundary map | done | 1299 functions, 100% coverage, deterministic; 2395 flagged mid-instruction | 2026-10-19 | | |
 | CP2 | Code/data separation | done | code 8238 + derived 13350 + string 7358 + zeros 2404 + table 40 + psp 256 + unclassified 5218 = 0x9000; forced .byte 100% explained; classified asm byte-matches | 2026-10-19 | | |
 | CP3 | Per-function asm slices | done | map-driven asm regen fixed 106 mis-aligned starts; 1299 slices + prologue rebuild byte-identical | 2026-10-19 | | |
-| CP4 | Reko re-run on true boundaries + bytecheck v2 | todo | | |
+| CP4 | Reko re-run on true boundaries + bytecheck v2 | done | 1299/1299 emitted; mismatch 279->199, drift 574->371; fabs 2->6 (4 new, contexts recorded for CP5) | 2026-10-19 | | |
 | CP5 | Defect resolution (2 fabrications, 3 Reko failures) | todo | | |
 | CP6 | Byte-verification gate 🔒 | todo | | |
 | CP7 | Sign-off & Phase 3 memo 🔒 | todo | | |

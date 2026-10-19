@@ -77,3 +77,18 @@ Created this log and `docs/phase2-state.md`. No deviations.
   **REBUILD BYTE-MATCH: 37,344 bytes identical**. Acceptance met (4/4 clauses).
 - Canonical asm for Phase 2+ is now `ultimaii-mapped.asm` (per-function aligned);
   `ultimaii.asm` (linear) kept as the Phase 1 artifact.
+
+## CP4 — Reko re-run on true boundaries + bytecheck v2 (2026-10-19)
+
+- `tools/make_reko_project.py --map` -> 1299 map starts as procedure seeds, output dir
+  `decompiled/reko-map/`. Run: exit 0 (~30 s), **1299/1299 map starts emitted** + 44
+  discovered (1343 defines). 1 contained internal error + known 531B rewrite failure.
+  `original/` md5 unchanged; Reko's `.reko` output dir moved out of `original/` (verified clean).
+- `tools/bytecheck_map.py`: claims checked against TRUE map ranges (replaces next-seed span).
+- Delta vs Phase 1 full-corpus (Reko side):
+  * mismatch entries 279 -> **199**; drift flags 574 -> **371** (true ranges kill boundary noise);
+  * verdicts: 537 verified / 199 mismatch / 563 no-claims (of 1299);
+  * fabrications 2 -> **6**: known 0A5F + 4FA5, plus NEW 47BD/4815/486D (all claim 0x739 —
+    same pattern as CP6-v1's 4568/0x739 fabrication; three sibling fragments) and 6999
+    (`ax |= ~0x1701` — a `not` lowering artifact miscounted as fabrication). All 4 carry
+    contexts; final verdicts are CP5 work. Not hidden, not reclassified silently.
