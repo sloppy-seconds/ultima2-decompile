@@ -249,3 +249,41 @@ Format per checkpoint:
   small (fn0800_2B8F = 121 lines). Corrected here for the record.
 - Gate: report + this log committed; STOPPING for user ratification per plan (no self-certify).
 - Commit: `phase1: CP6 bytecheck (44 sampled, 0 unflagged mismatches, 2 true fabrications)`
+
+## NIGHT SHIFT — external captures, asm extraction, full-corpus validation (2026-10-19 late)
+User went to bed leaving instructions: use the authorized external CFGs to improve the
+decompiles, get as much asm as possible, and attempt build + validation of pseudo-C.
+
+### External capture merge (resolves CP2 gap partially, with owner authorization)
+- Owner explicitly authorized `/var/home/paul/Projects/ultima2/references/extracted/live-capture/`
+  (raw CFGs only; I did NOT read the sibling tree's derived-analysis files). 44 harvest dirs
+  copied to `captures/external-20261019/` with PROVENANCE.md; raw JSON gitignored.
+- Identity check: 40,162 external block first-opcode comparisons vs `original/` — only the
+  known 0100 relocation fixup mismatched. Same binary confirmed before any use.
+- Merged entry extraction (rewrote `tools/extract_entry_points.py` for multi-source, per-file
+  dead rule): 693 -> **1113 unique entries**; seed union with jump table = **1125**
+  (12 handlers still never executed: C D G H J K L M O R T V W X).
+
+### Ground-truth asm extraction + BUILD & BYTE-MATCH (the Phase-2/4 loop, early)
+- No jwasm/nasm on host; used GNU `as --32` + `.code16` + `objcopy` (documented deviation).
+- `tools/extract_asm.py`: objdump linear disassembly -> GAS source with per-instruction labels,
+  PC-relative branch rewriting (labels for in-range targets, forward `.org` labels for
+  out-of-range; `.set` absolutes silently mis-encode rel16 — found and fixed), gap/tail `.byte`
+  padding, and an iterative loop that forces any instruction gas rejects or mis-encodes to raw
+  `.byte` (incl. objdump `(bad)` operands, `repz inc`, double-prefix lines).
+- **Result: `disasm/ultimaii.asm` (whole file 0x0..0x91E0) assembles to a byte-identical copy
+  of `original/ultimaii.exe` — 37,344/37,344 bytes. 16,411 instructions, 2,071 forced .byte.**
+- `tools/verify_asm.sh` re-runs the assemble+diff check (exit 0 = match). Verified twice.
+- Full asm dumps are gitignored (bulky derived artefacts of the copyrighted binary, same
+  policy as decompiled/); the tools + verify script are committed.
+
+### Reko v2 (1125 seeds)
+- 1125/1125 seeds emitted + 168 discovered (1294 defines). 3 contained per-proc failures
+  (2395, 35DD, 531B). original/ untouched (md5 verified).
+
+### Full-corpus pseudo-C byte validation (`tools/bytecheck_full.py`)
+- Reko side (complete): 2 fabricated constants total across 1125 procedures
+  (0x2655, 0x4F85); everything else verified / boundary-drift / lowering-artifact.
+- Ghidra side (partial, run6 in flight): all fabrication entries are flow-runaway bodies —
+  24 large (080D family, >=100 fabs each) + 62 small (startup-region entries claiming 1-byte
+  bodies with runaway flow). No fabrication found in a normal-sized Ghidra body so far.
