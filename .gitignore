@@ -41,3 +41,7 @@ disasm/*.asm
 
 # per-function asm slices (regenerable via tools/make_slices.py)
 disasm/functions/
+
+# vendored jwasm build (Open Watcom Public License, re-fetchable; see tools/jwasm/README.md)
+tools/jwasm/*
+!tools/jwasm/README.md

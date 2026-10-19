@@ -8,9 +8,10 @@ argued. C lifting is deferred to Phase 4 (`docs/phase4-draft-c-lift.md`); a runn
 build is Phase 5 via C+SDL — the assemblers themselves are not a portability path.
 
 Assembler decision (owner 2026-10-19): **jwasm is the chosen dialect target** (MASM-compatible,
-era-faithful, AGENTS.md §1). It is NOT installed yet; the phase runs on **GNU `as` as the working
-verifier** and is not blocked on jwasm. When the owner installs jwasm (`sudo dnf install jwasm`
-or distrobox), CP5 adds the MASM-dialect conversion + dual-assembly verification.
+era-faithful, AGENTS.md §1). **INSTALLED:** JWasm v2.21 built from source, vendored at
+`tools/jwasm/jwasm` (gitignored binary + README with rebuild steps; Open Watcom Public License,
+same vendored-tool policy as spice86/reko). `source tools/env.sh` exports `$JWASM`. GNU `as`
+remains the independent whole-tree verifier (`assemble_all.sh` must stay green regardless).
 
 > **To start a fresh agent:** paste `docs/phase3-kickoff.md`. Agent maintains
 > `docs/phase3-state.md` + `docs/phase3-implementation.md`.
@@ -49,8 +50,9 @@ files if small; full dumps stay gitignored** (same policy as Phase 2).
   0x61/0x42/0x43. Clean asm must wrap each call site in a named stub
   (`video_int10`, `key_int16`, `clock_int1a`, `dos_int21`, `speaker_tone`) — this seam is what
   Phase 5's portable port will replace.
-* Toolchain: GNU `as --32` + `.code16` + `objcopy` (works, byte-matches). jwasm: not installed
-  (owner will install on demand). No system installs by the agent.
+* Toolchain: GNU `as --32` + `.code16` + `objcopy` (works, byte-matches) AND `$JWASM` v2.21
+  (installed 2026-10-19; `-bin -Fo<out>` output, case-sensitive options; error log lands in a
+  `<name>.err` file — keep invocations inside `tmp/`). No system installs needed.
 
 ## 2. Inputs already available (do not regenerate)
 
@@ -96,7 +98,7 @@ Remaining `code-derived`/`no-claims` functions; apply defect dispositions (47BD-
 files; nop-pads marked; 531B documented; selfmod cluster 0x5120–0x5151 reconstructed as-is
 with loud comments). Every one of the 1299 map functions ends as: **clean | data | excluded
 (selfmod) | deferred-with-reason** — counts must sum to 1299.
-If the owner has installed jwasm by now: add `tools/dialect_masm.py` converting the cleaned
+jwasm is installed: add `tools/dialect_masm.py` converting the cleaned
 tree to MASM syntax and verify dual-assembly byte-match (GNU as + jwasm) on a 50-function
 sample; report honestly if jwasm quirks force deviations.
 **Acceptance:** 1299 dispositioned with counted sum; jwasm sub-task done or explicitly
@@ -129,7 +131,7 @@ never hidden inside "clean" claims.
   1983 listing are unrecoverable; this is a faithful reconstruction, stated as such everywhere.
 - 5,218 B unclassified may hide small functions; wave 2 re-examines the largest clusters.
 - Self-modifying cluster cannot be made "readable" — reconstructed as-is with documentation.
-- jwasm conversion is opportunistic (owner-install dependent), never a blocker.
+- jwasm is installed (v2.21, vendored); the dialect conversion rides on it from the start.
 
 ## 7. Definition of "stop and ask the user"
 

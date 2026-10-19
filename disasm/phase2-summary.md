@@ -31,6 +31,10 @@ never slice a linear decode; decode from each function's own start.
 
 ## PHASE 3 DECISION MEMO — C-lifting strategy
 
+> **UPDATE 2026-10-19 (owner):** roadmap reframed — the *clean byte-exact ASM reconstruction*
+> became Phase 3 (`docs/phase3-plan.md`); the C-lifting strategy below is deferred to
+> Phase 4 (`docs/phase4-draft-c-lift.md`). Kept verbatim as the signed-off historical memo.
+
 **Recommendation: lift from Reko drafts, verify against asm slices per function.**
 
 Per-function loop:

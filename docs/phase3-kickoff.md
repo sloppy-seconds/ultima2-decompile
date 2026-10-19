@@ -47,7 +47,7 @@ C lifting is Phase 4 (draft in `docs/phase4-draft-c-lift.md`); do not start it h
 
 - Pilot = the 26 command handlers + `str_out`; the CP3 gate is your one-time style review
   (naming, comments, INT-stub seam) before the bulk waves scale it to ~1,200 functions.
-- When you want the MASM-dialect step, install jwasm (`sudo dnf install jwasm` or distrobox)
-  and say so — CP5 picks it up; the phase never blocks on it.
+- jwasm v2.21 is already installed (vendored at `tools/jwasm/`, `$JWASM` after `source
+  tools/env.sh`); CP5 does the MASM-dialect conversion + dual-assembly check with it.
 - The named INT stubs created here (video_int10, key_int16, dos_int21, clock_int1a,
   speaker_tone) are the exact seam Phase 5's Linux/SDL port will replace.

@@ -12,6 +12,7 @@ _U2V2_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export GHIDRA_HOME="${GHIDRA_HOME:-/var/home/paul/Projects/ghidra-12.1.4}"
 export SPICE86_DLL="$_U2V2_ROOT/tools/spice86/Spice86.dll"
 export REKO_DLL="$_U2V2_ROOT/tools/reko/reko.dll"
+export JWASM="$_U2V2_ROOT/tools/jwasm/jwasm"
 export DOTNET_ROLL_FORWARD=Major
 
 # Ghidra 12.1.4 needs JDK 21+ (no upper bound); the system JDK 25 is fine.
