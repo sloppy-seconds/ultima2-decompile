@@ -83,3 +83,39 @@ Format per checkpoint:
 - Deviations: added `-j .data` to objdump invocations (tool quirk, noted above); wrote the
   extractor as a committed script under `tools/` for reproducibility.
 - Commit: (see git log, `phase1: CP1 ...`)
+
+## CP2 — Derive the command jump table   (session: phase1-run-A)
+- What I did: located the 26-entry command jump table independently; wrote
+  `disasm/jump-table.txt` (26 x `XXXX handler=<letter>`), `disasm/jump-table.md` (method +
+  gap explanation), and `disasm/seed-entries.txt` (union of CP1 entries + jump-table targets,
+  712 unique) for CP4/CP5 seeding.
+- Commands run (exact):
+  - python scan of all CFG `jmp` records for indirect jumps -> exactly one `FFE3|jmp near BX`,
+    block 2193 @ 017D:0A1F; block asm shows `sbb al,0x41; add al,al; mov bx, cs:[si+0x0730]; jmp bx`
+  - python struct.unpack of 26 LE words at file 0x930 (= cs:0x0730 + 0x200)
+  - per-entry `objdump -d -b binary -m i8086 -j .data --start-address=0x<XXXX+200> ...+7`
+  - membership check vs entry-points.txt; absence check vs raw CFG (block start, inside-block,
+    ±0x40 proximity)
+- Measured outputs:
+  - Table entries monotonic 0x2B8F..0x4568. All 26 disassemble as plausible routine starts:
+    24 begin `call 0x51df` (shared inline-string display routine, matches documented calling
+    convention), L=38B0 and V=437E begin `mov al,abs`.
+  - Cross-check: 7/26 present in entry-points.txt (E,N,P,Q,R,S,T). The other 19 are NOT in the
+    CFG at all (never executed in the playthrough) — not a dead-rule artifact.
+  - Union seed file: 693 cfg + 19 jump-table-only = 712 entries.
+- Decisions & reasoning:
+  - Kept `entry-points.txt` strictly CFG-derived per CP1's acceptance wording; the jump-table
+    extras flow into decompiler seeding via `seed-entries.txt` instead. decompiling.md calls the
+    table addresses "the best available seeds", so excluding them from CP4/CP5 would be worse
+    than including them.
+  - **Acceptance deviation (flagged):** plan's CP2 acceptance wants ≥24/26 in entry-points.txt;
+    actual 7/26. Meeting it legitimately requires a new interactive re-capture (press A–Z under
+    Spice86 via BIOS keyboard-buffer writes), which the plan places in Phase 2 (§6). CP2 step 4
+    explicitly allows "or explain the gap", so I recorded the gap and continued. No supervisor
+    channel was available in this session to ask mid-run; escalated in state file + CP6 gate
+    summary for user ratification. No addresses were guessed; nothing was padded.
+- Dead-ends / things that did not work:
+  - First CFG scan pattern (`'%bx' in dis`) missed the dispatch because Spice86 renders it as
+    `jmp near BX` (uppercase). Broadened scan found it.
+- Deviations: added `disasm/seed-entries.txt` (union) as the CP4/CP5 seed input; documented above.
+- Commit: `phase1: CP2 jump table located (26 handlers @ file 0x930; 7/26 CFG-covered, gap documented)`
