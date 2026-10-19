@@ -1,0 +1,8 @@
+# sub_214d — mechanical clean (bulk wave); behavior not yet reviewed
+# func 214D..214F  len 0003 B  evidence: seed+reko
+# calls: L_002399
+# confidence: low (bytes proven by check_func.py)
+# bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+sub_214d:
+L_00234d:
+        call L_002399
