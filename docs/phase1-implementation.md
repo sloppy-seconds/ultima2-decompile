@@ -119,3 +119,21 @@ Format per checkpoint:
     `jmp near BX` (uppercase). Broadened scan found it.
 - Deviations: added `disasm/seed-entries.txt` (union) as the CP4/CP5 seed input; documented above.
 - Commit: `phase1: CP2 jump table located (26 handlers @ file 0x930; 7/26 CFG-covered, gap documented)`
+
+## CP3 — Segment map and memory-dump inventory   (session: phase1-run-A)
+- What I did: wrote `disasm/segment-map.md` recording CS/DS, the MZ relocation caveat, the
+  `+0x200` file mapping, and an inventory of `live-ds-4f4d.bin` with a 64-byte hexdump.
+- Commands run (exact):
+  - `wc -c < captures/spice86/live-ds-4f4d.bin` -> 4096
+  - `objdump -s -j .data --start-address=0 --stop-address=64 captures/spice86/live-ds-4f4d.bin`
+- Measured outputs:
+  - CS=0x017D (796/845 blocks), DS=0x08BE, file immediate 0x0741 at file 0x0300,
+    0x08BE-0x0741=0x017D — all match `captures/README.md` verbatim.
+  - Dump: 4096 bytes from DS:0000. `TEST` at DS:0x36 (player name) independently confirms the
+    documented player-record base and the DS value. x,y at DS:0x00/0x01 = 0x21,0x17.
+- Decisions & reasoning: kept interpretation minimal per plan ("do not over-interpret; that is
+  Phase 3"); recorded only the two layout anchors that the README already documents. Included
+  the BCD warning because later byte-checks read these values.
+- Dead-ends: none. No live re-capture needed.
+- Deviations: none.
+- Commit: `phase1: CP3 segment map + DS dump inventory`
