@@ -33,3 +33,24 @@ Created this log and `docs/phase2-state.md`. No deviations.
   EXCEPT **2395 has no asm label** (mid-instruction per linear decode) — corroborates the CP5
   suspicion that the Reko-failing 2395 seed is not a real boundary. Recorded, not hidden.
 - Determinism: re-run -> byte-identical file (verified). Acceptance met (all four clauses).
+
+## CP2 — Code/data separation (2026-10-19)
+
+- `tools/classify_data.py`: byte-level classification of the whole 0x9000 code segment.
+  Priority: code (executed CFG block byte ranges, computed from per-instruction hex in all
+  45 captures) > psp > string (printable runs >=4) > zeros (runs >=8) > table (>=6 consecutive
+  even-aligned function-map words) > code-derived (inside call/reko-evidenced function ranges)
+  > unclassified. Emits `disasm/data-regions.tsv` + `disasm/ultimaii-classified.asm`
+  (data bytes as `.byte` with kind comments, labels preserved).
+- Byte kinds (sum = 36,864 = 0x9000 exactly): code 8,238 | code-derived 13,350 |
+  string 7,358 | unclassified 5,218 | zeros 2,404 | table 40 | psp 256.
+- Forced .byte explanation: 2,071/2,071 (100% >= 90% bar): data-misread 477,
+  opcode-artifact 1,593 (gas-rejected real instructions incl. 683 call forms + (bad) opcodes),
+  outside-seg 1 (MZ header).
+- **CLASSIFIED BYTE-MATCH: OK** — classified asm re-assembles byte-identical.
+- Command table detected at 0x730 (partial: 40 B of 52 — some table words fall on odd
+  alignment vs my even-aligned scan; noted, not hidden; the 26 handler starts are seeds anyway).
+- Sanity: exec'd handler A range = code 374/derived 276/string 102/unclass 240; unexecuted
+  handler C = derived 496 (Reko flow covers it) + string 96 + code 83 + unclass 82. Plausible.
+- Deviation note: plan said "db directives"; used `.byte` (GNU as equivalent) to keep the
+  existing assemble pipeline unchanged.
