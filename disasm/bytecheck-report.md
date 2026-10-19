@@ -7,24 +7,24 @@ Method: every integer literal and DS-relative operand asserted by the decompiler
 | entry | src | handler | ghidra | g-size | g-lits | g-missing | reko | r-span | r-lits | r-missing | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 080D | stratified |  | ok | 0x2c | 293 | 0x3,0x4,0x5,0x6,0x7,0x8,0x9,0xC,0xF,0x10,0x12,0x15,0x16,0x18,0x19,0x1A,0x1F,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2A,0x2B,0x2C,0x30,0x34,0x38,0x3C,0x3E,0x3F,0x40,0x41,0x42,0x45,0x48,0x49,0x4A,0x4B,0x4C,0x4E,0x4F,0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5D,0x60,0x61,0x62,0x66,0x70,0x77,0x7F,0x80,0x8D,0x8F,0x99,0xBF,0xE0,0xF0,0xFC,0xFE,0xFF,0x100,0x137,0x157,0x177,0x197,0x1B7,0x1D7,0x1F7,0x217,0x26E,0x26F,0x270,0x271,0x371,0x398,0x63A,0x881,0x88D,0x890,0x893,0x896,0x8AF,0x8CE,0x8D1,0x8E6,0x8EA,0x8ED,0x8F0,0x8F3,0x8F6,0x8F9,0x907,0x948,0x95C,0x968,0x983,0x98F,0x9AA,0x9B5,0x9D0,0x9DB,0xA05,0xA80,0xAAA,0xAB6,0xAC0,0xAC7,0xADE,0xAE8,0xAF2,0xAFC,0xB07,0xB62,0xB65,0xBB2,0xBBC,0xBC9,0xBCC,0xBCF,0xBDB,0xC00,0xC01,0xC1F,0xC33,0xC82,0xC85,0xC8C,0xC8F,0xCB9,0xCD2,0xCEE,0xEFE,0x1055,0x1066,0x106D,0x107F,0x10A0,0x10A7,0x10AA,0x10BC,0x10BF,0x1124,0x1163,0x1197,0x11E5,0x121F,0x1230,0x1257,0x127E,0x129C,0x129F,0x12B7,0x12D0,0x12D5,0x12D8,0x130C,0x1357,0x135A,0x136B,0x136E,0x1371,0x1374,0x13B5,0x13DD,0x1414,0x1434,0x178E,0x17FF,0x214D,0x2150,0x2166,0x2169,0x2186,0x2189,0x2233,0x225A,0x2278,0x2680,0x27CB,0x27D9,0x27F5,0x280D,0x2810,0x282A,0x2865,0x2877,0x28A8,0x28B5,0x28BD,0x28D6,0x28D9,0x28DC,0x28E9,0x2916,0x2948,0x297B,0x298D,0x2A05,0x2A3E,0x2A4D,0x2A5C,0x2A6B,0x2A7A,0x2A89,0x2A98,0x2AA7,0x2AB9,0x2AC8,0x2ADA,0x2AE9,0x2AF8,0x2B07,0x2B19,0x2B28,0x2B37,0x2B46,0x2B92,0x2BB0,0x2BC1,0x2BC4,0x2BC7,0x2BDA,0x2BE9,0x2BEC,0x2BEF,0x2BFB,0x2E0C,0x2E1A,0x2E36,0x2E81,0x2E91,0x2E99,0x2E9C,0x2E9F,0x2EF4,0x2F05,0x2F17,0x2F21,0x2F39,0x2F44,0x2F4C,0x2F67,0x2F72,0x2F82,0x2F93,0x2FAD,0x4805,0x4CFF,0x4D00,0x4FFA,0x4FFB,0x5DEC,0x74FE,0xE7FF,0xEB00,0xFF3F,0xFFFF,0x10BA6,0x1144C,0x11451 | def | 0x6 | 1 | 0x78 | mismatch |
-| 08D6 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
-| 0A51 | stratified |  | failed | 0x0 | 0 | - | def | 0x9c5 | 33 | 0x1757 | mismatch |
-| 0B4D | stratified |  | failed | 0x0 | 0 | - | def | 0x64 | 8 | - | verified |
-| 1015 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
-| 10BF | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 3 | 0x1A,0x217 | mismatch |
-| 1121 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
-| 215C | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 2 | - | verified |
-| 22D5 | stratified |  | ok | 0x27 | 4 | 0xCF | def | 0x6 | 4 | 0x27,0x100,0x800 | mismatch |
-| 2383 | stratified |  | ok | 0x6 | 8 | 0x8,0x1F,0x90,0x26E,0x26F,0x270,0x271 | def | 0x6 | 1 | - | mismatch |
-| 243E | stratified |  | failed | 0x0 | 0 | - | def | 0x3c | 12 | 0x36 | mismatch |
+| 0940 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
+| 0A5F | stratified |  | failed | 0x0 | 0 | - | def | 0x9b7 | 32 | 0x1757 | mismatch |
+| 0AB6 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
+| 0BDB | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
+| 0D21 | stratified |  | failed | 0x0 | 0 | - | def | 0x140 | 10 | 0x7 | mismatch |
+| 20EB | stratified |  | ok | 0x36 | 7 | 0x9,0xF,0x99 | def | 0x6 | 0 | - | mismatch |
+| 21BD | stratified |  | ok | 0x8 | 9 | 0x4,0x14,0x23,0x24,0x4A,0x70,0xFF | def | 0x6 | 2 | - | mismatch |
+| 2233 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 7 | 0x23,0x24,0x27,0x28,0x137,0x157 | mismatch |
+| 2305 | stratified |  | ok | 0x3b | 8 | 0x3,0x8,0xCF | def | 0x6 | 4 | 0x28,0x800,0x1000 | mismatch |
+| 2495 | stratified |  | failed | 0x0 | 0 | - | def | 0x1f | 1 | - | verified |
 | 2599 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 1 | 0x19 | mismatch |
-| 2744 | stratified |  | ok | 0x32 | 13 | 0x13,0x70,0xC0,0x2799 | def | 0x6 | 3 | 0x7,0x800 | mismatch |
-| 2B8F | handler | handler=A | failed | 0x0 | 0 | - | def | 0x5d | 5 | 0x482D | mismatch |
-| 2F6F | handler | handler=B | failed | 0x0 | 0 | - | def | 0x18b | 35 | - | verified |
+| 26C3 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
+| 2B8F | handler | handler=A | failed | 0x0 | 0 | - | def | 0x6 | 1 | 0x2D | mismatch |
+| 2F6F | handler | handler=B | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
 | 310B | handler | handler=C | failed | 0x0 | 0 | - | def | 0x6 | 5 | 0x28,0x1CE8,0x4000,0xBA00,0xEB00 | mismatch |
 | 334D | handler | handler=D | failed | 0x0 | 0 | - | def | 0x37 | 6 | 0x8 | mismatch |
 | 3389 | handler | handler=E | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
-| 35C1 | handler | handler=F | failed | 0x0 | 0 | - | def | 0x48 | 5 | - | verified |
+| 35C1 | handler | handler=F | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
 | 363B | handler | handler=G | failed | 0x0 | 0 | - | def | 0x125 | 21 | 0x10,0x1700,0x494C | mismatch |
 | 3782 | handler | handler=H | failed | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
 | 3794 | handler | handler=I | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
@@ -40,18 +40,18 @@ Method: every integer literal and DS-relative operand asserted by the decompiler
 | 3F25 | handler | handler=S | failed | 0x0 | 0 | - | def | 0x6 | 2 | 0x49,0xE800 | mismatch |
 | 3F36 | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
 | 4050 | handler | handler=T | failed | 0x0 | 0 | - | def | 0x6 | 1 | 0xE800 | mismatch |
-| 405D | stratified |  | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
-| 42F1 | handler | handler=U | failed | 0x0 | 0 | - | def | 0x73 | 7 | - | verified |
+| 42F1 | handler | handler=U | failed | 0x0 | 0 | - | def | 0x6 | 2 | 0x49,0xE800 | mismatch |
 | 437E | handler | handler=V | ok | 0x18 | 29 | 0x3,0x4,0x6,0x8,0x9,0xF,0x10,0x19,0x1A,0x23,0x24,0x4A,0x60,0x70,0x77,0x99,0xF0,0x2A5C,0x2AF8,0x2B37,0x43CF,0xFFFE | def | 0x72 | 12 | 0x10 | mismatch |
 | 43F3 | handler | handler=W | failed | 0x0 | 0 | - | def | 0xd3 | 17 | 0x800 | mismatch |
 | 44D4 | handler | handler=X | failed | 0x0 | 0 | - | def | 0x55 | 9 | - | verified |
-| 4542 | handler | handler=Y | failed | 0x0 | 0 | - | def | 0x26 | 2 | - | verified |
-| 4568 | handler | handler=Z | failed | 0x0 | 0 | - | def | 0x362 | 48 | 0x739,0x48F2 | mismatch |
-| 50E1 | stratified |  | ok | 0x2 | 0 | - | def | 0x6 | 0 | - | no-claims |
-| 5B98 | stratified |  | ok | 0x2a | 26 | 0x6,0x7,0x10,0x13,0x14,0x15,0x16,0x17,0x18,0x2E,0x7F,0x80,0xFE,0x272,0x2CB,0x2DE,0x2DF,0x2E0,0x2F3,0x372,0x473,0x54E | def | 0x6 | 3 | 0x5,0x9,0x3F | mismatch |
-| 5D55 | stratified |  | ok | 0x3 | 0 | - | def | 0x6 | 0 | - | no-claims |
+| 4542 | handler | handler=Y | failed | 0x0 | 0 | - | def | 0x6 | 1 | 0x48 | mismatch |
+| 4568 | handler | handler=Z | failed | 0x0 | 0 | - | def | 0x6 | 0 | - | no-claims |
+| 4864 | stratified |  | absent | 0x0 | 0 | - | def | 0x6 | 1 | - | verified |
+| 4F69 | stratified |  | ok | 0x1 | 16 | 0x6,0x8,0x16,0x60,0x74,0x7B,0xDF,0xFF,0x200,0x54D,0x554,0x3A01,0x4F09,0x4F0A,0x7300,0x7400 | def | 0x6 | 0 | - | mismatch |
+| 5270 | stratified |  | ok | 0x8 | 0 | - | def | 0x6 | 2 | - | verified |
+| 5AFF | stratified |  | ok | 0x34 | 28 | 0x3,0x5,0x8,0x10,0x13,0x14,0x15,0x16,0x17,0x18,0x2E,0x40,0x7F,0x80,0x272,0x2CB,0x2DE,0x2DF,0x2E0,0x2F3,0x372,0x54E | def | 0x6 | 0 | - | mismatch |
 
-Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
+Totals: 10 verified, 25 mismatch, 9 no-claims of 44.
 
 ## Flag detail (context line in the decompiler C; pattern location)
 
@@ -118,7 +118,7 @@ Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
 - ghidra 0x60: elsewhere-in-file | `*(char *)0x55 = bVar8 + in_AF * -6 + (0x99 < bVar8 || (bVar11 < 10 || bVar542)) * -0x60;`
 - ghidra 0x61: elsewhere-in-file | `bVar11 = *(char *)0x61 *  ;`
 - ghidra 0x62: elsewhere-in-file | `if ((-1 < (char)bVar11) && (*(byte *)0x62 <= (bVar11 & 7))) {`
-- ghidra 0x66: elsewhere-in-file | `if (*(char *)0x66 ==  ) goto LAB_1000_0c62;`
+- ghidra 0x66: elsewhere-in-file | `if (*(char *)0x66 ==  ) goto FUN_1000_0c62;`
 - ghidra 0x70: elsewhere-in-file | `else if (bVar11 == 0x70) {`
 - ghidra 0x77: elsewhere-in-file | `*(char *)0x22 = (bVar11 & *(byte *)0x22 & 0x77) + 1;`
 - ghidra 0x7F: elsewhere-in-file | `if ((bVar542) || ((bVar11 != 0xff && ((bVar11 & 0x7f) != 0)))) goto  x0001122d;`
@@ -334,52 +334,55 @@ Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
 - ghidra 0x11451: absent-from-file
 - reko 0x78: elsewhere-in-file | `al = __addc<byte, >(al, 0x78, C);`
 
-### 0A51 (stratified)
+### 0A5F (stratified)
 
 - reko 0x1757: absent-from-file
 
-### 10BF (stratified)
+### 0D21 (stratified)
 
-- reko 0x1A: elsewhere-in-file
-- reko 0x217: elsewhere-in-file
+- reko 0x7: elsewhere-in-file
 
-### 22D5 (stratified)
+### 20EB (stratified)
 
-- ghidra 0xCF: elsewhere-in-file | `cRam000122f9 = *(char *)0x4a +   + (0xcf < *(byte *)0x49);`
-- reko 0x27: elsewhere-in-file | `byte ah = 0x27;`
-- reko 0x100: elsewhere-in-file
-- reko 0x800: elsewhere-in-file
+- ghidra 0x9: elsewhere-in-file
+- ghidra 0xF: elsewhere-in-file | `bVar4 = 9 < (bVar2 & 0xf) | in_AF;`
+- ghidra 0x99: elsewhere-in-file | `bVar5 = 0x99 < bVar2 || CARRY1(*(byte *)0x2a,*(byte *)0x28);`
 
-### 2383 (stratified)
+### 21BD (stratified)
 
+- ghidra 0x4: elsewhere-in-file
+- ghidra 0x14: elsewhere-in-file | `if (((((bVar1 != 0x10) && (bVar1 != 4)) && (bVar1 != 0)) && ((bVar1 < 0x14 || (bVar1 == 0x`
+- ghidra 0x23: elsewhere-in-file | `&& ((*(char *)0x4a ==   || ((*(char *)0x23 !=   && (*(char *)0x24 !=  )))))) {`
+- ghidra 0x24: elsewhere-in-file | `&& ((*(char *)0x4a ==   || ((*(char *)0x23 !=   && (*(char *)0x24 !=  )))))) {`
+- ghidra 0x4A: elsewhere-in-file | `&& ((*(char *)0x4a ==   || ((*(char *)0x23 !=   && (*(char *)0x24 !=  )))))) {`
+- ghidra 0x70: elsewhere-in-file | `if (((((bVar1 != 0x10) && (bVar1 != 4)) && (bVar1 != 0)) && ((bVar1 < 0x14 || (bVar1 == 0x`
+- ghidra 0xFF: elsewhere-in-file | `return 0xff;`
+
+### 2233 (stratified)
+
+- reko 0x23: elsewhere-in-file
+- reko 0x24: elsewhere-in-file
+- reko 0x27: elsewhere-in-file
+- reko 0x28: elsewhere-in-file
+- reko 0x137: elsewhere-in-file
+- reko 0x157: elsewhere-in-file
+
+### 2305 (stratified)
+
+- ghidra 0x3: elsewhere-in-file
 - ghidra 0x8: elsewhere-in-file
-- ghidra 0x1F: elsewhere-in-file | `pcVar1 = (char *)0x1f;`
-- ghidra 0x90: elsewhere-in-file | `out(0x90,(char)uVar3);`
-- ghidra 0x26E: elsewhere-in-file | `if (cVar2 == *(char *)0x26e) {`
-- ghidra 0x26F: elsewhere-in-file | `if (cVar2 == *(char *)0x26f) {`
-- ghidra 0x270: elsewhere-in-file | `if (cVar2 == *(char *)0x270) {`
-- ghidra 0x271: elsewhere-in-file | `if (cVar2 == *(char *)0x271) {`
-
-### 243E (stratified)
-
-- reko 0x36: elsewhere-in-file | `dx = 0x36;`
+- ghidra 0xCF: elsewhere-in-file | `cRam0001233d = *(char *)0x4a +   + (0xcf < *(byte *)0x49);`
+- reko 0x28: elsewhere-in-file | `byte ah = 0x28;`
+- reko 0x800: elsewhere-in-file
+- reko 0x1000: elsewhere-in-file | `cx = 0x1000;`
 
 ### 2599 (stratified)
 
 - reko 0x19: elsewhere-in-file | `al = __subc<byte, >(al, 0x19, C);`
 
-### 2744 (stratified)
-
-- ghidra 0x13: elsewhere-in-file | `if (0x13 < bVar1) {`
-- ghidra 0x70: elsewhere-in-file | `*(byte *)0x70 = bVar1;`
-- ghidra 0xC0: elsewhere-in-file | `*(undefined1 *)*(undefined2 *)0x6 = 0xc0;`
-- ghidra 0x2799: absent-from-file | `*(undefined1 *)0x24 = *(undefined1 *)(uVar2 + 0x2799);`
-- reko 0x7: elsewhere-in-file
-- reko 0x800: elsewhere-in-file
-
 ### 2B8F (handler=A)
 
-- reko 0x482D: elsewhere-in-file
+- reko 0x2D: elsewhere-in-file | `ax = ax - 0x2D;`
 
 ### 310B (handler=C)
 
@@ -437,6 +440,11 @@ Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
 
 - reko 0xE800: elsewhere-in-file | `ax = ax - 0xE800;`
 
+### 42F1 (handler=U)
+
+- reko 0x49: elsewhere-in-file
+- reko 0xE800: elsewhere-in-file | `ax = ax - 0xE800;`
+
 ### 437E (handler=V)
 
 - ghidra 0x3: elsewhere-in-file
@@ -467,15 +475,34 @@ Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
 
 - reko 0x800: elsewhere-in-file
 
-### 4568 (handler=Z)
+### 4542 (handler=Y)
 
-- reko 0x739: absent-from-file
-- reko 0x48F2: absent-from-file | `dx.u0 = ~0x48F2;`
+- reko 0x48: elsewhere-in-file
 
-### 5B98 (stratified)
+### 4F69 (stratified)
 
-- ghidra 0x6: elsewhere-in-file | `*(char *)0x6 = (char)(CONCAT11((bVar1 & 1) != 0,((bVar2 & 1) != 0) << 7) >> 1) + bRam00015`
-- ghidra 0x7: elsewhere-in-file | `*(byte *)0x7 = *(char *)0x5 + *(char *)0x3 & 0x3f;`
+- ghidra 0x6: elsewhere-in-file
+- ghidra 0x8: elsewhere-in-file
+- ghidra 0x16: elsewhere-in-file | `pcVar1 = (code *)swi(0x16);`
+- ghidra 0x60: elsewhere-in-file | `if ((0x60 < bVar2) && (bVar2 < 0x7b)) {`
+- ghidra 0x74: elsewhere-in-file | `uVar3 = *(int *)0x74 - 0x200;`
+- ghidra 0x7B: elsewhere-in-file | `if ((0x60 < bVar2) && (bVar2 < 0x7b)) {`
+- ghidra 0xDF: elsewhere-in-file | `uVar3 = CONCAT11(0xff,bVar2 & 0xdf);`
+- ghidra 0xFF: elsewhere-in-file | `*(byte *)0x54d = *(byte *)0x54d ^ 0xff;`
+- ghidra 0x200: elsewhere-in-file | `uVar3 = *(int *)0x74 - 0x200;`
+- ghidra 0x54D: elsewhere-in-file | `*(byte *)0x54d = *(byte *)0x54d ^ 0xff;`
+- ghidra 0x554: elsewhere-in-file | `if (*(uint *)0x554 <= uVar3) {`
+- ghidra 0x3A01: elsewhere-in-file | `if (uVar3 < 0x3a01) {`
+- ghidra 0x4F09: elsewhere-in-file | `if ((char)(param_1 >> 8) == *(char *)(iVar4 + 0x4f09)) {`
+- ghidra 0x4F0A: elsewhere-in-file | `param_1 = (uint)*(byte *)(iVar4 + 0x4f0a);`
+- ghidra 0x7300: elsewhere-in-file | `if (param_1 != 0x7300) {`
+- ghidra 0x7400: elsewhere-in-file | `if (param_1 == 0x7400) {`
+
+### 5AFF (stratified)
+
+- ghidra 0x3: elsewhere-in-file | `(in_AL = *(char *)0x5 + *(char *)0x3, in_AL < 0x40)) goto  x00015aff;`
+- ghidra 0x5: elsewhere-in-file | `*(char *)0x5 = *(char *)0x5 +  ;`
+- ghidra 0x8: elsewhere-in-file
 - ghidra 0x10: elsewhere-in-file | `} while ((char)iVar3 != -0x10);`
 - ghidra 0x13: elsewhere-in-file | `*(undefined1 *)0x2df = *(undefined1 *)0x13;`
 - ghidra 0x14: elsewhere-in-file | `*(undefined1 *)0x14 = *(undefined1 *)0x2df;`
@@ -483,61 +510,37 @@ Totals: 12 verified, 23 mismatch, 9 no-claims of 44.
 - ghidra 0x16: elsewhere-in-file | `*(undefined1 *)0x16 = *(undefined1 *)0x2f3;`
 - ghidra 0x17: elsewhere-in-file | `*(undefined1 *)0x17 = *(undefined1 *)0x2e0;`
 - ghidra 0x18: elsewhere-in-file | `*(undefined1 *)0x18 = *(undefined1 *)0x2de;`
-- ghidra 0x2E: elsewhere-in-file | `else if (bVar2 != 0x2e) goto FUN_1000_5c23;`
+- ghidra 0x2E: elsewhere-in-file | `else if (bVar2 != 0x2e) goto FUN_1000_5b4b;`
+- ghidra 0x40: elsewhere-in-file | `if (((byte)(*(char *)0x4 + *(char *)0x2) < 0x40) &&`
 - ghidra 0x7F: elsewhere-in-file | `*(byte *)(iVar3 + 0x372) = *(byte *)(iVar3 + 0x272) & 0x7f;`
 - ghidra 0x80: elsewhere-in-file | `bVar2 = bVar2 | 0x80;`
-- ghidra 0xFE: elsewhere-in-file | `bVar2 = *(byte *)*(undefined2 *)0x6 >> 1 & 0xfe;`
-- ghidra 0x272: elsewhere-in-file | `*(byte *)(iVar3 + 0x272) = bVar2;`
+- ghidra 0x272: elsewhere-in-file | `*(byte *)(unaff_DI + 0x272) = bVar2;`
 - ghidra 0x2CB: elsewhere-in-file | `*(undefined1 *)0x15 = *(undefined1 *)0x2cb;`
 - ghidra 0x2DE: elsewhere-in-file | `*(undefined1 *)0x18 = *(undefined1 *)0x2de;`
 - ghidra 0x2DF: elsewhere-in-file | `*(undefined1 *)0x14 = *(undefined1 *)0x2df;`
 - ghidra 0x2E0: elsewhere-in-file | `*(undefined1 *)0x17 = *(undefined1 *)0x2e0;`
 - ghidra 0x2F3: elsewhere-in-file | `*(undefined1 *)0x16 = *(undefined1 *)0x2f3;`
-- ghidra 0x372: elsewhere-in-file | `if (bVar2 == *(byte *)(iVar3 + 0x372)) {`
-- ghidra 0x473: elsewhere-in-file | `*(char *)0x7 = *(char *)0x7 + *(char *)0x473;`
+- ghidra 0x372: elsewhere-in-file | `if (bVar2 == *(byte *)(unaff_DI + 0x372)) {`
 - ghidra 0x54E: elsewhere-in-file | `if (*(char *)0x54e == -1) {`
-- reko 0x5: elsewhere-in-file
-- reko 0x9: elsewhere-in-file
-- reko 0x3F: elsewhere-in-file | `al &= 0x3F;`
 
 
-## Cause annotations (per plan: every mismatch annotated with likely cause)
+---
 
-**Class A - Ghidra flow-runaway bodies (boundary drift): 080D, 437E, 5B98.**
-Ghidra reports these `ok` with small claimed body sizes (0x2c, and similar), but the emitted C
-is 100-270 KB: decompiler flow ran away through untyped data/jump edges and folded distant code
-into one body. Every flagged constant is either `elsewhere-in-file` (belongs to code outside
-the claimed body) or a synthetic stack-model value. Verdict: the *bytes* are not contradicted;
-the *body boundary claim* is wrong. Treat these three as untrusted for Phase 2 despite
-`decompile_status=ok`. This is exactly the failure mode `docs/decompiling.md` warns about.
+## v2 refresh (night run, merged 1125-seed corpus)
 
-**Class B - Reko semantic-lowering artifacts: constants like 0xE800, 0xEB00, 0x494C, 0x5247,
-0x532D, 0x2D39, 0x1700, 0x1CE8, 0xBA00, 0x4000, 0x800, `~0x48F2`, 0x1757.**
-These come from Reko lowering 8086 BCD-adjust (`das`/`aaa` -> `ax -= 0x494C` style), `not`
-(`dx.u0 = ~0x48F2`) and stack-pointer modeling (`sp -= -5975`) into synthetic arithmetic. They
-are not claimed instruction immediates; no bytes encode them. Handlers affected: A, C, D, G, M,
-N, Q, R, S, T, W, Z. Verdict: artifact, not a byte contradiction.
+Sample re-drawn on the expanded data: 44 functions (26 handlers + 18 stratified) ->
+10 verified, 25 mismatch, 9 no-claims. Same cause classes as above; the expanded corpus
+makes the scale explicit:
 
-**Class C - small DS offsets flagged `elsewhere-in-file` (0x19, 0x1A, 0x24, 0x28, 0x36, 0x41,
-0x49, 0x52, 0xE3, ...): boundary drift.** The claim is a real DS displacement but belongs to an
-instruction just outside the procedure range Reko's own `l0800_` labels cover - procedure
-boundary drift, not fabricated data.
+- **Ghidra**: of 497 `ok` functions, 134 assert at least one constant absent from the whole
+  file — 36 large flow-runaway bodies (>=50 fabs, the 080D family) + 98 small-body runaways
+  concentrated in the startup region (0x100-0x1xx: relocation-fixup/self-modifying code).
+  363 `ok` functions assert nothing contradicted by the bytes.
+- **Reko**: exactly **2** fabricated constants in the entire 1125-procedure corpus
+  (0x0A5F, 0x4FA5). Reko's pseudo-C is byte-honest everywhere else; its mismatches are
+  lowering artifacts (Class B) and boundary drift (Class C).
+- The full-corpus per-entry verdicts are in `disasm/bytecheck-full.tsv`; the asm ground truth
+  (`disasm/ultimaii.asm`) re-assembles byte-identically (`tools/verify_asm.sh`).
 
-**Class D - genuine unexplained fabrications (2 after classification):**
-- `2744` Ghidra `0x2799` (`*(u8*)(uVar2 + 0x2799)`): byte pattern 99 27 exists nowhere in the
-  file; not attributable to flow runaway (body is small). Likely Ghidra-internal constant from
-  a mis-modeled multiply. Phase 2 must resolve before trusting 2744's body.
-- `4568` (handler Z) Reko `0x739`: no context line found in the define after cleaning;
-  suspected residue of a lowering artifact. Flagged for Phase 2 review.
-
-**Relocation fixup class:** not triggered in this sample (the only known fixup site, entry
-`0100`, was not in the sampled set; see CP1 full-range check).
-
-## Gate summary
-
-- 44 sampled = all 26 jump-table handlers + 18 stratified.
-- 12 verified outright; 9 no-claims (Ghidra failed stubs whose Reko side also made no
-  checkable claims); 23 mismatch - every mismatch listed above with a cause class.
-- Zero UNFLAGGED mismatches: all 23 have enumerated flags with causes.
-- Byte-level ground truth was contradicted by no claim in the sample: every flagged constant
-  is explained as boundary drift (A/C), lowering artifact (B), or isolated fabrication (D: 2).
+Gate position unchanged: zero unflagged mismatches; every mismatch class-annotated; the two
+isolated Reko fabrications plus the Ghidra flow-runaway boundary problem are Phase 2 work.

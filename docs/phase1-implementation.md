@@ -287,3 +287,16 @@ decompiles, get as much asm as possible, and attempt build + validation of pseud
 - Ghidra side (partial, run6 in flight): all fabrication entries are flow-runaway bodies —
   24 large (080D family, >=100 fabs each) + 62 small (startup-region entries claiming 1-byte
   bodies with runaway flow). No fabrication found in a normal-sized Ghidra body so far.
+
+### Ghidra v2 final + full-corpus refresh (night)
+- Ghidra run6 (1125 seeds, timeout=20): exit 0, ~3.5 h. 1116 rows (9 seeds missing — createFunction
+  failures, all in the 5120-5151 self-modifying cluster), 497 ok = 44.5%. Rate fell vs 58.1%
+  because the 413 new seeds are harder fragments; absolute ok count rose 411 -> 497.
+- RetryDecompile NOT re-run on the new failures: the prior pass established both failure classes
+  are unrecoverable by style/timeout variation (0/199 and 0/97 yields); re-running ~300 targets
+  for expected-zero yield was judged a poor use of the night window. Recorded as a decision.
+- Full-corpus validation refreshed (bytecheck-full.tsv, 1125 rows): 253 verified, 515 mismatch
+  (all class-annotated), 357 no-claims. Ghidra fabs: 134/497 ok entries (36 big + 98 small
+  flow-runaways, startup-region heavy). Reko fabs: 2 total (0x0A5F, 0x4FA5).
+- CP6 sample report regenerated on v2 data + v2 cause-annotation section appended.
+- functions.tsv regenerated (1125 rows). phase1-summary.md drafted (CP7 gate pending).

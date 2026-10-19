@@ -6,13 +6,13 @@ checkpoint. See `phase1-plan.md` for the full work order.
 | CP | Checkpoint | Status | Result / artifact paths | Updated |
 | --- | --- | --- | --- | --- |
 | CP0 | Environment & isolation verification (+ git init) | done | All 4 tools OK; binary 37,344 B; git repo initialised, initial commit b045523; ignore-policy verified | 2026-10-19 |
-| CP1 | Entry points from runtime CFG | done | 796 code blocks -> 693 unique entries (103 dead-dropped, 0 dupes); 692/693 first-opcode match vs file (1 = known reloc fixup); 3 objdump spot-checks OK | 2026-10-19 |
-| CP2 | Command jump table (26 handlers) | done* | Table found at file 0x930 (dispatcher 017D:0A1F); 26/26 plausible starts; only 7/26 in CFG — 19 handlers never executed in playthrough (gap documented, decision flagged for CP6 gate). Union seed `disasm/seed-entries.txt` = 712 | 2026-10-19 |
+| CP1 | Entry points from runtime CFG | done (v2) | Merged 45 CFG sources (incl. 44 owner-authorized external captures): **1113** unique entries; all byte-verified vs file (only 0100 fixup differs) | 2026-10-19 |
+| CP2 | Command jump table (26 handlers) | done* | Table at file 0x930; 26/26 plausible; runtime coverage now **14/26** (was 7/26) after external merge; 12 handlers seeded from table only — flagged for gate | 2026-10-19 |
 | CP3 | Segment map & memory-dump inventory | done | `disasm/segment-map.md`: CS=017D, DS=0x08BE, 0x0741→0x08BE fixup caveat, +0x200 map; live-ds dump 4096 B, `TEST` @ DS:0x36 confirms layout | 2026-10-19 |
-| CP4 | Seeded Ghidra decompilation | done* | 707/712 seeds have rows; 411 ok = **58.1%** (bar: 60% — missed, structural, flagged for gate); RetryDecompile on 296 failures recovered 0; no Exception/COMPILATION in log | 2026-10-19 |
-| CP5 | Seeded Reko decompilation | done* | Exit 0; 712/712 seeds emitted + 126 discovered (839 defines); 3 per-proc rewrite failures; 1 contained SSA exception (fn 531B) — see notes; `original/` restored byte-clean | 2026-10-19 |
-| CP6 | Byte-check verification 🔒 | in-progress → **awaiting gate** | 44 sampled (26 handlers + 18 stratified): 12 verified, 9 no-claims, 23 mismatch — all flagged & cause-annotated (flow-runaway / Reko lowering / boundary drift / 2 true fabrications). Zero unflagged. **Awaiting user ratification** | 2026-10-19 |
-| CP7 | Function inventory & sign-off 🔒 | todo | | |
+| CP4 | Seeded Ghidra decompilation | done* | v2 (1125 seeds): 1116 rows, 497 ok = **44.5%** (bar 60% — missed; new seeds are harder fragments; flow-runaway contamination in 134/497 ok bodies flagged) | 2026-10-19 |
+| CP5 | Seeded Reko decompilation | done | v2: 1125/1125 seeds + 169 discovered (1294 defines); 3 contained per-proc failures; original/ byte-clean | 2026-10-19 |
+| CP6 | Byte-check verification 🔒 | in-progress → **awaiting gate** | Sample 44 refreshed + **full-corpus** `bytecheck-full.tsv`: Reko 2 fabrications total; Ghidra fabs all flow-runaway bodies; asm ground truth byte-matches whole file. Zero unflagged. **Awaiting user ratification** | 2026-10-19 |
+| CP7 | Function inventory & sign-off 🔒 | draft ready | `disasm/functions.tsv` (1125 rows) + `disasm/phase1-summary.md` drafted; awaiting CP6 gate decision | 2026-10-19 |
 
 Status values: `todo` / `in-progress` / `done` / `blocked`.
 
@@ -32,6 +32,12 @@ Status values: `todo` / `in-progress` / `done` / `blocked`.
   crash the doc warns about. Flagged for CP6 gate review.
 
 - **CP4 acceptance shortfall:** ok = 411/707 = 58.1% vs the ≥60% bar. Failures are 199
+  **Night update:** after the owner-authorized external capture merge, v2 numbers are 497/1116
+  = **44.5%** — the 413 new seeds are harder startup/jump-table fragments, so the rate fell
+  while absolute coverage rose (411→497 ok functions). The 60% bar looks unreachable under any
+  Ghidra configuration on this binary; recommend the owner either accept 44.5% (with the asm
+  byte-match as the real ground truth) or formally retire the bar.
+- **CP4 acceptance shortfall (original run):** ok = 411/707 = 58.1% vs the ≥60% bar. Failures are 199
   "Cannot properly adjust input varnodes" + 97 timeouts; timeout failures are mostly 1-5 byte
   functions whose decompiler flow runs away (more time won't help); RetryDecompile (3 alt
   styles × 296) recovered 0. Reaching 60% would need ~13 more recoveries — no legitimate path
