@@ -49,3 +49,37 @@ Format per checkpoint:
 - Dead-ends: none.
 - Deviations: none.
 - Commit: b045523 `phase1: CP0 initial commit of authored files (docs, tools, policy)`
+
+## CP1 — Extract entry points from the runtime CFG   (session: phase1-run-A)
+- What I did: wrote `tools/extract_entry_points.py` implementing the plan's filter rule
+  (segment 017D; drop dead blocks only when no live predecessor; dedup; sort), generated
+  `disasm/entry-points.txt` (693 lines) and `disasm/entry-points.md`.
+- Commands run (exact):
+  - `python3 tools/extract_entry_points.py`
+  - full first-opcode verification (inline python): for each entry, compare CFG first-opcode
+    bytes with file bytes at `XXXX+0x200`
+  - `objdump -d -b binary -m i8086 -j .data --start-address=0x<XXXX+200> --stop-address=+6 original/ultimaii.exe`
+    for 3 random entries (seed=1): 0962, 5188, 06AC
+  - `wc -l disasm/entry-points.txt` -> 693
+- Measured outputs:
+  - 845 blocks total; 796 in 017D (48 F000 + 1 0A29 dropped); 181 dead in code segment;
+    78 dead kept (live pred), 103 dead dropped (all preds dead); 693 unique offsets, 0 dupes.
+  - First-opcode check: 692/693 match the file. Sole mismatch = block 96 @ 0100 (runtime
+    `mov ax,0x08BE` vs file `mov ax,0x0741`) — the documented MZ relocation fixup, expected.
+  - All 3 objdump spot-checks decode as plausible instruction starts (see entry-points.md).
+- Decisions & reasoning:
+  - "Live predecessor" = pred id present in the CFG and not flagged dead. All pred ids resolved
+    and no block had an empty pred list, so the rule is unambiguous on this data.
+  - Count is 693, not "within a few of 796": the reduction is the plan's own dead-drop rule
+    (103 blocks), not dedup. The plan's on-failure note explicitly anticipates the dead-block
+    reduction and forbids padding, so I kept the rule as written and documented the arithmetic
+    rather than loosening anything. Flagged for human eyes at the CP6 gate.
+  - Went beyond the required 3-random spot-check with a full 693-entry first-opcode comparison
+    (cheap, stronger evidence).
+- Dead-ends / things that did not work:
+  - **binutils 2.46 quirk:** `objdump -d -b binary -m i8086 --start-address=... file` silently
+    emits zero instructions (no error). Adding `-j .data` fixes it. All later objdump commands
+    in this phase must include `-j .data`. Plan's Test command amended accordingly.
+- Deviations: added `-j .data` to objdump invocations (tool quirk, noted above); wrote the
+  extractor as a committed script under `tools/` for reproducibility.
+- Commit: (see git log, `phase1: CP1 ...`)
