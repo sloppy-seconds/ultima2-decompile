@@ -45,4 +45,10 @@ Status values: `todo` / `in-progress` / `done` / `blocked`.
 
 ## Gate log
 
+- **2026-10-19 (owner decision):** Ghidra ≥60% decompile bar **retired**. Quality gate for
+  Phase 1+ is now: (a) asm extraction re-assembles byte-identical (`tools/verify_asm.sh`),
+  (b) full-corpus pseudo-C bytecheck with zero unflagged mismatches
+  (`disasm/bytecheck-full.tsv`). Reko designated primary pseudo-C engine; Ghidra retained
+  only for MarkInlineData, interactive GUI use, and targeted second opinions.
+
 _(record each 🔒 gate summary and the user's decision here)_
