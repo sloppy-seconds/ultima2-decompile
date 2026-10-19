@@ -11,12 +11,14 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP3 | Per-function asm slices | done | map-driven asm regen fixed 106 mis-aligned starts; 1299 slices + prologue rebuild byte-identical | 2026-10-19 | | |
 | CP4 | Reko re-run on true boundaries + bytecheck v2 | done | 1299/1299 emitted; mismatch 279->199, drift 574->371; fabs 2->6 (4 new, contexts recorded for CP5) | 2026-10-19 | | |
 | CP5 | Defect resolution | done | defects.md: 5/6 fabs = bytecheck FPs, 1 true (0A5F); 3 failures = nop-pads + string site | 2026-10-19 | | |
-| CP6 | Byte-verification gate 🔒 | todo | | |
-| CP7 | Sign-off & Phase 3 memo 🔒 | todo | | |
+| CP6 | Byte-verification gate 🔒 | **done (owner-approved 2026-10-19)** | Function map totals + classified regions + bytecheck v2 delta + defects presented; owner approved | 2026-10-19 |
+| CP7 | Sign-off & Phase 3 memo 🔒 | **done (owner sign-off 2026-10-19)** | `disasm/phase2-summary.md` + Phase 3 C-lifting decision memo; Phase 3 authorized | 2026-10-19 |
 
 ## Gate log
 
-(none yet)
+- **2026-10-19 (owner):** CP6 byte-verification gate **approved** (map totals, classified data,
+  bytecheck v2 delta, defect verdicts). CP7 summary + Phase 3 decision memo signed off.
+  **Phase 2 complete; Phase 3 (C lifting) authorized** per the memo in `phase2-summary.md`.
 
 ## Open questions / blockers
 

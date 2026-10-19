@@ -102,3 +102,10 @@ Created this log and `docs/phase2-state.md`. No deviations.
   padding seeds, 531B is a str_out call + spaces string site.
 - Follow-ups recorded for Phase 3 (bytecheck v3 derived-constant whitelist; data-island
   candidates 47BD/4815/486D; nop-pad kind).
+
+## CP6/CP7 — GATES CLEARED (owner 2026-10-19)
+- CP6 byte-verification gate APPROVED by owner.
+- CP7 `disasm/phase2-summary.md` written (corpus stats + naming conventions + Phase 3
+  C-lifting decision memo). Recommended Phase 3 strategy: lift from Reko drafts, verify each
+  function against its asm slice via re-assemble byte-diff; handlers first.
+- Phase 2 status: COMPLETE. All §4 global criteria met. Phase 3 authorized.
