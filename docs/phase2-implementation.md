@@ -92,3 +92,13 @@ Created this log and `docs/phase2-state.md`. No deviations.
     same pattern as CP6-v1's 4568/0x739 fabrication; three sibling fragments) and 6999
     (`ax |= ~0x1701` — a `not` lowering artifact miscounted as fabrication). All 4 carry
     contexts; final verdicts are CP5 work. Not hidden, not reclassified silently.
+
+## CP5 — Defect resolution (2026-10-19)
+
+- `disasm/defects.md`: all 9 defects adjudicated against asm slices. Headline: 5 of the 6
+  "fabrications" are bytecheck literal-extraction FPs (constant folding 4FA5; negative
+  displacement -0x739 x3; complement form ~0x1701). **1 genuine Reko fabrication (0A5F) in
+  1299 procedures.** The 3 Reko failures are all non-functions: 2395/35DD are single-nop
+  padding seeds, 531B is a str_out call + spaces string site.
+- Follow-ups recorded for Phase 3 (bytecheck v3 derived-constant whitelist; data-island
+  candidates 47BD/4815/486D; nop-pad kind).
