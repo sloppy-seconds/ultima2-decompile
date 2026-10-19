@@ -137,3 +137,41 @@ Format per checkpoint:
 - Dead-ends: none. No live re-capture needed.
 - Deviations: none.
 - Commit: `phase1: CP3 segment map + DS dump inventory`
+
+## CP5 — Seeded Reko decompilation   (session: phase1-run-A)
+- What I did: wrote `tools/make_reko_project.py` generating `decompiled/reko/ultimaii.dcproject`
+  (arch/platform as elements, absolute paths, 712 `<procedure>` entries from
+  `seed-entries.txt`, address form `0800:XXXX`). Ran Reko with `--time-limit 1800`. Ran in
+  parallel with CP4 Ghidra to use wall time well.
+- Commands run (exact):
+  - `python3 tools/make_reko_project.py` -> 712 procedures, xml-ok
+  - `dotnet "$REKO_DLL" decompile decompiled/reko/ultimaii.dcproject --time-limit 1800`
+  - post-run: moved `original/ultimaii.reko/ultimaii.h` -> `decompiled/reko/ultimaii.h`,
+    removed the empty `original/ultimaii.reko/` dir; verified `original/ultimaii.exe` md5
+    unchanged (fe884d5117971073ac8097cc7a6aca25, identical to references backup)
+- Measured outputs:
+  - Exit code 0. `decompiled/reko/`: ultimaii.c (566 KB), ultimaii.asm, ultimaii.dis,
+    ultimaii.globals.c, ultimaii.h, analysis_99_crash.txt.
+  - 839 `define` blocks; **712/712 seeds have a define**; 126 extra procedures discovered by
+    Reko beyond the seeds.
+  - 3 per-procedure rewrite errors: fn0800_2395, fn0800_50F9, fn0800_531B. None are jump-table
+    handlers.
+  - Many "Structure analysis stopped making progress" warnings (non-fatal, per-procedure).
+- Decisions & reasoning:
+  - Seeded from `seed-entries.txt` (union) not `entry-points.txt`, consistent with the CP2
+    decision so all 26 handlers get Reko coverage too.
+  - **SSA note (flagged):** acceptance says "run completes without an SSA crash". One procedure
+    (531B) hit a *caught, per-procedure* SSA exception (boundless recursion finding `ds` defs;
+    captured in analysis_99_crash.txt) but the run completed and emitted everything else. This
+    is materially different from the documented whole-run shingle-heuristic crash; I judged the
+    criterion met in substance and flagged the nuance in the state file for the CP6 gate rather
+    than silently passing it.
+  - Reko writes its `.reko` output dir next to the input binary by design (plan CP5 step 3
+    anticipates this). The binary itself was never mutated; the stray dir was moved out and
+    `original/` verified byte-clean afterwards.
+  - `references/ultima2/ultimaii.reko/` exists with mtime 12:05 (before this session started);
+    pre-existing, not touched by me.
+- Dead-ends / things that did not work: none — first run succeeded.
+- Deviations: parallelized CP5 ahead of CP4 completion (pure wall-time optimization, no
+  dependency); noted here for audit order.
+- Commit: `phase1: CP5 Reko seeded (712/712 emitted, 839 defines, 3 per-proc failures)`
