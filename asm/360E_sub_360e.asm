@@ -1,0 +1,8 @@
+# sub_360e — mechanical clean (bulk wave); behavior not yet reviewed
+# func 360E..3610  len 0003 B  evidence: seed+reko
+# calls: L_0060d7
+# confidence: low (bytes proven by check_func.py)
+# bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+sub_360e:
+L_00380e:
+        call L_0060d7
