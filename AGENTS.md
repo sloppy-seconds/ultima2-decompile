@@ -2,9 +2,11 @@
 
 This document defines the high-level architecture, compiler selection, automated diffing tools, testing strategies, and execution protocols for AI agents (and human collaborators) reverse engineering early 16-bit real-mode DOS binaries (e.g., *Ultima II*) into assembly, re-engineering into C where appropriate, and verifying exact byte-for-byte fidelity.
 
-> **Executable work orders:** `docs/phase1-plan.md` is the autonomous, checkpointed plan for Phase
-> 1 (evidence capture). To start a fresh agent on it, paste `docs/phase1-kickoff.md`. A session
-> should read `AGENTS.md` §0, then `docs/phase1-plan.md`, then `docs/phase1-state.md` to resume.
+> **Executable work orders:** `docs/phase1-plan.md` is the completed, checkpointed plan for Phase
+> 1 (evidence capture) — signed off 2026-10-19, see `disasm/phase1-summary.md`. Phase 2 (function
+> boundaries, code/data separation, per-function asm corpus) is `docs/phase2-plan.md`; to start a
+> fresh agent on it, paste `docs/phase2-kickoff.md`. A session should read `AGENTS.md` §0, then
+> the phase plan, then the phase state file to resume.
 
 ---
 
