@@ -48,6 +48,13 @@ def literals_from_c(text: str):
         v = int(m.group(0))
         if v > 1:
             lits.add(v)
+    # Reko renders DS-relative operands as struct field names bXXXX; the offset
+    # appears as a 2-byte immediate in the instruction, so it is checkable.
+    for m in re.finditer(r"\bb([0-9a-fA-F]{4,6})\b", text):
+        lits.add(int(m.group(1), 16))
+    # Ghidra renders absolute operands as ram/DS symbols.
+    for m in re.finditer(r"(?:DAT_|ram|ds)(?:0x)?([0-9a-fA-F]{4,8})", text):
+        lits.add(int(m.group(1), 16))
     lits.discard(0)
     lits.discard(1)
     return sorted(lits)
