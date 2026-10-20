@@ -216,7 +216,14 @@ static int wait_choice(u2_ctx *ctx)
     u2_key k;
 
     while (!seam_key_poll(ctx, &k)) {
-        if (ctx->exit_code || ctx->mode == U2_MODE_HEADLESS)
+        /* input_exhausted is the flag that actually gets set: a finished
+         * script, a closed window and --dump-screen all arrive through
+         * seam_key_poll's -1, which raises this flag and leaves exit_code
+         * alone unless the backend chose to set it. Testing only exit_code
+         * is what made `SDL_VIDEODRIVER=dummy --dump-screen` write its frame
+         * and then spin here for ever (T6, measured 2026-10-20: the PPM was
+         * on disk, the process had to be killed). */
+        if (ctx->exit_code || ctx->input_exhausted || ctx->mode == U2_MODE_HEADLESS)
             return -1;
         seam_wait_ms(ctx, 20);
     }    seam_char_print(ctx, k.ch);

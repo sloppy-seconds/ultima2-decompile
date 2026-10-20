@@ -244,6 +244,48 @@ else
     printf '  SKIP  no player content present (pass --data-dir to test against it)\n'
 fi
 
+# --- the SDL path proves itself headlessly, when u2-sdl is built ----------
+# Standing directive: the cell -> font -> upload chain must be testable without
+# a display. SDL_VIDEODRIVER=dummy gives exactly that. It used to hang after
+# writing the frame (T6: --dump-screen set dump_screen_done, the poll turned
+# that into input_exhausted, and wait_choice only tested exit_code), so this
+# test is also the regression guard for that. Skipped when the SDL build was
+# not requested, because SDL2 is an owner-install dependency.
+if [ -x ./u2-sdl ]; then
+    rm -f "$WORK/sdl.ppm"
+    SDL_VIDEODRIVER=dummy timeout -s KILL 20 ./u2-sdl --sdl --dump-screen "$WORK/sdl.ppm" \
+        >/dev/null 2>&1
+    sdl_rc=$?
+    if [ "$sdl_rc" -ne 0 ]; then
+        bad "headless SDL run did not exit cleanly (rc=$sdl_rc; a hang here is the T6 defect)"
+    elif [ ! -s "$WORK/sdl.ppm" ]; then
+        bad "headless SDL run wrote no frame"
+    else
+        ppm_size=$(wc -c < "$WORK/sdl.ppm" | tr -d ' ')
+        [ "$ppm_size" = "192015" ] \
+            && ok "headless SDL: dummy driver presents a 320x200 frame ($ppm_size B)" \
+            || bad "headless SDL frame is $ppm_size B, expected 192015 (P6 320x200)"
+        # Ink check: the title screen is text on black, so a presented frame
+        # must contain non-black pixels. A blanked frame is the failure mode
+        # this guards (the same class the screenshot diff guards for the map).
+        ink=$(python3 - "$WORK/sdl.ppm" <<'PY'
+import sys
+raw = open(sys.argv[1], 'rb').read()
+end = 0
+for _ in range(3):                      # P6, dims, maxval
+    end = raw.index(b'\n', end) + 1
+px = raw[end:]
+print(sum(1 for i in range(0, len(px), 3) if px[i:i+3] != b'\x00\x00\x00'))
+PY
+)
+        [ -n "$ink" ] && [ "$ink" -gt 100 ] \
+            && ok "headless SDL frame carries ink ($ink non-black pixels, not a blank upload)" \
+            || bad "headless SDL frame is blank or unreadable (ink=$ink)"
+    fi
+else
+    printf '  SKIP  u2-sdl not built (make sdl) — headless SDL path not exercised\n'
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP4 TEST: PASS\n'
