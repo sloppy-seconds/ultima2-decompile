@@ -268,4 +268,107 @@ each opening with a concrete story rather than a thesis.
 
 ## Morning report
 
-(filled in at the end)
+Tree is green at HEAD (`make test` all suites pass; `make sdl` compiles). Six
+tasks resolved: three shipped with code, one shipped the proven half, one is a
+documented PASS where the premise was false, one is this write-up. Nothing was
+guessed. Every claim below cites an address or a test name.
+
+**Shipped (commit list, newest first):**
+- `T7` screenshot differential harness (`tools/screenshot_diff.py`) + wired into
+  `run_cp4.sh`.
+- `T6` SDL dummy-driver hang fixed + headless SDL test in `run_cp4.sh`.
+- `T2` (proven half) food tick on PASS + instant starvation death +
+  `food_check.c` (14 checks).
+- `T4` SIGTERM now ends an SDL run (two-deep root cause).
+- `T3` window close ends the overworld loop.
+- `T1` write-up (no code — see below).
+
+---
+
+**DONE T3** — Closing the SDL window mid-game now quits instead of spinning.
+Player-visible: pressing the window X while walking used to leave the game
+running; it now exits. Proof: `sdl_poll` sets `exit_code` and returns -1 on
+`SDL_QUIT`; `seam_key_poll` collapses -1 to 0 and raises `input_exhausted`; the
+overworld idle branch tested neither, so it looped forever. It now breaks on
+`exit_code || input_exhausted`, matching what the title flow already did via
+`flow_stopped()`. `seam_key_poll`'s return contract is untouched (callers test
+it with `!`). No new test — the CP4 scripted tests already exercise the loop and
+stayed green; the defect needs a live window to show.
+
+**DONE T4** — `kill`/`timeout -s TERM` now stops an SDL run. Player-visible: a
+polite stop (systemd, `timeout`) used to require `kill -9`. Root cause was two
+layers deep, both measured not assumed: (1) the library is `sdl2-compat`
+2.32.74, which does not implement `SDL_HINT_NO_SIGNAL_HANDLERS` (the string is
+absent from `/usr/lib64/libSDL2-2.0.so.0`) and re-applies its own SIGTERM
+disposition, so our handler is now asserted from `sdl_poll`, after every SDL
+init; (2) the real blocker — the signal path set `exit_code = 0`, and every wait
+loop tests `if (ctx->exit_code)`, where 0 reads as "no exit requested", so
+`hold_for_esc` slept its whole 1.5 s budget through the signal (gdb showed the
+main thread in `nanosleep`). It now sets 1 and also tests `input_exhausted`.
+Proof: `kill -TERM` dies with our exit code 1 in under a second; `timeout -s
+TERM 2` returns at exactly 2 s with no stale process (was: survived to SIGKILL).
+Note: `timeout`'s own 124 is not an oracle on this coreutils — a script that
+catches TERM and one that ignores it both report 124; the real test is prompt
+death, which is what we measure.
+
+**DONE T6** — `SDL_VIDEODRIVER=dummy ./u2-sdl --sdl --dump-screen` now runs
+headless and is a test. The defect was a hang, not the segfault the task
+suspected: the dummy driver wrote the frame (192015 B PPM on disk) then spun
+forever in `wait_choice`, because `--dump-screen` sets `dump_screen_done`, the
+poll turns that into `input_exhausted`, and `wait_choice` tested only
+`exit_code`/headless — the same wrong-stop-flag class as T3/T4. `run_cp4.sh` now
+drives the whole cell->font->upload path headlessly and asserts PPM size (192015
+B) and non-black ink (572 px), and SKIPs when `u2-sdl` is not built.
+
+**DONE T2 (proven half only)** — Walking around no longer freezes time: PASS
+(space) spends food, and running out kills you. Player-visible: each PASS prints
+`PASS` and drops FOOD by 10 units; at zero the character dies and HP/FOOD/EXP/
+GOLD all go to 0000. Proof: file `0x0B0D` subtracts `$0x0a` from the DS:53/54/55
+packed-decimal triple (low byte at 55) and file `0x0B2E` sends a borrow to the
+death handler at runtime `0x0E62` (`asm/0C62`), which zeroes DS:51..59. Two
+disagreements with the owner's model are recorded, not guessed: (a) there is no
+"food at zero drains HP gradually" step anywhere in the tree — underflow is
+instant, every stat at once; (b) the band prints only DS:53/54, so a fresh
+`FOOD=0400` is really 4000 units and a character dies on the **4001st** PASS,
+not the 41st. `food_check.c` (14 checks) locks the numbers, built against a
+reference model of the `sbb`/`das` chain (the first C cut got the `das` AF term
+and the `>0x99` compare wrong — caught before commit). **Not done, and why:**
+the per-action tick for *movement* is not implemented because the walk loop calls
+no food drain — `asm/2599`/`asm/2626` (−19) have no static caller — so a per-step
+cost would be a guess. Auto-PASS on idle is not implemented: the main loop
+(file `0x0AC8`) does not time its key wait, it just redraws on no-key, so there is
+no idle timer to hang auto-PASS on. Both are open questions, not oversights.
+
+**PASSED T1** — The task's premise ("the gate-unblocker is the `asm/2423`
+passability table") is false, and disproving it is the deliverable. A full
+continuous decode of the walk loop and its callee shows `asm/2423` never reads a
+tile: on the overworld it only applies vehicle costs (mode 2 spends 5 HP, mode
+`0x2E` is the dungeon force-field) and returns 0 for on-foot travel. So
+`--INVALID MOVE!` is unreachable by walking into terrain — the original lets you
+walk anywhere on the overworld, water included. Implementing a water-block would
+have been the doubling bug again. What the decode *did* settle: tile IDs (0 =
+water, 4 = land, 8 = plane-landing, `0x78` = player, step-4 family from the
+location table at file `0x4E61`), and the sector-crossing mechanism — it is the
+`DS:6E` arrival system (`asm/26B7/26CC/2708/2744` + the 36-byte `cs:0x2798`
+table), reached from overworld entry, not from a step. The fill loop's two
+variants (void-fill when `DS:12==0xFF`, masked `&0x3F` wrap otherwise) prove the
+foot path never draws a neighbouring sector, so the owner's "smooth crossing"
+recollection is not what the bytes do on foot — recorded, not implemented.
+**Evidence that would unblock a crossing change:** a live capture of the original
+walking off the west edge (does the sector digit change, does the view scroll),
+which the static bytes cannot answer. Full detail in
+`docs/phase4-implementation.md § CP4b`.
+
+**DONE T8 (this write-up)** — `docs/phase4-implementation.md § CP4b` records
+T1/T2/T3/T4/T6/T7 with every citation; `docs/phase4-state.md` CP4 row updated.
+
+**HELD — needs an owner decision:**
+- **T5** (creation tail straight into the world) MOVES THE CP2 baseline and is
+  marked `[OWNER: pre-approved?]` in the task list. The contract says a baseline
+  move needs evidence *and* the pre-approval flag resolved; the tail itself is
+  proven (redecoded `5400` tail, file `0x5C1F`), but I did not move the baseline
+  without the flag cleared. One word from you and it is a short task.
+
+**Not attempted:** T9 (blog/retro) — the queue did not fully clear, and T9 is
+explicitly gated on T1–T8 being done or passed.
+
