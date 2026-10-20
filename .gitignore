@@ -70,6 +70,11 @@ engine/u2-sdl
 # Player saves. The engine writes a byte-compatible PLAYER file into
 # --save-dir (default ./saves). That is user data, never a repo artefact.
 engine/saves/
+
+# Tile cache. Derived from the player's own executable on first run, stamped
+# with its SHA-256, and rebuilt when that digest changes. Game content by
+# construction, so it never belongs in the repo wherever --save-dir points.
+*.u2tl
 engine/tests/*.out
 
 # Raw output of the selfmod runtime-capture scans (scratch; the curated note

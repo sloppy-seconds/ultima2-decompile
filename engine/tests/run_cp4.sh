@@ -28,6 +28,33 @@ else
         || { bad "world check failed:"; sed 's/^/        /' "$WORK/world.out"; }
 fi
 
+# --- the tile extractor ---------------------------------------------------
+# The art is game content and is never committed, so it has to arrive from the
+# player's own executable at run time. The synthetic-image half of this test
+# always runs and proves the assertions reject a wrong layout; the real-binary
+# half SKIPs when no copy is here, so CI stays green and honest.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/tiles_check" \
+   tests/tiles_check.c src/core/tiles.c src/core/sha256.c 2>"$WORK/cc-tiles.err"
+if [ $? -ne 0 ]; then
+    bad "tiles test harness did not build: $(head -5 "$WORK/cc-tiles.err")"
+else
+    REAL_EXE=""
+    for c in ../original/ultimaii.exe ../original/ULTIMAII.EXE; do
+        if [ -r "$c" ]; then REAL_EXE="$c"; break; fi
+    done
+    if "$WORK/tiles_check" "$WORK" "$REAL_EXE" > "$WORK/tiles.out" 2>&1; then
+        n=$(grep -c '  ok  ' "$WORK/tiles.out")
+        if [ -n "$REAL_EXE" ]; then
+            ok "tile extractor: invariants, cache round-trip, real binary ($n checks)"
+        else
+            ok "tile extractor: invariants and cache round-trip ($n checks, real-binary SKIP)"
+        fi
+    else
+        bad "tiles check failed:"
+        sed 's/^/        /' "$WORK/tiles.out"
+    fi
+fi
+
 # --- --data-dir is part of the documented contract ----------------------
 ./u2 --help 2>&1 | grep -q -- '--data-dir' \
     && ok "--data-dir is in the usage text" \
@@ -36,8 +63,8 @@ fi
 # --- zero game content committed ----------------------------------------
 # The whole point of the CP4 decision: the map never enters the repo, so the
 # loader must carry no tile tables and no baked sector bytes.
-if grep -qE '0x[0-9a-fA-F]{2},[[:space:]]*0x[0-9a-fA-F]{2},[[:space:]]*0x' src/core/world.c src/core/world.h; then
-    bad "core/world.[ch] contains an inline byte table — map bytes must come from the player's files"
+if grep -qE '0x[0-9a-fA-F]{2},[[:space:]]*0x[0-9a-fA-F]{2},[[:space:]]*0x' src/core/world.c src/core/world.h src/core/tiles.c src/core/tiles.h; then
+    bad "core/world.[ch] or core/tiles.[ch] contains an inline byte table — map and tile bytes must come from the player's files"
 else
     ok "no tile bytes baked into the sector model"
 fi
