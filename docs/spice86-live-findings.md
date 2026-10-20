@@ -328,3 +328,56 @@ by a traced edge.
 is `0x0FE7`: `sbb AL,1; das; mov [DI+0xD6],AL` — the inverse of the drop at
 `0x2D07`, operating on the same item-count array. So a thief can remove an item
 from `DS:D6+i`.
+
+## 9. Provenance cross-reference, and a corpus defect it caught
+
+`tools/xref_provenance.py` makes the docs <-> asm link machine-checkable in both
+directions: every `asm/XXXX` citation in `docs/` must resolve to a real function
+range, and every named function should carry a `# provenance:` line saying
+whether its behaviour is `static` (read from the listing), `live:<harvest>`
+(observed), `owner` (reported, not yet seen in bytes) or `retracted`.
+
+Bare `0xXXXX` mentions are counted but not resolved: the first run flagged 47
+" dangling" citations and nearly all were data addresses, segments or constants
+like `0x9000` and `0x00FF`, not function references.
+
+First run over the existing corpus:
+
+```
+functions parsed              1298  (named: 111)
+named functions cited in docs   21
+named functions with provenance  0 / 111
+dangling asm/ citations           2   (asm/0964, asm/5002)
+```
+
+So 90 of 111 named functions are never cited by any finding, and none record
+whether anything about them was ever observed rather than inferred. That is the
+condition that let the T1 misreading stand for an hour as a confident finding.
+
+### Defect: `2DC1` and `2DEE` are misnamed in `asm/`
+
+`asm/2DC1_combat_exp_gain.asm` adds `DS:1F` into `DS:58/59`, which is **gold**
+(`engine/src/core/state.h` pins `0x56/57 = exp`, `0x58/59 = gold` with
+`_Static_assert`, cited to the display sites), and only *then* prints
+`--EXP.+`. The string introduces the following operation, `2DEE`, which is the
+one that writes `DS:56/57`. The namer assumed a printed string describes the
+function that prints it.
+
+Independent confirmation from the arithmetic and a live read: `2DC1` adds
+`(rand & 0x17) | 1`, i.e. 1..23, and `2DEE` adds `(rand & 3) + 1`, i.e. 1..4.
+The harvested dump had `DS:58/59 = 452` against a starting 400 and `DS:56/57 =
+10` against a starting 0. Swapping them would require gold to have fallen 400 ->
+10, which cannot happen from a reward path.
+
+Correct reading: **`2DC1` = gold gain, `2DEE` = exp gain.** The filenames are
+transposed. Renaming corpus files is a CP3-wide convention change, so this is
+recorded rather than applied unilaterally.
+
+### Also already named, from the same listing
+
+`asm/` already contains `0E70_combat_paralyzed_legs`, `0EC2_combat_paralyzed_arms`
+(two distinct paralysis effects, not one), `0FCD_combat_thief_steal`,
+`0F12_combat_magic_missile`, `0F48_combat_sleep_spell`, `0F8E_combat_minax_attack`,
+`2BEC_combat_hit_msg`, `2E09_combat_miss_msg` and `2E3D_combat_attack_flow`. The
+thief-steal and paralysis questions raised during live play had named functions
+sitting in the tree the whole time.
