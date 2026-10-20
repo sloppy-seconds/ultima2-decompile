@@ -188,3 +188,10 @@ void seam_present(u2_ctx *ctx)
         fflush(stdout);
     }
 }
+
+int seam_present_frame(u2_ctx *ctx)
+{
+    if (!ctx || !ctx->renderer || !ctx->renderer->present_frame || !ctx->frame)
+        return 0;
+    return ctx->renderer->present_frame(ctx, ctx->frame);
+}

@@ -37,5 +37,9 @@ void seam_wait_ms(u2_ctx *ctx, uint32_t ms);
 void seam_tone(u2_ctx *ctx, uint16_t divisor, uint32_t ms);
 /* paint the grid to the active renderer (call at frame boundaries). */
 void seam_present(u2_ctx *ctx);
+/* Present the pixel framebuffer. Returns non-zero when the display asked to
+ * quit (window closed). A no-op returning 0 on cell-only backends, so callers
+ * do not need to know which kind of renderer they were given. */
+int  seam_present_frame(u2_ctx *ctx);
 
 #endif /* U2_SEAM_H */

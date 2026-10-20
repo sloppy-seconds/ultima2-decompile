@@ -80,15 +80,33 @@ test-cp4: $(BIN)
 
 # CP9 placeholder. SDL2 must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.
-sdl:
-	@echo "sdl: the SDL2 CGA renderer is CP9. Ask the owner to approve the"
-	@echo "sdl: system package first, then this target builds u2-sdl."
-	@exit 1
+# SDL2 is an owner-approved dependency (docs/phase4-plan.md § 6 stop-and-ask), so
+# it never enters the default build: the objects are compiled a second time into
+# a separate directory with -DU2_HAVE_SDL, and src/platform/*_sdl.c are empty
+# without that define. `make` alone still needs nothing but a C compiler.
+SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
+SDL_LIBS   := $(shell sdl2-config --libs 2>/dev/null)
+SDLOBJ     := $(BUILD)-sdl
+SDL_BIN    := u2-sdl
+
+sdl: $(SDL_BIN)
+
+$(SDL_BIN): $(patsubst %.c,$(SDLOBJ)/%.o,$(SRCS))
+	$(CC) $(LDFLAGS) -o $@ $^ $(SDL_LIBS)
+
+$(SDLOBJ)/%.o: %.c $(GEN)
+	@test -n "$(SDL_CFLAGS)" || { echo "sdl: SDL2 not found. On Bazzite the low-friction" \
+	     "install is 'brew install sdl2' (no reboot, no OS layering)."; exit 1; }
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDL_CFLAGS) -MMD -MP -c $< -o $@
+
+sdl-run: $(SDL_BIN)
+	./$(SDL_BIN) --sdl --play-map --data-dir ../original --save-dir saves
 
 clean:
-	rm -rf $(BUILD) $(BIN)
+	rm -rf $(BUILD) $(SDLOBJ) $(BIN) $(SDL_BIN)
 
 help:
-	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl help"
+	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 sdl sdl-run clean content content-check help"
 
 -include $(DEPS)

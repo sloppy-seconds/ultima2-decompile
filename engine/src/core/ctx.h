@@ -27,6 +27,11 @@ typedef struct u2_ctx {
     u2_vram  vram;
     u2_state state;
 
+    /* The framebuffer a bitmap backend presents, owned by whoever allocates it
+     * (the overworld screen today) and NULL for cell-only flows. Kept as a
+     * pointer so a text-only run pays nothing for pixel support. */
+    struct u2_frame *frame;
+
     struct {
         int   enabled;      /* --trace */
         FILE *out;          /* stderr by default */
@@ -49,6 +54,8 @@ typedef struct u2_ctx {
                                 default drive, holding mapxNN / monxNN / tlkxNN.
                                 Never created; see core/world.h. */
     int save_seeded;         /* set when the blank PLAYER file was created here */
+    int use_sdl;             /* --sdl: bitmap backends (make sdl build only) */
+    int play_map;            /* --play-map: enter the CP4 overworld directly */
     int exit_code;          /* set by game code / backends to force termination */
 
     /* Per-backend private state, one slot each so backends stay independent

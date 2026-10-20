@@ -55,6 +55,12 @@ typedef struct u2_key {
 #define U2_KEY_LEFT  0xF2
 #define U2_KEY_RIGHT 0xF3
 
+/* Defined in core/frame.h. Forward-declared here so the display seam can refer
+ * to a framebuffer without pulling core/frame.h into every translation unit
+ * that includes platform.h — frame.h reaches ctx.h through view.h and world.h,
+ * so including it here would close a cycle. */
+struct u2_frame;
+
 /* Character-cell display. The engine owns the 80x25 grid (core/vram.h);
  * renderers only paint it. */
 typedef struct u2_renderer {
@@ -64,6 +70,12 @@ typedef struct u2_renderer {
     void (*cursor)(u2_ctx *ctx, int row, int col, int visible);
     void (*flush)(u2_ctx *ctx);
     void (*shutdown)(u2_ctx *ctx);
+    /* Optional pixel seam, present only on bitmap backends. The original draws
+     * everything in mode 4 graphics including its text, so a cell-only renderer
+     * is an approximation of the original rather than a model of it; this is the
+     * seam that lets a backend show real pixels without the game logic knowing
+     * which backend exists. Returns non-zero when the display asked to quit. */
+    int  (*present_frame)(u2_ctx *ctx, const struct u2_frame *f);
 } u2_renderer;
 
 typedef struct u2_input {
@@ -109,5 +121,13 @@ extern const u2_audio    u2_audio_beep;
 extern const u2_audio    u2_audio_null;
 extern const u2_clock    u2_clock_posix;
 extern const u2_clock    u2_clock_script;
+
+/* The SDL backends exist only in the `make sdl` build, so the default cc-only
+ * build never references them and needs no third-party headers. */
+#ifdef U2_HAVE_SDL
+extern const u2_renderer u2_renderer_sdl;
+extern const u2_input    u2_input_sdl;
+extern const u2_audio    u2_audio_sdl;
+#endif
 
 #endif /* U2_PLATFORM_H */

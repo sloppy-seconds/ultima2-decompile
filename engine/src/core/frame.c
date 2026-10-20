@@ -62,10 +62,13 @@ void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
     for (int row = 0; row < U2_VIEW_ROWS; row++) {
         for (int col = 0; col < U2_VIEW_COLS; col++) {
             /* asm/4ABB: `or cl,cl; js skip`. A suppressed cell keeps whatever
-             * was already in the frame, which is why the caller clears first. */
-            const int tile = u2_view_at(v, col, row);
-            if (tile < 0) continue;
-            u2_frame_blit_tile(f, t, tile, col * U2_TILE_W, row * U2_TILE_H);
+             * was already in the frame, which is why the caller clears first.
+             * The staging byte halves to reach the art record — see
+             * u2_view_art(); skipping that step doubles every tile index. */
+            const int staging = u2_view_at(v, col, row);
+            if (staging < 0) continue;
+            u2_frame_blit_tile(f, t, u2_view_art(staging),
+                               col * U2_TILE_W, row * U2_TILE_H);
         }
     }
 

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "game/overworld.h"
+#include "core/seam.h"
 #include "core/tiles.h"
 #include "core/view.h"
 #include "core/world.h"
@@ -75,18 +76,53 @@ void u2_overworld_draw(u2_overworld *ow)
                  ow->off_map_tile, NULL, U2_OVERWORLD_EMPTY_GATE);
 
     u2_frame_clear(&ow->frame, U2_CGA_BLACK);
-    /* No overlay tile: which tile id the original uses for the player is not
-     * established by the asm, so the marker below is engine-authored rather
-     * than a guess dressed up as a sprite. */
-    u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles, -1, -1, -1);
+    /* The player is not terrain: the game's own staging buffer holds 0x78 at the
+     * player's cell, which halves to art 60, a humanoid figure. That is evidence
+     * from the captured DS rather than a guess, so the real sprite is drawn. */
+    u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles,
+                       U2_OVERWORLD_PLAYER_ART,
+                       U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+}
 
-    /* Engine-authored player marker: four corner pixels of the player's window
-     * cell. Deliberately not a tile, so it cannot be mistaken for original art. */
-    const int px = U2_VIEW_PLAYER_COL * U2_TILE_W;
-    const int py = U2_VIEW_PLAYER_ROW * U2_TILE_H;
-    static const int off[4][2] = { {0,0}, {15,0}, {0,15}, {15,15} };
-    for (int i = 0; i < 4; i++)
-        ow->frame.px[py + off[i][1]][px + off[i][0]] = U2_CGA_WHITE;
+int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
+{
+    if (u2_overworld_init(ctx, ow) != 0) {
+        fprintf(stderr, "overworld: %s\n", ow->note);
+        return -1;
+    }
+    ctx->frame = &ow->frame;
+
+    for (;;) {
+        u2_overworld_draw(ow);
+        if (seam_present_frame(ctx)) break;      /* window closed */
+
+        u2_key k;
+        const int r = seam_key_poll(ctx, &k);
+        if (r < 0) break;
+        if (r == 0) { seam_wait_ms(ctx, 16); continue; }   /* ~60 fps cadence */
+        if (k.ch == 0x1B) break;                           /* ESC leaves */
+
+        int dx = 0, dy = 0;
+        switch (k.ch) {
+        case U2_KEY_UP:    dy = -1; break;
+        case U2_KEY_DOWN:  dy =  1; break;
+        case U2_KEY_LEFT:  dx = -1; break;
+        case U2_KEY_RIGHT: dx =  1; break;
+        default: continue;                                  /* not a move key */
+        }
+
+        const int nx = ow->x + dx, ny = ow->y + dy;
+        if (nx < 0 || nx >= U2_SECTOR_EDGE || ny < 0 || ny >= U2_SECTOR_EDGE) {
+            /* See the header: the reload semantics are unproven, so refuse
+             * rather than guess. The step is not applied, exactly as the
+             * original refuses an invalid move. */
+            continue;
+        }
+        ow->x = nx;
+        ow->y = ny;
+    }
+    ctx->frame = NULL;
+    return 0;
 }
 
 int u2_overworld_dump(u2_ctx *ctx, const char *path)

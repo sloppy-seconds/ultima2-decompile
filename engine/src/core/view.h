@@ -74,6 +74,26 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
  * suppressed. Out-of-range coordinates also give -1. */
 int u2_view_at(const u2_view *v, int col, int row);
 
+/*
+ * Staging byte -> art record.
+ *
+ * The staging byte is always even (0,2,4,...,126) because the fill loop computes
+ * it as (map_byte >> 1) & 0xFE, and the art table holds exactly 64 records.
+ * Those two facts only reconcile if the flush lookup halves the staging byte:
+ * art = staging / 2. Assuming the table was indexed by the staging byte directly
+ * doubled every tile index, which rendered as: grass shown as mountains,
+ * mountains shown as the castle, the castle shown as a humanoid — and water
+ * correct, because 0 is the only index where doubling is invisible.
+ *
+ * The player cell is the confirmation the reasoning needed: its staging byte is
+ * 0x78 (120), which looked out of range against a 64-entry table, but halves to
+ * art 60, a humanoid figure. The value was never out of range; the lookup was.
+ */
+static inline int u2_view_art(int staging)
+{
+    return staging >> 1;
+}
+
 /* Window coordinates of the player, always (9, 5) by construction; a function
  * so a test can assert the geometry rather than trust a constant. */
 static inline int u2_view_player_col(void) { return U2_VIEW_PLAYER_COL; }

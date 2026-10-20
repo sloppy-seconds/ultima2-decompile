@@ -27,6 +27,12 @@
 #define U2_OVERWORLD_PROBE_X 33
 #define U2_OVERWORLD_PROBE_Y 23
 
+/* Art record the original draws for the player, derived from the live DS
+ * capture: the staging byte at the player's cell is 0x78, and 0x78 >> 1 == 60,
+ * a humanoid figure. The player is stamped in after the terrain fill, which is
+ * why that cell holds a value no map byte can produce. */
+#define U2_OVERWORLD_PLAYER_ART 60
+
 typedef struct u2_overworld {
     u2_world world;
     u2_tiles tiles;
@@ -57,5 +63,18 @@ void u2_overworld_draw(u2_overworld *ow);
  * Returns 0 on success.
  */
 int u2_overworld_dump(u2_ctx *ctx, const char *path);
+
+/*
+ * Interactive play: draw, present, read a key, move. Returns 0 on a clean exit.
+ *
+ * Movement is in-sector only, and that limit is deliberate rather than an
+ * oversight. Crossing a sector edge is handled by asm/242D / asm/2434 / asm/243E,
+ * and what those routines set on reload — in particular which sector digit moves
+ * and in which direction — is not yet established by the asm. Walking the player
+ * into a neighbouring sector on a guess would produce a map that is subtly wrong
+ * in a way that looks like a rendering bug, so the edge is reported and the step
+ * refused until the trace is done.
+ */
+int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
 
 #endif /* U2_OVERWORLD_H */

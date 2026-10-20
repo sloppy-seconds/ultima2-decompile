@@ -128,6 +128,28 @@ int main(void)
             (v.tile[i] & U2_VIEW_NO_DRAW)) esc_ok = 0;
     CHECK(esc_ok, "index 0x2E escapes underlay suppression, as the asm's second test says");
 
+    /* --- staging byte -> art record --------------------------------------
+     * This is the bug that made the map unrecognisable: the staging byte was
+     * used directly as an art index, doubling every tile. Grass rendered as
+     * mountains, mountains as the castle, the castle as a humanoid, and water
+     * alone survived because 0 doubled is still 0. */
+    int in_range = 1, even_ok = 1;
+    for (int mb = 0; mb <= 0xFF; mb++) {
+        const int s = u2_view_index((uint8_t)mb);
+        if (s & 1) even_ok = 0;
+        if (u2_view_art(s) < 0 || u2_view_art(s) > 63) in_range = 0;
+    }
+    CHECK(even_ok, "every staging byte is even, which is what makes the halving exact");
+    CHECK(in_range, "every halved art index lands inside the 64-entry table");
+    CHECK(u2_view_art(u2_view_index(0x08)) == 2,
+          "map byte 0x08 -> art 2 (grass), not art 4 (mountains)");
+    CHECK(u2_view_art(u2_view_index(0x10)) == 4,
+          "map byte 0x10 -> art 4 (mountains), not art 8 (castle)");
+    CHECK(u2_view_art(u2_view_index(0x20)) == 8,
+          "map byte 0x20 -> art 8 (castle), not art 16 (humanoid)");
+    CHECK(u2_view_art(0x78) == 60,
+          "the player's staging byte 0x78 halves to art 60, a figure — not out of range");
+
     /* --- robustness ------------------------------------------------------ */
     CHECK(u2_view_at(&v, -1, 0) == -1 && u2_view_at(&v, 0, 99) == -1,
           "out-of-range window coordinates give -1, never a stray read");

@@ -33,6 +33,8 @@ static void usage(const char *argv0)
         "  --headless      null renderer + script input + deterministic clock\n"
         "  --script FILE   key script (see tests/title.keys)\n"
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
+        "  --sdl           bitmap window instead of the text grid (make sdl build)\n"
+        "  --play-map      enter the overworld screen directly (CP4 development entry)\n"
         "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
         "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
@@ -63,6 +65,15 @@ static int wire_backends(u2_ctx *ctx)
         ctx->audio    = &u2_audio_null;
         ctx->clock    = &u2_clock_script;
         ctx->input    = ctx->script_path ? &u2_input_script : &u2_input_term;
+#ifdef U2_HAVE_SDL
+    } else if (ctx->use_sdl) {
+        /* The bitmap shell. It only moves pixels the engine already composed;
+         * choosing it changes nothing about what the game draws. */
+        ctx->renderer = &u2_renderer_sdl;
+        ctx->audio    = &u2_audio_sdl;
+        ctx->clock    = &u2_clock_posix;
+        ctx->input    = &u2_input_sdl;
+#endif
     } else {
         ctx->renderer = &u2_renderer_term;
         ctx->audio    = &u2_audio_beep;
@@ -100,6 +111,10 @@ int main(int argc, char **argv)
         const char *a = argv[i];
         if (strcmp(a, "--headless") == 0) {
             ctx.mode = U2_MODE_HEADLESS;
+        } else if (strcmp(a, "--sdl") == 0) {
+            ctx.use_sdl = 1;
+        } else if (strcmp(a, "--play-map") == 0) {
+            ctx.play_map = 1;
         } else if (strcmp(a, "--script") == 0 && i + 1 < argc) {
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {
@@ -180,7 +195,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    u2_game_run(&ctx);
+    if (ctx.play_map) {
+        u2_overworld ow;
+        u2_overworld_run(&ctx, &ow);
+    } else {
+        u2_game_run(&ctx);
+    }
     u2_game_shutdown(&ctx);
     seam_present(&ctx);
     release_backends(&ctx);
