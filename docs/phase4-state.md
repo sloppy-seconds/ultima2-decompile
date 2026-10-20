@@ -9,7 +9,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP0 | Skeleton + automation substrate 🔒 | done (owner approved 2026-10-27) | `engine/` builds with cc only; term + null renderers, term + script input, beep + null audio, posix + script clocks; seam layer with asm-cited `--trace`; `--dump-state` screen grid + JSON; `make test` PASS incl. reproducibility; selfmod question resolved from 45 existing runtime captures (`disasm/selfmod-capture.md`) — cluster is not patched, CP3 unblocked | 2026-10-27 |
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
-| CP3 | Character creation + status line | todo | selfmod capture dependency removed — see `disasm/selfmod-capture.md`; RNG seed is per launch, not per game, and is not in the save record — decide at CP3 whether the engine persists `rng_state` in saves | |
+| CP3 | Character creation + status line | **in-progress** | owner decision recorded (byte-compatible saves, no `rng_state` in them). Recon done, no engine code written yet for CP3. See impl log § CP3 (in progress) for the recovered creation-form blob, the proven status-bar positions, and the one open question that gates the save work | 2026-10-27 |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
@@ -20,6 +20,15 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 (owner): save-format decision, binding for CP3 onward.** Engine
+  save games must be **byte-compatible with the original 384-byte player
+  record**, so `rng_state` (and anything else that is not in the original
+  record) must **not** go into the save file. Character creation proceeds on
+  that basis. If extra state ever needs persisting, the fallback is a separate
+  sidecar meta file next to the save, and only once there is a strong reason —
+  not by default. Breadcrumbs to revisit are left in
+  `engine/src/core/save.h` (`DEFERRED` block) and in
+  `docs/phase4-state.md` § Deferred decisions.
 - **2026-10-27 (owner):** CP2 route change **approved in conversation**: the CLI
   is the contract, an MCP wrapper can be added later on top of it. Also recorded:
   **no subagents for this project** — a second local model contends for the GPU;
@@ -94,6 +103,16 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
      headless; no system package installed.
   6. **CI gains an engine job** (build + `make test`); Phase 3 jobs unchanged
      and still green.
+
+## Deferred decisions (with the breadcrumb location)
+
+| decision | status | breadcrumb |
+| --- | --- | --- |
+| Persist the PRNG seed/state for replayable saves | **rejected for the save file by owner** — engine saves must stay byte-compatible with the original 384-byte record, which does not store `DS:0x23F..0x244`. A sidecar meta file is the only fallback, and only with a strong reason. Revisit when CP3's save work lands | this section, and `docs/phase4-implementation.md` § CP3 |
+| Exact saved span and write path of the player record | **open question, first CP3 task** — see impl log § CP3 "the disk-write puzzle" | `docs/phase4-implementation.md` § CP3 |
+| `][` glyph mapping ("II") | deferred to CP9 (SDL2 font decision) | `engine/README.md` § Known limits |
+| PIC picture files during the intro | deferred to CP9 (no bitmap pipeline before then) | `engine/src/game/title.c` header |
+| Live (non-replay) play API / MCP wrapper | optional, build only if a harness needs it; the CLI contract is the substrate | `docs/phase4-plan.md` §7 |
 
 ## Invariants (checked at every checkpoint)
 

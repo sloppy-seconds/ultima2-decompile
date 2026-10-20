@@ -495,3 +495,124 @@ heredoc still exits 0. Everything written that way was read back and verified
 intact, but the mistake is the point: from here on, files get written with the
 dedicated tools.
 
+---
+
+## CP3 — Character creation + status line — IN PROGRESS (recon only, no engine code yet)
+
+Session paused for context compaction at this point. Everything below is derived
+from `asm/` and `original/` in this session and is safe to build on.
+
+### Owner decisions binding this checkpoint
+
+* Engine saves must be **byte-compatible with the original 384-byte player
+  record**. Therefore `rng_state` (and anything else outside that record) must
+  **not** be written into saves. A sidecar meta file is the only fallback and
+  only with a strong reason. No sidecar is to be added speculatively.
+* No subagents for this project (GPU contention with the local model).
+
+### Recovered: the character-creation form
+
+One contiguous blob at **file `0x56f4`, 442 bytes** (runtime `0x54f4`), inside
+`asm/5400_sub_5400.asm`. It is printed as a single `str_out`, with the layout
+encoded in leading spaces and CR/LF:
+
+```text
+<CR><LF>
+           STRENGTH.......
+           AGILITY........
+           STAMINA........
+           CHARISMA.......
+           WISDOM.........
+           INTELLIGENCE...
+<CR><LF>                M/F-
+               RACE-
+               TYPE-
+               NAME-
+<CR><LF>          SATISFACTORY (Y/N)-
+<CR><LF>        RACES:         TYPES:
+         1-HUMAN        1-FIGHTER
+         2-ELF          2-CLERIC
+         3-DWARF        3-WIZARD
+         4-HOBBIT       4-THIEF
+```
+
+It is not written as `db "..."` lines in `asm/5400` (that region is full of
+`db 0x..` split markers), so the extractor needs a `("run", 0x56F4)`-style
+entry for it, and the blob must be read up to its terminating NUL rather than
+as a printable run — it contains CR and LF.
+
+This blob is a good exercise for the CR/LF model: in `char_print`, CR means
+"column back to `DS:54F`, row forward", and LF means "row forward", so a lone
+`\r` is one line break and `\r\n` is a blank line. The form's layout confirms
+that reading.
+
+### Proven status-bar geometry (right column block)
+
+| label | row | col | source |
+| --- | --- | --- | --- |
+| `H.P.=` | 20 | 30 | `asm/50F9_show_hitpoints.asm` (also sets right margin `DS:31` = 0x28) |
+| `FOOD=` | 21 | 30 | `asm/5129_sub_5129.asm` |
+| `EXP.=` | 22 | 30 | `asm/5154_sub_5154.asm` (string is literally `EXP.=`) |
+| `GOLD=` | 23 | 30 | `asm/5175_sub_5175.asm` — **confirm the row/col, inferred not yet re-read** |
+
+Status label strings recovered: `"  WEAPON-"` (`asm/45C4`), `"TORCHES-"`
+(`asm/45E9`), `"KEYS-"` (`asm/462F`), plus `status_armour` (`asm/460A`) and
+`status_tools` (`asm/466F`) not yet re-read. These routines only emit the label;
+the caller sets the cursor, and no `call` sites were found for them — the
+status-bar routine is `asm/48C7` (which calls `show_hitpoints`) and the region
+after it (`asm/48CA` onward) is a **data table**, not code, which Phase 3 left
+mis-classified. The left-hand status layout is therefore still unproven.
+
+`show_hitpoints` is called from `asm/0867`, `asm/0C1C`, `asm/0C62`, `asm/48C7`
+and inside `asm/1151_dungeon_darkness.asm` — those are the status refresh sites.
+
+### The disk-write puzzle — first thing to resolve in CP3
+
+A full scan of every `int` site in the binary finds only: `int 10h` ×7, `int 21h`
+×4, `int 1ah` ×4, `int 16h` ×4. The four INT 21h sites are AH=0Fh (get drive
+max), AH=1Ah (set DTA), AH=21h (read absolute sector) and AH=10h (close).
+There is **no** DOS write (AH=40h), no write-absolute-sector (AH=22h), and no
+INT 25h/26h/13h anywhere.
+
+The likely explanation, and the hypothesis to confirm: the disk I/O wrapper takes
+its function number **from memory**. `asm/535A_sub_535a.asm` does
+`mov %cs:0x4f04,%ah` immediately before `int $0x21`, and `asm/52CA_timed_wait.asm`
+writes that same `cs:4F04..4F0A` block with the caller's AH/CX/DX. So callers
+stage an arbitrary DOS function number at runtime and static grep cannot
+enumerate them. Finding every writer of `cs:4F04` (and every caller of the
+`asm/5343`/`asm/5351` trio) is what identifies the save path.
+
+This matters directly: "byte-compatible saves" cannot be designed until we know
+what the original writes, through which call, and to which sector or file. Do
+this before writing `core/save.c`.
+
+Evidence available without running the game: `references/ultima2/player` (the
+pristine 384-byte blank record, read-only; per `captures/README.md` it is all
+zero except `0x1a` at offset `0x100`, and that exact content is what makes the
+game accept a new character). Note `references/` is gitignored, so no test may
+depend on it — assert layout with synthetic buffers instead.
+
+### Field offsets: what is proven vs. what is doc-only
+
+Proven from the asm in this session: food is the BCD pair at `DS:53/54`
+(`asm/5129` region reads them right after printing `FOOD=`).
+
+Doc-only, from `captures/README.md` (live dumps, **not yet re-verified against
+the asm**): record starts at `DS:36`; name 16 bytes; `DS:46/47/48` =
+sex/class/race; `DS:4B..50` = STR/AGI/STA/CHA/WIS/INT; `DS:51/52` = hit points;
+`DS:58/59` = gold; `DS:61/62/63` = readied weapon / worn armour / readied spell;
+`DS:64/65/66` = torches / keys / tools; `DS:76` weapons array (10); `DS:96`
+armour array (7); `DS:B6` magic; `DS:D6` items; `DS:137` monsters stride `0x20`.
+
+Caution recorded so nobody re-inherits it: the monster table at `DS:137` with
+stride `0x20` × 32 slots would run to `DS:537`, well past the 384-byte record
+(`DS:36..1B5`). So that table is live DS state, not save content — the capture
+doc's table mixes both. Verify each field against the asm before putting it in a
+byte-compatible struct.
+
+### Not yet started
+
+`engine/src/core/save.[ch]`, `engine/src/game/creation.c`, `engine/src/game/status.c`,
+the extractor entries for the form blob, and `engine/tests/run_cp3.sh`. Nothing
+in `engine/` was modified during this recon.
+
