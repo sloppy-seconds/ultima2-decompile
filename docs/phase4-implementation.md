@@ -1364,8 +1364,18 @@ What is still open, and it is now a small question rather than a wall:
    Start from the callers of `asm/4B26` / `asm/4B4E` (the mode-4 text writer) and
    from `asm/08ED`, not from the tile reader.
 * whether the 64-tile wrap is applied by `asm/2623` or by the edge terrain
-* the terrain ID -> properties table (needed by `asm/2623`), encounter rates,
-   and the `DS:0x4A` "last key vs site kind" collision
+* **the draw path is now located, not just inferred.** `asm/4AC3` does
+  `ch=0; di=cx; cx = [DS:0x5b0 + di]` — that is the tile index table at **DS:0x5B0**
+  (file `0x7BC0`, the table the owner found) indexed by tile ID — then `call asm/4A74`
+  to blit. Around it: `asm/4A64` fills two 256-byte staging buffers at `DS:0x272`
+  (font) and `DS:0x372` (attributes) — the same two ranges `asm/38B0_cmd_L` clears
+  before its flight loop, which is now explained — `asm/4ABB` reads the font staging
+  buffer, and `asm/4B26` / `asm/4B4E` set `ES` to `0xB800` then `0xBA00` and call a
+  common writer, i.e. flush staging to the mode-4 framebuffer and attribute planes.
+  So the render model is **stage into DS, then flush to video**, not draw-direct.
+  Next: read `asm/4A74`, `asm/4D35`, `asm/4D5D` and the callers of `asm/4AC3` to get
+  the row/column loop and the map byte -> table entry mapping.
+* the terrain ID -> properties table for `asm/2423`, and encounter rates
 * `move_only_on_foot` (`asm/33AE`) is only a message site so far, and its callers
    are unresolved; `--data-dir` itself is still unwritten
 
