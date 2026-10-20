@@ -150,3 +150,83 @@ confirming the drained value only persists on an explicit save.
    whether it engages, and at what range, is not yet captured.
 6. Whether the `& 0x3F` accept-path wrap means the sector edge is a torus after
    all, and how that squares with the `DS:6E` arrival system.
+
+## 7. Combat and monsters (second session, `play-test`)
+
+Captured by diffing the CFG before and after a fight: 150 blocks appear only in
+the post-fight harvest, which pins the combat code far more precisely than
+reading the listing did.
+
+### Controls (owner correction, recorded because my guess was wrong)
+
+* `R` is **not** a combat key. `cmd_R` (`asm/3E50`, "READY WEAPON:") equips or
+  swaps the readied weapon. With nothing in inventory there is nothing to swap,
+  and the character fights bare-handed.
+* `A` is the attack (`cmd_A`, `asm/2B8F`, prints `ATTACK--`).
+* Arrow keys set facing/direction, and are also the dungeon turn keys.
+
+### The attack path, from the new blocks
+
+| runtime | what it does |
+| --- | --- |
+| `0x2BFB` | damage basis: `AL = [DS:61]` (readied weapon) `*8`, `adc [DS:4B]` (strength), then `rcr` twice — weapon and strength combine into the attack value |
+| `0x2C2D` | `cmp [DI+0x197], 0x40` — monster slot active/sentinel check |
+| `0x2CB5` | stamps `[DI+0x1B7]` (monster sprite) into the map cell |
+| `0x2CD3`/`0x2CE5`/`0x2D22`/`0x2D60` | dispatch on the monster sprite: `0x60`, `0xFC`, `0xF0`, `0xF8` — distinct handlers per monster kind |
+| `0x2D8C` | **kill**: zeroes `[DI+0x1B7]`, `0x177`, `0x137`, `0x157`, `0x197` — the whole monster record is cleared |
+| `0x2DC1` | **gold award**: BCD `adc` into `DS:58/59` |
+| `0x2DEE` | **exp award**: BCD `adc` into `DS:56/57` |
+| `0x0C09` | **damage to player**: `sbb [DS:22]` from `DS:51` (HP), `das`, and `jae` to the death path |
+
+So `DS:22` is the damage-about-to-be-applied scratch byte, and player damage and
+death are the same BCD-subtract-and-test shape as the food drain.
+
+### Monster record layout — the capture doc is wrong
+
+Three **parallel byte arrays, stride 1**, 32 slots — not stride `0x20`:
+
+```
+x[i]    = DS:0x137 + i
+y[i]    = DS:0x157 + i
+sprite  = DS:0x1B7 + i
+active  = DS:0x197 + i      (0x40 = empty sentinel, per 0x2C2D)
+```
+
+Reading it with stride `0x20` produces plausible-looking garbage, which is
+exactly how I lost time on it earlier.
+
+### Monsters move on the idle tick, and the world wraps
+
+Observed while the player stood still at (16,20):
+
+* food fell exactly **10** every ~7.6 s of real time at `--Cycles 3000` — the
+  idle auto-PASS interval;
+* on the same cadence the monster positions stepped one cell, i.e. **idle time
+  advances monsters**. Standing still is not safe;
+* monster 30 went `x = 63 -> 0 -> 1 -> 2`, direct live confirmation of the
+  `& 0x3F` torus wrap in movement, independent of the accept-path instruction.
+
+### Monsters are RNG-spawned, and the emulator makes them repeatable
+
+`monx20` contains exactly one non-zero byte (`0x1A`, the tail marker), so
+monster placement cannot come from the file — it is generated. The seed is taken
+once at launch from the BIOS keyboard flags at `0x40:6C`, which in a freshly
+started emulator is the same every time. Hence the owner's observation that it
+was "the same monster as last time": it is not carried by the save, it is an
+artifact of a frozen entropy source.
+
+Worth stating plainly for the engine: our reproducibility comes from substituting
+the clock and exposing `--seed`; the original under emulation is reproducible
+only by accident. Do not mistake emulator determinism for game determinism.
+
+### Also observed
+
+* Walking into a **mountain** produced `--INVALID MOVE!` (owner report), so
+  blocking is not water-only. The mountain's tile id was not captured — needs a
+  read while standing next to one.
+* Crossing a **land bridge** was accepted.
+* Player HP fell `0399 -> 0397 -> 0396 -> 0395` during the logged fight.
+* New walk-loop blocks `0x09AF` (`mov AL,[DS:18]; call 0x2423`) show the
+  passability routine is called with `[DS:18]` from at least one arm, not only
+  `[DS:15]` — so the "travel mode" argument has more than one source and the
+  mode dispatch is still not fully understood.
