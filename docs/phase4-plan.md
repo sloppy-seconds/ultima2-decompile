@@ -183,6 +183,70 @@ here.
 modules), honest limits (unverified corners, selfmod interpretation), tag
 `v4-engine`. **Stop and wait.**
 
+### CP11 — Mod surface and the two game modes (owner-directed, scheduled 2026-10-27)
+
+**Deferred out of CP3 by owner instruction** ("do the modding stuff where it makes
+sense, now or later is fine"), recorded here so it is a scheduled checkpoint and
+not folklore. Motivation, from the owner: people enjoy moddable games, and
+Ultima II already has a modding community that patches the **original binary**
+(a `.pat` patch format plus a patcher program). That is the demand signal.
+
+The design agreed in conversation:
+
+* **Two modes.** `--mode original` (default) is the faithful engine with **no
+  knobs at all**; `--mode enhanced` is where customisation lives. This is what
+  answers the obvious objection to tweakable constants: in `original` mode a
+  number cannot be edited, so the reconstruction stays provably faithful.
+* **Overrides are sparse diffs, never full replacements.** Anything absent keeps
+  the original value, so the file stays short, reviewable, and does not drift on
+  every re-extraction.
+* **Two surfaces.** *Content* (strings, tables, maps, monster/town data) and
+  *rules* (budget, stat minimums, bonuses, later encounter rates). Content is
+  the one the existing extractor already half-provides.
+* **Precedence, explicit and boring:** built-in defaults (original values, cited
+  to `asm/`) -> content extracted from the user's own copy -> mod pack ->
+  personal override file. Later wins; every layer sparse.
+* **Provenance is mandatory.** `--dump-config` prints each effective value with
+  the layer that set it and `file:line`. Third-party packs make this a support
+  requirement, not a nicety.
+* **Mod packs are directories with a manifest**, so they can be shared, versioned
+  and broken cleanly. No new archive format, no parser dependency.
+* **Format is `key=value` with sections**, not JSON/YAML: the engine's rule is
+  *cc only, zero dependencies*.
+
+**Hard constraints, which survive the whole design:**
+
+1. **The 256-byte save record layout is not overridable, even in enhanced mode.**
+   Overrides change rules, not the record structure. Byte-compatibility with the
+   original's `PLAYER` file is what makes this engine useful to anyone who
+   already mods the original; enhanced-only persisted state goes in the deferred
+   sidecar, never into the record.
+2. **We do not reimplement `.pat`.** It is address-based over a binary we
+   deliberately do not embed, and `AGENTS.md` already records that our copy may
+   carry community patches — patching by address into a binary whose patch level
+   cannot be determined is the failure mode we are escaping, not reproducing.
+3. **No game content is committed.** Mods are user-supplied, under the same rule
+   as the game copy itself.
+
+**Cheap accommodations to land before CP11**, each of which is better code
+regardless of whether enhanced mode ever ships:
+
+* Collect the tunable binary facts into **one registry** with default + citation
+  each (today they are spread through `game/creation.c`), so the later loader has
+  a single thing to read.
+* Route reads through an accessor with the default inline, so `original` mode has
+  zero runtime difference.
+* **Random character creation** is the first enhanced feature to want this. Keep
+  stat *acquisition* separate from stat *validation* so a roller is additive; the
+  constraint it must satisfy is small (six packed-BCD values, each >= 10, summing
+  to <= 90).
+
+**Open input needed from the owner:** whether existing U2 mods mostly patch text,
+tables, or code. That answer decides which surface gets built first. It must come
+from the owner or from public research — **not** from the sibling `../ultima2`
+checkout, which is off limits under §0 and must not become a source of conclusions
+we present as our own.
+
 ## 4. Global acceptance
 
 1. `engine/` builds with cc on Linux; zero game content committed.

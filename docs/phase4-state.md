@@ -10,7 +10,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
 | CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
-| CP3 | Character creation + status line | **in-progress** | (a) save/disk model + player record **done** — `core/save.[ch]`, `--save-dir`, 23-assertion `save_check`, creation flow fully decoded. (b) todo: `game/creation.c`, `game/status.c`, extractor entry for the form blob, wire `C` at the menu | 2026-10-27 |
+| CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow (point-buy from a packed-BCD 90 budget, sex/race/class BCD bonuses) + status block at proven positions; `seam_clear_screen` added; 21 CP3 content entries. CP3 test 4/4 + 23-assertion `save_check`. **CP2 evidence baseline moved deliberately** — see gate log | 2026-10-27 |
+| CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
@@ -21,6 +22,23 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 — CP2 evidence baseline moved deliberately (owner should note).
+  The approved artefact was regenerated, not silently patched.** `C` at the menu
+  no longer runs the CP2 stub, so the recorded run could not reproduce; the
+  tamper check is what surfaced it, which is the whole point of committing it.
+  `tests/play_to/reach_everything_today.keys` now completes a real character, so
+  the evidence covers the creation screens too. Digest
+  `76a0b3de7556c2b1…` -> `3e5d0492c946fb5b…`, 23 steps/14 keys -> 21 steps/39
+  keys. If a baseline must stay frozen instead, say so and it is one revert.
+- **2026-10-27 (owner): mod surface scheduled as CP11, deferred out of CP3.**
+  Two game modes (`original` hardcoded, `enhanced` customisable), sparse-diff
+  overrides, content + rules surfaces, mandatory provenance, mod packs as
+  directories with manifests, `key=value` not JSON. Hard constraints: the
+  save-record layout is never overridable, no `.pat` reimplementation, no
+  committed content. Full design in `docs/phase4-plan.md` § CP11. Also recorded
+  there: the sibling `../ultima2` checkout stays off limits as a source of
+  conclusions under `AGENTS.md` §0, so the "what do people actually patch"
+  question comes from the owner or public research, not from that repo.
 - **2026-10-27 (owner): save/disk model approved.** Engine maps the original's
   "insert a disk" onto `--save-dir` (default `./saves`) with a byte-compatible
   `PLAYER` file; missing file is seeded from the pristine blank template;
@@ -122,6 +140,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | Persist the PRNG seed/state for replayable saves | **rejected for the save file by owner** — engine saves stay byte-compatible with the original player record (256 bytes at `DS:36..135`), which does not store `DS:0x23F..0x244`. A sidecar meta file is the only fallback, and only with a strong reason. Revisit when CP3's save work lands | this section, and `docs/phase4-implementation.md` § CP3 |
 | Exact saved span and write path of the player record | **RESOLVED at CP2.5** — FCB random read/write (AH=27h/28h) via the `asm/52CA` DOS wrapper, 256 bytes at `DS:36..135`, FCB name `PLAYER  ` | `docs/phase4-implementation.md` § CP2.5 |
 | What the 128-byte tail of the 384-byte player file is (one non-zero byte, `0x1a` at offset 256) | **open question** — no write path found; do not guess | `docs/phase4-implementation.md` § CP2.5 |
+| Are the status pairs (HP/FOOD/EXP/GOLD) binary little-endian or packed decimal? | **open question, needs the owner's eyes at the CP3 gate.** `asm/5400` stores plain `4` into `[0x51]`/`[0x53]`/`[0x58]`; read as BCD-hundreds-first that is 400, read as binary it is 4. HP=400 for a fresh character is absurd, so `game/status.c` formats them as binary — but `--dump-state` still prints gold through `u2_bcd16()` and reports 400, so the two disagree until this is settled | `engine/src/game/status.h` OPEN QUESTION, `engine/src/core/state.h` gold comment |
+| After creation the engine returns to the title menu, which redraws over the status block | **known gap** — the owner cannot see the status bar at the gate until CP4 gives it a permanent home, or the flow pauses on a key first | `engine/src/game/creation.c` tail |
 | `][` glyph mapping ("II") | deferred to CP9 (SDL2 font decision) | `engine/README.md` § Known limits |
 | PIC picture files during the intro | deferred to CP9 (no bitmap pipeline before then) | `engine/src/game/title.c` header |
 | Live (non-replay) play API / MCP wrapper | optional, build only if a harness needs it; the CLI contract is the substrate | `docs/phase4-plan.md` §7 |
