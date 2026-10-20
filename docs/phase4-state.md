@@ -22,6 +22,14 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 (owner): fidelity policy.** The engine reproduces the original's
+  rules and state exactly, but may improve **interaction** where the original was
+  frustrating — "spirit of the game", and these improvements live in `original`
+  mode, not behind a mode flag. Hard line: UX ergonomics yes, game rules no, and
+  the save-record layout never. Deviation register D1-D5 (field navigation,
+  editing backspace, refuse-in-place instead of full restart, visible cursor,
+  Ctrl-C quit) is in `docs/phase4-plan.md` § 4a. This also scopes what "faithful"
+  may be claimed to mean: rules and state match the asm; interaction need not.
 - **2026-10-27 — CP2 evidence baseline moved deliberately (owner should note).
   The approved artefact was regenerated, not silently patched.** `C` at the menu
   no longer runs the CP2 stub, so the recorded run could not reproduce; the

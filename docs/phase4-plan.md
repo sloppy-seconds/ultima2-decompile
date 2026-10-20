@@ -247,6 +247,44 @@ from the owner or from public research — **not** from the sibling `../ultima2`
 checkout, which is off limits under §0 and must not become a source of conclusions
 we present as our own.
 
+## 4a. Fidelity policy — what "faithful" permits (owner decision 2026-10-27)
+
+The engine reproduces the original's **rules and state** exactly, and improves
+its **interaction** where the original was genuinely frustrating. Owner's
+framing: aim for the *spirit* of the game; small UX improvements belong in
+`original` mode, not behind a mode flag.
+
+The line, stated so it can be applied consistently:
+
+| change | allowed in `original` mode? | why |
+| --- | --- | --- |
+| cursor visibility, field navigation (Tab/arrows), backspace that edits rather than wipes | **yes** | interaction only; no game state or outcome changes |
+| refusing invalid input in place instead of restarting the whole form | **yes** | the original's `asm/5C66` rejection jumps back to `0x5698` and discards everything. Refusing in place changes the *pain*, not what is achievable |
+| a quit key; clearer error text | **yes** | the original has no quit path at all, which is a defect rather than a design |
+| stat values, bonuses, budget, minimums, encounter rates, damage, gold, XP | **no — enhanced mode** | these are the game; changing them changes play |
+| the 256-byte save record layout | **never, in either mode** | byte-compatibility with the original's `PLAYER` file is what makes DOSBox saves work both ways |
+| extracted content (strings, tables, maps) | **no** | content is the user's copy, surfaced by the extractor |
+
+Two consequences worth stating:
+
+1. **Behavioural fidelity claims must be scoped.** When this project says an
+   engine module is faithful it means its *rules and state* match the asm, not
+   that every interaction is identical. Interaction deviations are listed below
+   with the reason.
+2. **The asm is still the spec for what a change may touch.** A UX improvement may
+   not silently alter what is written to `DS` or to disk. `asm/` remains ground
+   truth for state; it simply stops being the spec for keystroke handling.
+
+### Deviation register (interaction changes made deliberately)
+
+| # | original behaviour | engine behaviour | reason |
+| --- | --- | --- | --- |
+| D1 | Creation is strictly sequential; no way back | Tab / Up / Down move between fields; any field can be re-edited | the form is the most-repeated input in the game and could not be corrected without restarting it |
+| D2 | Backspace in the name field wipes and restarts the whole field (`asm/5BA5`) | Backspace deletes one character | matches every other input surface players know |
+| D3 | A stat below the minimum, or an overspend, discards the entire generation and restarts at `asm/5698` | The entry is refused in place and the field re-asked | same outcome set, none of the lost work |
+| D4 | No visible cursor during creation | Cursor shown on the active field | without it there is no indication which field is being filled |
+| D5 | No quit key; the program only restarts via `INSERT PROGRAM MASTER` | Ctrl-C quits cleanly from any screen | there is no disk to swap, so the original's exit path does not exist here |
+
 ## 4. Global acceptance
 
 1. `engine/` builds with cc on Linux; zero game content committed.
