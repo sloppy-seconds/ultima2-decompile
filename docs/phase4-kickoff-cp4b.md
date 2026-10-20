@@ -188,21 +188,23 @@ Owner decision 2026-10-20: **render text our own way.** Readable, correctly
 placed, correct values. Do not spend time re-deriving the original's text
 mechanism before building the status band or the SDL screens.
 
-Recommended route, and it has no licensing exposure (see **Font licensing
-decision** below for the full reasoning and what bundling a third-party font would
+Recommended route (see **Font licensing decision** below for the full analysis,
+the rejected sources, and what bundling a copyleft or ShareAlike font would
 require):
 
-- **A-Z: use the game's own tile letters**, art 32-57, `art = ch - 33`. Extracted
-  at run time from the player's executable, so nothing is committed and no
-  third-party right is involved. Note the quirk: **Q is drawn as vertical bars**
-  and must not be "corrected".
-- **Digits and punctuation: author the glyphs** as engine data under Apache-2.0,
-  using Px437's CGA 8x8 as a visual reference only — look at it, do not copy its
-  bytes. Roughly 40 glyphs x 8 bytes = 320 bytes, trivial to commit and to test.
-- Blit the result into `u2_frame`. One mechanism for banners and status text.
+- **Use `dhepper/font8x8` (Public Domain)** for status, menu and creation text.
+  Commit `font8x8_basic.h` or the needed subset as engine data; it is already C
+  headers, 8 bytes per glyph row-wise, LSB = first pixel, covering U+0000–U+007F.
+  Credit the author in `THIRD-PARTY-LICENSES` even though the licence does not
+  require it.
+- **A-Z for in-world banners and site names: the game's own tile letters**, art
+  32-57 (`art = ch - 33`), extracted at run time from the player's executable.
+  Nothing committed, no third-party right involved, and it is what the original
+  displays. **Q is drawn as vertical bars** — do not "correct" it.
+- Blit into `u2_frame`. One rendering mechanism for the framebuffer.
 
-Cover at least ASCII 32-126: A-Z, a-z (or fold to uppercase if the original has no
-lowercase), digits, space and `= . : + - / ! ? , ( )`.
+Cover at least ASCII 32-126: A-Z, a-z, digits, space and `= . : + - / ! ? , ( )`.
+font8x8 gives all of these already.
 
 ### 1. Status band
 
@@ -306,20 +308,54 @@ approachable and has clearly researched the question) before doing it.
 I am not a lawyer; the above is a careful reading of the licence and the author's
 own stated position, not legal advice.
 
-### The route chosen, and why it is better anyway
+### The route chosen
 
-- **A-Z: use the game's own tile letters**, art 32-57 (`art = ch - 33`), extracted
-  at run time from the player's own executable. There is no third-party right in
-  play at all, because the data is never committed and comes from the user's copy —
-  the same posture as the map and tile art. It is also more faithful: those are the
-  glyphs the original uses for banners.
-- **Digits and punctuation: author ~40 glyphs** as engine data, committed under
-  Apache-2.0, using Px437's CGA 8x8 as a **visual reference only** (look at it,
-  do not copy its bytes). Roughly 95 glyphs x 8 bytes is trivial to commit and to
-  test as plain data.
-- **Zero third-party licence surface**, no attribution obligation, no ShareAlike
-  question, and one rendering mechanism for both banners and status text — which
-  is simpler than the two-path split an earlier draft of this file assumed.
+**Primary: `dhepper/font8x8`, Public Domain.** Commit `font8x8_basic.h` (or the
+subset we need) as engine data. It is already in exactly the required shape — C
+header, 8 bytes per glyph, row-wise, least significant bit = first pixel — and
+`font8x8_basic.h` covers U+0000–U+007F, i.e. all of ASCII. No ShareAlike, no
+attribution obligation, no collection-versus-adaptation analysis to perform.
+
+- Author: Daniel Hepper, derived from an earlier header by Marcel Sondaar citing
+  "International Business Machines (public domain VGA fonts)".
+- **Credit the author anyway** in `THIRD-PARTY-LICENSES` with a note that it is
+  public domain. Not required by licence; required by good practice, and it makes
+  the provenance auditable instead of mysterious.
+- **Caveat, stated honestly:** this is the **VGA** 8x8 glyph set, not the CGA 8x8
+  set, and its provenance line repeats the same "IBM public domain" claim that
+  romfont's author openly doubts. Two mitigations: US law does not treat typefaces
+  as copyrightable (VileR's research point), and unlike CC-BY-SA there is no viral
+  clause to trip over even if the public-domain claim proved imperfect. Worst case
+  it is an unlicensed bitmap set used for UI text, not a licence infection.
+- **A-Z for in-world banners and site names still come from the game's own tile
+  letters** (art 32-57, `art = ch - 33`), extracted at run time from the player's
+  executable. Nothing committed, no third-party right, and it is what the original
+  actually displays. Remember **Q is drawn as vertical bars** and must not be
+  "corrected".
+
+### Sources assessed and rejected
+
+- **`spacerace/romfont`** — dumps genuine ROM fonts from vintage cards, including
+  IBM CGA, so it has the most authentic glyphs. **Rejected: the repository has no
+  licence file at all.** Silence means all-rights-reserved by default. It also
+  ships ROM dumps from proprietary hardware that the author himself questions:
+  *"qemu source comment claims this is public domain. I doubt IBM would release a
+  font to public domain. Does this mean qemu... use a illegal copy?"* Do not
+  vendor it, and do not treat its CGA dumps as free just because they are
+  published.
+- **SeaBIOS (`coreboot/seabios`)** — **LGPL-3.0 / GPL-3.0** per GitHub. Copyleft;
+  cannot be committed into an Apache-2.0 project. Its 8x8 font also derives from
+  the same disputed public-domain VGA claim. Rejected.
+- **Px437** — CC-BY-SA 4.0; reference only, per the analysis above.
+- **scriven** — SIL OFL 1.1, includable but the wrong kind of font entirely.
+
+### Fallback if none of the above is acceptable
+
+Author the ~40 missing glyphs (digits and punctuation) by hand as engine data
+under Apache-2.0, using Px437's CGA 8x8 as a **visual reference only** — look at
+it, do not copy its bytes. Roughly 40 glyphs x 8 bytes = 320 bytes. Zero licence
+surface, and it is a few hours of work. This is the safe option, not the preferred
+one, since font8x8 is already public domain and already in the right format.
 
 Decide and record: does the SDL build render text into the same framebuffer as
 the map (one composited frame), or a separate surface? One framebuffer is closer
