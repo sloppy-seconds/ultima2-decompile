@@ -25,7 +25,7 @@ SRCS     := src/main.c \
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 clean content content-check sdl help
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl help
 
 all: $(BIN)
 
@@ -61,7 +61,7 @@ run: $(BIN)
 headless: $(BIN)
 	./$(BIN) --headless --script tests/title.keys --dump-state
 
-test: test-cp0 test-cp1 test-cp2 test-cp3
+test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4
 
 test-cp0: $(BIN)
 	bash tests/run_cp0.sh
@@ -75,6 +75,9 @@ test-cp2: $(BIN)
 test-cp3: $(BIN)
 	bash tests/run_cp3.sh
 
+test-cp4: $(BIN)
+	bash tests/run_cp4.sh
+
 # CP9 placeholder. SDL2 must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.
 sdl:
@@ -86,6 +89,6 @@ clean:
 	rm -rf $(BUILD) $(BIN)
 
 help:
-	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 clean content content-check sdl help"
+	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl help"
 
 -include $(DEPS)

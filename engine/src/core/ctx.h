@@ -45,6 +45,9 @@ typedef struct u2_ctx {
     const char *content_source; /* set by the game layer from the generated header */
     const char *script_path;/* --script PATH (input_script backend input) */
     const char *save_dir;    /* --save-dir PATH; "saves" when unset (core/save.h) */
+    const char *data_dir;    /* --data-dir PATH; "." when unset — the original's
+                                default drive, holding mapxNN / monxNN / tlkxNN.
+                                Never created; see core/world.h. */
     int save_seeded;         /* set when the blank PLAYER file was created here */
     int exit_code;          /* set by game code / backends to force termination */
 

@@ -39,6 +39,11 @@ static void usage(const char *argv0)
         "  --rng-sequence N  print N rand_byte values and exit (test vector)\n"
         "  --save-dir DIR    player-record directory, the modern default drive\n"
         "                    (default: ./saves; holds the byte-compatible PLAYER file)\n"
+        "  --data-dir DIR    world content directory: mapxNN / monxNN / tlkxNN.\n"
+        "                    The map is runtime data, never extracted content, so the\n"
+        "                    engine reads the player's own files the way the original\n"
+        "                    read them from its default drive (default: .). It is read\n"
+        "                    AND written: the original rewrites its own sectors.\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
         "  --mode M          reserved for CP11; only 'original' exists today\n"
@@ -95,6 +100,8 @@ int main(int argc, char **argv)
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {
             ctx.save_dir = argv[++i];
+        } else if (strcmp(a, "--data-dir") == 0 && i + 1 < argc) {
+            ctx.data_dir = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {
