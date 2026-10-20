@@ -10,11 +10,16 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP2 | Pilot: cmd_A..Z + str_out (27) | done | 27/27 check_func green; new tools preclean.py + decode_str.py (str_out-aware re-decode fixed all 5 mis-decode defects); per-function log in impl doc | 2026-10-20 |
 | CP3 | Style gate 🔒 | done (owner-approved 2026-10-20) | owner: AFTER style = goal; max accurate comments; honest naming, improve in later passes | 2026-10-20 |
 | CP4 | Bulk wave 1: execution-confirmed code | done | 1052/1052 green (majority-execution-confirmed cut); 42 batch commits; auto INT/port seams; verify_encodings fix | 2026-10-20 |
-| CP5 | Bulk wave 2 + dispositions + jwasm dialect | in-progress | | |
-| CP6 | Full-tree rebuild + sign-off 🔒 | todo | | |
+| CP5 | Bulk wave 2 + dispositions + jwasm dialect | done | 218/218 green; dispositions 1283 clean + 3 data + 13 excluded(selfmod) + 0 deferred = 1299; dialect 50/50 sample + 197/200 wide, deviations reported | 2026-10-20 |
+| CP6 | Full-tree rebuild + sign-off 🔒 | awaiting-gate | assemble_clean.sh: 1299/1299 cleaned files, 37344 B byte-identical; phase3-summary.md written | 2026-10-20 |
 
 ## Gate log
 
+- **2026-10-20 — CP6 🔒 AWAITING OWNER SIGN-OFF.** Full-tree rebuild from the
+  cleaned tree is byte-identical (`bash tools/assemble_clean.sh`);
+  1299/1299 dispositioned (1283 clean / 3 data / 13 excluded-selfmod / 0
+  deferred); per-function proofs 1299/1299 green. See
+  `disasm/phase3-summary.md`.
 - **2026-10-20 (owner):** CP3 **approved**. Owner verdict: AFTER style is the
   goal; directive "more comments the better, as long as they're accurate";
   naming as honest as possible (proven names only; `sub_<seg>` default;

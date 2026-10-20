@@ -234,3 +234,64 @@ Invariants: `assemble_all.sh` byte-identical after the wave; full
 exist, mechanical slices elsewhere). Cleaned tree now 1081 files.
 
 **Acceptance:** wave-1 1052/1052 green + assemble_all green → **met**.
+
+---
+
+## CP5 — Bulk wave 2 + dispositions + jwasm dialect — done 2026-10-20
+
+**Wave 2** (remaining 218 functions: code-derived/no-claims majority): same
+`clean_wave.py` pipeline → 211 first-pass green; 7 defers fixed by two
+decode_str upgrades: (a) objdump `...` repeated-fill runs created silent byte
+gaps — now emitted as `db ... # fill`; (b) branch targets swallowed inside
+data/mis-decoded runs — post-pass now splits the covering line at the target
+address and emits the label there (works for db strings AND instructions).
+Final: **218/218 green**.
+
+**Defect dispositions** (per plan §CP5 + `disasm/defects.md`):
+* selfmod cluster seg 0x5120–0x5151 (13 map functions): reconstructed as-is,
+  each file carries a loud `*** SELF-MODIFYING CLUSTER (runtime-patched) ***`
+  note; disposition **excluded(selfmod)**.
+* 47BD/4815/486D data islands: replaced sub_* files with
+  `asm/<SEG>_data_mixed.asm` db blobs + defect-verdict headers; disposition
+  **data** (3).
+* 2395/35DD nop-pads: marked in headers (`Disposition: clean (marked
+  nop-pad)`); 531B string site: documented (decoded cleanly as call str_out +
+  "WRONG DISK" string).
+
+**Disposition sum: clean 1283 + data 3 + excluded(selfmod) 13 + deferred 0 =
+1299** ✓ (every function has a proven asm/ file; `check_func` sweep 1299/1299).
+
+**jwasm dialect** — `tools/dialect_masm.py`: transpiles a cleaned file to
+MASM (.MODEL TINY, ORG scaffolding, AT&T→MASM operand mapping) and
+dual-verifies (gas via check_func + jwasm -bin byte compare). Findings:
+* Plan's 50-function sample: **50/50 dual-match**.
+* Wider 200-function sample: **197/200**. Honest deviations:
+  - `3F37`: `sub %sp,%sp` — gas emits 29 /r, jwasm emits 2B /r (both legal
+    direction-bit choices; no MASM syntax forces 29 for reg,reg). True
+    dialect difference, documented.
+  - `4639` (`gs add ...`), `4658` (`arpl ...`): objdump artifacts decoding
+    data as 386/prefix instructions; gas reproduces the bytes, the transpiler
+    refuses (CONVERT-FAIL) rather than approximating.
+* jwasm quirks found and worked around: bare `mov al,[04h]` encodes as an
+  IMMEDIATE (must emit `ds:[04h]`); `-bin` strips leading ORG padding
+  (compare from first emitted byte); line-length limit (long db lists
+  wrapped); `.`-prefixed local labels renamed to `LC_` in the MASM output
+  only (source tree unchanged).
+
+Committed `phase3: CP5 wave2 (218) + defect dispositions + dialect_masm.py`.
+
+---
+
+## CP6 — Full-tree rebuild from cleaned tree — built, awaiting sign-off 🔒
+
+**`tools/assemble_clean.sh`**: rebuilds the ENTIRE 37,344-byte binary from the
+cleaned tree only — prologue (MZ+PSP mechanical blob) + every function's
+cleaned file assembled in isolation and spliced at its proven range. Result:
+
+```
+cleaned files used: 1299, mechanical-slice fallbacks: 0
+CLEAN REBUILD BYTE-MATCH: 37344 bytes identical
+```
+
+`assemble_all.sh` (Phase 2 mechanical oracle) re-verified green alongside.
+Summary written to `disasm/phase3-summary.md`. **STOP — owner sign-off gate.**
