@@ -99,6 +99,25 @@ Do these in order; each is cheap and each changes the design.
    grid means the map is inset, which probably also means there is a border or
    frame to account for.
 
+   **Update from a reference screenshot (owner-supplied, 2026-10-27).** The image
+   is 320x200, exactly 40x25 text cells at 8x8, confirming the grid. The map fills
+   the **full 40 columns** with no inset and no visible status block, and the
+   bottom two rows carry text - and that text is the story poem ("BATTLE STRANGE
+   CREATURES / ACROSS THE FACE OF THE EARTH"), so the shot is almost certainly the
+   **demonstration** screen, not the in-play screen.
+
+   The reconciliation with the owner's recollection is the tile size: if a tile is
+   **2x2 text cells (16x16 px)** rather than one cell, then 320/16 = **20 tiles
+   wide** and the map area is **11 tiles tall** - exactly 5 + 1 + 5 rows and the
+   asymmetric 9 + 1 + 10 columns remembered. The "21-wide inset window" reading
+   above is therefore wrong: the map is full-width and tiles are multi-cell.
+
+   Two things the screenshot does **not** settle, both needing the draw loop rather
+   than pixels: whether a tile really is 2x2 cells, and why the proven status block
+   at column 30 rows 20-23 would overlap a full-width map. The likely answer is
+   that the demonstration and the play screen lay out differently - worth
+   establishing early, because it decides whether CP4 has one viewport or two.
+
 ## 3. Facts already established that CP4 must respect
 
 * **Grid is 40x25**, not 80x25. Evidence in plan § 7.
