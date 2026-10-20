@@ -57,10 +57,11 @@ returns to the menu.
 - Acceptance: C → create → world at (20,20) sector 20; CP3 tests still pass
   or are updated with named reasons; baseline regenerated + logged.
 
-## T3 — SIGTERM defect (kickoff defect 1)
+## T3 — SIGTERM defect (kickoff defect 1) — CONFIRMED tonight
 
-SDL build ignores SIGTERM; `timeout`/systemd stop escalate to SIGKILL.
-Earlier `SDL_APP_TERMINATING` attempt did not take.
+Reproduced 2026-10-20: a stale `u2-sdl --play-map` process (1.5 h old, the
+"very old window" the owner saw) survived `kill` (SIGTERM) and only died on
+SIGKILL. SDL ignores polite stop; `timeout`/systemd escalate.
 
 - Debug properly: reproduce with `timeout -s TERM` under the real Wayland
   session; find whether SDL installs a handler (check `SDL_SetHint`
@@ -70,6 +71,23 @@ Earlier `SDL_APP_TERMINATING` attempt did not take.
   code, not 137.
 - Acceptance: documented root cause in the commit; manual proof in the
   morning report (command + exit code).
+
+## T3b — Window-close X ignored in the overworld (owner, 2026-10-20 night)
+
+Clicking the Wayland close button does nothing while in the world; only ESC
+leaves. Root cause is already localised: `sdl_poll` returns -1 and sets
+`exit_code`, but `seam_key_poll` collapses -1 to 0 ("no key") and sets
+`input_exhausted` — the title flow checks `flow_stopped()` so X works at the
+menu, while `u2_overworld_loop` checks neither flag and spins on.
+
+- Fix in `u2_overworld_loop`: after a no-key poll, break when
+  `ctx->exit_code || ctx->input_exhausted` (do NOT change `seam_key_poll`'s
+  return contract — callers test it with `!`, where -1 would read as
+  "key got").
+- Check the creation flow for the same gap (it has its own wait loops).
+- Acceptance: X closes the window mid-game with exit code 0; a scripted
+  headless run is unaffected (`input_exhausted` already ends script runs —
+  verify CP3 tests stay green).
 
 ## T4 — SDL dummy-driver segfault → headless SDL test
 
