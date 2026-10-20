@@ -14,8 +14,11 @@
  *   title lines       asm/0246, 025E, 0273, 0288, 02A3, 02CC, 02E6,
  *                     02F8, 031F, 034B, 0375
  *   choice wait       asm/0389/038C/038F           (key_poll until AH=0xFF)
- *   choice dispatch   asm/0394..03A6               ('D', 'P', 'C', else redraw)
- *   create call site  asm/03A9 -> asm/5400_sub_5400.asm   (CP3)
+ *   choice dispatch   asm/0394..03A6               ('D' jumps ahead; 'P' calls
+ *                                                    asm/0764; 'C' calls
+ *                                                    asm/5400 then asm/0764;
+ *                                                    anything else redraws)
+ *   mode set + flag   asm/03B0 -> asm/4A3E, asm/03B3 (DS:0x239 = 1)
  *   demo poem         asm/03AC_sub_03ac.asm        (12 lines, rows 23 and 24)
  *   row clears        asm/53A0_sub_53a0.asm, asm/538F_sub_538f.asm
  *
@@ -53,17 +56,22 @@ static const txt INTRO_2[] = {
     { 12, 14, U2_S_INTRO_AUTHOR },      /* asm/01E1/01E4: di=0xc si=0xe */
 };
 static const txt TITLE[] = {
+    /* Draw order is the order the code sets the cursor and calls str_out:
+     * asm/0246, 025E, 0273, 0288, 02A3, 02CC, 02E6, 02F8, 031F, 034B, 0375.
+     * The order matters: the choice echo (asm/0394) prints at whatever cursor
+     * the last line leaves behind, and CHOICE: is drawn last so the key lands
+     * right after it. */
     { 15,  1, U2_S_TITLE_GAME },        /* asm/0246 */
     { 16,  3, U2_S_TITLE_REVENGE },     /* asm/025E */
     { 16,  5, U2_S_TITLE_OF_THE },      /* asm/0273 */
     { 14,  7, U2_S_TITLE_ENCHANTRESS }, /* asm/0288 */
+    {  6, 22, U2_S_TITLE_COPYRIGHT },   /* asm/02A3 (inside a mis-decoded run) */
+    { 15, 23, U2_S_TITLE_AND_ORIGIN },  /* asm/02CC */
     {  5, 11, U2_S_TITLE_TYPE },        /* asm/02E6 (inside a mis-decoded run) */
     {  6, 13, U2_S_MENU_DEMO },         /* asm/02F8 */
     {  6, 15, U2_S_MENU_PLAY },         /* asm/031F */
     {  6, 17, U2_S_MENU_CREATE },       /* asm/034B */
     {  5, 19, U2_S_MENU_CHOICE },       /* asm/0375 */
-    {  6, 22, U2_S_TITLE_COPYRIGHT },   /* asm/02A3 (inside a mis-decoded run) */
-    { 15, 23, U2_S_TITLE_AND_ORIGIN },  /* asm/02CC */
 };
 /* asm/03AC prints each pair into the bottom two rows, waits, then clears them
  * with asm/538F_sub_538f.asm. Columns are the movb $n,0x2e sites. */
@@ -148,10 +156,18 @@ static int present_intro(u2_ctx *ctx)
     return 0;
 }
 
-/* asm/03AC: the story poem, one couplet at a time in rows 23-24. The demo
- * loops it until ESC, which is what makes it a demonstration. */
+/* asm/03AC: the story poem. The path here first sets the video mode and so
+ * clears the screen (asm/03B0 -> asm/4A3E_sub_4a3e.asm), sets the story flag
+ * (DS:0x239), waits, and then draws one couplet at a time into rows 23 and 24,
+ * clearing them with asm/538F_sub_538f.asm between couplets. */
 static int present_poem(u2_ctx *ctx)
 {
+    u2_vram_clear(&ctx->vram, 0x07);              /* asm/03B0 -> asm/4A3E */
+    ctx->state.story_flag = 1;                    /* asm/03B3: mov $1,0x239 */
+    seam_present(ctx);
+    if (hold_for_esc(ctx, 800))
+        return 1;
+
     for (int i = 0; i < NARR(POEM); i += 2) {
         seam_clear_row(ctx, 23);
         seam_clear_row(ctx, 24);
@@ -207,7 +223,6 @@ static void stub_not_implemented(u2_ctx *ctx, const char *what)
  * entry at asm/0242. */
 static void run_demo(u2_ctx *ctx)
 {
-    ctx->state.story_flag = 1;
     for (;;) {
         if (present_poem(ctx) || flow_stopped(ctx))
             return;
@@ -233,15 +248,19 @@ int u2_title_flow(u2_ctx *ctx)
         if (key < 0)
             return 0;
         switch (key) {
-        case 'D':                               /* asm/039B */
+        case 'D':                               /* asm/039B: jmp 0x3AF */
             run_demo(ctx);
             break;
-        case 'P':                               /* asm/03AC head -> asm/0964 */
+        case 'P':                               /* asm/03A0 -> asm/03AC */
+            /* asm/0764 is a small wrapper: emit the key, print a line at row 10
+             * column 0 and wait for a key (asm/0767 + asm/0776). The disk/load
+             * path behind it is not lifted yet, so only the wait is missing. */
+            stub_not_implemented(ctx, "play prompt (asm/0764)");
             run_demo(ctx);
-            stub_not_implemented(ctx, "play (asm/0964)");
             break;
-        case 'C':                               /* asm/03A9 -> asm/5400 */
+        case 'C':                               /* asm/03A4 -> asm/5400 -> 03AC */
             stub_not_implemented(ctx, "create (asm/5400)");
+            run_demo(ctx);
             break;
         default:                                /* asm/03A6: redraw */
             break;

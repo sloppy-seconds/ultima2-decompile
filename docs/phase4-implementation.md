@@ -292,3 +292,53 @@ references/`. The engine only reads `asm/`.
 * `TYPE -` at row 11 col 5 is a real extracted line with no visible producer
   for whatever follows it. Worth a glance in DOSBox.
 * Intro hold durations are chosen, not derived.
+
+### CP1 owner review round (2026-10-27)
+
+Owner feedback on the first CP1 report, and what each item turned into:
+
+1. **"the character they press appears on the CHOICE: line, but only briefly"**
+   — a real bug. `TITLE[]` was drawn in row order, so the cursor ended after the
+   last entry (`AND ORIGIN`, row 23) and the echo printed there. The original
+   draws in *code* order (`asm/0246, 025E, 0273, 0288, 02A3, 02CC, 02E6, 02F8,
+   031F, 034B, 0375`), which ends with `CHOICE:` at row 19 col 5, so the echo
+   from `asm/0394` lands at row 19 col 12, right after the prompt. Table
+   reordered; `char_print`'s trace now carries `at=row,col` and the test
+   asserts the echo position, so this cannot silently regress.
+2. **Choice dispatch order corrected.** A clean decode of runtime `0x389..0x3B5`
+   (the region Phase 3 had fragmented) shows: `'D'` jumps to `0x3AF` (poem);
+   `'P'` calls `asm/0764` then the poem; `'C'` calls `asm/5400` (creation) then
+   falls into the same `asm/0764` call; anything else jumps back to the title
+   entry. My first pass had the order inverted and cited `asm/0964`, which is
+   the *file* offset of runtime `0x764`. `asm/0764` turns out to be a small
+   display-and-wait wrapper (echo the key, print a line at row 10 col 0, wait),
+   not the play setup — the load path behind it is still ahead of us.
+3. **The poem path clears the screen first** (`asm/03B0` -> `asm/4A3E`, the
+   INT 10h mode set) and sets the story flag there (`asm/03B3`), so the couplets
+   appear on a blank screen rather than over the title. Implemented.
+4. **Grid width question.** The owner could not count columns in a CGA bitmap
+   render, and declined a live DOSBox/Spice86 capture as a decision point unless
+   it becomes necessary. Agreed and recorded: the 40-column conclusion rests on
+   static evidence only — 40-space row clear (`asm/53A0`), margins 0x26/0x28
+   (`asm/456B`, `asm/48A7`, `asm/4A2F`), scroll window 0..`DS:0x31`
+   (`asm/5025`), mode 4 = 320x200 (`asm/4A3E`). If a later checkpoint shows a
+   contradiction, this is the assumption to revisit.
+5. **`][` accepted as-is** by the owner; CP9 still owns the glyph decision.
+6. **"did we implement the splash screens?"** — the two text splash screens are
+   implemented (see the frame log below); the PIC bitmap art the original loads
+   during the intro is not, until CP9. To make that visible without running the
+   game, the engine gained **`--dump-each`**: it prints the grid after every
+   screen change, so a headless run produces a frame-by-frame visual log. That
+   also happens to be the read-side primitive the CP2 MCP API needs.
+
+Frame log from `./u2 --headless --dump-each --script <(printf 'WAIT\nWAIT\n')`:
+
+```
+frame 1: r10 ORIGIN                     r12 PROUDLY PRESENTS
+frame 3: r08 PART ][     r10 OF THE #1 BEST SELLING
+         r12 FANTASY ROLE-PLAYING GAME  r14 BY LORD BRITISH
+frame 5: r01 ULTIMA ][  r03 REVENGE  r05 OF  THE  r07 ENCHANTRESS  r11 TYPE -
+         r13 'D' ...  r15 'P' ...  r17 'C' ...  r19 CHOICE:  r22 (C)-...  r23 AND ORIGIN
+```
+
+CP1 test is now 10 assertions, all green, plus CP0's 9.

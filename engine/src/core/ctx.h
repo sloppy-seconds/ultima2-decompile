@@ -33,6 +33,7 @@ typedef struct u2_ctx {
     } trace;
 
     int dump_state;         /* --dump-state */
+    int dump_each;          /* --dump-each: print the grid after every present */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
     int input_exhausted;    /* set by the script backend when the keys run out;
                                the flow treats it as "the player left" */

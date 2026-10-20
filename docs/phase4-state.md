@@ -20,6 +20,20 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 — CP1 owner review round 1.** Owner feedback applied: the echoed
+  choice now lands on the `CHOICE:` line (title draw order was wrong —
+  `asm/0394` prints at the cursor the last title line leaves, and `CHOICE:` is
+  drawn last at row 19 col 5); choice dispatch order corrected against a clean
+  decode of runtime `0x389..0x3B5` (`D`→poem, `P`→`asm/0764`→poem,
+  `C`→`asm/5400`→`asm/0764`→poem); the poem clears the screen first
+  (`asm/03B0`→`asm/4A3E`) and sets the story flag there (`asm/03B3`). Owner
+  accepted `][` as-is. Owner **declined a live DOSBox/Spice86 capture** unless a
+  real decision point needs one, so the 40-column grid stands on static evidence
+  (40-space row clear `asm/53A0`, margins `asm/456B`/`48A7`/`4A2F`, scroll
+  window `asm/5025`, mode 4 `asm/4A3E`) — revisit if anything contradicts it.
+  Added `--dump-each` (frame-by-frame grid log) so screens can be eyeballed
+  without running the game, and an echo-position assertion in the CP1 test.
+  CP1 test now 10/10, CP0 9/9.
 - **2026-10-27 — CP1 🔒 AWAITING OWNER EYEBALL.** The plan's CP1 acceptance is
   "green test + owner eyeball vs DOSBox screenshot (one-off)". The test is
   green; the screenshot comparison is the owner's. Things worth looking at:
@@ -37,8 +51,9 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   4. **Intro hold durations** (1.5 s / 2 s) are a choice, not a fact; the
      original burns a cycle loop whose real duration is machine-dependent.
   5. **Not implemented yet, on purpose:** the intro's PIC picture loads (CP9),
-     'P' setup `asm/0964` (CP4), 'C' creation `asm/5400` (CP3). Both stubs
-     print engine-authored notices that name their checkpoint.
+     'P' prompt path `asm/0764` (load path ahead of us), 'C' creation
+     `asm/5400` (CP3). Both stubs print engine-authored notices naming their
+     checkpoint.
 - **2026-10-27 (owner):** CP0 **approved** ("sure"). Seam layer as the only
   platform boundary, offset-asserted DS state, determinism by clock
   substitution, selfmod premise retired, audio stub until CP9, CI engine job.
@@ -73,4 +88,4 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | Mechanical rebuild | `bash tools/assemble_all.sh` | byte-identical |
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
-| Engine test | `make -C engine test` | CP0 9/9 PASS, CP1 9/9 PASS |
+| Engine test | `make -C engine test` | CP0 9/9 PASS, CP1 10/10 PASS |

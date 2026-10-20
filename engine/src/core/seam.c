@@ -22,6 +22,7 @@
 #include "core/seam.h"
 #include "core/rng.h"
 #include "core/timer.h"
+#include "debug/dump_state.h"
 #include "debug/trace.h"
 
 static void text_sync_cursor(u2_ctx *ctx)
@@ -52,7 +53,8 @@ void seam_char_print(u2_ctx *ctx, uint8_t ch)
     u2_state *s = &ctx->state;
 
     ch &= 0x7F;                                   /* asm/5003: and $0x7f,%al */
-    u2_trace(ctx, "char_print", "5003", "ch=0x%02X", ch);
+    u2_trace(ctx, "char_print", "5003", "ch=0x%02X at=%u,%u", ch,
+             s->cursor_row, s->cursor_col);
     if (ch == '\r') {                             /* asm/5003: cmp $0xd */
         text_next_row(ctx, 1);
         return;
@@ -162,4 +164,8 @@ void seam_tone(u2_ctx *ctx, uint16_t divisor, uint32_t ms)
 void seam_present(u2_ctx *ctx)
 {
     u2_vram_flush(&ctx->vram, ctx);
+    if (ctx->dump_each) {
+        u2_dump_screen(ctx, stdout);
+        fflush(stdout);
+    }
 }

@@ -12,6 +12,7 @@ make                      # cc only, C11, no third-party dependencies
 make test                 # CP0 + CP1 acceptance tests
 ./u2                      # interactive terminal play
 ./u2 --headless --script tests/title.keys --dump-state
+./u2 --headless --script tests/title.keys --dump-each   # frame-by-frame grid log
 ./u2 --headless --script tests/title.keys --trace=trace.log
 ./u2 --headless --selftest --script tests/selftest.keys --dump-state
 make content              # regenerate build/gen_content.h only

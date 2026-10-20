@@ -21,7 +21,6 @@
 #include "debug/trace.h"
 #include "debug/dump_state.h"
 #include "game/game.h"
-
 static void usage(const char *argv0)
 {
     fprintf(stderr,
@@ -31,6 +30,7 @@ static void usage(const char *argv0)
         "  --headless      null renderer + script input + deterministic clock\n"
         "  --script FILE   key script (see tests/title.keys)\n"
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
+        "  --dump-each     print the grid after every screen change (frame log)\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --trace[=FILE]  log every seam call with its asm address\n",
         argv0);
@@ -81,6 +81,8 @@ int main(int argc, char **argv)
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--dump-state") == 0) {
             ctx.dump_state = 1;
+        } else if (strcmp(a, "--dump-each") == 0) {
+            ctx.dump_each = 1;
         } else if (strcmp(a, "--selftest") == 0) {
             ctx.selftest = 1;
         } else if (strcmp(a, "--trace") == 0) {

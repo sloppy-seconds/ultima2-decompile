@@ -106,6 +106,13 @@ a=$(./u2 --headless --script tests/title.keys --dump-state)
 b=$(./u2 --headless --script tests/title.keys --dump-state)
 [ "$a" = "$b" ] && ok "scripted title run is reproducible" || bad "scripted title run differs"
 
+# The echoed choice must land on the CHOICE: line (asm/0394 prints at whatever
+# cursor the last title line left behind, and CHOICE: is drawn last). Row 19 is
+# the CHOICE: row and column 12 is where "CHOICE:" ends.
+grep -qE 'seam=char_print asm=5003 ch=0x(44|50|43) at=19,12' "$WORK/trace" \
+    && ok "echoed choice lands after CHOICE: (row 19 col 12)" \
+    || bad "echoed choice did not land on the CHOICE: line"
+
 # Fallback path, which is what CI gets: with no exe the two strings that live
 # inside the mis-decoded regions cannot be recovered from asm db lines, and the
 # extractor says so by yielding them empty. Everything else must still arrive.
