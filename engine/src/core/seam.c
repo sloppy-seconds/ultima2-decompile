@@ -144,8 +144,10 @@ int seam_key_wait(u2_ctx *ctx, u2_key *out)
 uint8_t seam_rand_byte(u2_ctx *ctx)
 {
     uint8_t r = u2_rand_byte(ctx);
-    ctx->state.rand_last = r;                     /* asm/5217: mov %al,0x23f */
-    u2_trace(ctx, "rand_byte", "5217", "value=%u", r);
+    /* asm/5217 leaves the new byte in DS:0x23F, which is rng_state[0]; the
+     * asm/5236 tail does `or %al,%al`, so callers branch on a zero result. */
+    u2_trace(ctx, "rand_byte", "5217", "value=%u zero=%d rolls=%u",
+             r, r == 0, ctx->rng_rolls);
     return r;
 }
 

@@ -72,7 +72,10 @@ void u2_dump_state_json(const u2_ctx *ctx, FILE *out)
     fprintf(out, "    \"gold_bcd\": [%u, %u],\n", s->gold_lo, s->gold_hi);
     fprintf(out, "    \"gold\": %d,\n", u2_bcd16(s->gold_lo, s->gold_hi));
     fprintf(out, "    \"spell_pick\": %u,\n", s->spell_pick);
-    fprintf(out, "    \"ticks\": [%u, %u, %u],\n", s->tick_a, s->tick_b, s->tick_c);
+    fprintf(out, "    \"rng\": {\"state\": [%u, %u, %u, %u, %u, %u], \"rolls\": %u},\n",
+            s->rng_state[0], s->rng_state[1], s->rng_state[2],
+            s->rng_state[3], s->rng_state[4], s->rng_state[5],
+            ctx->rng_rolls);
     fprintf(out, "    \"map_base\": %u\n", s->map_base);
     fprintf(out, "  },\n");
     fprintf(out, "  \"content\": \"");

@@ -341,4 +341,62 @@ frame 5: r01 ULTIMA ][  r03 REVENGE  r05 OF  THE  r07 ENCHANTRESS  r11 TYPE -
          r13 'D' ...  r15 'P' ...  r17 'C' ...  r19 CHOICE:  r22 (C)-...  r23 AND ORIGIN
 ```
 
-CP1 test is now 10 assertions, all green, plus CP0's 9.
+CP1 test is now 9 assertions, all green (CP0 was 9 at that point, 11 after the RNG vectors).
+
+### Correction: rand_byte is a stateful PRNG, not a clock sampler
+
+Recorded 2026-10-27 while starting CP2, prompted by the owner asking how replay
+determinism would interact with the RNG and monster spawns. The CP0 log states
+"the original has no PRNG state of its own: entropy is the live tick counters".
+**That is wrong**, and the CP0 `core/rng.c` implemented the wrong model (it
+derived three "tick" bytes from the clock and mixed them).
+
+Phase 3's function boundaries split `rand_byte` into `asm/5217`, `asm/522B` and
+`asm/5236`, so the routine read as a 14-byte prologue falling into unrelated
+code. Decoded whole (runtime `0x5217..0x523D`) it is:
+
+```
+stc; al = DS:0x240; al += DS:0x243 + 1; al += DS:0x244 + carry
+DS:0x23F = al                       ; the new value
+bx = 4 .. 0 (jns):  DS:0x240(bx) = DS:0x23F(bx)     ; shift the window
+al = DS:0x23F; or al,al; ret        ; callers branch on zero
+```
+
+A six-byte feedback shift register over `DS:0x23F..0x244`. Grepping every write
+to those six bytes in `asm/` finds exactly two sources: this routine, and the
+one-time seed at `asm/0100_sub_0100.asm` (six copies of the BIOS keyboard-flag
+byte at `0x40:6C`, then `incb 0x23F` and `incb 0x240`). Nothing else touches
+them, and no timer feeds them. `docs/phase4-plan.md` §1's "tick counters" label
+is therefore also wrong.
+
+Consequences, all of them good:
+
+* Rolls are a pure function of (seed, roll count). Encounters, combat rolls and
+  monster spawns replay exactly for identical inputs, with no clock, no
+  freezing and no special headless mode needed for determinism.
+* The original's seed is normally zero (a cold boot's keyboard flags), so the
+  shipped game is itself effectively deterministic per launch until player
+  actions diverge. That is a property of the game, not of the engine.
+* The seed is per **program launch**, not per new game. The only other caller of
+  the seeding stub is the `INSERT PROGRAM MASTER` restart at the tail of
+  `asm/5400` (`call L_000300` followed by a halt loop). The RNG state is *not*
+  in the 384-byte save record (`DS:0x36..0x1B6`), so the original cannot save or
+  restore a dice sequence.
+
+Engine changes: `core/rng.c`/`rng.h` rewritten to the shift register with a
+citation per step; `u2_state.rng_state[6]` at `0x23F` replaces the three fake
+tick fields; `core/timer.c` no longer pretends to feed the RNG (it only waits);
+`--seed N` and `--rng-sequence N` added; `--dump-state` reports the register and
+the roll count; `core/seam.c` traces `value`, `zero` (the `or al,al` that
+callers test) and the roll count.
+
+Test vectors, derived from the decode and asserted in `tests/run_cp0.sh`:
+
+```
+seed 0x00 -> 2,3,4,6,10,16,24,35,52,79,120,180,12,144
+seed 0x20 -> 98,163,228,39,171,178
+```
+
+Honest limit: these vectors come from reading the bytes, not from watching the
+running game. They prove the engine matches my decode; they do not independently
+prove the decode. CP0 test is now 11 assertions, all green.

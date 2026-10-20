@@ -60,11 +60,15 @@ typedef struct u2_state {
     /* 0x23E */ uint8_t text_attr;    /* INT 10h AH=09h attribute: 0x0F normal, 0x70 dim,
                                          0x02 red — asm/53D9_sub_53d9.asm,
                                          asm/53E6_sub_53e6.asm, asm/53EE_sub_53ee.asm */
-    /* 0x23F */ uint8_t rand_last;    /* asm/5217_rand_byte.asm: `mov %al,0x23f` */
-    /* 0x240 */ uint8_t tick_a;       /* asm/5217_rand_byte.asm: adc chain */
-    /* 0x241 */ uint8_t reserved_241[2];
-    /* 0x243 */ uint8_t tick_b;       /* asm/5217_rand_byte.asm */
-    /* 0x244 */ uint8_t tick_c;       /* asm/5217_rand_byte.asm */
+    /* 0x23F */ uint8_t rng_state[6]; /* the rand_byte shift register, DS:0x23F..0x244.
+                                         Seeded once at asm/0100_sub_0100.asm from the BIOS
+                                         keyboard flags at 0x40:6C, then rewritten only by
+                                         asm/5217_rand_byte.asm + asm/522B_sub_522b.asm.
+                                         rng_state[0] is DS:0x23F, the last value produced;
+                                         rng_state[1..5] are DS:0x240..0x244.
+                                         NB: docs/phase4-plan.md §1 called these "tick
+                                         counters"; the full decode shows PRNG state, and
+                                         nothing else in the binary writes them. */
     /* 0x245 */ uint8_t reserved_245[0x22D];
     /* 0x472 */ uint16_t map_base;    /* map table base offset, asm/50B3_map_tile_ptr.asm */
     /* 0x474 */ uint8_t reserved_474[0x0DB];
@@ -87,10 +91,8 @@ _Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
 _Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
 _Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");
 _Static_assert(U2_OFF(text_attr)  == 0x23E, "text_attr moved");
-_Static_assert(U2_OFF(rand_last)  == 0x23F, "rand_last moved");
-_Static_assert(U2_OFF(tick_a)     == 0x240, "tick_a moved");
-_Static_assert(U2_OFF(tick_b)     == 0x243, "tick_b moved");
-_Static_assert(U2_OFF(tick_c)     == 0x244, "tick_c moved");
+_Static_assert(U2_OFF(rng_state)  == 0x23F, "rng_state moved");
+_Static_assert(sizeof(((u2_state *)0)->rng_state) == 6, "rng_state is DS:0x23F..0x244");
 _Static_assert(U2_OFF(map_base)   == 0x472, "map_base moved");
 _Static_assert(U2_OFF(left_margin)== 0x54F, "left_margin moved");
 

@@ -16,7 +16,7 @@
  *   str_out_at      asm/51EB_str_out_at.asm -> seam_goto      -> renderer->cursor
  *   str_out_core    asm/51FD_str_out_core.asm (INT 10h AH=02 cursor set)
  *   key_poll        asm/4F4D_key_poll.asm   -> seam_key_poll  -> input->poll
- *   rand_byte       asm/5217_rand_byte.asm  -> seam_rand_byte -> clock->tick
+ *   rand_byte       asm/5217_rand_byte.asm  -> seam_rand_byte -> core/rng.c
  *   timed_wait      asm/52CA_timed_wait.asm -> seam_wait_ms   -> clock->sleep_ms
  *   speaker_freq    asm/5CD2_speaker_freq.asm -> seam_tone    -> audio->tone
  *   video_int10 / key_int16 / clock_int1a / dos_int21 / speaker_tone
@@ -80,9 +80,9 @@ typedef struct u2_audio {
     void (*shutdown)(u2_ctx *ctx);      /* optional */
 } u2_audio;
 
-/* The original keeps its own tick counters in the DS segment (DS:0x23F..0x244,
- * seeded at asm/0100_sub_0100.asm) and mixes them for randomness. tick()
- * supplies the monotonic source; sleep() is the wall-clock delay. */
+/* The original keeps its PRNG state in the DS segment (DS:0x23F..0x244, seeded
+ * at asm/0100_sub_0100.asm) — see core/rng.h. The clock is only what
+ * timed_wait waits on; no randomness is derived from it. */
 typedef struct u2_clock {
     const char *name;
     int      (*init)(u2_ctx *ctx);      /* optional */

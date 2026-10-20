@@ -20,6 +20,16 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 — correction logged (no gate needed):** `rand_byte` is a
+  six-byte feedback shift register at `DS:0x23F..0x244`, seeded once at program
+  launch from the BIOS keyboard flags at `0x40:6C` — not a tick-counter sampler
+  as plan §1 and the CP0 log said. Phase 3 had split the routine across
+  `asm/5217`/`asm/522B`/`asm/5236`. Engine rewritten to match; `--seed` and
+  `--rng-sequence` added; vectors asserted. Consequence for the plan: replay
+  determinism comes from the PRNG itself, so the CP2 play-API needs no clock
+  trickery, and monster spawns/encounters are reproducible by construction. The
+  seed is per launch, not per new game, and is not part of the 384-byte save
+  record. Details in `docs/phase4-implementation.md`.
 - **2026-10-27 — CP1 owner review round 1.** Owner feedback applied: the echoed
   choice now lands on the `CHOICE:` line (title draw order was wrong —
   `asm/0394` prints at the cursor the last title line leaves, and `CHOICE:` is
@@ -88,4 +98,4 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | Mechanical rebuild | `bash tools/assemble_all.sh` | byte-identical |
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
-| Engine test | `make -C engine test` | CP0 9/9 PASS, CP1 10/10 PASS |
+| Engine test | `make -C engine test` | CP0 11/11 PASS, CP1 9/9 PASS |

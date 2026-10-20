@@ -43,7 +43,7 @@ assert d["mode"]=="headless", d["mode"]
 assert d["screen"]["cols"]==40 and d["screen"]["rows"]==25, d["screen"]
 assert d["platform"]["renderer"]=="null", d["platform"]
 assert d["platform"]["input"]=="script", d["platform"]
-assert "state" in d and "ticks" in d["state"], d
+assert "state" in d and "rng" in d["state"], d
 ' >/dev/null 2>&1 \
     && ok "JSON parses with the expected schema" \
     || bad "JSON does not parse or schema mismatch"
@@ -58,6 +58,19 @@ grep -q 'seam=str_out_at asm=51EB' "$tr" && grep -q 'seam=rand_byte asm=5217' "$
     && ok "--trace logs seam calls with asm citations" \
     || bad "--trace output missing or uncited"
 rm -f "$tr"
+
+# The PRNG is a shift register (asm/5217 + asm/522B + asm/5236), seeded once at
+# launch from the 0x40:6C byte (asm/0100). Vector derived by hand-decoding those
+# three fragments together; it guards regressions and documents the decode.
+vec=$(./u2 --rng-sequence 14)
+[ "$vec" = "2,3,4,6,10,16,24,35,52,79,120,180,12,144" ] \
+    && ok "rand_byte sequence matches the decoded shift register" \
+    || bad "rand_byte sequence is $vec"
+
+vec2=$(./u2 --seed 0x20 --rng-sequence 6)
+[ "$vec2" = "98,163,228,39,171,178" ] \
+    && ok "--seed changes the sequence as the seed model predicts" \
+    || bad "--seed 0x20 gave $vec2"
 
 # The engine must never touch the Phase 3 tree.
 if git rev-parse --git-dir >/dev/null 2>&1; then

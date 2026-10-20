@@ -102,17 +102,28 @@ in that module's header. See `disasm/selfmod-capture.md`.
 
 ## Headless is a first-class mode
 
-`--headless` swaps in the null renderer, the script input and a deterministic
-virtual clock, so a key script replays identically and stdout is
-machine-readable. The scripted RNG follows from that: the original derives
-`rand_byte` from live tick counters, so freezing the clock freezes the dice.
+`--headless` swaps in the null renderer, the script input and a virtual clock
+that does not really sleep, so a key script replays identically and stdout is
+machine-readable.
+
+## Randomness
+
+`rand_byte` is a six-byte feedback shift register at `DS:0x23F..0x244`
+(`asm/5217` + `asm/522B` + `asm/5236`, which Phase 3 had split into three
+fragments). It is seeded once at program launch from the BIOS keyboard-flag
+byte at `0x40:6C` (`asm/0100`) and nothing else writes those bytes. So rolls
+are a pure function of seed and roll count: encounters, combat rolls and monster
+spawns replay exactly for the same inputs, with no clock involved. `--seed N`
+sets that byte (default 0, what a cold boot gives); `--rng-sequence N` prints
+the first N values as a test vector.
 
 ## Known limits
 
 * Behaviour is argued from the asm and checked by playing, not differentially
   tested against the original (owner decision — see `docs/phase4-plan.md`).
-* `rand_byte` is modelled from the reconstructed prologue; the tail past the
-  proven bytes is lifted when the first caller needs it.
+* The `rand_byte` vector in `tests/run_cp0.sh` is derived from a hand decode of
+  the three fragments, not captured from the running game; it guards against
+  regressions and documents the reading.
 * The title strings contain a two-byte bracket sequence where the game means
   "II" (in the game title, the intro's part number and the PLAY menu line). The
   original never redefines the font, so this is a glyph question, not a decoding

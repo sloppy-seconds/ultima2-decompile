@@ -35,6 +35,8 @@ typedef struct u2_ctx {
     int dump_state;         /* --dump-state */
     int dump_each;          /* --dump-each: print the grid after every present */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
+    uint32_t rng_rolls;     /* rolls served, for dumps and tests */
+    int rng_probe;          /* --rng-sequence N: print N rolls and exit */
     int input_exhausted;    /* set by the script backend when the keys run out;
                                the flow treats it as "the player left" */
     const char *content_source; /* set by the game layer from the generated header */

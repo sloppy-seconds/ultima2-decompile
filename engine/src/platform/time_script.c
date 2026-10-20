@@ -1,11 +1,10 @@
 /*
- * time_script.c — deterministic virtual clock for headless runs.
+ * time_script.c — virtual clock for headless runs.
  *
- * A scripted playthrough must replay identically, so the tick advances by a
- * fixed step per call instead of reading the wall clock. This is also what
- * makes rand_byte (asm/5217_rand_byte.asm) reproducible under automation:
- * the original derives its roll from the live tick counters, so freezing the
- * clock freezes the dice — which is exactly what a test harness wants.
+ * It exists so a scripted run does not sleep for real, not to make anything
+ * deterministic: the PRNG is a shift register (core/rng.h) and was never
+ * clock-derived. Delays advance a counter instead of the wall clock, which is
+ * what keeps a long scripted playthrough fast.
  */
 #include <stdlib.h>
 #include "core/ctx.h"
