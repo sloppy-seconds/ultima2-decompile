@@ -41,7 +41,10 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   1. ~~Binary vs packed decimal for HP/FOOD/GOLD~~ **resolved**: packed decimal,
      4 digits, and the original prints the two bytes in the wrong order so food 3
      displays `0300`. See plan § 7 and `engine/src/game/status.h`.
-  2. Whether the CP2 evidence baseline should keep being regenerated in place or
+  2. **CP3 polish deferred by the owner** ("good enough to move on, we can polish
+     later"): nothing is recorded as broken, so if a later checkpoint exposes a CP3
+     defect it goes here rather than being silently fixed in passing.
+  3. Whether the CP2 evidence baseline should keep being regenerated in place or
      frozen with new files per checkpoint. It has moved six times, each
      deliberately and each recorded in the gate log.
   3. Play the form: `make play`, press `C`. Confirm Tab/arrows, re-editing, and
@@ -50,6 +53,15 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   reads, random-creation seam), and the branch audit as a standing gate rule is
   written in `docs/phase4-acceptance.md` but not yet applied retroactively to
   CP1/CP2.
+
+## Next checkpoint
+
+**CP4 — overworld + movement.** Start a fresh session from
+`docs/phase4-kickoff-cp4.md`, which records the one decision that shapes the
+whole checkpoint: the map is **runtime data** (`original/mapxNN`, ~30 files of
+exactly 4224 bytes each), not something the extractor pulls into code, so CP4
+adds a `--data-dir` seam and reads the player's own files the way the original
+ did. It also lists the four questions to settle before writing any rendering.
 
 ## Gate log
 
