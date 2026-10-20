@@ -787,4 +787,87 @@ gitignored and a test asserts no headless run leaves a `PLAYER` in the tree.
 extractor entry for the form blob at file `0x56f4`, and wiring `C` at the menu
 to reach creation instead of the stub notice. Then the owner gate.
 
+---
+
+## CP3 (b) — creation flow + status line — done 2026-10-27, gate pending
+
+Two of the CP3(a) notes above turned out to be **wrong**, and the re-decode is
+what caught them. Worth stating plainly because both would have shipped as
+confident, incorrect behaviour:
+
+* **Stats are bought, not rolled.** `call 0x53B0` is not a dice roll — it waits
+  for two typed digits, echoes each, and returns them packed as nibbles
+  (`(d1<<4)|d2`). `DS:29` holds a packed-BCD **90-point budget**, set at file
+  `0x56E6`. `asm/5C66` rejects a stat below `0x0a` and rejects an overspend, and
+  **both rejections restart the whole generation** (jump to `0x5698`). Harsh, and
+  exactly what the bytes do.
+* **Race is converted**, `sub $0x31` to 0..3, like class. CP3(a) said "stored as
+  typed"; that was wrong and would have written the wrong byte to a
+  byte-compatible save.
+
+### The modifier table
+
+Each is `mov al,[stat]; add al,$NN; daa; mov [stat],al` — a BCD add, which is why
+the constants are packed decimal. Owner recalled the sex bonuses before this was
+decoded and was right on both, which is a good argument for asking.
+
+| choice | stat | +BCD | file |
+| --- | --- | --- | --- |
+| MALE | STR | +05 | `0x5960` |
+| FEMALE | CHA | +10 | `0x598F` |
+| HUMAN | INT | +05 | `0x59CF` |
+| ELF | AGI | +05 | `0x59FB` |
+| DWARF | STR | +05 | `0x5A29` |
+| HOBBIT | WIS | +10 | `0x5A5B` |
+| FIGHTER | STR | +15 | `0x5AA6` |
+| CLERIC | WIS | +10 | `0x5AD5` |
+| WIZARD | INT | +10 | `0x5B04` |
+| THIEF | AGI | +10 | `0x5B35` |
+
+**STAMINA is never modified by sex, race or class.** Bonuses are additive across
+the three axes, and the round trip proves the arithmetic: buying 15 STR as a MALE
+FIGHTER stores `0x35`, and 15 INT as a HUMAN stores `0x20`.
+
+### Status block
+
+Positions and source bytes all proven by the code that reads them, including one
+surprise: **EXP reads `[0x56]/[0x57]`, not `[0x55]`** — `state.h` now has
+`exp_lo`/`exp_hi` at the real offsets and `unk_55` beside them. `H.P.=` sets the
+right margin to `0x28` and the `GOLD=` tail restores `0x1d`, reproduced because
+`char_print`'s wrap test reads that margin.
+
+This needed a new seam: `seam_clear_screen` (`asm/4C1C`). Without it the status
+block drew over the form, which is what the first run did before the gate check
+caught it.
+
+### The CP2 evidence baseline moved — deliberately, and the owner should decide
+
+`C` no longer runs the stub, so the committed CP2 run could not reproduce. **The
+tamper check is what told us**, which is the entire reason it exists. Rather than
+quietly patching the artefact, the route was updated to complete a real character
+so the evidence now covers the creation screens as well, and it was regenerated:
+digest `76a0b3de7556c2b1…` -> `3e5d0492c946fb5b…`, 23 steps/14 keys -> 21
+steps/39 keys. If the preference is that approved baselines stay frozen and new
+baselines get new files, that is a one-revert change — flagged rather than assumed.
+
+### Extractor
+
+Added length-bounded `("run", off, len)` locators, because `(INSERT A BLANK
+PLAYER DISK)` is **not NUL-terminated** and reading to the next NUL swallows
+following code bytes. 21 CP3 content entries added; the four status labels come
+from `asm` `db` lines and need no exe.
+
+A self-inflicted bug worth recording: making 2-tuple reads include the terminator
+**silently changed two existing CP1 title strings**. The CP1 placement test caught
+it. 2-tuple semantics are restored and the reason is commented at the site.
+
+### Open for the gate
+
+Whether the status pairs are binary little-endian or packed decimal. Creation
+stores a plain `4`, so BCD-hundreds-first would mean a fresh character has 400
+HP, which is absurd — so `status.c` formats them as binary. But `--dump-state`
+still prints gold through `u2_bcd16()` and reports 400, so **the two disagree**
+until the original is observed. Flagged in `game/status.h` and the state file
+rather than resolved by guesswork.
+
 
