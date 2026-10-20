@@ -1708,3 +1708,61 @@ T5 (creation tail into the world) moves the CP2 baseline and is marked
 needs evidence *and* the owner's pre-approval flag resolved, so it is held for
 an owner decision rather than guessed. T7 (screenshot differential) needs PIL
 and the gitignored screenshots; T8 is this write-up plus the state row.
+
+#### RETRACTION (2026-10-21, same day): the T1 "no passability" finding is FALSE
+
+Everything in the two T1 subsections above claiming the overworld never rejects a
+step is wrong, and so is the matching line in the morning report. Live evidence
+from the original running under Spice86 (session `create-test`, sector 20,
+character `TEST`):
+
+* Walking EAST from (20,20) onto tile `0x00` printed `CMD: EAST--INVALID MOVE!`
+  (observed on screen by the owner) and `DS:00` moved 20 -> 21 and back to 20 on
+  every single press. That is the walk loop's rollback firing.
+* Walking SOUTH onto tile `0x0C` moved `DS:01` 20 -> 21 -> 22 -> 23 -> 24 -> 25
+  and every step stuck.
+
+So the overworld **does** have tile-based passability: `0x00` blocks on foot,
+`0x0C` does not. The rollback happens before the redraw, which is why no
+screenshot could ever have shown the illegal position and why the viewport
+evidence never hinted at it.
+
+**Why my static analysis got this wrong.** I re-decoded file `0x268B..0x2743` and
+treated the function as finished. It is not finished: execution falls through at
+`0x2745` and the body continues to about `0x2880`. The tail contains the mode
+dispatch, the accept path at runtime `0x2664` (`x &= 0x3F; y &= 0x3F; ret 0`),
+the reject path at runtime `0x25FF` (`mov al,0xFF; ret`), and two inline copies
+of the `-19` food drain (runtime `0x2599` and `0x2626`). I stopped roughly 200
+bytes short of the behaviour I was looking for and then asserted it was absent.
+The project already has a written rule that a negative result from a probe not
+designed to detect the thing is not a negative result; I violated it.
+
+What caught it was the live CFG harvest, which enumerated the tile-reader
+callers in seconds where my reading did not.
+
+Corrections that follow from the same evidence:
+
+* "movement does not tick food" is false. Every accepted move costs **19** food
+  (observed: `039538 -> 039519 -> 039500 -> 039481 -> 039462`), and the drain is
+  inline in this function, not only in the "no static caller" routines.
+* "no idle timer, so auto-PASS not implemented" is false. The owner observed the
+  game auto-passing when idle, and food falls by exactly **10** per idle tick,
+  matching `sbb $0x0a` at file `0x0B0D`.
+* `DS:13` is the **player's own tile id** (the capture doc says so, and the map
+  buffer really holds `0x78` at the player's cell because the game stamps the
+  figure into the map). It is not the travel mode. The Q-save "on foot" guard
+  reading `DS:13 >= 0x78` needs revisiting.
+* The value the walk loop passes as the travel mode is `[DS:15]`, and it was
+  observed **changing** between moves (`0x84, 0x06, 0x18, 0x98`). The mode
+  dispatch is therefore not yet understood; it is an open question, not a
+  settled reading.
+
+Still open, deliberately not guessed: the full passable-tile set (only `0x00`
+blocked and `0x0C` passable are observed so far), the boat-on-water rule the
+owner predicts, and the exact meaning of `[DS:15]`.
+
+Tooling note: windowed Spice86 crashes under heavy HTTP API polling -
+`InvalidOperationException: Collection was modified` in
+`CfgCpuViewModel.CreateBlockHeaderTableEntry` (CfgCpuViewModel.cs:459), a race
+between the CFG graph panel and the emulation thread. Keep API polling to a few
+requests per second.

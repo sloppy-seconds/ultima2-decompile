@@ -323,7 +323,12 @@ B) and non-black ink (572 px), and SKIPs when `u2-sdl` is not built.
 **DONE T2 (proven half only)** — Walking around no longer freezes time: PASS
 (space) spends food, and running out kills you. Player-visible: each PASS prints
 `PASS` and drops FOOD by 10 units; at zero the character dies and HP/FOOD/EXP/
-GOLD all go to 0000. Proof: file `0x0B0D` subtracts `$0x0a` from the DS:53/54/55
+GOLD all go to 0000.
+
+> **Corrected same day:** the "movement does not tick" and "no idle timer" notes
+> below are both false. Live evidence: every accepted move costs **19** food, and
+> the game auto-passes on idle for **10** each. See the CP4b retraction.
+ Proof: file `0x0B0D` subtracts `$0x0a` from the DS:53/54/55
 packed-decimal triple (low byte at 55) and file `0x0B2E` sends a borrow to the
 death handler at runtime `0x0E62` (`asm/0C62`), which zeroes DS:51..59. Two
 disagreements with the owner's model are recorded, not guessed: (a) there is no
@@ -338,6 +343,10 @@ no food drain — `asm/2599`/`asm/2626` (−19) have no static caller — so a p
 cost would be a guess. Auto-PASS on idle is not implemented: the main loop
 (file `0x0AC8`) does not time its key wait, it just redraws on no-key, so there is
 no idle timer to hang auto-PASS on. Both are open questions, not oversights.
+
+**PASSED T1** — **RETRACTED the same day; see `docs/phase4-implementation.md § CP4b → RETRACTION`.** The paragraph below was wrong: the overworld *does* enforce tile-based passability. Live under Spice86, walking east onto tile `0x00` printed `--INVALID MOVE!` and bounced `DS:00` back every press, while walking south onto `0x0C` stuck. My decode of the passability function stopped at file `0x2743` and treated it as complete; it falls through to about `0x2880`, and the accept path (runtime `0x2664`, `x &= 0x3F; y &= 0x3F; ret 0`) and reject path (runtime `0x25FF`, `mov al,0xFF; ret`) are both in the part I never read. The original claim and its reasoning are kept here only as the record of how the error happened.
+
+<details><summary>original (false) T1 entry</summary>
 
 **PASSED T1** — The task's premise ("the gate-unblocker is the `asm/2423`
 passability table") is false, and disproving it is the deliverable. A full
