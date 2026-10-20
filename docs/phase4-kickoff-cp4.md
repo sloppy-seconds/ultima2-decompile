@@ -53,6 +53,29 @@ Do these in order; each is cheap and each changes the design.
 4. **Which read path?** The save path turned out to be FCB random read/write
    (`AH=27h`/`28h`) through the generic DOS wrapper at `asm/52CA`, which is why
    static grep found nothing. Expect the same shape here.
+5. **What is the viewport, and how is it centred?** Owner's recollection of the
+   original (2026-10-27, from memory, **not yet verified**): the map shows 5 tiles
+   above and below the character, and about 10 to each side — possibly asymmetric,
+   9 on one side and 10 on the other.
+
+   The arithmetic that has to fall out of the asm: 5 + 1 + 5 = **11 rows**, and
+   either 10 + 1 + 10 = **21 columns** (symmetric) or 9 + 1 + 10 = **20 columns**
+   (asymmetric). So the candidates are 21x11 or 20x11, which is 231 or 220 tiles —
+   not the 40x25 grid, and not a clean fraction of it either.
+
+   The asymmetry is the informative part. A symmetric window is what you get from
+   centring a viewport; an uneven split is what you get from `left = player_x - N`
+   with a fixed `N`, which also predicts how the view behaves at a sector edge.
+   Do not settle this by eye. Find the map draw loop and read its row and column
+   bounds and the offset it derives from the player position, the same way the
+   status block positions were proven from the code that sets `DS:0x2E` and
+   `DS:0x2F`.
+
+   Related constraint already known: the status block occupies column 30 and rows
+   20-23, and `right_margin` alternates between `0x28` (40) and `0x1d` (29), so
+   the map region cannot use the full width. A 21-wide window inside a 40-column
+   grid means the map is inset, which probably also means there is a border or
+   frame to account for.
 
 ## 3. Facts already established that CP4 must respect
 
