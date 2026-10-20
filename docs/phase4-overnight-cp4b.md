@@ -25,24 +25,51 @@ win and the disagreement gets written down.
 - If everything below is done or blocked, stop and write a morning summary in
   this file under `## Morning report`. Do not invent new scope.
 
-## T1 — Sector-edge crossing (gate blocker)
+## T1 — Passability first, then the true crossing model (gate unblocker)
 
-Proven already: `asm/242D/2434` test `x,y >= 0x40`; `asm/243E` restores
-`[00],[01] = [5A],[5B]`, sets `[4A]=0`, calls the map read. Unknown: which
-digit moves and in which direction per arrow.
+Recon 2026-10-20 evening reframed this task. Proven:
 
-- Read the callers of `asm/242D/2434/243E`, `asm/26C6` (known `DS:49`
-  writer), `asm/2708` + the (x,y)-pair table at `cs:0x2798`, every writer
-  of `DS:5A/5B`.
-- Establish the crossing rule per direction (which digit, +/-, entry pair in
-  the new sector).
-- Implement in `u2_overworld_loop`: on crossing, update digits, reload via
-  `u2_world_load`, set position from the rule. Missing sector files (the
-  shipped gaps) refuse the step like an invalid move, never crash.
-- Tests: digit arithmetic with synthetic sectors (`edge_check.c` or extend
-  `save_q_check`).
-- Acceptance: walking across a boundary loads the neighbour; `make test`
-  green; rule cited to asm in overworld.c.
+- Edge tests `asm/242D/2434`: `cmp $0x40; jae 243E` per axis; wrapped
+  decrements (0xFF) trip the same test, so both edges share one path.
+- `asm/243E`: position := entry pair `DS:5A/5B`, `DS:4A := 0`, reload
+  `mapx[49][4A]`. It never touches `DS:49` — the reload does not change
+  sector.
+- Sector changes are the arrival system: `DS:6E` arrival code, `asm/26B7`
+  (compare `DS:6E>>1` vs current), `asm/26C6` (set `DS:49` + reload),
+  `asm/2708` (set sector, entry (x,y) from the `cs:0x2798` table indexed
+  `8*sector + DS:6E` -> `DS:23/24`, stamp).
+- `DS:4A` reads as site kind (0 overworld, 2 town, 4 tower per `asm/343F`
+  strings), so `mapx22` = town in sector 2; the `*x4/*x5` odd-format family
+  = tower/dungeon maps (defect 4 stands).
+- Edge probe: mapx20 and mapx30 are ringed almost entirely by index-0 tiles
+  (water per the kickoff's art labels); many other sectors have mixed edges
+  (land links or impassable mountains — unknown until passability is decoded).
+
+Tasks, in order:
+
+- T1a: decode `asm/2423` (passability, AL = travel mode at `DS:29`) and find
+  the terrain-ID -> blocked table. Cite every blocked tile id. NOTE: settle
+  the art-label question here — the kickoff calls art 0 "water (magenta
+  dashes)" but the renders show the magenta dotted field as the walkable
+  land the player stands on; the passability table is the arbiter, not the
+  label.
+- T1b: implement passability in `u2_overworld_run` for travel mode on foot:
+  rejected step is undone and `--INVALID MOVE!` echoed through the CMD
+  window (string proven in the movement loop). This alone makes the starting
+  sector fully walkable and the boundary a natural wall.
+- T1c: with passability in, re-probe every `*x0` sector: can a foot traveler
+  reach an edge anywhere? If yes, implement the `243E` semantics faithfully
+  (entry restore, site kind 0, reload) — the bytes do NOT support a
+  neighbour-digit walk-over, so do not invent one; document what reaching an
+  edge does per the bytes.
+- T1d: dump the `cs:0x2798` arrival table (file `0x2998`, 8 bytes per sector)
+  and find the writers of `DS:6E`; write up as the vehicle/arrival contract
+  for later CPs. No vehicle implementation tonight.
+- Tests: passability unit checks (blocked ids refused, walkable accepted,
+  echo correct); edge probe output into the implementation doc.
+- Acceptance: CP4 gate is walkable — owner can walk around sector 20 fully,
+  water blocks with the original's echo; crossing question answered by
+  evidence and written down, not guessed.
 
 ## T2 — Time passes: action tick, food drain, auto-PASS (owner unlock, 2026-10-20 night)
 
