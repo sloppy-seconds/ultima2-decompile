@@ -230,3 +230,101 @@ only by accident. Do not mistake emulator determinism for game determinism.
   passability routine is called with `[DS:18]` from at least one arm, not only
   `[DS:15]` — so the "travel mode" argument has more than one source and the
   mode dispatch is still not fully understood.
+
+## 8. Kill rewards — full loot model (resolved offline, no capture needed)
+
+Derived from the harvested blocks cross-read against `asm/`. The harvest's
+runtime addresses key directly onto the asm filenames, so `017D:2D8C` is
+`asm/2D8C_combat_kill_reward.asm`.
+
+### Sequence on a kill
+
+1. **Per-monster-kind bonus**, dispatched on the monster sprite byte
+   (`DS:1B7+i`) at `0x2CD3..0x2D8B`:
+
+   | sprite | effect |
+   | --- | --- |
+   | `0x60` | `DS:65` (keys) `+= 2` |
+   | `0xFC` | `DS:66` (tools) `+= 1`, **and** roll an item drop (below) |
+   | `0xF0` | `DS:DB` `+= 1`, gated on `rand >= 0x40` |
+   | `0xF8` | separate branch, not yet read |
+   | other | straight to the reward |
+
+2. **`0x2D8C` `combat_kill_reward`** — zeroes the whole monster record
+   (`0x1B7`, `0x177`, `0x137`, `0x157`, `0x197`) and prints
+   `KILLED--GOLD+`.
+
+3. **Gold** at `0x2DB7`/`0x2DC1`: amount = `(rand & 0x17) | 1`, BCD-added into
+   `DS:58/59`.
+
+4. **Exp** at `0x2DE4`/`0x2DEE`: amount = `(rand & 3) + 1`, BCD-added into
+   `DS:56/57`.
+
+5. **Item drop** at `0x2D03`/`0x2D07`: `idx = rand & 0x0F`, then
+   `DS:D6+idx += 1` (BCD). Only reached from the `0xFC` sprite branch.
+
+So the owner's report — exp, gold *and* an item from one kill — is exactly the
+`0xFC` path, and the item drop is not generic loot, it is specific to that one
+monster kind.
+
+### The item array, and its name table
+
+`DS:D6+0..15` are **item counts**, sixteen slots, and the `rand & 0x0F` index
+range matches the sixteen-entry item-name table in the binary exactly:
+
+```
+file 0x501d  [ 0] RING       [ 4] CLOAK      [ 8] RED GEM      [12] BLUE TASSLE
+             [ 1] WAND       [ 5] HELM       [ 9] SKULL KEY    [13] STRANGE COIN
+             [ 2] STAFF      [ 6] GEM        [10] GREEN GEM    [14] GREEN IDOL
+             [ 3] BOOTS      [ 7] ANKH       [11] BRASS BUTTON [15] TRI-LITHIUM
+```
+
+Index 16 is `STRENGTH`, where the attribute table starts, so the sixteen-entry
+boundary is real and not a parsing artifact.
+
+Corroboration that this table is the right one: block `0x487A` special-cases
+index **3** in the item display path, and index 3 is `BOOTS`, the only item with
+bespoke messaging elsewhere in the binary.
+
+### Measured final state, from the harvested memory dump
+
+`DS` base `0x8BE0`, read out of `spice86dumpMemoryDump.bin`:
+
+```
+hp 0184 (184)   food 036244   exp 0010 (10)   gold 0452 (452, started 400)
+str 0x50  dex 0x12  int 0x18   boots DS:6D = 00 (none)   ready DS:61 = 00
+DS:76..0x8D  all zero          <-- NOT the inventory
+DS:D6..0xED  00 00 01 00 ... 01 00 ...   <-- items: index 2 and index 12
+```
+
+The save file mirrors the same array at **save offset `0x0a0`**, holding only
+index 2 — so the second item was picked up after the last save. Save and live
+memory agree.
+
+### Open discrepancy — do not close this silently
+
+Index 2 is `STAFF`, which matches the owner exactly. Index 12 is `BLUE TASSLE`,
+but the owner recalled a **green gem**. `GREEN GEM` is index 10, two away.
+
+The table order is the only evidence; nothing in `asm/` references these string
+addresses by pointer, so the table is indexed arithmetically and an off-by-two
+base would produce exactly this symptom. Unresolved on purpose. Settle it next
+session by watching the on-screen message at the moment of a drop rather than
+trusting either memory or the table.
+
+### Paralysis resist — now backed by a string, not just a byte test
+
+`asm/0E70_combat_paralyzed_legs.asm` already exists and carries both
+`LEGS PARALIZED!` and `SAVED BY MAGICAL BOOTS!`. The boots test seen at
+`0x22FD` (`mov AL,[DS:6D]; or AL,AL; je ...; ret` — return early when boots are
+present) is consistent with it. Still not proven to be the *same* call site as
+the paralysis event; the string file and the boots gate have not yet been joined
+by a traced edge.
+
+### Theft
+
+`asm/3F5D_steal_attempt.asm` holds the thief outcomes: `NO LUCK!`,
+`STEAL FOOD!`, `STEAL ARMOUR!`, `STEAL WEAPONS!`. The matching decrement path
+is `0x0FE7`: `sbb AL,1; das; mov [DI+0xD6],AL` — the inverse of the drop at
+`0x2D07`, operating on the same item-count array. So a thief can remove an item
+from `DS:D6+i`.
