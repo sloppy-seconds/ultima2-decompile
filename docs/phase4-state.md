@@ -22,8 +22,21 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
-- **CP4 is mid-flight and everything is committed.** Read this first after
-  compaction. Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
+- **CP4 is mid-flight and everything is committed. To take over, paste
+  `docs/phase4-kickoff-cp4b.md` to a fresh agent — it is the current handoff and
+  supersedes the notes below on what to do next.** The headline it must not miss:
+  the original has **two display paths** — tiles for the map and banners, and
+  INT 10h teletype text (`str_out_at` runtime `0x51EB` -> `str_out_core`
+  runtime `0x51FD`) for the status band, menu and creation form. There are no
+  digit glyphs in the 64-record tile table (verified: zero `04 10` headers in the
+  1312 bytes after the last record), so the status band must be drawn through the
+  text path, not the tile path. That also explains the `CS:0x48DC` table
+  alternating `B800+5k`/`BA00+5k` — character plane and attribute plane of text
+  mode 0. And **the staging byte is `2 x art`**: `u2_view_at()` returns the
+  staging byte, `u2_view_art()` halves it; skipping the halving doubles every
+  tile, which is the bug the owner caught from a screenshot after every
+  structural check had passed.
+Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
   self-patched at file `0x24b7`; tile = **1 byte**, `y*64+x`, 64x64 sector, read
   `AH=27h CX=0x1000` into `[DS:0x472]`); the sector **write-back** (`asm/2305`) with
   the owner's decision (a) faithful in `original` mode, (b) copy-on-write for
