@@ -132,6 +132,12 @@ static int hold_for_esc(u2_ctx *ctx, unsigned ms)
             return 1;
         return 0;
     }    for (unsigned waited = 0; waited < ms; waited += 50) {
+        /* A termination signal (T4) or a closed window lands on the poll as
+         * exit_code / input_exhausted, not as a key. Without this test the
+         * hold kept sleeping through its whole budget and the process sat
+         * out SIGTERM until SIGKILL — the defect T4 reproduces. */
+        if (ctx->exit_code || ctx->input_exhausted)
+            return 1;
         if (seam_key_poll(ctx, &k)) {
             /* Any key ends the hold; only ESC aborts to the title. The
              * original's poll consumed the key the same way (asm/069C). */

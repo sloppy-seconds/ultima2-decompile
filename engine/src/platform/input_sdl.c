@@ -10,7 +10,7 @@
 #ifdef U2_HAVE_SDL
 
 #include <SDL.h>
-#include <stdlib.h>
+#include <signal.h>
 
 #include "core/ctx.h"
 
@@ -20,6 +20,42 @@
 #define SCAN_LEFT  0x4B
 #define SCAN_RIGHT 0x4D
 
+/*
+ * Termination signals, handled by us rather than by SDL.
+ *
+ * Measured on this host (T4, 2026-10-20): a `u2-sdl` process sat through
+ * SIGTERM and SIGINT until SIGKILL, and /proc/<pid>/status showed both bits
+ * in SigIgn (mask 0x6), not SigCgt — the signals were ignored outright, so
+ * nothing could drain them. The library doing the ignoring is
+ * `sdl2-compat` (the Fedora build maps SDL2 onto SDL3), and two things fell
+ * out of testing it:
+ *
+ *   * `SDL_HINT_NO_SIGNAL_HANDLERS` is a no-op here — the string is not even
+ *     present in /usr/lib64/libSDL2-2.0.so.0, so the hint cannot be honoured.
+ *   * a handler installed before `main()` loses: SDL's own disposition is
+ *     still applied during init (SIGINT became catchable, SIGTERM stayed
+ *     ignored). The fix therefore installs ours *after* SDL has initialised,
+ *     from the first `sdl_poll`, which is guaranteed to run after every
+ *     backend's `init` (main.c: renderer, input, audio all init first).
+ *
+ * The handler itself does exactly one async-signal-safe thing: set a flag.
+ * `sdl_poll` reads the flag on every pump, so a polite `kill` or
+ * `timeout -s TERM` now ends the run the same way closing the window does.
+ */
+static volatile sig_atomic_t g_term_signal;
+
+static void term_handler(int sig) { (void)sig; g_term_signal = 1; }
+
+static void install_term_handlers(void)
+{
+    struct sigaction sa;
+    sa.sa_handler = term_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;                 /* no SA_RESTART: let blocking calls fail */
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT,  &sa, NULL);
+}
+
 static int sdl_poll(u2_ctx *ctx, u2_key *out)
 {
     SDL_Event e;
@@ -28,15 +64,28 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
      * player left". Without a display this is the only exit, and with one
      * it makes the flag terminate the run the same way. */
     if (ctx && ctx->dump_screen_done) return -1;
+    /* Re-asserted on every pump, not once: sdl2-compat re-applies its own
+     * SIGTERM disposition while windows and devices are created, so a
+     * one-shot install (before main, or on the first poll) is quietly
+     * overwritten — measured 2026-10-20, the handler was in place right
+     * after install and gone again a second later, with the bit showing up
+     * in SigIgn. sigaction is a cheap syscall next to the event pump beside
+     * it, and this is the only placement that survives. */
+    install_term_handlers();
+    if (g_term_signal) {              /* SIGTERM/SIGINT: our handler set this */
+        /* Non-zero on purpose: every wait loop in the game tests
+         * `if (ctx->exit_code)`, and 0 reads as "no exit requested". */
+        if (ctx) ctx->exit_code = 1;
+        return -1;
+    }
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) {
             if (ctx) ctx->exit_code = 1;
             return -1;
         }
-        /* SDL2 turns SIGTERM and friends into this event rather than dying, so a
-         * backend that only watches SDL_QUIT will ignore `timeout`, a systemd
-         * stop, and anything else that asks politely. Observed directly: the
-         * process sat through SIGTERM until SIGKILL. */
+        /* Kept as a belt-and-braces path: with SDL_HINT_NO_SIGNAL_HANDLERS set
+         * above we own SIGTERM/SIGINT ourselves, but if the hint is ever
+         * overridden this is how the event would arrive. */
         if (e.type == SDL_APP_TERMINATING) {
             if (ctx) ctx->exit_code = 0;
             return -1;
