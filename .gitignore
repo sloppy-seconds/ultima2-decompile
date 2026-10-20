@@ -10,6 +10,12 @@ original/
 references/
 
 # Raw runtime dumps of the copyrighted binary (regenerable, derived, bulky).
+# The top-level patterns predate tools/spice86_stop.sh, which harvests into one
+# subdirectory per labelled run (captures/spice86/<label>/); those subdirs were
+# NOT covered, so a harvest would have staged copyrighted derived dumps into
+# git. The directory is ignored wholesale now; curated analysis derived from it
+# lives in disasm/ and docs/, which stay tracked.
+captures/spice86/
 captures/spice86/*.bin
 captures/spice86/*.json
 
