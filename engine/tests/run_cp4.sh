@@ -55,6 +55,23 @@ else
     fi
 fi
 
+# --- the viewport mapping -------------------------------------------------
+# The viewport is where a map byte becomes something drawable, so the whole CP4
+# render contract rests on these rules: geometry, the index formula, the
+# off-sector fallback and the underlay suppression.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/view_check" \
+   tests/view_check.c src/core/view.c 2>"$WORK/cc-view.err"
+if [ $? -ne 0 ]; then
+    bad "viewport test harness did not build: $(head -5 "$WORK/cc-view.err")"
+else
+    if "$WORK/view_check" > "$WORK/view.out" 2>&1; then
+        ok "viewport: geometry, index formula, off-sector, suppression ($(grep -c '  ok  ' "$WORK/view.out") checks)"
+    else
+        bad "viewport check failed:"
+        sed 's/^/        /' "$WORK/view.out"
+    fi
+fi
+
 # --- --data-dir is part of the documented contract ----------------------
 ./u2 --help 2>&1 | grep -q -- '--data-dir' \
     && ok "--data-dir is in the usage text" \

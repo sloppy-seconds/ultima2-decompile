@@ -33,8 +33,14 @@
 #include <string.h>
 
 typedef struct u2_state {
-    /* 0x00 */ uint8_t reserved_00[0x23];
-    /* 0x23 */ uint8_t player_x;      /* asm/50B3_map_tile_ptr.asm: x + (y<<6) + map base */
+    /* 0x00 */ uint8_t sector_x;      /* asm/5AE1 fill loop: window origin is (x-9, y-5);
+                                        also the >= 0x40 sector-reload test (asm/242D). */
+    /* 0x01 */ uint8_t sector_y;      /* asm/5AE1, asm/2434 */
+    /* 0x02 */ uint8_t reserved_02[0x21];
+    /* 0x23 */ uint8_t player_x;      /* asm/50B3_map_tile_ptr.asm: x + (y<<6) + map base.
+                                        The relationship between this pair and the
+                                        DS:00/01 pair above is not yet established by
+                                        the asm, so both are kept rather than merged. */
     /* 0x24 */ uint8_t player_y;      /* asm/50B3_map_tile_ptr.asm */
     /* 0x25 */ uint8_t reserved_25[0x09];
     /* 0x2E */ uint8_t cursor_col;    /* asm/51FD_str_out_core.asm: DL for INT 10h AH=02h */
