@@ -373,6 +373,43 @@ Correct reading: **`2DC1` = gold gain, `2DEE` = exp gain.** The filenames are
 transposed. Renaming corpus files is a CP3-wide convention change, so this is
 recorded rather than applied unilaterally.
 
+### Corrected: the reward sequence, and why the boundary caused the mislabel
+
+Owner's reading, confirmed against the blocks: each message announces the award
+that *follows* it, not the one preceding it.
+
+```
+2D8C  clear monster record, print "KILLED--GOLD+"   <- announces the gold below
+2DB7  gold_amount = (rand & 0x17) | 1  -> DS:1F
+2DC1  DS:58/59 += DS:1F                  (GOLD)
+      print "--EXP.+"                                <- announces the exp below
+2DE4  exp_amount  = (rand & 3)  + 1  -> DS:1F
+2DEE  DS:56/57 += DS:1F                  (EXP)
+```
+
+The string `--EXP.+` lives at the tail of the block CP3 named `2DC1..2DE0`, while
+the exp roll and add are `2DE4` and `2DEE`. The block boundary cuts through the
+middle of one semantic unit, so "the function that prints `--EXP.+`" and "the
+function that awards exp" genuinely are different files. Both renames are now
+applied: `2DC1_combat_gold_gain.asm` and `2DEE_combat_exp_gain.asm`, each citing
+the display site that proves which pair it writes.
+
+**Every kill awards both, minimum 1 each.** Neither roll can produce zero: the
+`| 1` on the gold mask forces an odd non-zero value, and the exp roll is
+`(rand & 3) + 1`, i.e. 1..4. So gold is not a chance drop; only the amount is
+random. The item drop at `0x2D07` is the part that is conditional, and it is
+gated on the monster sprite being `0xFC`.
+
+### Also: `asm/2423` declares a boundary that is wrong, and it is on purpose now
+
+`asm/2423_sub_2423.asm` declares `func 2423..242C`, ten bytes, while the
+passability routine runs to roughly runtime `0x2680`. Reading only that file
+makes the routine look like it performs no rejection whatsoever, which is exactly
+how the static pass on 2026-10-21 produced the retracted "no passability"
+finding. The file now carries a WARNING and a provenance line so the next reader
+does not repeat it. The boundary itself is still wrong and needs a CP3 re-decode
+of `2423..2680`.
+
 ### Also already named, from the same listing
 
 `asm/` already contains `0E70_combat_paralyzed_legs`, `0EC2_combat_paralyzed_arms`

@@ -3,6 +3,11 @@
 # func 0FCD..1012  len 0046 B  evidence: call+reko
 # strings: "A THIEF STOLE SOMETHING!"
 # calls: L_0051df (str_out), L_005417
+# provenance: owner — owner fought what they believe was a thief on 2026-10-21
+#           and suspects items were taken. The matching decrement path is
+#           runtime 0x0FE7 (sbb 1, das into DS:D6+i), the inverse of the drop at
+#           0x2D07 on the same item-count array. Not yet traced from this
+#           function to that decrement.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_thief_steal:

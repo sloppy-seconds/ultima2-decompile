@@ -2,6 +2,8 @@
 # name-evidence: string 'KILLED--GOLD+'
 # func 2D8C..2DB3  len 0028 B  evidence: seed+reko
 # calls: L_0051df (str_out)
+# provenance: live:play-test-live — kill observed; the trailing string announces
+#           the gold award that follows in asm/2DC1, it does not describe this block
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_kill_reward:

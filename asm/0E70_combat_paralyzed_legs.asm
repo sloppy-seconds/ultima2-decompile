@@ -3,6 +3,11 @@
 # func 0E70..0EC1  len 0052 B  evidence: call+reko
 # strings: "LEGS PARALIZED!"; "SAVED BY MAGICAL BOOTS!"
 # calls: L_004d26, L_0051df (str_out), L_005417, L_0061c3
+# provenance: owner — owner was paralysed by a casting monster on 2026-10-21 and
+#           had no boots, matching 'SAVED BY MAGICAL BOOTS!'. The boots gate seen
+#           live at runtime 0x22FD (return early when [DS:6D] != 0) is consistent
+#           but NOT yet joined to this event by a traced edge. Do not treat the
+#           boots resist as proven until that edge exists.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_paralyzed_legs:
