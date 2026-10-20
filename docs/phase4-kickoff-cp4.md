@@ -114,9 +114,18 @@ Do these in order; each is cheap and each changes the design.
 
    Two things the screenshot does **not** settle, both needing the draw loop rather
    than pixels: whether a tile really is 2x2 cells, and why the proven status block
-   at column 30 rows 20-23 would overlap a full-width map. The likely answer is
-   that the demonstration and the play screen lay out differently - worth
-   establishing early, because it decides whether CP4 has one viewport or two.
+   at column 30 rows 20-23 would overlap a full-width map. **Owner confirmed
+   (2026-10-27): this is the demo screen, which is why there is no status block or
+   other play furniture on it.**
+
+   The consequence matters for scoping: the 20x11 tile arithmetic above was derived
+   from a demo layout, so it is evidence about the **demo's** viewport, not
+   necessarily the play viewport. If the play screen really does reserve column 30
+   and rows 20-23 for the status block, its map region is narrower and shorter and
+   the tile count differs. CP4's gate is walking the play map, so the play viewport
+   is the one that must be proven from the play draw loop; the demo layout is a
+   separate, later concern (it belongs with the CP9 picture slideshow). Do not
+   build CP4 to the demo's geometry because the screenshot was convenient.
 
 ## 3. Facts already established that CP4 must respect
 
