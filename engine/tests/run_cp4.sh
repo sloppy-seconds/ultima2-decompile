@@ -286,6 +286,32 @@ else
     printf '  SKIP  u2-sdl not built (make sdl) — headless SDL path not exercised\n'
 fi
 
+# --- the screenshot differential, when the evidence is on disk ------------
+# Standing directive: validate the engine against the owner's play screenshots
+# as a test. The screenshots are gitignored (derived from copyrighted art), so
+# this SKIPs with a named reason when they or PIL are absent, and goes live
+# the moment they are present. It compares the status-block region only; the
+# map region differs by sector/position and is out of scope (see the tool's
+# header). The engine frame is rendered here so both sides come from one run.
+SHOT="../captures/screenshots/move-after.png"
+if python3 -c "import PIL" 2>/dev/null && [ -f "$SHOT" ] && [ -x ./u2 ]; then
+    ./u2 --headless --dump-map "$WORK/t7-engine.ppm" --data-dir "$CONTENT" \
+        >/dev/null 2>&1 || true
+    if [ ! -s "$WORK/t7-engine.ppm" ] && [ -z "$CONTENT" ]; then
+        printf '  SKIP  no content dir for the engine frame in the screenshot diff\n'
+    else
+        if python3 ../tools/screenshot_diff.py --screenshot "$SHOT" \
+               --engine-ppm "$WORK/t7-engine.ppm" >"$WORK/t7.out" 2>&1; then
+            ok "screenshot diff: status block agrees with the play shot ($(grep agreement "$WORK/t7.out" | awk '{print $3}') ink on both sides)"
+        else
+            bad "screenshot diff failed:"
+            sed 's/^/        /' "$WORK/t7.out"
+        fi
+    fi
+else
+    printf '  SKIP  screenshot diff not run (needs PIL + captures/screenshots/move-after.png)\n'
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP4 TEST: PASS\n'
