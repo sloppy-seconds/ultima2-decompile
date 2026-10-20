@@ -310,6 +310,15 @@ Two consequences worth stating:
   capture is wrong, that subsystem is wrong (flagged in code).
 * CGA authenticity (glyphs, colors) is best-effort from open fonts.
 * Sound/timing feel (speaker beeps, delays) approximated.
+* **The fan EGA upgrade is a different binary, not a mode of ours.**
+  `original/updated/` is *The Exodus Project: Ultima II Upgrade 1.1*, and
+  `Files.txt` lists `U2EGA.EXE` as "EGA Game Binary & tiles". Our `ultimaii.exe`
+  has no EGA register programming, no `MAPG` string and only ever sets video mode
+  4, so a faithful EGA mode would be a second reconstruction pass over that
+  binary, not a flag on this one. What CP4 does protect is the cheap part: the
+  tile **ID** grid is mode-independent (`MAPG44` is byte-identical to `mapx44`),
+  so art, naming and geometry are kept as data behind the renderer seam. Details
+  and the three adopted accommodations in `docs/phase4-implementation.md` § CP4.
 
 ## 6. Stop-and-ask
 
@@ -334,6 +343,9 @@ settled each one. Kept here so a fresh agent does not re-derive or re-trust them
 | An intermediate CP3 reading claimed the original **prints the two bytes in the wrong order**, so food 3 displayed `0300` | wrong, and worth recording because it was confidently written into `status.c` and this table. `GOLD=0038` in a real gameplay screenshot is 38 gold; a byte-swapped display would read `3800`. The display is ordinary big-endian packed BCD and there is no quirk to reproduce. The trap: `0300` read from memory was assumed to mean "3 with a bug" instead of "three hundred" | owner gameplay screenshot 2026-10-27, superseding an owner from-memory recollection the same day |
 | CP3 "the remaining-point total follows `PLAYER GENERATION :`" | it does not. `asm/56C6` prints `POINTS LEFT TO DISTRIBUTE : ` and `asm/5C85` addresses the value at column 33 row 2; the heading carries no number. The string was missing from the extraction manifest entirely | `asm/56C6`, `asm/5C7D..5C89`, `asm/5C66` |
 | CP3 "stats are two typed digits packed as nibbles, budget is packed BCD at `DS:29`" | correct as to the budget, but the validator is narrower than assumed: `asm/5C66` stores the stat, fails below `0x0a`, then `sub`/`das`/`jb` fails an overspend. **Minimum 10 per stat, no maximum** — the only other bounds are the 90 budget and two-digit input. Derived: since every stat is at least 10, no single stat can exceed `90 - 5*10 = 40`, so the BCD bonuses (max +15) can never overflow a byte | `asm/5C66..5C7A` |
+| CP4 kickoff "4224 = 4096 + 128, candidates: 32x32 tiles x 4 bytes plus a 128-byte header, or 1056 x 4-byte entries" | neither. **One byte per tile, 64 columns, 4096 bytes = a 64x64 sector**, and the 128-byte tail is never read (same shape as the 384-byte `PLAYER` file whose record is 256). The read is `AH=27h, CX=0x1000` into `[DS:0x472]`, and the name is `MAPX` + two digits self-patched into the code stream at file `0x24bb`/`0x24bc` | `asm/50B3_map_tile_ptr.asm`, `asm/2290_sub_2290.asm` |
+| §1 "`0x4A` last key" | **in doubt, not yet corrected.** `asm/2290`/`asm/22D5`/`asm/2305` read `DS:0x4A`, add `0x30` and self-patch the result into the second digit of the `MAPXFF`/`MONXFF` FCB name, which is arithmetic a key byte does not support. `asm/334D_cmd_D` meanwhile reads it as a key byte. Either the location is reused or one reading is wrong; CP4 must settle it before movement is built | `asm/2290`, `asm/334D_cmd_D` |
+| §1 "`0x472` map table base" | confirmed, and larger than a base: `[DS:0x472]` is the destination of the 4096-byte sector **read** (`asm/2290`, AH=27h) *and* the source of the sector **write** (`asm/2305`, AH=28h). The original rewrites its own `mapxNN` file, so world content is mutable at runtime | `asm/2290`, `asm/2305` |
 
 Two consequences worth stating plainly:
 

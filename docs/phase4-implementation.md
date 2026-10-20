@@ -870,4 +870,194 @@ still prints gold through `u2_bcd16()` and reports 400, so **the two disagree**
 until the original is observed. Flagged in `game/status.h` and the state file
 rather than resolved by guesswork.
 
+*(Closed 2026-10-27: packed decimal, most-significant-pair-first, no byte-swap
+quirk. See plan § 7 — `GOLD=0038` in a real gameplay screenshot is 38 gold.)*
+
+---
+
+## CP4 — Overworld + movement — IN PROGRESS (recon, no engine code yet)
+
+Kickoff: `docs/phase4-kickoff-cp4.md`. This section settles its § 2 items 1 and 2
+from the bytes, records the EGA-mode question the owner raised, and leaves the
+viewport for the draw loop.
+
+### Q1 settled: how the `mapx` filename is built
+
+There is no `mapx` literal because the name is **self-patched into the code
+stream** — the same trick CP3 found for `PLAYER`, and the reason a grep for
+`mapx` finds nothing. `asm/2290_sub_2290.asm` (runtime `0x2290`, file `0x2490`):
+
+```
+L_002491: mov    0x49,%al        ; first digit, 0-9
+L_002494: adc    $0x30,%al       ; -> ASCII
+L_002496: mov    %al,%cs:0x22bb  ; patch own code stream
+L_00249e: mov    0x4a,%al        ; second digit
+L_0024a3: mov    %al,%cs:0x22bc
+L_0024ab: mov    $0x27,%ah       ; FCB random block read
+L_0024ad: mov    $0x1000,%cx     ; 4096 records, record size 1 (cf. CP2.5)
+L_0024b0: mov    0x472,%dx       ; destination offset, from [DS:0x472]
+L_0024b4: call L_0054ca          ; the generic DOS wrapper
+```
+
+The call steps over the eight bytes of the FCB name, at file `0x24b7`:
+
+```
+0x24b7  30 4d 41 50 58 46 46 20 20      ;  MAPXFF<sp><sp>
+                 ^^ ^^  = file 0x24bb / 0x24bc = cs:0x22bb / 0x22bc
+```
+
+`F` (0x46) is a placeholder overwritten at runtime by the two digits, so the
+name is `MAPX` + `%d%d` from `DS:0x49` and `DS:0x4A`, no extension. The literal
+in the image is `MAPXFF`, which is what the earlier "no `mapx` string anywhere"
+grep was really reporting.
+
+Same shape at the companion tables:
+
+| function | inline name | AH | CX | destination |
+| --- | --- | --- | --- | --- |
+| `asm/2290` | `MAPXFF  ` @ file `0x24b7` | 27h read | 0x1000 (4096) | `[DS:0x472]` |
+| `asm/22D5` | `MONXFF  ` @ file `0x24c9` | 27h read | 0x100 (256) | `[DS:0x476]` |
+| `asm/2305` | `MAPXFF  ` @ file `0x2538` **and** `MONXFF  ` @ file `0x2548` | **28h write** | 0x1000 | `[DS:0x472]` |
+
+`TLKX` (talk files) is at file `0x24f4` and `PLAYER` follows it at `0x2558` —
+all four prefixes sit in one contiguous block of code, each as patchable inline
+bytes.
+
+**The consequence nobody predicted:** `asm/2305` writes the sector back out
+(AH=28h, 4096 bytes, same name). The original **mutates its own map files**; that
+is the "AutoSave" the fan patch later added a switch for. It makes `--data-dir`
+writable content, which is a product decision rather than an implementation
+detail — see "Open for the owner" at the end of this section.
+
+### Q2 settled: what a tile is
+
+`asm/50B3_map_tile_ptr.asm` (26 call sites) is the whole answer:
+
+```
+mov 0x24,%al ; shl $6 -> ax = y*64 ; add DS:0x23 ; add [DS:0x472] -> tile address
+```
+
+**One byte per tile, 64 columns, 4096 bytes = a 64x64 sector.** The kickoff's
+"32x32 tiles x 4 bytes plus a 128-byte header" candidate is wrong, and so is
+"1056 x 4-byte entries". The 4224-byte file is 4096 tile bytes plus a 128-byte
+tail that is never read — the same shape as the 384-byte `PLAYER` file whose
+record is 256 bytes. The tail is disk geometry, not content.
+
+Tile bytes are small IDs, not pixel data: `mapx00` uses 13 distinct values,
+`mapx21` 37, `mapx03` 51, each dominated by two values (ocean). The ID -> glyph
+/ properties table is still to be located; that is the extractor's remaining
+CP4 job.
+
+### Sector digits: proven as far as the name goes
+
+`DS:0x49` (first digit) has exactly one writer in the tree, `asm/26C6`.
+`DS:0x4A` (second digit) is written at `asm/243E` (=0), `asm/342A` (=1),
+`asm/343F` (=2 and =4, next to the `-TOWN` / `-TOWER` strings), `asm/34CF`,
+`asm/34E4`, `asm/3823` and `asm/7030_space_collision`.
+
+Two things this raises and does not yet answer:
+
+* plan § 1 lists `DS:0x4A` as "last key", and `asm/334D_cmd_D` reads it as a key
+  byte and compares against 4 and 5. The `+0x30 -> ASCII` arithmetic above is
+  harder evidence than that comment, so **either the location is reused or one of
+  the two readings is wrong**. Flagged, not resolved: it decides whether movement
+  direction arrives in `DS:4A`.
+* the gaps in the shipped set (no `mapx01`, `02`, `12`..`14`, ...) are still
+  unexplained. `asm/26B7` compares `DS:0x49` against `DS:0x6e >> 1`, and
+  `asm/2708` indexes a table of (x,y) byte pairs at `cs:0x2798` with
+  `8*DS:0x49 + DS:0x6e` — so there is a sector -> coordinate table to read, and
+  its values are all < 0x40, consistent with tile coordinates inside a sector.
+
+### Direction keys (owner, 2026-10-27)
+
+Movement is **arrow keys**: Up=N, Down=S, Left=W, Right=E. It is not a letter
+command, which is why the letter handlers read `cmd_N` = "NEGATE TIME",
+`cmd_E` = "ENTER", `cmd_S` = "STEAL DIRECT-", `cmd_W` = "WEAR ARMOUR". CP4
+movement is therefore a scancode-level key handler, not a `cmd_dispatch` entry.
+`platform.h` already carries the scancode in `u2_key.scan` and defines
+`U2_KEY_UP/DOWN/LEFT/RIGHT`, so no API change is needed.
+
+### The EGA question (owner, 2026-10-27)
+
+The owner asked whether early CP4/CP9 rendering decisions would make the fan
+EGA mode hard to enable later. The answer is in the tree: **`original/updated/`
+is a directory**, and it holds *The Exodus Project: Ultima II Upgrade 1.1*
+(Michael C. Maggio, "Voyager Dragon") — readme, file list, patchers, EGA art and
+Galaxy map content.
+
+What the bytes and its own docs say:
+
+* `Files.txt` describes `U2EGA.EXE` as **"EGA Game Binary & tiles"**. EGA is a
+  **different executable**, not a mode inside ours.
+* `original/ultimaii.exe` is byte-identical to `updated/ultimaii.exe`
+  (sha256 `d7cc110c…`), so there is no ambiguity about which CGA binary we are
+  reconstructing.
+* our binary has no `MAPG` / `MONG` / `TLKG` string, no EGA/VGA register
+  programming anywhere in `asm/` (nothing on 3c4/3c6/3ce/3d4/3d8), and the only
+  video mode set is mode 4 (`asm/4A3E`: `AH=00h, AL=04h`).
+* **the map data is mode-independent**: `updated/MAPG44` is byte-identical to
+  `mapx44`, and `RENGAL.BAT` only *renames* `mapx`->`mapg` and adds planet
+  sectors (`MAPG10` Mercury, `MAPG20` Venus, `MAPG30`/`32` Mars, `MAPG40`/`41`/`45`
+  Jupiter). Combined with the 1-byte-tile finding, the tile **ID space is shared**
+  between CGA and EGA; only art, naming and geometry differ.
+* EGA demo pictures are 64000 bytes (640x200 at 4bpp) against CGA's 16384
+  (320x200 at 2bpp), and are named with an `-E` suffix (`PICDRA-E`).
+
+So enabling EGA is never a flag on this reconstruction: it is a second spec pass
+over `U2EGA.EXE` plus a second art set. The cheap thing to do now is to make sure
+nothing in CP4 welds tile identity, tile size or viewport geometry to the text
+renderer.
+
+Two independent validations from its feature list, worth keeping: it adds
+**ALT-X to exit** (agreement with our D5 Ctrl-Q from a completely separate
+direction) and it **caps attributes at 99** — a *rule* change, which therefore
+must not be absorbed into `original` mode, where the 9999 BCD ceiling and the
+wraparound are the original's own behaviour.
+
+### Three accommodations adopted for CP4
+
+Each is better code whether or not an EGA mode ever happens.
+
+1. **Tile layer, not glyph layer.** CP4 produces a viewport of tile **IDs** and
+   hands it to the renderer through one new seam; the backend decides glyph
+   (terminal, now), CGA sprite (CP9) or EGA sprite (hypothetical). Game logic
+   never sees a glyph. Skipping this makes CP4's map draw the third place glyphs
+   are hardcoded after title and status, and CP9 would have to re-open all three.
+2. **Geometry in one cited struct.** Viewport cols/rows, player offset within the
+   window and tile size in cells live in a single `u2_view_t` proven from the
+   draw loop, not in scattered constants. A mode change swaps the struct.
+3. **Filename prefix is data.** The original keeps `MAPXFF  ` as patchable inline
+   bytes, which is exactly how the fan patch retargets it — so the engine reads
+   the prefix from the extractor (or detects `mapx*` vs `mapg*` in the content
+   directory) instead of hardcoding it. Same for the picture `-E` suffix.
+
+   Related trap: **do not assert the 4224 size.** `updated/MAPG10` is exactly
+   4096 bytes with no tail, `mapx00` is 4224, and the read is 4096 either way. A
+   size assertion would reject valid Galaxy content on day one.
+
+Not adopted: no `--mode ega` flag, no speculative EGA renderer, and no running or
+patching `U2EGA.EXE`. Those binaries are third-party work derived from the game
+and are Apache-2.0 incompatible, so they stay where they are and out of git.
+
+### Open for the owner
+
+1. **Does `--data-dir` get written to?** The original writes the sector back
+   (`asm/2305`). Options: (a) faithful — mutate the player's own map files; (b)
+   copy-on-write into the save directory on first modification, leaving the
+   content directory read-only; (c) never write and log the deviation. This is a
+   product decision, so it is stated rather than picked quietly.
+2. Whether the EGA reconstruction is ever in scope. If it is, it is its own
+   checkpoint with its own asm-equivalent spec, not a CP9 subtask.
+
+### Not yet done
+
+* the play draw loop, and with it the viewport geometry, the tile size in cells,
+   and whether the view straddles sectors. New evidence makes the kickoff's
+   "tile = 2x2 text cells" reading doubtful: the binary writes **directly to
+   `0xB800`** (`asm/5351`, `asm/4B26`, `asm/4B4E`, `asm/310B_cmd_C`) while text
+   goes through BIOS, so the original mixes bitmap and text on one screen and the
+   map is probably a bitmap blit, not cell output.
+* the terrain ID -> properties table, encounter rates, direction messages
+* `invalid_move_msg`, `move_only_on_foot`, the `--data-dir` seam itself
+
 
