@@ -1095,22 +1095,42 @@ if key == [DS:271]: x = x - 1; print "WEST"
 else if key >= 'A': dispatch through the command jump table at cs:0x730
 ```
 
-The position is **`DS:0x00` = x, `DS:0x01` = y**, and `asm/38B0_cmd_L` shows the
-wrap explicitly: `adc` the delta, then **`and $0x3f`** (file `0x3c9b..0x3cb2`). So
-the sector is a **64x64 torus** and the viewport **never straddles a sector
-boundary** — kickoff § 2 item 6 has an answer, and it is neither "smooth scroll"
-nor "snap": walking off an edge reappears on the opposite edge of the same file.
-That makes the loader one-sector-at-a-time, which is the simple case.
+The position is **`DS:0x00` = x, `DS:0x01` = y**. `asm/38B0_cmd_L` applies the
+delta with `adc` then **`and $0x3f`** (file `0x3c9b..0x3cb2`) — but that is the
+**launch** loop (rocket / plane auto-flight), and it is *not* the general world
+model. The general path has its own edge handling, and it is not a wrap:
+
+```
+asm/242D:  al = [DS:00]; cmp $0x40,%al; jae <sector reload>   ; x >= 64
+asm/2434:  al = [DS:01]; cmp $0x40,%al; jae <sector reload>   ; y >= 64
+asm/243E:  [DS:00],[DS:01] = [DS:5A],[DS:5B]; [DS:4A] = 0; call map_read
+```
+
+So walking past 63 reloads the sector and restores the position from the saved
+pair at `DS:5A/5B`, with `DS:4A = 0` (overworld). **Correction, recorded because I
+wrote the wrong thing an hour ago:** the kickoff's straddling question is still
+open. What is now known is narrower and still useful — the viewport is never
+*rendered* across two files, because crossing a boundary triggers a reload rather
+than a straddle — but what sets `DS:49` on that reload, and therefore which sector
+comes next and where the player lands in it, is not yet found. The loader stays
+one-sector-at-a-time either way, which was the practical question.
 
 The direction words are printed by the game followed by `0x0d` and `"CMD: "`
 (`asm/38B0_cmd_L`, file `0x3ce5` etc.), which is exactly the stacked
 `CMD: NORTH` echo in the owner's gameplay screenshot — the echo is game output,
 not terminal line editing.
 
-Caveat to close: the `and $0x3f` is proven in the launch loop. The main movement
-path above uses bare `inc`/`dec` on `DS:00`/`DS:01`, so either the wrap happens
-inside `asm/2623` or the edge tiles reject it. One more pass on `asm/2623` settles
-it, and it decides whether the engine masks or the terrain does.
+Caveat to close: the `and $0x3f` is proven in the launch loop only. The main
+movement path uses bare `inc`/`dec` on `DS:00`/`DS:01` and then the `>= 0x40`
+checks above, so the two paths disagree about the edge by design, and the
+overworld's real extent is set by the sector reload, not by the mask.
+
+The passability call is `asm/2423` (file `0x2623`): it stores the travel mode into
+`DS:0x29` and branches on `[DS:4A] == 0`, i.e. **overworld versus site** — further
+evidence that `DS:4A` is the site kind (0 = overworld, 1 = village, 2 = town,
+4 = tower, from `asm/343F`'s `-TOWN` / `-TOWER` strings and the fan pack's own
+`Files.txt`). Note `DS:0x29` is also the CP3 creation budget, so the byte is
+reused across subsystems.
 
 ### Viewport: still open, and what it is not
 
