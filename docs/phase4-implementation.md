@@ -1357,6 +1357,65 @@ What is still open, and it is now a small question rather than a wall:
    cyan or magenta depending on it. `04 10` is the prime suspect for exactly that,
    which would explain how one pattern serves several terrains.
 
+### Tile cache design: self-bootstrapping, gitignored (owner, 2026-10-27)
+
+The tiles cannot be shipped — they are game content. But the engine must not pay
+extraction cost or require a build step either. The owner's decision:
+
+* on start-up the engine looks for a tile file in **its own** content area;
+* if it is absent, the engine **extracts it from the user's `ultimaii.exe`** and
+  writes it there, so a first run on a fresh install generates its own cache;
+* the cache is **gitignored**, like `engine/build/` and the raw captures.
+
+This is the existing extractor posture (`tools/extract/extractor.py` ->
+`engine/build/gen_content.h`) applied to binary art rather than strings. Two rules
+follow from it and are binding:
+
+1. **The .exe is the only trusted source.** The cache is a derived artifact, so it
+   must carry the source file's SHA-256 and be rebuilt when that digest changes.
+   A stale tile cache that silently keeps working after the player swaps game copies
+   is the failure mode to design against, and it is the same class of bug as the
+   provenance worry in `AGENTS.md`.
+2. **Extraction must be verifiable, not eyeballed.** `tools/extract_tiles.py` already
+   proves the structure (index table at file `0x7BC0`, 64 words, deltas exactly `{66}`,
+   `04 10` header on all 64 tiles, first pixel offset `0x7C42`); the runtime extractor
+   asserts the same invariants and refuses to write a cache when they fail, rather
+   than emitting garbage that renders as nonsense tiles.
+
+### `references/u2upgrade` — secondary source only, and it is already informative
+
+The owner downloaded *The Exodus Project* upgrade to `references/u2upgrade/`
+(gitignored). **Explicit owner instruction: this is an "upgrade", not the original,
+so it is not a trusted reference and may be used only as a secondary source.**
+Nothing in it may establish a fact about the shipped binary; the byte-proven `asm/`
+tree and `original/` remain ground truth.
+
+What it contains, and the one thing the sizes already hint at:
+
+| file | size | note |
+| --- | --- | --- |
+| `CGATILES` | 4160 | = 64-byte header + 64 tiles x 64 px-bytes (2bpp 16x16) |
+| `EGATILES` | 8320 | = 128-byte header + 64 tiles x 128 bytes (4bpp 16x16); exactly 2x CGATILES |
+| `CGACOMP.PAL` | 768 | the composite palette the owner referenced earlier |
+| `EGATHEME.{10,ALT,C64}/` | — | per-theme `EGATILES` + `EGACOLOR` (32 B) |
+| `PICCAS` + `PIC*.IDX` | 16384 / small | **the demo picture this pack is missing** |
+| `u2-*.pat`, `u2up-*.pat` | 22-44 KB | the patch files; `u2-map.pat` is 44158 B |
+
+The hint, stated as a hypothesis and not a conclusion: the upgrade's tile files look
+like the in-exe table with the **per-tile 2-byte headers stripped out into a separate
+leading table** — 64 tiles x 2 header bytes = exactly the 64-byte header, and
+64 x 64 = 4096 pixel bytes, summing to 4160. If that holds, our cache format should
+be the same shape (header table + fixed-stride pixel data), because it separates the
+attribute/palette information from the pattern, which is the open question about the
+`04 10` header. **To verify against `original/`, not against the upgrade**: extract
+with `tools/extract_tiles.py`, compare our 64 headers to `CGATILES`' first 64 bytes,
+and treat any disagreement as a signal that our reading of the header is wrong, not
+as evidence the upgrade is wrong.
+
+Also useful and non-controversial: `PICCAS` is present here, so the missing sixth
+demonstration picture can be tested for CP9 without waiting on the original pack —
+while still being marked as upgrade-sourced content, never committed.
+
 ### Not yet done
 
 * the play draw loop: which function paints the sector, its row and column bounds,

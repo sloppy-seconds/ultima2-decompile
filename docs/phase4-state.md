@@ -22,22 +22,43 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
-- **CP4 recon is in flight.** Kickoff § 2 items 1-2 are answered and logged in
-  `docs/phase4-implementation.md` § CP4, with two rows added to plan § 7 (the
-  tile geometry, and `DS:0x4A` now in doubt as "last key"). Movement is also
-  proven: the **arrow keys** are translated through a scancode table at
-  `CS:0x4F09` (file `0x5109`) into direction codes held as data at
-  `DS:0x26E..0x271`, a rejected step is undone before `--INVALID MOVE!`, and
-  crossing `[DS:00]`/`[DS:01] >= 0x40` reloads the sector through `asm/243E`
-  instead of straddling, so the loader is one-sector-at-a-time. (An earlier draft
-  of this note claimed a 64x64 torus from the `and $0x3f` in `asm/38B0_cmd_L`; that
-  mask is the rocket/plane launch auto-move, not the overworld. Corrected in plan
-  § 7 and the CP4 log.) Next task is the **play draw loop**:
-  start from the callers of `asm/4B26`/`asm/4B4E` (the mode-4 text writer, `ES`=
-  `0xB800` font plane then `0xBA00` attribute plane) and from `asm/08ED`, not from
-  the tile reader. The four direct-`0xB800` sites are text output, not a tile blit,
-  so a tile is 1x1 or 2x2 cells and that is still open. No engine code written yet
-  for CP4.
+- **CP4 is mid-flight and everything is committed.** Read this first after
+  compaction. Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
+  self-patched at file `0x24b7`; tile = **1 byte**, `y*64+x`, 64x64 sector, read
+  `AH=27h CX=0x1000` into `[DS:0x472]`); the sector **write-back** (`asm/2305`) with
+  the owner's decision (a) faithful in `original` mode, (b) copy-on-write for
+  `enhanced`; movement and the **arrow keys** (scancode table at `CS:0x4F09`,
+  direction codes as data at `DS:26E..271`, space = PASS, rejected step undone then
+  `--INVALID MOVE!`); the **viewport measured** from owner screenshots (tile = 16x16
+  px = 2x2 cells, window 20x10 tiles at rows 0-19 full width, player at window tile
+  (9,5), row 24 blank); the **game-data inventory** as a reusable tool
+  (`tools/content_inventory.py` + committed `disasm/content-inventory.tsv`); the
+  **tile art found in the exe** (index at file `0x7BC0` = DS:0x5B0, 64 words, deltas
+  exactly 66, `04 10` header, pixels from `0x7C42`, 16x16 2bpp —
+  `tools/extract_tiles.py` proves and renders it); and **CP4(a) engine code**:
+  `core/world.[ch]` + `--data-dir` + `tests/world_check.c` (42 checks) +
+  `tests/run_cp4.sh`, all green under `make test`.
+- **Next task, in order.** (1) Read `asm/4A74`, `asm/4D35`, `asm/4D5D` and the callers
+  of `asm/4AC3` — that is the draw loop, and it also answers the map byte -> tile
+  entry mapping and what the `04 10` header means (suspect: the mode-4 attribute
+  byte). (2) Build the tile cache: self-bootstrapping, extracted from the user's exe
+  on first run, gitignored, stamped with the source SHA-256 so a stale cache cannot
+  silently survive a swapped game copy. (3) Viewport renderer behind a **tile-ID
+  seam** (renderer chooses the glyph/sprite; game logic never sees a glyph), then
+  movement wiring and encounter rolls. (4) Hand to the owner to walk.
+- **Standing directives from the owner, recorded in plan § CP4.** Validate the engine
+  against the screenshots **as a test** as it is built (SKIP with a named reason when
+  the images are absent, so CI stays honest). Use **REA for engine validation, not for
+  re-deriving the asm** — byte-identity is already proven better by `check_func.py`, and
+  REA's provider here is Ghidra, which found fewer routine starts than the vendored
+  Reko (7 vs 11 of 46). `references/u2upgrade/` is a **secondary source only** and is
+  explicitly not trusted; it is an upgrade, not the original.
+- **Two self-corrections to remember.** The `and $0x3f` "torus" claim was wrong (that
+  mask is the rocket/plane launch auto-move; the overworld reloads the sector at
+  `>= 0x40`). And "no bitmap table in the exe" was wrong twice over — my own scan
+  printed `file 0x7c40` and I dismissed it as zero padding when it is two bytes from
+  the tile table. A negative result from a probe not designed to detect the thing is
+  not a negative result.
 - **Everything is committed.** Working tree clean at the commit that folded D6-D13
   into the plan. No in-flight edits.
 - **CP3 form state**: stats prefill at 10 and are a two-digit shift register (D6,
