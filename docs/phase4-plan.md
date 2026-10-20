@@ -283,7 +283,7 @@ Two consequences worth stating:
 | D2 | Backspace in the name field wipes and restarts the whole field (`asm/5BA5`) | Backspace deletes one character | matches every other input surface players know |
 | D3 | A stat below the minimum, or an overspend, discards the entire generation and restarts at `asm/5698` | The entry is refused in place and the field re-asked | same outcome set, none of the lost work |
 | D4 | No visible cursor during creation | Cursor shown on the active field | without it there is no indication which field is being filled |
-| D5 | No quit key; the program only restarts via `INSERT PROGRAM MASTER` | Ctrl-C quits cleanly from any screen | there is no disk to swap, so the original's exit path does not exist here |
+| D5 | No quit key; `'Q'` in the command set is "QUIT OR SAVE GAME." (string at file `0x3FCA`) and it saved rather than exiting, because on a real machine you swapped disks or powered off | **Ctrl-Q quits** from any screen; **`Q` saves** once the in-game command loop exists (CP4), keeping the original's meaning | there is no disk to swap, so a clean quit is a gap rather than a deviation. Ctrl-Q rather than Ctrl-C because Ctrl-C is a signal the terminal owns and a harness cannot always deliver; note raw mode must clear `IXON` or Ctrl-Q is swallowed as XON |
 
 ## 4. Global acceptance
 

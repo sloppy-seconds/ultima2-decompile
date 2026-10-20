@@ -77,21 +77,23 @@ grep -qE '"gold"[[:space:]]*:[[:space:]]*0' "$WORK/p_empty.out" \
 # of game text: pressing C must change the screen far more than pressing an
 # invalid key does.
 if command -v script >/dev/null 2>&1; then
-    pty_run() {   # $1 = keys, $2 = save dir
-        printf '%b' "$1" | timeout 20 script -qec "./u2 --save-dir $2" \
-            "$WORK/pty.out" >/dev/null 2>&1
+    pty_run() {   # $1 = keys after the intro, $2 = save dir
+        # The intro screens each hold for a key, so a burst delivered in one
+        # write is swallowed by the holds and never reaches the menu. Pace the
+        # intro-skip apart from the body or the run sits until the timeout.
+        { printf '\033'; sleep 1; printf '%b' "$1"; } | timeout 20 script -qec "./u2 --save-dir $2" "$WORK/pty.out" >/dev/null 2>&1
         wc -c <"$WORK/pty.out"
     }
     mkdir -p "$WORK/d_invalid" "$WORK/d_create"
-    invalid_bytes=$(pty_run '\033X' "$WORK/d_invalid")
-    create_bytes=$(pty_run '\033C\n151515151515M11BRITISH\rY' "$WORK/d_create")
+    # \021 is Ctrl-Q: the run ends on its own instead of being killed at the
+    # timeout, which is what used to make this suite take ~40 seconds.
+    invalid_bytes=$(pty_run 'X\021' "$WORK/d_invalid")
+    create_bytes=$(pty_run 'C\n151515151515M11BRITISH\rY\021' "$WORK/d_create")
     [ "$create_bytes" -gt $((invalid_bytes * 2)) ] \
         && ok "C draws a form in a real terminal (${create_bytes}B vs ${invalid_bytes}B for an invalid key)" \
         || bad "C produced no more screen output than an invalid key (${create_bytes}B vs ${invalid_bytes}B)"
-    # The pty run above completed a whole character; prove it reached the disk.
-    # (A "no input" case is not testable here: script(1) keeps the pty master
-    # open after its stdin closes, so a blocked read is correct behaviour, not
-    # a hang — the game is waiting for a key a real player would press.)
+    # The pty run above completed a whole character and then quit on Ctrl-Q;
+    # prove it reached the disk.
     if [ -s "$WORK/d_create/PLAYER" ]; then
         nz=$(python3 -c "import sys;d=open('$WORK/d_create/PLAYER','rb').read();print(sum(1 for b in d if b))")
         [ "$nz" -gt 1 ] \

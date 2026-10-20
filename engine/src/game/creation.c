@@ -67,6 +67,10 @@ static int wait_key(u2_ctx *ctx)
 {
     u2_key k;
     if (!seam_key_wait(ctx, &k)) return -1;   /* input exhausted: the player left */
+    if (k.ch == 0x11) {                       /* Ctrl-Q quits from anywhere (D5) */
+        ctx->exit_code = 0;
+        return -1;
+    }
     return k.ch;
 }
 

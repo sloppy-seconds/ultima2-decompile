@@ -313,6 +313,16 @@ int u2_title_flow(u2_ctx *ctx)
             if (u2_creation_flow(ctx) < 0)
                 stub_not_implemented(ctx, "create: save path unusable");
             break;
+        case 0x11:                              /* Ctrl-Q: quit (deviation D5) */
+            /* The original has no quit path: 'Q' in the command set is
+             * "QUIT OR SAVE GAME." (string at file 0x3FCA) and it saved rather
+             * than exiting, because on a real machine you switched disks or
+             * powered off. There is no disk to swap here, so a clean quit key is
+             * a gap rather than a deviation. Ctrl-Q rather than Ctrl-C because
+             * Ctrl-C is a signal the terminal owns and a harness cannot always
+             * deliver. */
+            ctx->exit_code = 0;
+            return 0;
         default:                                /* asm/03A6: redraw */
             break;
         }

@@ -39,6 +39,11 @@ static int term_set_raw(u2_ctx *ctx, int on)
         return -1;
     t = ti->saved;
     t.c_lflag &= (tcflag_t)~(ICANON | ECHO);
+    /* IXON must go: Ctrl-Q is XON, and with start/stop flow control enabled the
+     * terminal driver consumes it before the program ever sees a byte. The
+     * engine uses Ctrl-Q as its quit key, so leaving IXON on would make the key
+     * do nothing with no error and no hint why. */
+    t.c_iflag &= (tcflag_t)~(IXON | IXOFF | IXANY);
     t.c_cc[VMIN] = 0;
     t.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSANOW, &t) != 0)
