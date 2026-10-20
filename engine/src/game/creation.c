@@ -458,6 +458,7 @@ int u2_creation_flow(u2_ctx *ctx)
         while (!done) {
             int c = wait_key(ctx);
             if (c < 0) return 0;                    /* bailed or input ended */
+            if (c == 0x1b) return 0;                /* ESC abandons creation (D11) */
 
             if (c == '\t' || c == U2_KEY_DOWN || c == U2_KEY_RIGHT) {
                 f.sel = (f.sel + 1) % NFIELDS;      /* D1 */

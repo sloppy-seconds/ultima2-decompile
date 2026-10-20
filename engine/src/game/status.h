@@ -20,19 +20,22 @@
  * and the GOLD= tail restores it to 0x1d (file 0x5396), which is reproduced
  * here because the wrap test in char_print reads that margin.
  *
- * OPEN QUESTION, flagged rather than guessed: the display loads a byte pair and
- * hands it to a print helper that has not been decoded yet, so whether the pair
- * is binary little-endian or packed decimal is not proven. The creation routine
- * stores plain 4s (asm/5400 file 0x5BEB: `mov [0x51],$0x4`), which only reads
- * correctly as binary, so this file formats them as binary little-endian. If
- * the owner's playthrough of the original shows two-digit or BCD output, this
- * is the place that is wrong and the fix is local.
+ * RESOLVED 2026-10-27, was an open question: the pair is packed decimal and the
+ * print helper is asm/55B5, which emits a byte as its two nibbles each OR'd with
+ * '0' with no zero suppression. asm/53A5 calls it on the low byte then the high
+ * byte, so a 4-digit BCD value held little-endian renders byte-swapped: food 3
+ * (stored 03 00) displays "0300". Owner-confirmed against the original — four
+ * digits, food 0300, gold 1200. Reproduced exactly, quirk included.
  */
 
 #include "core/ctx.h"
 
 /* Draw the four status lines from the current state. */
 void u2_status_draw(u2_ctx *ctx);
+
+/* Engine-authored detail block for the 'P' placeholder: name, sex, race, class
+ * and the six stats as stored. Not in the original (deviation D13). */
+void u2_status_draw_character(u2_ctx *ctx);
 
 /* Draw one value at its proven position (used by the CP3 test). */
 void u2_status_draw_hp(u2_ctx *ctx);

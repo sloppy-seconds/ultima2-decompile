@@ -193,6 +193,10 @@ static int present_poem(u2_ctx *ctx)
 /* asm/0242: draw the title and menu. */
 static void draw_title(u2_ctx *ctx)
 {
+    /* The menu owns the full width. Anything that draws the status block narrows
+     * the right margin to 0x1d on the way out (asm/5396), and returning to the
+     * menu without restoring it wrapped the menu text at 25 columns. */
+    ctx->state.right_margin = 0x28;
     u2_vram_clear(&ctx->vram, 0x07);
     draw_all(ctx, TITLE, NARR(TITLE));
     seam_present(ctx);
@@ -232,8 +236,14 @@ static void stub_not_implemented(u2_ctx *ctx, const char *what)
 static void run_demo(u2_ctx *ctx)
 {
     for (;;) {
+        /* ESC abandons the demonstration (deviation D12). The original has no
+         * way out once you start it; the picture slideshow arrives at CP9 and
+         * until then this is a wall of text with an exit only if you add one. */
+        u2_key k;
+        if (seam_key_poll(ctx, &k) && k.ch == 0x1b) return;
         if (present_poem(ctx) || flow_stopped(ctx))
             return;
+        if (seam_key_poll(ctx, &k) && k.ch == 0x1b) return;
         if (present_intro(ctx) || flow_stopped(ctx))
             return;
     }
@@ -257,11 +267,13 @@ static void run_play(u2_ctx *ctx)
 
         if (r == U2_SAVE_OK) {
             /* The load is real; the world is not. CP4 owns the overworld, so the
-             * placeholder says so while still showing the CP3 status block, so
-             * the loaded character is visible rather than implied. */
+             * placeholder says so while still showing what was read from disk —
+             * the point is visual proof the save round-tripped, not a stub that
+             * implies one. */
             seam_clear_screen(ctx);
-            seam_str_out_at(ctx, 1, 12, "[engine] OVERWORLD GOES HERE (CP4)");
             u2_status_draw(ctx);
+            u2_status_draw_character(ctx);
+            seam_str_out_at(ctx, 1, 24, "[engine] OVERWORLD GOES HERE (CP4)");
             seam_present(ctx);
             (void)wait_choice(ctx);
             return;
@@ -312,6 +324,9 @@ int u2_title_flow(u2_ctx *ctx)
              * here only after a disk swap, which the engine does not need. */
             if (u2_creation_flow(ctx) < 0)
                 stub_not_implemented(ctx, "create: save path unusable");
+            /* Ctrl-Q inside the form must leave the game, not just the form.
+             * The flow records the intent on the context and unwinds here. */
+            if (ctx->exit_code) return 0;
             break;
         case 0x11:                              /* Ctrl-Q: quit (deviation D5) */
             /* The original has no quit path: 'Q' in the command set is
