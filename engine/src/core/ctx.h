@@ -44,6 +44,8 @@ typedef struct u2_ctx {
                                the flow treats it as "the player left" */
     const char *content_source; /* set by the game layer from the generated header */
     const char *script_path;/* --script PATH (input_script backend input) */
+    const char *save_dir;    /* --save-dir PATH; "saves" when unset (core/save.h) */
+    int save_seeded;         /* set when the blank PLAYER file was created here */
     int exit_code;          /* set by game code / backends to force termination */
 
     /* Per-backend private state, one slot each so backends stay independent

@@ -708,4 +708,83 @@ classified as a function**, not mis-decoded code. It does not affect byte
 fidelity, but it means the function corpus contains at least one non-function.
 Left as-is; noted so nobody spends a session "fixing" it.
 
+---
+
+## CP3 (a) — save/disk model + player record — done 2026-10-27
+
+Owner asked how the engine handles "insert a disk to save onto", with the brief:
+faithful but pragmatic, never make the game impossible over a disk we cannot
+hand it. Design recorded in `docs/phase4-plan.md` § CP3 design; implemented in
+`engine/src/core/save.[ch]`.
+
+### The mechanism, and why it was invisible to grep
+
+`asm/52CA` builds an FCB at `DS:245`: it zeroes the buffer (so the **drive byte
+is 0 = default drive**), copies **8 bytes from the caller's own code stream** as
+the name, space-pads the extension, then calls DOS AH=0Fh (select drive). If
+that fails it prints the inline `(INSERT ... DISK)` prompt, waits for ESC and
+retries forever; only on success does it perform the staged real call.
+
+That resolves two puzzles at once:
+
+* the inline `PLAYER  ` strings are **FCB name operands**, not stray data — same
+  class as the inline `str_out` strings;
+* the "insert disk" experience is a **retry loop on drive-select failure**, not a
+  disk-swap API. There is nothing to emulate beyond "path unusable -> prompt".
+
+Four INSERT prompts exist: `(INSERT PLAYER DISK)` at `0x0979` and `0x73D2`,
+`(INSERT A BLANK PLAYER DISK)` at `0x5615`, and `(INSERT GALACTIC DISK)` at
+`0x740A` — the last one is why the deviation below is stated explicitly rather
+than quietly taken.
+
+### Mapping chosen
+
+`--save-dir` (default `./saves`) is the modern default drive; the file is
+`PLAYER` with no extension, so a real DOSBox save drops straight in. A missing
+file is seeded from the blank template, which is byte-identical to the pristine
+shipped disk — and because `DS:36 == 0` is the original's own "generate a
+character" test, faithful and pragmatic are literally the same branch. Only the
+256 record bytes are written; the 128-byte tail survives, so saves stay
+interchangeable both ways. An unusable path returns `U2_SAVE_NOT_READY` and shows
+the INSERT prompt instead of inventing somewhere to write.
+
+### Creation flow, fully decoded (was: the open half of CP3)
+
+From `disasm/redecoded/5400_sub_5400.txt`, all proven by assignment:
+
+* **Name**: `[0x36..0x45]` cleared, then typed; backspace restarts the field,
+  CR ends it. 16 bytes on disk.
+* **Class** `[0x47]`: read as `'1'..'4'` (FIGHTER/CLERIC/WIZARD/THIEF) then
+  **converted** — `sub $0x31` — so it is stored 0..3.
+* **Race** `[0x48]`: stored **as typed** (`'1'..'4'`), no conversion. The
+  asymmetry with class is real and easy to get wrong.
+* **`[0x49]` = 2, `[0x5A]` = 20, `[0x5B]` = 20** at creation; meaning unknown,
+  named `unk_*` rather than invented.
+* **HP=4, FOOD=4, GOLD=4** (`[0x51]`, `[0x53]`, `[0x58]`).
+* `SATISFACTORY (Y/N)`: `N` jumps back to `0x5698` and re-rolls everything;
+  anything other than `Y`/`N` re-prompts.
+
+`state.h` now carries the record as named fields with `_Static_assert` on every
+offset, and `save.h` asserts the record base is the `name` field, so a struct
+edit that moves the record fails at compile time.
+
+### Test
+
+`tests/save_check.c` (23 assertions) + `tests/run_cp3.sh`. It checks the blank
+template byte-for-byte, that `ensure()` is idempotent, a full 256-byte round
+trip (not just the named fields), that the tail survives and that **nothing else
+in the tail was invented by the engine**, and three refusal cases: save-dir
+pointing at a file, a short `PLAYER` file (not clobbered), and an oversized one
+(not truncated). Refusals matter because silently rewriting a user's file is the
+worst failure mode available here.
+
+`make test` = CP0 11/11, CP1 9/9, CP2 12/12, CP3 4/4. `engine/saves/` is
+gitignored and a test asserts no headless run leaves a `PLAYER` in the tree.
+
+### Still to do for CP3
+
+`game/creation.c` (the interactive flow), `game/status.c` (status bar), the
+extractor entry for the form blob at file `0x56f4`, and wiring `C` at the menu
+to reach creation instead of the stub notice. Then the owner gate.
+
 

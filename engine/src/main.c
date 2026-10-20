@@ -37,6 +37,8 @@ static void usage(const char *argv0)
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
         "  --rng-sequence N  print N rand_byte values and exit (test vector)\n"
+        "  --save-dir DIR    player-record directory, the modern default drive\n"
+        "                    (default: ./saves; holds the byte-compatible PLAYER file)\n"
         "  --trace[=FILE]  log every seam call with its asm address\n",
         argv0);
 }
@@ -86,6 +88,8 @@ int main(int argc, char **argv)
             ctx.mode = U2_MODE_HEADLESS;
         } else if (strcmp(a, "--script") == 0 && i + 1 < argc) {
             ctx.script_path = argv[++i];
+        } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {
+            ctx.save_dir = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {

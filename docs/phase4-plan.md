@@ -114,6 +114,38 @@ Stats, sex (`print_sex_*`), `show_hitpoints`, `status_*` lines, food/exp/gold
 display (selfmod-adjacent `FOOD=`/`EXP=`/`GOLD=` sites: use CP0 capture).
 **Gate:** owner playthrough: create character, correct status bar.
 
+#### CP3 design — the save/disk model (owner-approved 2026-10-27)
+
+The original asks the player to insert a disk to save onto. The engine cannot
+hand back a physical floppy, and must not become unplayable because of one. The
+model below is faithful where it can be and pragmatic where it must be.
+
+**How the original actually works.** All disk I/O goes through the DOS wrapper
+at `asm/52CA`, which takes the DOS function number in AH from its caller (which
+is why a scan of every `int 21h` site shows no write function — the numbers are
+dynamic). Player I/O is FCB random access: AH=27h read, AH=28h write, CX=0x100,
+DX=0x36, with the FCB name `PLAYER  ` copied out of the caller's own code
+stream. The wrapper validates the drive with AH=0Fh; on failure it prints its
+inline `(INSERT ... DISK)` prompt, waits for ESC and retries forever. The FCB
+drive byte is 0 — the **default drive** — so the game plays in whatever
+directory it was launched from. There is no disk-swap API; the retry loop *is*
+the disk-swap experience.
+
+| concern | engine behaviour | why |
+| --- | --- | --- |
+| save location | `--save-dir DIR`, default `./saves`, created on demand | maps the original's "default drive" onto a directory |
+| file name | `PLAYER`, no extension | matches the FCB name, so a real DOSBox save drops straight in |
+| missing file | seed from the blank template: 384 bytes, all zero except `0x1a` at `0x100` | byte-identical to the pristine shipped disk; and `DS:36 == 0` is the original's own "generate a character" test, so faithful and pragmatic are the same path |
+| what gets written | only the 256 record bytes at `DS:36..135`; the 128-byte tail is preserved | keeps saves interchangeable in both directions |
+| unusable path | `U2_SAVE_NOT_READY` -> show the INSERT prompt and wait | the honest analogue of a drive that is not ready; the engine never invents a place to write |
+| `(INSERT GALACTIC DISK)` | **deliberate deviation**: all world content comes from the user's extracted copy at startup, so there is no second disk to swap | documented, not faked; the prompt becomes unreachable |
+| quicksaves / slots | **not now.** They are a filename layer over this same record format (`PLAYER.01`, `autosave`), so they need no format change and no migration | owner wants modern management eventually, faithfulness first |
+
+**Consequences that are already binding:** `rng_state` stays out of the save
+(owner decision, § Deferred decisions in the state file), and the 128-byte tail
+whose meaning is still an open question is reproduced verbatim rather than
+interpreted.
+
 ### CP4 — Overworld + movement
 `map_tile_ptr` sector model, direction messages, `invalid_move_msg`,
 `move_only_on_foot`, terrain encounter rolls (`rand_byte` semantics).

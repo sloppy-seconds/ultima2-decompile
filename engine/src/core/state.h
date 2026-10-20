@@ -44,13 +44,37 @@ typedef struct u2_state {
                                          sites asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm,
                                          asm/4A2F_sub_4a2f.asm; read by char_print's wrap
                                          test in asm/504A_sub_504a.asm */
-    /* 0x32 */ uint8_t reserved_32[0x18];
+    /* --- player record: the 256 bytes the game saves, DS:36..135 ----------
+     * Proven by assignment in the creation routine (see
+     * disasm/redecoded/5400_sub_5400.txt) and by the FCB read/write sites in
+     * asm/5400 and asm/3823; narrative in
+     * docs/phase4-implementation.md § CP2.5. Anything not proven by an
+     * assignment or a display site stays in `reserved` — never guessed. */
+    /* 0x32 */ uint8_t reserved_32[4];
+    /* 0x36 */ uint8_t name[16];      /* cleared, then typed; entry ends on CR */
+    /* 0x46 */ uint8_t sex;           /* 'M' or 'F' as typed, not converted */
+    /* 0x47 */ uint8_t pclass;        /* 0..3 after `sub $0x31`: FIGHTER..THIEF */
+    /* 0x48 */ uint8_t race;          /* '1'..'4' as typed: HUMAN ELF DWARF HOBBIT */
+    /* 0x49 */ uint8_t unk_49;        /* set to 2 at creation; meaning unknown */
     /* 0x4A */ uint8_t last_key;      /* last key byte consumed by the command loop */
-    /* 0x4B */ uint8_t reserved_4B[0x0D];
+    /* 0x4B */ uint8_t stat_str;
+    /* 0x4C */ uint8_t stat_agi;
+    /* 0x4D */ uint8_t stat_sta;
+    /* 0x4E */ uint8_t stat_cha;
+    /* 0x4F */ uint8_t stat_wis;
+    /* 0x50 */ uint8_t stat_int;
+    /* 0x51 */ uint8_t hp;            /* set to 4 at creation */
+    /* 0x52 */ uint8_t unk_52;        /* adjacent to hp; no assignment traced yet */
+    /* 0x53 */ uint8_t food;          /* set to 4 at creation; BCD pair with 0x54,
+                                        read at asm/5129_sub_5129.asm (FOOD=) */
+    /* 0x54 */ uint8_t food_hi;
+    /* 0x55 */ uint8_t reserved_55[3];
     /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site
                                          asm/5175_sub_5175.asm (string at file 0x5382) */
     /* 0x59 */ uint8_t gold_hi;
-    /* 0x5A */ uint8_t reserved_5A[0x09];
+    /* 0x5A */ uint8_t unk_5A;        /* set to 20 at creation; meaning unknown */
+    /* 0x5B */ uint8_t unk_5B;        /* set to 20 at creation; meaning unknown */
+    /* 0x5C */ uint8_t reserved_5C[7];
     /* 0x63 */ uint8_t spell_pick;    /* readied spell slot */
     /* 0x64 */ uint8_t reserved_64[0x1D5];
     /* 0x239 */ uint8_t story_flag;   /* "story/poem shown"; cleared at asm/0133_sub_0133.asm,
@@ -87,6 +111,15 @@ _Static_assert(U2_OFF(cursor_col) == 0x02E, "cursor_col moved");
 _Static_assert(U2_OFF(cursor_row) == 0x02F, "cursor_row moved");
 _Static_assert(U2_OFF(right_margin)== 0x031, "right_margin moved");
 _Static_assert(U2_OFF(last_key)   == 0x04A, "last_key moved");
+_Static_assert(U2_OFF(name)       == 0x036, "name moved — it anchors the save record");
+_Static_assert(sizeof(((u2_state *)0)->name) == 16, "name is 16 bytes");
+_Static_assert(U2_OFF(sex)        == 0x046, "sex moved");
+_Static_assert(U2_OFF(pclass)     == 0x047, "pclass moved");
+_Static_assert(U2_OFF(race)       == 0x048, "race moved");
+_Static_assert(U2_OFF(stat_str)   == 0x04B, "stat_str moved");
+_Static_assert(U2_OFF(stat_int)   == 0x050, "stat_int moved");
+_Static_assert(U2_OFF(hp)         == 0x051, "hp moved");
+_Static_assert(U2_OFF(food)       == 0x053, "food moved");
 _Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
 _Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
 _Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");

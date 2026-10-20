@@ -10,7 +10,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
 | CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
-| CP3 | Character creation + status line | **in-progress** | recon complete — see § CP3 and § CP2.5 in the impl log. Engine code not yet written | 2026-10-27 |
+| CP3 | Character creation + status line | **in-progress** | (a) save/disk model + player record **done** — `core/save.[ch]`, `--save-dir`, 23-assertion `save_check`, creation flow fully decoded. (b) todo: `game/creation.c`, `game/status.c`, extractor entry for the form blob, wire `C` at the menu | 2026-10-27 |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
@@ -21,6 +21,13 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 (owner): save/disk model approved.** Engine maps the original's
+  "insert a disk" onto `--save-dir` (default `./saves`) with a byte-compatible
+  `PLAYER` file; missing file is seeded from the pristine blank template;
+  unusable path shows the INSERT prompt rather than inventing a location;
+  `(INSERT GALACTIC DISK)` is a documented deviation because content is loaded
+  at startup. Quicksaves/slots deferred as a filename layer over the same
+  record format. Full design in `docs/phase4-plan.md` § CP3 design.
 - **2026-10-27 (owner): save-format decision, binding for CP3 onward.** Engine
   save games must be **byte-compatible with the original player record**,
   so `rng_state` (and anything else that is not in the original
