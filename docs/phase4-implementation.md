@@ -1250,6 +1250,57 @@ they are in the plan rather than only in a commit message.
      byte-proven `asm/` tree is the stronger artifact and stays ground truth. REA
      corroborates findings; it does not replace them.
 
+### Game data inventory: what every file next to the game is for
+
+Prompted by the owner asking whether the tile art lived in the game data rather
+than the executable. Catalogued every file in `original/` (excluding `updated/`,
+which is the fan pack and not the original), with the code that opens it:
+
+| file | count x size | what it is | evidence |
+| --- | --- | --- | --- |
+| `mapxNN` | 33 x 4224 | 64x64 tile **IDs** (4096 B) + 128 B tail | read `asm/2290` CX=0x1000; written `asm/2305`; indexed `asm/50B3` |
+| `monxNN` | 33 x 384 | 256 monster-ID slots (16x16) + 128 B tail | read `asm/22D5` CX=0x100; values are small IDs (0x1c..0x24) |
+| `tlkxNN` | 15 x 384 | street-NPC dialogue, **high-bit-set ASCII** | decoded below |
+| `monsters` | 1 x 2176 | monster table, records of small integers | **no inline FCB name found** — open |
+| `pic*` | 6 files, 16384 (16512 for the dragon) | full-screen 2bpp demonstration pictures | `asm/03AC` reads each with CX=0x4000 |
+| `player` | 1 x 384 | the 256-byte save record + 128 B tail | `asm/0796`, `asm/07F3` |
+| `CHOICE.EXE` | 49152 | **Microsoft's `choice` utility**, used by `run.bat` — not game content | `run.bat` calls `choice /C:123 /N` |
+| `run.bat` | 459 | menu: original at `cpu cycles=400`, updated at 5000 | read in full |
+| `ultimaii.pif` | 967 | Windows 3.x PIF shortcut, not game data | header contains `ULTIMAI` |
+| `ultimaii.exe` | 37344 | the game | — |
+
+Four things this settled that were not known before:
+
+1. **`tlkx` files are high-bit-set ASCII — the Apple II text convention.** Masking
+   `0x80` turns them straight into readable English dialogue in the shape
+   `<NPC NAME> <VERB>: <LINE>`, one record per street NPC — the same NPCs the
+   `asm/street_*` handlers name. The dialogue itself is game content and is
+   deliberately **not** reproduced here; the point is the encoding, which is
+   confirmed across all 15 files (byte 0 is a marker, then high-bit-set text,
+   `0x8D` ending lines). **The extractor must mask the high bit** for talk files or
+   every string arrives as mojibake.
+2. **There is no sprite or tile art anywhere in the game data.** The only bitmaps
+   are the six full-screen demonstration pictures. So the tile art is in
+   `ultimaii.exe`, and the draw loop is what will expose the table. This also means
+   my earlier claim that "there is no bitmap table in the exe" was unsupported and
+   is **retracted**: the scan looked for bytes in `{00,55,AA,FF}`, but a 2bpp CGA
+   row can be any byte at all, so that scan could not have found the table.
+3. **`PICCAS` is referenced by the demo but missing from this pack.** `asm/03AC`
+   loads `PICOUT`, `PICTWN`, `PICCAS`, `PICDNG`, `PICSPA`, `PICMIN`; `original/`
+   ships `picout pictwn picdng picspa picmin` plus `picdra` (the intro dragon) and
+   **no `piccas`**. The fan pack supplies it (`Files.txt`: "PICCAS - CGA Castle Demo
+   Screen"). So one of the six demonstration pictures cannot load from the shipped
+   content — a CP1/CP9 gap, recorded rather than discovered at the gate.
+4. **`run.bat` settles the patch-level worry.** The pack offers the original binary
+   at `cpu cycles=400` and the fan upgrade as a separate opt-in under `updated/`.
+   `ultimaii.exe` is the original path, not a patched one, which is the clearest
+   statement of provenance we have found.
+
+Still open from this inventory: what reads `monsters` (no inline FCB name matches
+it), what the 128-byte tails of the `mapx` files hold (byte 0 is `0x1A` in all 82
+data files, and most map tails carry 127 further non-zero bytes that the 4096-byte
+read never touches), and why a literal `MAPX30` sits at file `0x7544`.
+
 ### Not yet done
 
 * the play draw loop: which function paints the sector, its row and column bounds,
