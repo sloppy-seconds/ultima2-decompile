@@ -1,8 +1,8 @@
 # Phase 3 Summary — Clean Byte-Exact ASM Reconstruction
 
-Status: **built, awaiting owner sign-off (CP6 🔒)**. Date: 2026-10-20.
-Plan: `docs/phase3-plan.md`. Log: `docs/phase3-implementation.md`.
-State: `docs/phase3-state.md`.
+Status: **COMPLETE — owner sign-off 2026-10-20** (CP6 gate: owner booted and
+played the clean-tree rebuild). Plan: `docs/phase3-plan.md`.
+Log: `docs/phase3-implementation.md`. State: `docs/phase3-state.md`.
 
 ## What this is
 

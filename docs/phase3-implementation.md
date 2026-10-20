@@ -282,7 +282,7 @@ Committed `phase3: CP5 wave2 (218) + defect dispositions + dialect_masm.py`.
 
 ---
 
-## CP6 — Full-tree rebuild from cleaned tree — built, awaiting sign-off 🔒
+## CP6 — Full-tree rebuild from cleaned tree — done (owner-approved 2026-10-20) 🔒
 
 **`tools/assemble_clean.sh`**: rebuilds the ENTIRE 37,344-byte binary from the
 cleaned tree only — prologue (MZ+PSP mechanical blob) + every function's
@@ -294,4 +294,8 @@ CLEAN REBUILD BYTE-MATCH: 37344 bytes identical
 ```
 
 `assemble_all.sh` (Phase 2 mechanical oracle) re-verified green alongside.
-Summary written to `disasm/phase3-summary.md`. **STOP — owner sign-off gate.**
+Summary written to `disasm/phase3-summary.md`.
+
+**Gate:** owner approved 2026-10-20 after booting and playing
+`build/ultimaii-clean.bin` (the clean-tree rebuild, md5-identical to the
+original). **Phase 3 complete.**
