@@ -31,6 +31,12 @@ build/
 .DS_Store
 *.swp
 
+# Owner-supplied screenshots of the running game (evidence for on-screen geometry).
+# The image is derived from copyrighted game art, so the file stays out of git and
+# only the measurements we derive from it are committed, in docs/. See
+# docs/phase4-implementation.md § CP4 "Evidence gap".
+captures/screenshots/
+
 # User-authorized external raw runtime captures (see captures/external-20261019/PROVENANCE.md).
 # Raw dumps stay out of git per the licensing policy; the provenance note is committed.
 captures/external-20261019/**/*.json

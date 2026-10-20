@@ -1145,13 +1145,49 @@ tile-size question is back on the table as 1x1 or 2x2 cells.
 
 ### Open for the owner
 
-1. **Does `--data-dir` get written to?** The original writes the sector back
-   (`asm/2305`). Options: (a) faithful — mutate the player's own map files; (b)
-   copy-on-write into the save directory on first modification, leaving the
-   content directory read-only; (c) never write and log the deviation. This is a
-   product decision, so it is stated rather than picked quietly.
+1. **Does `--data-dir` get written to?** — **answered by the owner 2026-10-27:**
+   **(a) faithful in `original` mode**, the engine writes back into the player's own
+   sector files, and **(b) copy-on-write is the candidate for `enhanced` mode**.
+   Consequences, so nobody rediscovers them later:
+   * `--data-dir` must be **writable** in `original` mode, so it needs the same
+     not-ready handling the save path already has (`U2_SAVE_NOT_READY`): if the
+     directory is read-only or missing, say so rather than inventing a place to
+     write. A silently skipped sector write would be worse than the original, which
+     has no way to lose a map change.
+   * writes must be **atomic per sector** (temp + rename, or the original's
+     fixed-size in-place block write). A crash mid-sector leaves a corrupt world file
+     the player cannot restore, and unlike the `PLAYER` record there is no pristine
+     copy in the save directory.
+   * because the sector is dirtied by gameplay (`asm/2C38` writes tile bytes back
+     into the buffer, `asm/0839` writes the player marker), the engine must write
+     **only** sectors it actually loaded, and only when dirty — not rewrite every
+     file on quit.
+   * `enhanced` mode's copy-on-write is a content-directory overlay, so it belongs
+     with CP11's content surface rather than being invented here.
+   * the shipped content in `references/ultima2/` remains the recovery path if a
+     player's world files are damaged by a bad run, and restoring from it needs the
+     owner's approval each time (`AGENTS.md` § 0).
 2. Whether the EGA reconstruction is ever in scope. If it is, it is its own
    checkpoint with its own asm-equivalent spec, not a CP9 subtask.
+
+### Evidence gap: the play screenshot is not in the project
+
+Several CP4 numbers (tile size in cells, the 9-left / 10-right split, the window
+bounds) trace back to a gameplay screenshot the owner pasted into a chat on
+2026-10-27. **The image was never saved**, so no later session can re-measure it:
+`find` over the project returns no image files, and `docs/` carries only the prose
+conclusions. That is why the kickoff records "memory has been off by one twice
+today" — the numbers were being re-quoted rather than re-measured.
+
+The fix is not a live DOSBox capture. It is the same file, committed to disk and
+measured with code once: the pixel grid gives the tile size, the window bounds and
+the player's offset inside the window directly, which is stronger evidence than an
+eyeball and stronger than a recollection. What a screenshot *cannot* settle is
+motion — whether the view scrolls per step or redraws, and what happens at a sector
+edge — and those are already answered from `asm/` (the `>= 0x40` sector reload).
+
+Per the content rule, the derived measurements go in the docs and the image itself
+stays gitignored alongside the raw `captures/` blobs.
 
 ### Not yet done
 
