@@ -95,9 +95,8 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
  * the live capture). The sector digits and the entry pair all come from the
  * record, so a loaded character stands where the save left it.
  *
- * The second digit is read from state.last_key immediately after the load,
- * before any further key can overwrite it (state.h documents the dual
- * reading; the overworld captures the digits into ow at open time).
+ * The second digit is read from state.sector_second immediately after the
+ * load; the overworld captures the digits into ow at open time.
  */
 int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
 {
@@ -106,7 +105,7 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     ow->x = ctx->state.entry_x;
     ow->y = ctx->state.entry_y;
     ow->sector_hi = ctx->state.sector_first;
-    ow->sector_lo = ctx->state.last_key;
+    ow->sector_lo = ctx->state.sector_second;
     ow->off_map_tile = 0xFF;      /* file 0x0A67: mov $0xff,[0x12] */
     return overworld_open(ctx, ow);
 }

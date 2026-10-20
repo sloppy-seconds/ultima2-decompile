@@ -65,19 +65,20 @@ typedef struct u2_state {
                                         * patches [0x49],[0x4A] into MAPXFF. Set to 2
                                         * at creation (redecoded 5400 tail, file 0x5BE8),
                                         * so a fresh character starts in sector 2x. */
-    /* 0x4A */ uint8_t last_key;       /* DUAL READING, open question: plan §1 says
-                                        * "last key", but the filename patch (asm/2290),
-                                        * the sector reload zeroing it (asm/243E), the
-                                        * town/tower writers (asm/343F) and the P-path
-                                        * branch `cmp $0x4; jb` (file 0x0A76) all say it
-                                        * is the sector's second digit / site kind
-                                        * (0 overworld, 1 village, 2 town, 4 tower).
-                                        * seam.c still writes polled keys here, which is
-                                        * only safe while the reading stays unresolved;
-                                        * the P path captures it at world entry and the
-                                        * creation tail zeroes it the way a fresh DS
-                                        * would be. Renaming needs the CP2 baseline
-                                        * moved — owner call. */
+    /* 0x4A */ uint8_t sector_second;  /* second digit of the sector filename and,
+                                        * outside a sector read, the site kind:
+                                        * 0 overworld, 1 village, 2 town, 4 tower.
+                                        * Evidence: asm/2290 patches [0x49],[0x4A]
+                                        * into MAPXFF; asm/243E zeroes it on sector
+                                        * reload; asm/343F writes 2 and 4 beside the
+                                        * -TOWN/-TOWER strings; the P path branches
+                                        * `cmp $0x4` on it (file 0x0A76). The plan §1
+                                        * "last key" reading is RETIRED: seam.c used
+                                        * to store polled keys here, which corrupted
+                                        * the saved sector digit (observed live as
+                                        * "sector 289" — 'Y' from the creation
+                                        * confirm). cmd_D's compares against 4 and 5
+                                        * are site-kind compares, not key compares. */
     /* 0x4B */ uint8_t stat_str;
     /* 0x4C */ uint8_t stat_agi;
     /* 0x4D */ uint8_t stat_sta;
@@ -139,7 +140,7 @@ _Static_assert(U2_OFF(player_y)   == 0x024, "player_y moved");
 _Static_assert(U2_OFF(cursor_col) == 0x02E, "cursor_col moved");
 _Static_assert(U2_OFF(cursor_row) == 0x02F, "cursor_row moved");
 _Static_assert(U2_OFF(right_margin)== 0x031, "right_margin moved");
-_Static_assert(U2_OFF(last_key)   == 0x04A, "last_key moved");
+_Static_assert(U2_OFF(sector_second)== 0x04A, "sector_second moved");
 _Static_assert(U2_OFF(sector_first)== 0x049, "sector_first moved");
 _Static_assert(U2_OFF(entry_x)    == 0x05A, "entry_x moved");
 _Static_assert(U2_OFF(entry_y)    == 0x05B, "entry_y moved");

@@ -427,11 +427,8 @@ static void commit(u2_ctx *ctx, form *f)
     memcpy(st->name, f->name, (size_t)f->name_len);
 
     st->entry_x = 20; st->entry_y = 20; st->sector_first = 2;  /* 0x5BDC..0x5BE8 */
-    /* The original's DS:4A is 0 at this point (fresh segment, creation never
-     * writes it) and it is saved into the record as the sector's second digit.
-     * The engine's seam writes polled keys there (see state.h dual reading),
-     * so zero it to match what the original puts on disk. */
-    st->last_key = 0;
+    /* DS:4A (sector_second) is never written by creation: a fresh segment
+     * holds 0 there and the saved record carries it as the overworld digit. */
     st->hp = 4; st->food = 4;                          /* 0x5BEB..0x5BF3 */
     st->gold_lo = 4; st->gold_hi = 0;
 }

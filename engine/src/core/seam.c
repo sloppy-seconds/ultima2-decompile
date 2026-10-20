@@ -133,7 +133,9 @@ int seam_key_poll(u2_ctx *ctx, u2_key *out)
          * command dispatch therefore only ever sees uppercase. */
         if (out->ch >= 'a' && out->ch <= 'z')
             out->ch = (uint8_t)(out->ch & 0xDF);
-        ctx->state.last_key = out->ch;
+        /* No "last key" state byte: DS:0x4A is the sector's second digit /
+         * site kind (see state.h). Storing the polled key here corrupted the
+         * saved sector digit in engine-written PLAYER records. */
         u2_trace(ctx, "key_poll", "4F4D", "ready=1 ch=0x%02X", out->ch);
     } else {
         /* "input finished for good" is the scripted stand-in for a player who
@@ -149,8 +151,6 @@ int seam_key_wait(u2_ctx *ctx, u2_key *out)
 {
     int got = ctx->input->wait(ctx, out);
     u2_trace(ctx, "key_wait", "4F4D", "got=%d", got);
-    if (got)
-        ctx->state.last_key = out->ch;
     return got;
 }
 

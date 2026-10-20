@@ -57,7 +57,7 @@ object:
  "platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},
  "screen":{"cols":40,"rows":25,"cells_written":592,"cursor":{"row":19,"col":12,"visible":0}},
  "state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":5},
-          "margins":{"left":0,"right":40},"text_attr":15,"story_flag":1,"last_key":68,
+          "margins":{"left":0,"right":40},"text_attr":15,"story_flag":1,"sector_second":0,
           "gold_bcd":[0,0],"gold":0,"spell_pick":0,
           "rng":{"state":[2,2,1,0,0,0],"rolls":1},"map_base":0},
  "content":"exe:original/ultimaii.exe md5=fe88..."}

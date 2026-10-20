@@ -62,7 +62,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         "\"state\":{\"player_x\":%u,\"player_y\":%u,"
         "\"cursor\":{\"row\":%u,\"col\":%u},"
         "\"margins\":{\"left\":%u,\"right\":%u},"
-        "\"text_attr\":%u,\"story_flag\":%u,\"last_key\":%u,"
+        "\"text_attr\":%u,\"story_flag\":%u,\"sector_second\":%u,"
         "\"gold_bcd\":[%u,%u],\"gold\":%d,\"spell_pick\":%u,"
         "\"rng\":{\"state\":[%u,%u,%u,%u,%u,%u],\"rolls\":%u},"
         "\"map_base\":%u},"
@@ -73,7 +73,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
         ctx->vram.row, ctx->vram.col, ctx->vram.visible,
         s->player_x, s->player_y, s->cursor_row, s->cursor_col,
-        s->left_margin, s->right_margin, s->text_attr, s->story_flag, s->last_key,
+        s->left_margin, s->right_margin, s->text_attr, s->story_flag, s->sector_second,
         s->gold_lo, s->gold_hi, u2_bcd16(s->gold_lo, s->gold_hi), s->spell_pick,
         s->rng_state[0], s->rng_state[1], s->rng_state[2],
         s->rng_state[3], s->rng_state[4], s->rng_state[5],
