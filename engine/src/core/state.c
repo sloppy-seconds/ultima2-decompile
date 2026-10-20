@@ -26,4 +26,7 @@ void u2_state_init(u2_state *s)
     /* asm/0100_sub_0100.asm seeds the tick bytes from ES:0x6C (BIOS keyboard
      * flags) and then increments; the engine seeds deterministically and lets
      * the clock drive them, see core/rng.c. */
+    s->text_attr = 0x0F;      /* asm/53D9_sub_53d9.asm: movb $0xf,0x23e */
+    s->right_margin = 0x28;   /* asm/4A2F_sub_4a2f.asm: movb $0x28,0x31 */
+    s->left_margin = 0x00;    /* asm/48A7_sub_48a7.asm: movb $0x0,0x54f */
 }

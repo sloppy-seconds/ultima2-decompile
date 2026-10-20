@@ -97,10 +97,10 @@ static int script_input_poll(u2_ctx *ctx, u2_key *out)
 {
     script_input *si = ctx->be_input;
     if (!si || si->i >= si->n)
-        return 0;
+        return -1; /* finished: the flow may stop instead of spinning */
     u2_key k = si->keys[si->i++];
     if (k.ch == 0xFF)
-        return 0; /* WAIT */
+        return 0; /* WAIT: no key this poll, input still open */
     *out = k;
     return 1;
 }

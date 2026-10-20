@@ -15,7 +15,7 @@
  *   - fields are uint8_t/uint16_t, never int; arithmetic that the original
  *     relies on wrapping is masked at the assignment site;
  *   - counters the original keeps in packed decimal (gold, food, exp) stay
- *     BCD pairs, hundreds byte first — see bcd16()/set_bcd16().
+ *     BCD pairs, hundreds byte first — see u2_bcd16()/u2_bcd16_encode().
  *
  * A second variable space exists in the original and is NOT here: the CS-side
  * data area (jump table at cs:0x730, the timed_wait parameter block at
@@ -37,39 +37,62 @@ typedef struct u2_state {
     /* 0x23 */ uint8_t player_x;      /* asm/50B3_map_tile_ptr.asm: x + (y<<6) + map base */
     /* 0x24 */ uint8_t player_y;      /* asm/50B3_map_tile_ptr.asm */
     /* 0x25 */ uint8_t reserved_25[0x09];
-    /* 0x2E */ uint8_t cursor_col;    /* asm/51FD_str_out_core.asm: DL for INT 10h AH=02 */
-    /* 0x2F */ uint8_t cursor_row;    /* asm/51FD_str_out_core.asm: DH for INT 10h AH=02 */
-    /* 0x30 */ uint8_t reserved_30[0x1A];
+    /* 0x2E */ uint8_t cursor_col;    /* asm/51FD_str_out_core.asm: DL for INT 10h AH=02h */
+    /* 0x2F */ uint8_t cursor_row;    /* asm/51FD_str_out_core.asm: DH for INT 10h AH=02h */
+    /* 0x30 */ uint8_t reserved_30;
+    /* 0x31 */ uint8_t right_margin;  /* last printable column; 0x26 or 0x28 at the
+                                         sites asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm,
+                                         asm/4A2F_sub_4a2f.asm; read by char_print's wrap
+                                         test in asm/504A_sub_504a.asm */
+    /* 0x32 */ uint8_t reserved_32[0x18];
     /* 0x4A */ uint8_t last_key;      /* last key byte consumed by the command loop */
     /* 0x4B */ uint8_t reserved_4B[0x0D];
-    /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site asm/5175_sub_5175.asm (string at file 0x5382) */
+    /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site
+                                         asm/5175_sub_5175.asm (string at file 0x5382) */
     /* 0x59 */ uint8_t gold_hi;
     /* 0x5A */ uint8_t reserved_5A[0x09];
     /* 0x63 */ uint8_t spell_pick;    /* readied spell slot */
-    /* 0x64 */ uint8_t reserved_64[0x1DC];
+    /* 0x64 */ uint8_t reserved_64[0x1D5];
+    /* 0x239 */ uint8_t story_flag;   /* "story/poem shown"; cleared at asm/0133_sub_0133.asm,
+                                         set at asm/03AC_sub_03ac.asm, branched on in the
+                                         same region */
+    /* 0x23A */ uint8_t reserved_23A[4];
+    /* 0x23E */ uint8_t text_attr;    /* INT 10h AH=09h attribute: 0x0F normal, 0x70 dim,
+                                         0x02 red — asm/53D9_sub_53d9.asm,
+                                         asm/53E6_sub_53e6.asm, asm/53EE_sub_53ee.asm */
+    /* 0x23F */ uint8_t rand_last;    /* asm/5217_rand_byte.asm: `mov %al,0x23f` */
     /* 0x240 */ uint8_t tick_a;       /* asm/5217_rand_byte.asm: adc chain */
     /* 0x241 */ uint8_t reserved_241[2];
     /* 0x243 */ uint8_t tick_b;       /* asm/5217_rand_byte.asm */
     /* 0x244 */ uint8_t tick_c;       /* asm/5217_rand_byte.asm */
     /* 0x245 */ uint8_t reserved_245[0x22D];
     /* 0x472 */ uint16_t map_base;    /* map table base offset, asm/50B3_map_tile_ptr.asm */
-    /* 0x474 */ uint8_t reserved_474[0x100];
+    /* 0x474 */ uint8_t reserved_474[0x0DB];
+    /* 0x54F */ uint8_t left_margin;  /* column a CR returns to; 0 or 1 at the sites
+                                         asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm;
+                                         read by asm/500D_sub_500d.asm */
+    /* 0x550 */ uint8_t reserved_550[0x100];
 } u2_state;
 
 #define U2_OFF(f) ((int)offsetof(u2_state, f))
 
 /* Compile-time proof that the struct still matches the asm offsets. */
-_Static_assert(U2_OFF(player_x)  == 0x023, "player_x moved");
-_Static_assert(U2_OFF(player_y)  == 0x024, "player_y moved");
-_Static_assert(U2_OFF(cursor_col)== 0x02E, "cursor_col moved");
-_Static_assert(U2_OFF(cursor_row)== 0x02F, "cursor_row moved");
-_Static_assert(U2_OFF(last_key)  == 0x04A, "last_key moved");
-_Static_assert(U2_OFF(gold_lo)   == 0x058, "gold_lo moved");
-_Static_assert(U2_OFF(spell_pick)== 0x063, "spell_pick moved");
-_Static_assert(U2_OFF(tick_a)    == 0x240, "tick_a moved");
-_Static_assert(U2_OFF(tick_b)    == 0x243, "tick_b moved");
-_Static_assert(U2_OFF(tick_c)    == 0x244, "tick_c moved");
-_Static_assert(U2_OFF(map_base)  == 0x472, "map_base moved");
+_Static_assert(U2_OFF(player_x)   == 0x023, "player_x moved");
+_Static_assert(U2_OFF(player_y)   == 0x024, "player_y moved");
+_Static_assert(U2_OFF(cursor_col) == 0x02E, "cursor_col moved");
+_Static_assert(U2_OFF(cursor_row) == 0x02F, "cursor_row moved");
+_Static_assert(U2_OFF(right_margin)== 0x031, "right_margin moved");
+_Static_assert(U2_OFF(last_key)   == 0x04A, "last_key moved");
+_Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
+_Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
+_Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");
+_Static_assert(U2_OFF(text_attr)  == 0x23E, "text_attr moved");
+_Static_assert(U2_OFF(rand_last)  == 0x23F, "rand_last moved");
+_Static_assert(U2_OFF(tick_a)     == 0x240, "tick_a moved");
+_Static_assert(U2_OFF(tick_b)     == 0x243, "tick_b moved");
+_Static_assert(U2_OFF(tick_c)     == 0x244, "tick_c moved");
+_Static_assert(U2_OFF(map_base)   == 0x472, "map_base moved");
+_Static_assert(U2_OFF(left_margin)== 0x54F, "left_margin moved");
 
 /* Packed-decimal helpers: a BCD pair is stored hundreds byte first
  * (0x99 0x97 == 9997), per captures/README.md and the display sites. */

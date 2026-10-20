@@ -153,3 +153,142 @@ proves it rather than claims it.
 CP0 acceptance is "owner approves architecture". Reported and waiting; the six
 decision points are listed in `docs/phase4-state.md` § Gate log. Nothing was
 irreversible and no acceptance criterion was loosened.
+
+---
+
+## CP1 — Extractor + title screen — done 2026-10-27 (awaiting owner eyeball)
+
+### Reading the asm before writing the flow
+
+The title region is `asm/0133..03AC`. Phase 3's function boundaries cut this
+region into ~60 fragments (objdump restarted at every byte that could be a
+boundary), so the flow had to be reassembled from the fragments plus raw
+decodes of the mis-split stretches. What came out:
+
+* **The inline-string convention is real code, not a comment.** `str_out`
+  (`asm/4FDF`) calls `str_out_core` to set the cursor, then its own body
+  (`asm/4FE2..asm/5002`) `pop`s the return address — which *is* the address of
+  the string bytes that follow the call — stores it to `DS:0x2B`, walks it with
+  `mov %cs:(%bx,%si),%al`, calls `char_print` per byte, and pushes the advanced
+  pointer back before `ret`. That is why the strings live in the image segment
+  and why the extractor reads them from the exe at `runtime offset + 0x200`.
+* **`char_print` is a full text printer** (`asm/5003` + `asm/500D` +
+  `asm/5016` + `asm/501A` + `asm/5025` + `asm/5036` + `asm/503D` + `asm/504A` +
+  `asm/5057`): mask high bit; CR returns the column to `DS:0x54F` and advances
+  the row; LF advances the row; at row 24 it scrolls rows 20..23 with INT 10h
+  AH=06h; otherwise INT 10h AH=09h writes char + attribute `DS:0x23E`, then the
+  column advances and wraps past `DS:0x31`. `core/seam.c` reproduces that
+  control flow with a citation per branch.
+* **`key_poll` is bigger than its Phase 3 boundary.** `asm/4F4D..4F51` is only
+  the `INT 16h AH=01h` probe; the routine continues at `4F52` (which the
+  function map had handed to a neighbouring fragment): it consumes the key with
+  AH=00h, maps Ctrl-E/Ctrl-N/Ctrl-W to NUL, handles the arrow table at
+  `cs:4F09`, and finally upper-cases `a-z` with `and $0xdf`, returning AH=0xFF
+  when a key was consumed and AH=0x00 when none was. That is what makes the
+  menu loop `cmp $0xff,%ah; jne loop` read correctly, and why the engine
+  upper-cases at the seam.
+* **`asm/0688` is the intro hold**: a cycle loop that calls `key_poll` each
+  pass and, on ESC, discards its return address and jumps to the title entry at
+  `asm/0242`. So ESC anywhere in the intro or the poem lands on the title.
+* **The 'D' demo is a cycle**, not a one-shot: the poem ends by jumping back to
+  the intro entry (`asm/033E`), so demo = poem, intro, poem, intro ... until
+  ESC. `run_demo()` models exactly that.
+* **`DS:0x239` is a "story shown" flag**: cleared at startup (`asm/0133`), set
+  when the poem runs (`asm/03AC`), branched on after the intro (`asm/0237`).
+
+### Architecture correction: the grid is 40x25, not 80x25
+
+Plan §2 specified an 80x25 VRAM grid. The bytes disagree:
+
+| evidence | file |
+| --- | --- |
+| row clear prints `0x28` = 40 spaces | `asm/53A0_sub_53a0.asm` |
+| printable right margin set to 0x26 / 0x28 | `asm/456B_sub_456b.asm`, `asm/48A7_sub_48a7.asm`, `asm/4A2F_sub_4a2f.asm` |
+| scroll window is columns 0..`DS:0x31` | `asm/5025_sub_5025.asm` |
+| video mode 4 = 320x200 = 40x25 cells of 8x8 | `asm/4A3E_sub_4a3e.asm` |
+| every title string fits 40 columns at its column | `asm/0246..0375` |
+
+`U2_COLS` is 40 and the CP0 test's schema assertion was updated to match. This
+is a change to a signed-off architecture number, so it is called out at the
+gate rather than slipped through; the evidence is in `engine/README.md`.
+
+### Extractor
+
+`engine/tools/extract/extractor.py`:
+
+* manifest of `(symbol, asm file, locator)`; offsets and names are ours, the
+  bytes are the user's;
+* **exe source**: locates each string inside the containing function's byte
+  range in the user's copy (search-forward from the previous hit, so repeated
+  short strings stay unambiguous) and emits the exe's own bytes;
+* **asm fallback** (the plan's stated fallback): the `db "...",0x00` lines of
+  the byte-proven tree;
+* `--check` fails on a stale header, `--emit text` gives `SYMBOL<TAB>value` for
+  test scripts, and a wrong-md5 copy warns instead of failing (community-patch
+  caveat from AGENTS.md);
+* two title strings live inside the regions Phase 3 reconstructed as mis-decoded
+  code (`asm/02A3`, `asm/02E6`) and therefore have no `db` line. They are
+  manifest entries of the `("run", file_offset)` kind: exe-only. Without a copy
+  the extractor yields them empty and the engine skips the line instead of
+  inventing text. The test asserts 27/29 in fallback mode, so this limit is
+  measured, not hidden.
+
+`make` generates `build/gen_content.h` before compiling; `make content` and
+`make content-check` exist for explicit control. The header stays gitignored.
+
+### Engine changes
+
+* `game/title.c` — intro (2 screens), title, choice dispatch, poem, demo cycle,
+  CP3/CP4 stubs. Every drawn line cites the asm function that sets its row and
+  column.
+* `core/vram.c` — 40 columns, `u2_vram_scroll_window()` for the AH=06h window.
+* `core/seam.c` — `char_print` semantics, `seam_clear_row`, `key_poll`
+  upper-casing, `rand_last` stored like `asm/5217` stores to `DS:0x23F`.
+* `core/state.h` — added `right_margin` (0x31), `story_flag` (0x239),
+  `text_attr` (0x23E), `rand_last` (0x23F), `left_margin` (0x54F), each with a
+  `_Static_assert` and a citation.
+* `--selftest` — the CP0 substrate probe screen moved behind a flag so the CP0
+  test stays runnable now that the default flow is the game. `tests/selftest.keys`
+  feeds it; `tests/title.keys` drives the real flow.
+* `input.poll()` now distinguishes "no key right now" (0) from "input is
+  finished" (-1). Without that, a script that ran out of keys left the demo
+  cycle spinning between poem and intro forever.
+
+### Test
+
+`make test` runs both checkpoint tests.
+
+```
+CP0 TEST: PASS   (9/9, unchanged assertions, now via --selftest)
+CP1 TEST: PASS
+  PASS  scripted run exits 0
+  PASS  extractor produced the expected-string table
+  PASS  title strings found at their asm positions        (placed=11 wrong=0)
+  PASS  demonstration poem drew 7 couplet lines in row 24
+  PASS  story flag set by the demo path
+  PASS  scripted title run is reproducible
+  PASS  asm fallback yields 27/29 strings (2 are exe-only by design)
+  PASS  generated content header is gitignored
+```
+
+The position check is independent of `title.c`'s table: `run_cp1.sh` carries
+its own `symbol:row:col` list read off the asm, so a mis-read in the module
+shows up as a mismatch rather than being confirmed by itself.
+
+### Phase 3 invariants after CP1
+
+`assemble_all.sh` byte-identical, `assemble_clean.sh` 1299/1299 + 37,344 B
+identical, `check_func` sample green, `original/ultimaii.exe` md5
+`fe884d5117971073ac8097cc7a6aca25`, `git status` clean for `asm/ original/
+references/`. The engine only reads `asm/`.
+
+### Open questions for the owner gate
+
+* The title strings contain a two-byte bracket sequence where the game means
+  "II" (in the game title, the intro's part number and the PLAY menu line).
+  Nothing in the binary redefines the font, so either DOSBox shows brackets too
+  (an Apple II holdover) or the glyph mapping is subtler than the static bytes
+  show. CP9 decides.
+* `TYPE -` at row 11 col 5 is a real extracted line with no visible producer
+  for whatever follows it. Worth a glance in DOSBox.
+* Intro hold durations are chosen, not derived.

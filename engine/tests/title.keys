@@ -1,9 +1,23 @@
-# CP0 smoke script — drives the skeleton main loop, then quits.
-# Format: one key token per line ('#' starts a comment).
-#   single char | SP CR LF TAB ESC BS NUL DEL | 0xNN | WAIT | EOF
-# The loop echoes each key into the probe line at row 14; Q ends the run.
-P
-R
-0
+# CP1 script — drives the presentation, the menu and the demonstration.
+# Format: one key token per line ('#' starts a comment); see tests/selftest.keys.
+#   ESC  skips the intro (asm/0688 polls ESC and jumps to the title at asm/0242)
+#   D    demonstration: the story poem, asm/03AC
+#   WAIT "the player thought about it": lets each couplet finish its hold, so
+#        six of them run the whole poem
+#   X    not a choice: asm/03A6 redraws the title
+#   P    play: poem, then the CP4 stub
+#   ESC  ends that demonstration
+#   C    create: the CP3 stub
+#   (end of script = end of input; the flow returns and the engine exits 0)
+ESC
+D
 WAIT
-Q
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+X
+P
+ESC
+C

@@ -1,9 +1,10 @@
 /*
- * vram.c — 80x25 character grid with teletype and direct-write semantics.
- * spec: asm/4A1C_char_out.asm (INT 10h AH=01h teletype),
- *       asm/5003_char_print.asm (CR special case),
- *       asm/51FD_str_out_core.asm (INT 10h AH=02 cursor set),
- *       asm/5351_sub_5351.asm (direct 0xB800 segment writes)
+ * vram.c — 40x25 character grid: primitives only.
+ * spec: asm/4A1C_char_out.asm (teletype), asm/5025_sub_5025.asm (INT 10h
+ *       AH=06h window scroll), asm/51FD_str_out_core.asm (cursor),
+ *       asm/53A0_sub_53a0.asm (40-column row clear)
+ * The margin/attribute/wrap policy lives in core/seam.c, next to the asm that
+ * implements it; this file is the hardware-shaped storage underneath.
  */
 #include <string.h>
 #include "core/vram.h"
@@ -37,19 +38,6 @@ void u2_vram_goto(u2_vram *v, int row, int col)
     v->col = col;
 }
 
-static void vram_scroll(u2_vram *v)
-{
-    memmove(&v->cell[0][0], &v->cell[1][0],
-            sizeof(u2_cell) * U2_COLS * (U2_ROWS - 1));
-    for (int c = 0; c < U2_COLS; c++) {
-        v->cell[U2_ROWS - 1][c].ch = ' ';
-        v->cell[U2_ROWS - 1][c].attr = 0x07;
-    }
-    v->col = 0;
-    v->row = U2_ROWS - 1;
-    v->dirty = 1;
-}
-
 void u2_vram_poke(u2_vram *v, int row, int col, uint8_t ch, uint8_t attr)
 {
     if (row < 0 || row >= U2_ROWS || col < 0 || col >= U2_COLS)
@@ -63,32 +51,35 @@ void u2_vram_poke(u2_vram *v, int row, int col, uint8_t ch, uint8_t attr)
 
 void u2_vram_put(u2_vram *v, uint8_t ch, uint8_t attr)
 {
-    /* char_print (asm/5003) masks the high bit and special-cases CR. */
+    /* char_out (asm/4A1C) is a bare INT 10h AH=01h teletype: no CR handling,
+     * no attribute of its own. Callers that want the game's text printer
+     * semantics use char_print instead (see core/seam.c). */
     ch &= 0x7F;
-    if (ch == '\r') {
-        v->col = 0;
-        return;
-    }
-    if (ch == '\n') {
-        v->col = 0;
-        if (++v->row >= U2_ROWS)
-            v->row = U2_ROWS - 1;
-        return;
-    }
-    if (ch == '\b') {
-        if (v->col > 0) v->col--;
-        return;
-    }
     if (ch < 0x20)
-        return; /* unhandled control chars: no cell write */
+        return;
     u2_vram_poke(v, v->row, v->col, ch, attr);
     if (++v->col >= U2_COLS) {
         v->col = 0;
         if (v->row < U2_ROWS - 1)
             v->row++;
         else
-            vram_scroll(v);
+            u2_vram_scroll_window(v, 0, U2_ROWS - 1, 0, U2_COLS - 1, attr);
     }
+}
+
+void u2_vram_scroll_window(u2_vram *v, int top, int bottom, int left, int right,
+                           uint8_t attr)
+{
+    if (top < 0 || bottom >= U2_ROWS || top >= bottom)
+        return;
+    if (right >= U2_COLS) right = U2_COLS - 1;
+    if (left < 0) left = 0;
+    for (int r = top; r < bottom; r++)
+        for (int c = left; c <= right; c++)
+            u2_vram_poke(v, r, c, v->cell[r + 1][c].ch, v->cell[r + 1][c].attr);
+    for (int c = left; c <= right; c++)
+        u2_vram_poke(v, bottom, c, ' ', attr);
+    v->dirty = 1;
 }
 
 void u2_vram_flush(u2_vram *v, u2_ctx *ctx)

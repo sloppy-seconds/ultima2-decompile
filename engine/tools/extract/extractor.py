@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""extractor.py — turn the user's own copy of the game into engine headers.
+
+Phase 4 rule: the engine ships zero game content. Every string the engine
+displays is pulled at build time from a copy the user owns, into
+engine/build/gen_content.h, which is gitignored. Nothing this script writes is
+ever committed, and nothing it writes belongs in git history.
+
+Two sources, in priority order:
+
+  exe  --exe PATH (default: <repo>/original/ultimaii.exe when present).
+         The real bytes, located inside the function range named by the
+         manifest, so a community-patched build that shifted a string is still
+         read correctly rather than silently mismatched.
+  asm  the documented fallback (docs/phase4-plan.md CP1): the `db "...",0x00`
+         lines of our own byte-proven asm/ tree. Used when no exe is present,
+         e.g. a fresh clone or CI.
+
+The manifest is (symbol, asm file, which string in that file). Offsets and
+names are facts about the binary and ours to publish; the bytes at them are
+not. `--check` regenerates and compares, so a stale header fails the build.
+
+Usage:
+  extractor.py [-o engine/build/gen_content.h] [--exe PATH] [--source auto|exe|asm]
+  extractor.py --emit text      # SYMBOL<TAB>value per line, for test scripts
+  extractor.py --check          # fail if the written header is not current
+"""
+import argparse
+import hashlib
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ENGINE = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO = os.path.abspath(os.path.join(ENGINE, ".."))
+
+# The known-good image (AGENTS.md, disasm/phase3-summary.md). A mismatch is a
+# warning, not an error: original/ may carry community patches.
+EXPECTED_MD5 = "fe884d5117971073ac8097cc7a6aca25"
+FILE_BIAS = 0x200          # runtime segment offset -> file offset
+
+# (symbol, asm file, locator)
+#   locator = int index into the file's `db "...",0x00` lines  -> both sources work
+#   locator = ("run", file_offset)                            -> exe only
+# The "run" form is needed for strings that sit inside the regions Phase 3
+# reconstructed as mis-decoded code (asm/02A3, asm/02E6): their bytes are
+# proven but not written as db lines, so the documented asm fallback cannot
+# recover them. Without an exe those entries come out empty and the engine
+# skips the line; see engine/tests/run_cp1.sh, which asserts accordingly.
+# CP1 scope: the presentation intro, the title/menu screen, and the 'D' poem.
+MANIFEST = [
+    ("U2_S_INTRO_ORIGIN",      "014B_sub_014b.asm", 0),
+    ("U2_S_INTRO_PROUDLY",     "015E_sub_015e.asm", 0),
+    ("U2_S_INTRO_PART",        "018D_sub_018d.asm", 0),
+    ("U2_S_INTRO_BESTSELLER",  "01A1_sub_01a1.asm", 0),
+    ("U2_S_INTRO_GENRE",       "01C4_sub_01c4.asm", 0),
+    ("U2_S_INTRO_AUTHOR",      "01EA_sub_01ea.asm", 0),
+    ("U2_S_TITLE_GAME",        "0246_sub_0246.asm", 0),
+    ("U2_S_TITLE_REVENGE",     "025E_sub_025e.asm", 0),
+    ("U2_S_TITLE_OF_THE",      "0273_sub_0273.asm", 0),
+    ("U2_S_TITLE_ENCHANTRESS", "0288_sub_0288.asm", 0),
+    ("U2_S_TITLE_COPYRIGHT",   "02A3_sub_02a3.asm", ("run", 0x04AD)),
+    ("U2_S_TITLE_AND_ORIGIN",  "02CC_sub_02cc.asm", 0),
+    ("U2_S_TITLE_TYPE",        "02E6_sub_02e6.asm", ("run", 0x04F0)),
+    ("U2_S_MENU_DEMO",         "02F8_sub_02f8.asm", 0),
+    ("U2_S_MENU_PLAY",         "031F_sub_031f.asm", 0),
+    ("U2_S_MENU_CREATE",       "034B_sub_034b.asm", 0),
+    ("U2_S_MENU_CHOICE",       "0375_sub_0375.asm", 0),
+    ("U2_S_POEM_1A",           "03AC_sub_03ac.asm", 0),
+    ("U2_S_POEM_1B",           "03AC_sub_03ac.asm", 1),
+    ("U2_S_POEM_2A",           "03AC_sub_03ac.asm", 2),
+    ("U2_S_POEM_2B",           "03AC_sub_03ac.asm", 3),
+    ("U2_S_POEM_3A",           "03AC_sub_03ac.asm", 4),
+    ("U2_S_POEM_3B",           "03AC_sub_03ac.asm", 5),
+    ("U2_S_POEM_4A",           "03AC_sub_03ac.asm", 6),
+    ("U2_S_POEM_4B",           "03AC_sub_03ac.asm", 7),
+    ("U2_S_POEM_5A",           "03AC_sub_03ac.asm", 8),
+    ("U2_S_POEM_5B",           "03AC_sub_03ac.asm", 9),
+    ("U2_S_POEM_6A",           "03AC_sub_03ac.asm", 10),
+    ("U2_S_POEM_6B",           "03AC_sub_03ac.asm", 11),
+]
+
+DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')
+FUNC_RE = re.compile(r'^#\s*func\s+([0-9A-Fa-f]{4})\.\.([0-9A-Fa-f]{4})')
+
+
+def decode_gas_string(s):
+    """Decode a gas db payload (the asm tree writes plain ASCII plus \\xNN)."""
+    out = bytearray()
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\":
+            nxt = s[i + 1] if i + 1 < len(s) else ""
+            if nxt in ("x", "X"):
+                out.append(int(s[i + 2:i + 4], 16))
+                i += 4
+                continue
+            out.extend(bytes(s[i:i + 2], "latin-1").decode("unicode_escape").encode("latin-1"))
+            i += 2
+            continue
+        out.append(ord(c))
+        i += 1
+    return bytes(out)
+
+
+def parse_asm(path):
+    """Return (func_lo, func_hi, [string bytes in file order]) for one asm file."""
+    lo = hi = None
+    strings = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            m = FUNC_RE.match(line.rstrip("\n"))
+            if m:
+                lo = int(m.group(1), 16) + FILE_BIAS
+                hi = int(m.group(2), 16) + FILE_BIAS
+            m = DB_RE.match(line)
+            if m:
+                strings.append(decode_gas_string(m.group(1)))
+    if lo is None:
+        raise ValueError(f"{path}: no '# func' range line")
+    return lo, hi, strings
+
+
+def locate(exe, lo, hi, strings):
+    """Find each string inside the function's range in the exe.
+
+    Returns [(file_offset, bytes)] or None if any string is missing. Searching
+    forward from the previous hit keeps repeated short strings unambiguous.
+    """
+    window_end = min(len(exe), hi + 0x100)
+    pos = lo
+    out = []
+    for want in strings:
+        idx = exe.find(want, pos, window_end)
+        if idx < 0:
+            return None
+        end = exe.find(b"\x00", idx)
+        out.append((idx, exe[idx:end]))
+        pos = idx + len(want)
+    return out
+
+
+def collect(source, exe, exe_path, warn):
+    cache = {}
+    rows = []
+    for sym, fname, loc in MANIFEST:
+        path = os.path.join(REPO, "asm", fname)
+        if not os.path.exists(path):
+            sys.exit(f"extractor: missing {path}")
+        if fname not in cache:
+            lo, hi, strings = parse_asm(path)
+            found = None
+            if source in ("auto", "exe") and exe is not None:
+                found = locate(exe, lo, hi, strings)
+                if found is None and source == "exe":
+                    sys.exit(f"extractor: strings for {fname} not found in {exe_path}")
+                if found is None:
+                    warn(f"extractor: {fname} not located in the exe; using the asm fallback")
+            cache[fname] = (strings, found)
+        strings, found = cache[fname]
+
+        if isinstance(loc, tuple) and loc[0] == "run":
+            off = loc[1]
+            if exe is not None:
+                end = exe.find(b"\x00", off)
+                rows.append((sym, exe[off:end], f"exe@0x{off:04X}"))
+            else:
+                rows.append((sym, b"", "unavailable without the user's copy"))
+            continue
+
+        idx = loc
+        if idx >= len(strings):
+            sys.exit(f"extractor: {fname} has {len(strings)} strings, manifest wants index {idx}")
+        if found:
+            off, val = found[idx]
+            rows.append((sym, val, f"exe@0x{off:04X}"))
+            if val != strings[idx]:
+                warn(f"extractor: note {sym}: exe bytes differ from the asm reconstruction")
+        else:
+            rows.append((sym, strings[idx], f"asm:{fname}"))
+    return rows
+
+
+def c_escape(data):
+    out = []
+    for b in data:
+        if b in (0x22, 0x5C):
+            out.append("\\%c" % b)
+        elif 0x20 <= b < 0x7F:
+            out.append(chr(b))
+        else:
+            out.append("\\x%02x" % b)
+    return '"' + "".join(out) + '"'
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--exe", default=os.path.join(REPO, "original", "ultimaii.exe"))
+    ap.add_argument("--source", choices=["auto", "exe", "asm"], default="auto")
+    ap.add_argument("-o", "--out", default=os.path.join(ENGINE, "build", "gen_content.h"))
+    ap.add_argument("--emit", choices=["header", "text"], default="header")
+    ap.add_argument("--check", action="store_true",
+                    help="fail if the existing output differs from what would be written")
+    args = ap.parse_args()
+
+    def warn(msg):
+        print(msg, file=sys.stderr)
+
+    exe = None
+    note = "asm fallback (no exe supplied)"
+    if args.source in ("auto", "exe") and os.path.exists(args.exe):
+        exe = open(args.exe, "rb").read()
+        md5 = hashlib.md5(exe).hexdigest()
+        note = f"exe:{os.path.relpath(args.exe, REPO)} md5={md5}"
+        if md5 != EXPECTED_MD5:
+            warn(f"extractor: warning: {args.exe} md5 {md5} != {EXPECTED_MD5}")
+    elif args.source == "exe":
+        sys.exit(f"extractor: --exe {args.exe} not found")
+
+    rows = collect("exe" if exe is not None else "asm", exe, args.exe, warn)
+
+    if args.emit == "text":
+        for sym, val, _ in rows:
+            print(f"{sym}\t{val.decode('latin-1')}")
+        return 0
+
+    body = [
+        "/* GENERATED by engine/tools/extract/extractor.py — do not edit, do not commit.",
+        " *",
+        " * Game content extracted at build time from the user's own copy.",
+        f" * Source: {note}",
+        " * These strings belong to the copyright holder of Ultima II; the engine",
+        " * reads them from a file it does not ship. See engine/README.md.",
+        " */",
+        "#ifndef U2_GEN_CONTENT_H",
+        "#define U2_GEN_CONTENT_H",
+        "",
+        f'#define U2_CONTENT_SOURCE "{note}"',
+        "",
+    ]
+    for sym, val, origin in rows:
+        body.append(f"/* {origin} */")
+        body.append(f"#define {sym} {c_escape(val)}")
+    body += ["", "#endif /* U2_GEN_CONTENT_H */", ""]
+    text = "\n".join(body)
+
+    if args.check:
+        cur = ""
+        if os.path.exists(args.out):
+            cur = open(args.out, encoding="utf-8").read()
+        if cur != text:
+            warn(f"extractor: {args.out} is stale or missing")
+            return 1
+        return 0
+
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    with open(args.out, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"extractor: wrote {os.path.relpath(args.out, REPO)} "
+          f"({len(rows)} strings, {note})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

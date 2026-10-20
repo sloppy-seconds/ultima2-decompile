@@ -26,7 +26,14 @@
 
 #include <stdint.h>
 
-#define U2_COLS 80
+/*
+ * The text grid is 40 columns x 25 rows, not 80x25: the row-clear loop prints
+ * 0x28 = 40 spaces (asm/53A0_sub_53a0.asm) and the printable right margin is
+ * 0x26/0x28 (asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm). The original sets
+ * video mode 4 (asm/4A3E_sub_4a3e.asm: INT 10h AH=00h AL=04h), i.e. 320x200,
+ * which is exactly 40x25 cells of 8x8 pixels.
+ */
+#define U2_COLS 40
 #define U2_ROWS 25
 
 typedef struct u2_ctx u2_ctx;
@@ -53,10 +60,13 @@ typedef struct u2_renderer {
 typedef struct u2_input {
     const char *name;
     int  (*init)(u2_ctx *ctx);
-    /* poll: non-blocking, mirrors key_poll (INT 16h AH=01 then AH=00).
-     * Returns 1 and fills *out when a key is available, else 0. */
+    /* poll: non-blocking, mirrors key_poll (which at asm/4F4D checks the BIOS
+     * queue with AH=01h and only then consumes with AH=00h).
+     *  1  = key available, *out filled
+     *  0  = no key right now
+     * -1  = input is finished for good (script exhausted, stdin closed) */
     int  (*poll)(u2_ctx *ctx, u2_key *out);
-    /* wait: blocking read (INT 16h AH=00). Returns 0 on end-of-input. */
+    /* wait: blocking read (INT 16h AH=00). Returns 0 on end of input. */
     int  (*wait)(u2_ctx *ctx, u2_key *out);
     void (*shutdown)(u2_ctx *ctx);
 } u2_input;

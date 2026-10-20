@@ -26,11 +26,12 @@ static void usage(const char *argv0)
 {
     fprintf(stderr,
         "u2 — portable C engine (Phase 4); spec = asm/ tree\n"
-        "usage: %s [--headless] [--script FILE] [--dump-state] [--trace[=FILE]]\n"
+        "usage: %s [--headless] [--script FILE] [--dump-state] [--selftest] [--trace[=FILE]]\n"
         "\n"
         "  --headless      null renderer + script input + deterministic clock\n"
         "  --script FILE   key script (see tests/title.keys)\n"
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
+        "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --trace[=FILE]  log every seam call with its asm address\n",
         argv0);
 }
@@ -80,6 +81,8 @@ int main(int argc, char **argv)
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--dump-state") == 0) {
             ctx.dump_state = 1;
+        } else if (strcmp(a, "--selftest") == 0) {
+            ctx.selftest = 1;
         } else if (strcmp(a, "--trace") == 0) {
             trace_arg = "-";
         } else if (strncmp(a, "--trace=", 8) == 0) {

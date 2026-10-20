@@ -65,6 +65,9 @@ void u2_dump_state_json(const u2_ctx *ctx, FILE *out)
     fprintf(out, "    \"player_x\": %u,\n", s->player_x);
     fprintf(out, "    \"player_y\": %u,\n", s->player_y);
     fprintf(out, "    \"cursor\": {\"row\": %u, \"col\": %u},\n", s->cursor_row, s->cursor_col);
+    fprintf(out, "    \"margins\": {\"left\": %u, \"right\": %u},\n", s->left_margin, s->right_margin);
+    fprintf(out, "    \"text_attr\": %u,\n", s->text_attr);
+    fprintf(out, "    \"story_flag\": %u,\n", s->story_flag);
     fprintf(out, "    \"last_key\": %u,\n", s->last_key);
     fprintf(out, "    \"gold_bcd\": [%u, %u],\n", s->gold_lo, s->gold_hi);
     fprintf(out, "    \"gold\": %d,\n", u2_bcd16(s->gold_lo, s->gold_hi));
@@ -72,6 +75,8 @@ void u2_dump_state_json(const u2_ctx *ctx, FILE *out)
     fprintf(out, "    \"ticks\": [%u, %u, %u],\n", s->tick_a, s->tick_b, s->tick_c);
     fprintf(out, "    \"map_base\": %u\n", s->map_base);
     fprintf(out, "  },\n");
-    fprintf(out, "  \"content\": \"none\"\n");
+    fprintf(out, "  \"content\": \"");
+    json_escape(out, ctx->content_source ? ctx->content_source : "none");
+    fprintf(out, "\"\n");
     fprintf(out, "}\n");
 }

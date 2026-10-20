@@ -79,10 +79,10 @@ static int term_read(u2_ctx *ctx, u2_key *out, int block)
         return 1;
     }
     if (n == 0) {
-        ctx->exit_code = 0; /* stdin closed */
-        return 0;
+        ctx->exit_code = 0; /* stdin closed: input is finished */
+        return -1;
     }
-    return 0;
+    return 0; /* EAGAIN: nothing right now */
 }
 
 static int term_input_poll(u2_ctx *ctx, u2_key *out)

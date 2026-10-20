@@ -33,6 +33,10 @@ typedef struct u2_ctx {
     } trace;
 
     int dump_state;         /* --dump-state */
+    int selftest;           /* --selftest: draw the seam probe screen and stop */
+    int input_exhausted;    /* set by the script backend when the keys run out;
+                               the flow treats it as "the player left" */
+    const char *content_source; /* set by the game layer from the generated header */
     const char *script_path;/* --script PATH (input_script backend input) */
     int exit_code;          /* set by game code / backends to force termination */
 

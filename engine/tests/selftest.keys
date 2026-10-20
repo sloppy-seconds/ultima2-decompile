@@ -1,0 +1,9 @@
+# CP0 substrate script — drives the --selftest loop, then quits.
+# Format: one key token per line ('#' starts a comment).
+#   single char | SP CR LF TAB ESC BS NUL DEL | 0xNN | WAIT | EOF
+# The selftest loop echoes each key into the probe line at row 14; Q ends it.
+P
+R
+0
+WAIT
+Q

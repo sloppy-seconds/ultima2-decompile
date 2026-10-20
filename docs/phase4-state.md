@@ -6,8 +6,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 | CP | Title | Status | Notes | Date |
 | --- | --- | --- | --- | --- |
-| CP0 | Skeleton + automation substrate 🔒 | **awaiting-gate (owner: architecture approval)** | `engine/` builds with cc only; term + null renderers, term + script input, beep + null audio, posix + script clocks; seam layer with asm-cited `--trace`; `--dump-state` screen grid + JSON; `make test` (CP0 test) 9/9 PASS incl. reproducibility; selfmod question resolved from 45 existing runtime captures (`disasm/selfmod-capture.md`) — cluster is not patched, CP3 unblocked | 2026-10-27 |
-| CP1 | Extractor + title screen | todo | blocked on CP0 gate | |
+| CP0 | Skeleton + automation substrate 🔒 | done (owner approved 2026-10-27) | `engine/` builds with cc only; term + null renderers, term + script input, beep + null audio, posix + script clocks; seam layer with asm-cited `--trace`; `--dump-state` screen grid + JSON; `make test` PASS incl. reproducibility; selfmod question resolved from 45 existing runtime captures (`disasm/selfmod-capture.md`) — cluster is not patched, CP3 unblocked | 2026-10-27 |
+| CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | MCP play-API | todo | | |
 | CP3 | Character creation + status line | todo | selfmod capture dependency removed — see `disasm/selfmod-capture.md` | |
 | CP4 | Overworld + movement | todo | | |
@@ -20,6 +20,28 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 — CP1 🔒 AWAITING OWNER EYEBALL.** The plan's CP1 acceptance is
+  "green test + owner eyeball vs DOSBox screenshot (one-off)". The test is
+  green; the screenshot comparison is the owner's. Things worth looking at:
+  1. **Grid width.** The engine draws 40x25, not the 80x25 in plan §2. The asm
+     is unambiguous (40-space row clear, 0x26/0x28 margins, video mode 4 =
+     320x200). If the DOSBox screenshot disagrees, this is the thing to fix.
+  2. **`][` = "II".** The title strings really contain `]` `[` bytes
+     (`ULTIMA ][`, `PART ][`, `...GAME OF ULTIMA ][`). No font redefinition
+     exists anywhere in the binary, so this is a glyph question for CP9; the
+     engine renders the bytes as extracted.
+  3. **`TYPE -` at row 11 col 5** is a genuine extracted line from
+     `asm/02E6`'s region; nothing in the engine fills in a value after it, and
+     no code was found that does. If DOSBox shows more text there, that is a
+     missing producer and CP1 needs another pass.
+  4. **Intro hold durations** (1.5 s / 2 s) are a choice, not a fact; the
+     original burns a cycle loop whose real duration is machine-dependent.
+  5. **Not implemented yet, on purpose:** the intro's PIC picture loads (CP9),
+     'P' setup `asm/0964` (CP4), 'C' creation `asm/5400` (CP3). Both stubs
+     print engine-authored notices that name their checkpoint.
+- **2026-10-27 (owner):** CP0 **approved** ("sure"). Seam layer as the only
+  platform boundary, offset-asserted DS state, determinism by clock
+  substitution, selfmod premise retired, audio stub until CP9, CI engine job.
 - **2026-10-27 — CP0 🔒 AWAITING OWNER ARCHITECTURE APPROVAL.** Built and
   tested; nothing here is irreversible and no gate criterion was loosened.
   Decisions needing sign-off before CP1 builds on them:
@@ -51,4 +73,4 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | Mechanical rebuild | `bash tools/assemble_all.sh` | byte-identical |
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
-| Engine test | `make -C engine test` | PASS 9/9 |
+| Engine test | `make -C engine test` | CP0 9/9 PASS, CP1 9/9 PASS |
