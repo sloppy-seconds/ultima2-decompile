@@ -1132,16 +1132,49 @@ evidence that `DS:4A` is the site kind (0 = overworld, 1 = village, 2 = town,
 `Files.txt`). Note `DS:0x29` is also the CP3 creation budget, so the byte is
 reused across subsystems.
 
-### Viewport: still open, and what it is not
+### Viewport: resolved, and measured from play screenshots
 
-The draw routine has not been found yet, but the shape of the answer has narrowed:
-the screen is **text in CGA graphics mode 4**, not a bitmap. `asm/4B26` and
-`asm/4B4E` set `ES` to `0xB800` (the font plane) and then `0xBA00` (the CGA
-attribute plane) and call a common writer — that is the standard mode-4 text
-layout, 40x25 cells of 8x8 pixels, and it means the earlier "the original mixes
-bitmap and text" reading of those four sites was **wrong**: they are the text
-writer, not a tile blit. So a tile is drawn with characters, and the kickoff's
-tile-size question is back on the table as 1x1 or 2x2 cells.
+The shape of the answer is **text in CGA graphics mode 4**, not a bitmap: `asm/4B26`
+and `asm/4B4E` set `ES` to `0xB800` (font plane) then `0xBA00` (CGA attribute
+plane), which is the standard mode-4 text layout of 40x25 cells at 8x8. The earlier
+"the original mixes bitmap and text" reading of those sites was wrong — they are the
+text writer, not a tile blit.
+
+The owner then supplied real play screenshots (overworld at Port Bonifice, the
+`H.P.=6284 / FOOD=1624 / EXP.=2135 / GOLD=0038` screen, a town screen with the
+`MUSEUM` banner, the bi-plane, and a dungeon). They live under
+`captures/screenshots/`, which is gitignored — the images are derived from
+copyrighted art, so only the measurements are committed here. Measured at native
+resolution, in game pixels (screen 320x200, text cell 8x8):
+
+| quantity | value | how it was measured |
+| --- | --- | --- |
+| tile size | **16x16 px = 2x2 text cells** | autocorrelation of the cyan ocean field peaks at lag **16** on both axes (0.96 / 1.00); town wall blocks come in 16 px runs and 16 px-tall bands |
+| map region | **cols 0-39, rows 0-19**, full width | cyan spans game y 0..158 and the whole x range; heavy text ink starts at row 20 |
+| viewport | **20 x 10 tiles** | 40/2 by 20/2 |
+| player in window | tile **(9, 5)** -> offsets `x - 9`, `y - 5` | figure measured at about 150,85 game px |
+| row 24 | **blank** | white ink per text row is 413/461/441/334 for rows 20-23 and **0** for row 24 |
+| bottom band | CMD echo cols 0-28, status block cols 30-39, **both rows 20-23** | agrees with the asm-proven `H.P.` r20 c30 / FOOD r21 / EXP r22 / GOLD r23 |
+
+So the kickoff's arithmetic stands and its own later doubt was misplaced: the window
+is **20x10 tiles at 2x2 cells**, asymmetric at **9 left / 10 right** and **5 above /
+4 below**, computed as a fixed offset from the player rather than a centred window.
+The one number the kickoff flagged as resting on memory alone — 9 left, 10 right —
+is now measured, and it came out as remembered.
+
+Two things the screenshots settle that the draw loop would not have given us cheaply:
+
+* **towns use the same tile grid as the overworld.** The town screen is the same
+  magenta ground and cyan water with buildings as solid 2x2-cell blocks and the
+  site name in a bordered banner box (`MUSEUM`; `PORT BONIFICE` appears the same way
+  on the overworld on entry). So CP4's tile renderer serves CP6 towns unchanged.
+* **the plane screen is the same map with a different figure**, which matches the
+  `and $0x3f` auto-move loop in `asm/38B0_cmd_L`: flight redraws the same viewport
+  instead of switching display model.
+
+What stays open about the draw is now only its **implementation**, not its shape:
+which function paints the window, and the terrain ID -> glyph table. The geometry is
+no longer a guess.
 
 ### Open for the owner
 
@@ -1170,24 +1203,20 @@ tile-size question is back on the table as 1x1 or 2x2 cells.
 2. Whether the EGA reconstruction is ever in scope. If it is, it is its own
    checkpoint with its own asm-equivalent spec, not a CP9 subtask.
 
-### Evidence gap: the play screenshot is not in the project
+### Evidence gap: closed, and the failure mode is worth naming
 
-Several CP4 numbers (tile size in cells, the 9-left / 10-right split, the window
-bounds) trace back to a gameplay screenshot the owner pasted into a chat on
-2026-10-27. **The image was never saved**, so no later session can re-measure it:
-`find` over the project returns no image files, and `docs/` carries only the prose
-conclusions. That is why the kickoff records "memory has been off by one twice
-today" — the numbers were being re-quoted rather than re-measured.
+An earlier version of this section recorded that the CP4 viewport numbers rested on
+a chat screenshot that had never been saved, so they were being **re-quoted between
+sessions instead of re-measured** — which is why the kickoff notes memory was off by
+one twice in a day. Fixed: the images are on disk under `captures/screenshots/` and
+every number in the table above is reproducible from them.
 
-The fix is not a live DOSBox capture. It is the same file, committed to disk and
-measured with code once: the pixel grid gives the tile size, the window bounds and
-the player's offset inside the window directly, which is stronger evidence than an
-eyeball and stronger than a recollection. What a screenshot *cannot* settle is
-motion — whether the view scrolls per step or redraws, and what happens at a sector
-edge — and those are already answered from `asm/` (the `>= 0x40` sector reload).
-
-Per the content rule, the derived measurements go in the docs and the image itself
-stays gitignored alongside the raw `captures/` blobs.
+The lesson, stated for the next checkpoint: **an evidence source nobody can open is
+indistinguishable from a settled fact right up until someone tries to check it.**
+Evidence that arrives in chat gets copied to disk in the same turn or it is marked
+as unverifiable. A screenshot still cannot settle motion — whether the view scrolls
+per step, what happens at a sector edge — and those came from `asm/` instead (the
+`>= 0x40` sector reload).
 
 ### Not yet done
 
