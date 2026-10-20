@@ -103,9 +103,14 @@ Do these in order; each is cheap and each changes the design.
    player's memory of a window tends to round toward symmetry, so an uneven split
    is a fact to extract from code rather than to ask about.
 
-   **Remaining unknown in the horizontal axis:** which side gets 9 and which gets
-   10, i.e. whether the offset is `player_tile_x - 9` or `- 10`. Readable from the
-   same draw loop in one line.
+   **Remaining unknown in the horizontal axis:** the owner's recollection is
+   **9 left and 10 right**, i.e. the offset is `player_tile_x - 9`. That is
+   consistent with the forced 20-wide window, but it is the one number here still
+   resting on memory, and memory has been off by one twice today. Unlike those two
+   errors this is not symmetry-rounding — 9/10 is already uneven — but *which side*
+   gets the extra column is exactly the kind of thing that reverses in
+   recollection. Confirm it from the draw loop in the same pass as everything
+   else; it is one line.
 
    **Prediction to check against the draw loop:** the vertical offset should be a
    fixed tile count that leaves 10 rows of map above row 20, and the horizontal
