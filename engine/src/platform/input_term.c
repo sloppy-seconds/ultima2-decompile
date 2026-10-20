@@ -114,6 +114,36 @@ static int term_read(u2_ctx *ctx, u2_key *out, int block)
         fcntl(STDIN_FILENO, F_SETFL, fl);
 
     if (n == 1) {
+        /* Decode the CSI sequences a terminal actually sends. Without this an
+         * arrow key arrives as ESC, '[', 'A' — three separate keys — so a game
+         * that wants arrows for field navigation cannot have them, and the ESC
+         * also reads as "cancel" wherever the original used ESC. Only consume a
+         * sequence when the follow-up bytes are already waiting, so a lone ESC
+         * still arrives as ESC (the original depends on that). */
+        if (c == 0x1b && ti->raw) {
+            struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN, .revents = 0 };
+            if (poll(&pfd, 1, 0) > 0) {
+                unsigned char seq[2] = { 0, 0 };
+                if (read(STDIN_FILENO, seq, 1) == 1 && seq[0] == '[') {
+                    unsigned char f = 0;
+                    int guard = 0;
+                    /* Read the final byte one at a time: a non-blocking read of
+                     * 2 would return 1 byte and silently drop the modifier. */
+                    while (guard++ < 8 && read(STDIN_FILENO, &f, 1) == 1) {
+                        if (f >= 0x40 && f <= 0x7e) break;
+                    }
+                    switch (f) {
+                    case 'A': out->ch = U2_KEY_UP;   out->scan = 0x48; return 1;
+                    case 'B': out->ch = U2_KEY_DOWN; out->scan = 0x50; return 1;
+                    case 'C': out->ch = U2_KEY_RIGHT;out->scan = 0x4d; return 1;
+                    case 'D': out->ch = U2_KEY_LEFT; out->scan = 0x4b; return 1;
+                    default:  return 0;      /* unknown sequence: swallow it */
+                    }
+                }
+                /* ESC followed by something that is not a CSI: pass the ESC
+                 * through and leave the rest for the next poll. */
+            }
+        }
         out->ch = c;
         out->scan = 0;
         return 1;

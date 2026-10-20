@@ -46,6 +46,15 @@ typedef struct u2_key {
     uint8_t scan;
 } u2_key;
 
+/* Pseudo characters for keys the original reached through INT 16h scan codes.
+ * The original only ever used printable keys plus ESC, so these exist for the
+ * engine's own interaction improvements (docs/phase4-plan.md § 4a) and are
+ * deliberately outside the ASCII range a game string could contain. */
+#define U2_KEY_UP    0xF0
+#define U2_KEY_DOWN  0xF1
+#define U2_KEY_LEFT  0xF2
+#define U2_KEY_RIGHT 0xF3
+
 /* Character-cell display. The engine owns the 80x25 grid (core/vram.h);
  * renderers only paint it. */
 typedef struct u2_renderer {
