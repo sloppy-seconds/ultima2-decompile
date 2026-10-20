@@ -493,8 +493,8 @@ offset, not hex strings: `segment=2238, offset=75`.
 | `0x4B` | STRENGTH | BCD | |
 | `0x4C` | AGILITY | BCD | gates weapon equip: `index*8 < AGILITY` |
 | `0x4D` | STAMINA | BCD | |
-| `0x4E` | WISDOM | BCD | |
-| `0x4F` | CHARISMA | BCD | |
+| `0x4E` | WISDOM **or** CHARISMA | BCD | order not provable from this character — see note |
+| `0x4F` | CHARISMA **or** WISDOM | BCD | order not provable from this character — see note |
 | `0x50` | INTELLIGENCE | BCD | attribute order is STR, AGI, STA, WIS, CHA, INT |
 | `0x51` / `0x52` | HP | BCD, high pair first | `0x40 0x00` = 4000 |
 | `0x53..0x55` | food | BCD, 3 bytes | the turn odometer: -19 per move, -10 per pass |
@@ -538,6 +538,15 @@ is `STRENGTH`, where the attribute table begins.
 The display appends a literal `S` for the plural (`asm/4881`) and skips it for
 index 3 only, because `BOOTS` is already plural — which is what proves this table
 is the one in use.
+
+### Not proven: which of `0x4E` / `0x4F` is WIS and which is CHA
+
+The test character has WISDOM 10 and CHARISMA 10, so the live block cannot tell
+them apart, and the save bytes match either reading. `engine/src/core/state.h`
+labels `0x4E` as `stat_cha` and `0x4F` as `stat_wis`; an earlier draft of this
+section asserted the opposite as fact and was not entitled to. Settle it with a
+character whose WIS and CHA differ, or by reading the status draw code, before
+any editor ships a label for those two bytes.
 
 ### Save file (`player`, 384 bytes)
 
