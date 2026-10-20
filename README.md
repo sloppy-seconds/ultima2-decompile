@@ -67,12 +67,37 @@ Known names so far: the 26 command handlers `cmd_A`..`cmd_Z`, `str_out`
 `clock_int1a`, `dos_int21`, `speaker_tone`) marking every hardware/DOS call
 site — the replacement surface for a future portable port (Phase 5).
 
-## Analysis toolchain (not vendored)
+## How this was made
 
-Spice86 (GPL), Reko (GPL-2.0) and JWasm (Open Watcom Public License) are used
-locally for analysis but are gitignored — fetch them separately; see
-`tools/jwasm/README.md` and `docs/reko-install.md`. Their output informed
-naming and structure; the committed reconstruction is our own authored work.
+This is an **AI-driven decompilation project**. All three phases — evidence
+capture, function-boundary analysis, and the clean byte-exact assembly
+reconstruction — were executed by AI coding agents under human direction:
+the human set goals, made style and scope decisions at review gates (and
+played the rebuilt game for final acceptance); the agents wrote the tooling,
+the reconstruction and every verification log.
+
+* **Agent harness:** [pi](https://pi.dev) (coding-agent CLI).
+* **Model:** `qwen3.8-flash-next`, served **locally** — no cloud inference.
+* **Hardware:** AMD “Strix Halo” (Ryzen AI Max+ 395) with 128 GB unified
+  memory, Fedora Linux.
+* **Verification principle:** the AI never asked to be trusted. Every claim
+  reduces to an exit code: `check_func.py` per function, `assemble_clean.sh`
+  for the whole binary, checksum in CI.
+
+### Toolchain (used locally, not vendored)
+
+| Tool | Role here | License |
+| --- | --- | --- |
+| GNU binutils 2.46 (`objdump`, `as`, `objcopy`) | ground-truth disassembly + the verifying assembler (`.code16`, `--32`) | GPL-3.0 (usage only; no code incorporated) |
+| [Spice86](https://github.com/Spice86/spice86) | x86 emulator; dynamic traces (executed-block CFG, memory dumps) that made function boundaries execution-confirmed | GPL-3.0 |
+| [Ghidra](https://ghidra-sre.org/) 12.1.4 | static-analysis reference (headless scripts in `tools/ghidra/`) | Apache-2.0 |
+| [Reko](https://github.com/uxmal/reko) 0.12.5 | decompiler drafts used only as *naming hints*; the asm slices remained the sole authority for content | GPL-2.0 |
+| [JWasm](https://jwasm.github.io) 2.21 | MASM-dialect target assembler for dual-assembly verification (`tools/dialect_masm.py`) | Open Watcom Public License |
+| Python 3.14 | our analysis/build tooling in `tools/` | — |
+
+Vendored tool builds (Spice86, Reko, JWasm) are gitignored and re-fetchable;
+nothing GPL/OWPL is incorporated into committed source. The reconstruction,
+tooling and documentation in this repo are our own authored work.
 
 ## Status
 
