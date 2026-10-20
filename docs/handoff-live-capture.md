@@ -1,112 +1,126 @@
-# Handoff — live-capture session, 2026-10-21 (read this first after compaction)
+# Handoff — live-capture work, updated 2026-10-21 (evening)
 
-Written deliberately before a context compaction. Everything proven is on disk
-and committed; this file is the index and the list of things that are now
-**known wrong in the engine**.
+Read this first after a compaction or a fresh session. It replaces the morning
+version. Evidence lives in `docs/spice86-live-findings.md`; this file is the
+index, the running state, and the list of what to do next.
 
-## Read in this order
+## Running state right now
 
-1. `AGENTS.md` — isolation, licensing, script rules. Hard law.
-2. `docs/spice86-live-findings.md` — **the new evidence**, 7 sections. This is
-   the freshest and most reliable thing we have.
-3. `docs/phase4-implementation.md § CP4b` — contains a **RETRACTION** subsection.
-   The two T1 subsections above it are false; the retraction is what stands.
-4. `docs/phase4-overnight-cp4b.md § Morning report` — the T1 and part of the T2
-   entries are marked retracted there too.
-5. `docs/spice86-capture.md` — how to drive Spice86 (note: its monster layout
-   and "DS:13 = player tile id" lines are corrected by the findings doc).
+* **Spice86 is stopped.** Ports 20180 / 20181 / 20190 free. Nothing to clean up.
+* **No recorder running.**
+* Owner is offline for the rest of the day — do not start a capture expecting
+  someone to play.
+* Beware: `pgrep -f Spice86` matches its own shell and reports a phantom
+  process. Check the ports instead.
 
-## Live state at time of writing
+## Harvests on disk
 
-Spice86 is **running** with the owner playing in it:
+| dir | what it is |
+| --- | --- |
+| `captures/spice86/vga-test/` | **newest and richest** — 965 blocks, buffed-character fight, kill observed live |
+| `captures/spice86/play-test-live/` | 959 blocks, the paralyze/thief/sea-monster session; its `spice86dumpMemoryDump.bin` is the one most analysis was run against |
+| `captures/spice86/baseline-fight/` | pre-fight snapshot kept as a diff baseline |
+| `captures/spice86/create-test-live/` | 901 blocks, pre-fight |
+| others | tooling smoke tests, safe to delete with owner approval |
 
-```
-pid 1513825   label play-test
-run dir  tmp/20261021-064945      (TEST character seeded via --player)
-http 20180   mcp 20181   gdb 20190
-```
+The before/after **CFG set-difference** is the technique that worked: diff the
+`entry` fields of two `spice86dumpCfgBlocks.json` files and print `asm` for the
+new blocks. It localised the entire combat path in seconds, and it is how the
+gold/exp filename swap was found.
 
-Do **not** kill it to be tidy. To stop it properly: `tools/spice86_stop.sh`.
-To harvest without stopping: `tools/spice86_start.sh --harvest`.
-Poll the API at a few Hz maximum — windowed Spice86 crashes above that
-(`CfgCpuViewModel.cs:459` race, already lost one session to it).
+## Tools built, and whether they are actually tested
 
-Harvests on disk: `captures/spice86/{create-test-live,play-test-live}/` are the
-two that matter (pre-fight and post-fight, 901 and 920 blocks). The rest are
-tooling smoke tests and can be deleted with the owner's OK.
+| tool | status |
+| --- | --- |
+| `tools/vga_screen.py` | **tested, works** — renders the text-mode screen from any memory dump |
+| `tools/map_render.py` | **tested, works** — renders the 64x64 sector with player and monsters |
+| `tools/xref_provenance.py` | **tested, works** — docs↔asm cross-reference |
+| `tools/poll_probe.py` | **tested, works** — measured 250 req/s, zero errors |
+| `tools/turn_recorder.py` | **works, two cosmetic flaws** (below) |
+| `tools/vga_ring.py` | **UNTESTED** — written after the session ended |
 
-## What is now PROVEN (was previously guessed or wrong)
+`turn_recorder.py` flaws, both known and neither blocking: `DS:20` is scratch
+rather than a pure invalid-move counter so `[reject]` rows are noise; and
+position and food update non-atomically, so one move can split across two
+samples and show as an odometer anomaly.
 
-* Overworld passability is real and tile-based. `0x00` water blocks on foot,
-  `0x0C` does not, mountains block (tile id not yet captured). Rollback happens
-  **before** the redraw.
-* Accepted move costs **19** food. Idle auto-PASS costs **10** and fires every
-  ~7.6 s at `--Cycles 3000`. Idle auto-PASS also **advances monsters one cell**,
-  so standing still is not safe.
-* Accept path is runtime `0x2664`: `x &= 0x3F; y &= 0x3F; ret 0`. The overworld
-  **wraps**. Reject path is runtime `0x25FF`: `mov al,0xFF; ret`.
-* Combat: attack value from readied weapon `DS:61` ×8 + strength `DS:4B`
-  (`0x2BFB`); a kill zeroes the monster record (`0x2D8C`) and awards gold
-  `DS:58/59` and exp `DS:56/57`; player damage is `sbb [DS:22]` from `DS:51`
-  (`0x0C09`). `A` attacks, `R` equips (not a combat key), arrows face.
-* Monster arrays are **stride 1**: `x=DS:137+i`, `y=DS:157+i`, `sprite=DS:1B7+i`,
-  `active=DS:197+i` (0x40 = empty). Not stride `0x20`.
-* `monx20` is empty, so monsters are RNG-spawned; the seed comes from `0x40:6C`
-  at launch and is frozen under emulation — which is why the same monster
-  reappears across launches. It is not in the save.
-* Character creation writes a complete loadable `player` record without `Q`.
-* `DS:13` is the player's own tile id, **not** the travel mode.
+## The one experiment still owed
 
-## What is WRONG in the engine right now (the actual work list)
+**Paralysis + boots.** Never completed — the owner fought instead. Procedure,
+all of it verified working except the last step:
 
-These are code defects created by the claims we have since disproven:
+1. Start: `tools/spice86_start.sh --name boots-test --player tmp/20261021-084906/player`
+   (that save is the buffed TEST character: stats 99, HP 4000, quick sword, power armour)
+2. Start `tools/vga_ring.py` **before** the fight — turn-boundary sampling cannot
+   catch combat text, continuous sampling is the only hope.
+3. Let the caster paralyze → expect `LEGS PARALIZED!`
+4. Try to act while paralyzed — does it block movement only, or commands too, and
+   does a paralyzed turn still spend food?
+5. Write boots: MCP `local-mcp_write_memory`, `segment=2238, offset=219, data="01"`
+   (`DS:D6[3]`, and the MCP wants **decimal** integers)
+6. Let it try again → expect `SAVED BY MAGICAL BOOTS!`
 
-1. `engine/src/game/overworld.c` — the loop **refuses** out-of-range steps
-   (`if (nx < 0 || nx >= U2_SECTOR_EDGE ...) continue;`). The original wraps
-   `& 0x3F`. This is faithful-to-nothing; fix to wrap.
-2. `engine/src/game/overworld.c` — **no passability at all**. Needs the tile
-   table; `0x00` and mountains block. `--INVALID MOVE!` echo is already
-   implemented as a string but never triggered.
-3. `engine/src/game/overworld.c` — food tick only on `PASS` (`−10`). Missing
-   **−19 per accepted move** and the **idle auto-PASS** (−10 / ~7.6 s, which
-   must also move monsters). The auto-PASS needs a decision on clock backend so
-   it does not perturb the CP2 baseline under the script clock.
-4. `engine/src/game/overworld.c` — the Q-save "on foot" guard reasons from
-   `DS:13 >= 0x78`, but `DS:13` is the player tile id. Re-derive or mark it.
-5. `engine/tests/food_check.c` — still correct for PASS arithmetic, but its
-   "4001st PASS kills" framing ignores that moves cost 19, so real starvation
-   arrives far sooner. Extend, don't just trust it.
-6. `docs/spice86-capture.md` — still says monster arrays are stride `0x20`. Fix.
+Step 6 is the payoff: `asm/0E70_combat_paralyzed_legs.asm` carries both strings
+and the boots gate at runtime `0x22FD` returns early when `DS:6D` is non-zero,
+but **no traced edge joins the gate to the paralysis event**. This proves or kills
+the claim behaviourally.
 
-## Not yet captured (the queue, in priority order)
+## Fresh findings from today, not yet in the engine
 
-1. **Mountain tile id** — stand next to a mountain, walk into it while the
-   logger runs, read the destination tile. One minute of owner time.
-2. **The passable-tile set** — `mapx20` has `0x00,0x04,0x08,0x0C,0x10,0x18,0x20,0x24`;
-   only `0x00` (block) and `0x0C` (pass) are measured. Roam with the logger on.
-3. **Boat on water** — the owner predicts a frigate on a water tile makes it
-   passable. Untested. Needs a sector with a boat.
-4. **What `[DS:15]` / `[DS:18]` really are** — the passability argument changes
-   value between moves (`0x84,0x06,0x18,0x98`); the mode dispatch in the tail
-   (runtime `0x2545..0x2660`) is still not understood. Do not guess a third time.
-5. **Full combat capture** — a fight started *and* ended cleanly, plus a CFG
-   harvest, to pin hit detection, monster damage rolls, and death.
-6. **Sector edge** — walk to x=0 and one past, diff `DS:49/4A`, `DS:6E`, and the
-   map buffer, to settle whether the `&0x3F` wrap is the whole story or the
-   `DS:6E` arrival system also fires.
+* **The staff was stolen.** `DS:D6[2]` (STAFF) went to 0 during the fight and a
+  BRASS BUTTON appeared at `[11]`. That is the theft decrement at `0x0FE7`
+  observed happening for real — the owner had suspected exactly this.
+* **Combat text does not survive turn-boundary sampling.** 151 turns of a real
+  fight, zero readable lines in the framebuffer, though memory proved a kill.
+* **A kill was measured live**: gold +13, exp +4, monsters 5→4 — inside the
+  `(rand&0x17)|1` and `(rand&3)+1` ranges the model predicts.
+* **`Z` pauses the game on the status screen.** Writes take effect immediately
+  but the screen is frozen, and while paused no turns occur.
 
-## Useful one-liners
+## Engine state
 
-Read live state (keep it to one request, a few Hz max):
+Tier 1 shipped this session (`74286ac`): the walk loop wraps instead of refusing,
+an accepted move spends 19 food, `0x00` blocks, and unknown tile ids pass while
+recording themselves into `u2_overworld_unmeasured_tiles()` so a permissive
+default announces itself. `make test` green at HEAD.
 
-```python
-# DS = 0x08BE; physical = seg*16 + off
-urllib.request.urlopen("http://127.0.0.1:20180/api/memory/35040/range/1536")
-```
+Still wrong, still open:
 
-Tile under the player: map buffer is at `DS:[DS:0x472]` (was `DS:1800`),
-indexed `y*64 + x`.
+1. Mountain tile id unknown — `0x10` is **not** mountain (the player stood on it)
+   and the owner states mountains never pass on foot. Do not guess again.
+2. Idle auto-PASS (~7.6 s at `--Cycles 3000`, −10 food, also advances monsters)
+   is not modelled. Needs a clock-backend decision so it does not perturb the
+   CP2 baseline under the script clock.
+3. The Q-save on-foot guard reasoning from `DS:13 >= 0x78` — now seen three times
+   in the original, so the idiom is real; the engine's use is probably fine.
+4. `docs/spice86-capture.md` still describes the monster arrays at stride `0x20`.
+5. `engine/src/core/state.h` labels `DS:4D` as int; it is STAMINA. And `DS:4E`
+   vs `DS:4F` (WIS vs CHA) is **not provable** from a character where both are 10
+   — see findings § 11 before labelling either.
+6. `asm/2423` declares a `2423..242C` range for a routine running to ~`0x2680`.
+   A CP3 re-decode of that span is owed.
 
-CFG diff that found the combat code: load two
-`captures/spice86/*/spice86dumpCfgBlocks.json`, set-subtract the `entry` fields,
-print `asm` for the new blocks. That diff did more than an hour of reading.
+## Decisions taken (do not re-litigate)
+
+* **Cross-sector attacks**: original mode reproduces the sector-edge targeting
+  restriction including the whiff; enhanced mode fixes it. A cross-sector hit is
+  therefore a *legitimate* CP2 differential mismatch.
+* **Provenance**: add `# provenance:` lines only where we actually know, filled in
+  as work proceeds — not a backfill of `static` everywhere.
+* **asm renames**: `2DC1` is gold gain, `2DEE` is exp gain (done). Renaming corpus
+  files is allowed when byte-proven.
+
+## Standing rules that bit me today
+
+* **Compute indices in code; never split hex by eye.** I miscounted `DS:D6` and
+  built a whole false "green gem vs blue tassle" discrepancy on it. The owner was
+  right and the table was right.
+* **List the corpus before harvesting.** `asm/` already had
+  `0FCD_combat_thief_steal`, `0E70/0EC2_combat_paralyzed_legs/arms`,
+  `0F12_combat_magic_missile`, `0F48_combat_sleep_spell`. I went hunting in
+  runtime data for things already named on disk.
+* **Ask before capturing, and never block for minutes.** Long foreground
+  captures swallow the owner's queued messages. Run detached, check between
+  turns.
+* **Python block-buffers stdout through a pipe** — use `-u` or the recorder looks
+  dead while working.
