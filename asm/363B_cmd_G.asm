@@ -8,7 +8,6 @@
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
 cmd_G:
-cmd_G:
 L_00383b:
         call L_0051df
         db "GET",0x00        # string

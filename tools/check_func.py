@@ -120,18 +120,28 @@ def main():
                 i += 1
         return ",".join(f"0x{ord(b):02x}" for b in bs)
 
+    def _split_comment(rest):
+        """Split trailing '#...' comment (outside quotes) from operand text."""
+        inq, esc = False, False
+        for idx, ch in enumerate(rest):
+            if esc:
+                esc = False
+            elif inq and ch == "\\":
+                esc = True
+            elif ch == '"':
+                inq = not inq
+            elif ch == "#" and not inq:
+                return rest[:idx], rest[idx:]
+        return rest, ""
+
     fixed = []
     for line in body.splitlines():
         m = re.match(r"^(\s*)(db|\.byte)\s+(.*)$", line)
         if not m:
             fixed.append(line)
             continue
-        ind, items = m.group(1), _split_outside_quotes(m.group(3))
-        # trailing comment = last item starting with '#' (gas comment char)
-        comment = ""
-        last = items[-1].strip()
-        if last.startswith("#"):
-            comment = "  " + items.pop()
+        ind, code, comment = m.group(1), *_split_comment(m.group(3))
+        items = _split_outside_quotes(code)
         hexs = []
         for it in items:
             it = it.strip()
@@ -141,7 +151,8 @@ def main():
                 hexs.append(_str_to_hex(it))
             else:
                 hexs.append(it)
-        fixed.append(f"{ind}.byte {','.join(hexs)}{comment}" if hexs
+        cmt = ("  " + comment) if comment else ""
+        fixed.append(f"{ind}.byte {','.join(hexs)}{cmt}" if hexs
                      else f"{ind}{comment.strip()}".rstrip())
     body = "\n".join(fixed)
     defined = set()

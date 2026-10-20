@@ -1,0 +1,346 @@
+# sub_6b3d — mechanical clean (bulk wave); behavior not yet reviewed
+# func 6B3D..6CC3  len 0187 B  evidence: call+reko
+# calls: L_004d76, L_004daa, L_005ed2, L_006d47, L_006da0, L_006df6, L_006e5c, L_006e8c (+3 more)
+# confidence: low (bytes proven by check_func.py)
+# bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+sub_6b3d:
+L_006d3d:
+        nop
+L_006d3e:
+        call L_006f83
+L_006d41:
+        mov    $0x0,%bh
+L_006d43:
+        mov    $0x0,%bl
+L_006d45:
+        .byte 0x8b,0xf3  # forced-kept: gas re-encodes 'mov    %bx,%si' differently
+L_006d47:
+        mov    0x4cd(%si),%al
+L_006d4b:
+        mov    %al,0x4c3
+L_006d4e:
+        stc
+L_006d4f:
+        cmc
+L_006d50:
+        sbb    0x47b,%al
+L_006d54:
+        cmc
+L_006d55:
+        jb L_006d7f
+L_006d57:
+        xor    $0xff,%al
+L_006d59:
+        clc
+L_006d5a:
+        rcr    $1,%al
+L_006d5c:
+        clc
+L_006d5d:
+        rcr    $1,%al
+L_006d5f:
+        clc
+L_006d60:
+        rcr    $1,%al
+L_006d62:
+        clc
+L_006d63:
+        rcr    $1,%al
+L_006d65:
+        mov    $0x0,%ah
+L_006d67:
+        .byte 0x8b,0xf8  # forced-kept: gas re-encodes 'mov    %ax,%di' differently
+L_006d69:
+        mov    0x4c3,%al
+L_006d6c:
+        stc
+L_006d6d:
+        cmc
+L_006d6e:
+        sbb    %cs:0x6cac(%di),%al
+L_006d73:
+        cmc
+L_006d74:
+        jb L_006d79
+L_006d76:
+        jmp L_006e8c
+L_006d79:
+        mov    %al,0x4c5
+L_006d7c:
+        jmp L_006da0
+L_006d7e:
+        nop
+L_006d7f:
+        clc
+L_006d80:
+        rcr    $1,%al
+L_006d82:
+        clc
+L_006d83:
+        rcr    $1,%al
+L_006d85:
+        clc
+L_006d86:
+        rcr    $1,%al
+L_006d88:
+        clc
+L_006d89:
+        rcr    $1,%al
+L_006d8b:
+        mov    $0x0,%ah
+L_006d8d:
+        .byte 0x8b,0xf8  # forced-kept: gas re-encodes 'mov    %ax,%di' differently
+L_006d8f:
+        mov    0x4c3,%al
+L_006d92:
+        clc
+L_006d93:
+        adc    %cs:0x6cac(%di),%al
+L_006d98:
+        mov    %al,0x4c5
+L_006d9b:
+        jae L_006da0
+L_006d9d:
+        jmp L_006e8c
+L_006da0:
+        mov    0x50d(%si),%al
+L_006da4:
+        mov    %al,0x4c4
+L_006da7:
+        stc
+L_006da8:
+        cmc
+L_006da9:
+        sbb    0x47c,%al
+L_006dad:
+        cmc
+L_006dae:
+        jb L_006dd5
+L_006db0:
+        xor    $0xff,%al
+L_006db2:
+        clc
+L_006db3:
+        rcr    $1,%al
+L_006db5:
+        clc
+L_006db6:
+        rcr    $1,%al
+L_006db8:
+        clc
+L_006db9:
+        rcr    $1,%al
+L_006dbb:
+        clc
+L_006dbc:
+        rcr    $1,%al
+L_006dbe:
+        mov    $0x0,%ah
+L_006dc0:
+        .byte 0x8b,0xf8  # forced-kept: gas re-encodes 'mov    %ax,%di' differently
+L_006dc2:
+        mov    0x4c4,%al
+L_006dc5:
+        stc
+L_006dc6:
+        cmc
+L_006dc7:
+        sbb    %cs:0x6cbc(%di),%al
+L_006dcc:
+        cmc
+L_006dcd:
+        mov    %al,0x4c6
+L_006dd0:
+        jns L_006df6
+L_006dd2:
+        jmp L_006e8c
+L_006dd5:
+        clc
+L_006dd6:
+        rcr    $1,%al
+L_006dd8:
+        clc
+L_006dd9:
+        rcr    $1,%al
+L_006ddb:
+        clc
+L_006ddc:
+        rcr    $1,%al
+L_006dde:
+        clc
+L_006ddf:
+        rcr    $1,%al
+L_006de1:
+        mov    $0x0,%ah
+L_006de3:
+        .byte 0x8b,0xf8  # forced-kept: gas re-encodes 'mov    %ax,%di' differently
+L_006de5:
+        mov    0x4c4,%al
+L_006de8:
+        clc
+L_006de9:
+        adc    %cs:0x6cbc(%di),%al
+L_006dee:
+        jns L_006df3
+L_006df0:
+        jmp L_006e8c
+L_006df3:
+        mov    %al,0x4c6
+L_006df6:
+        .byte 0x8b,0xde  # forced-kept: gas re-encodes 'mov    %si,%bx' differently
+L_006df8:
+        mov    %bl,0x4c9
+L_006dfc:
+        mov    0x4c7,%al
+L_006dff:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_006e01:
+        je L_006e14
+L_006e03:
+        mov    0x4cd(%si),%al
+L_006e07:
+        mov    %al,0x479
+L_006e0a:
+        mov    0x50d(%si),%al
+L_006e0e:
+        mov    %al,0x47a
+L_006e11:
+        call L_004daa
+L_006e14:
+        mov    $0x0,%bh
+L_006e16:
+        mov    0x4c9,%bl
+L_006e1a:
+        .byte 0x8b,0xf3  # forced-kept: gas re-encodes 'mov    %bx,%si' differently
+L_006e1c:
+        mov    0x4c5,%al
+L_006e1f:
+        mov    %al,0x479
+L_006e22:
+        mov    %al,0x4cd(%si)
+L_006e26:
+        mov    0x4c6,%al
+L_006e29:
+        mov    %al,0x47a
+L_006e2c:
+        mov    %al,0x50d(%si)
+L_006e30:
+        call L_004d76
+L_006e33:
+        cmpb   $0x2,0x4c7
+L_006e38:
+        jae L_006e52
+L_006e3a:
+        mov    %cs:0x6990,%bx
+L_006e3f:
+        add    %cs:0x6992,%bx
+L_006e44:
+        mov    %bx,%cs:0x6990
+L_006e49:
+        mov    $0x1,%cx
+L_006e4c:
+        call L_005ed2
+L_006e4f:
+        jmp L_006e5c
+L_006e51:
+        nop
+L_006e52:
+        decw   %cs:0x6994
+L_006e57:
+        jne L_006e5c
+L_006e59:
+        call L_007442
+L_006e5c:
+        mov    $0x0,%bh
+L_006e5e:
+        mov    0x4c9,%bl
+L_006e62:
+        .byte 0x8b,0xf3  # forced-kept: gas re-encodes 'mov    %bx,%si' differently
+L_006e64:
+        inc    %si
+L_006e65:
+        .byte 0x8b,0xde  # forced-kept: gas re-encodes 'mov    %si,%bx' differently
+L_006e67:
+        cmp    $0x40,%bl
+L_006e6a:
+        je L_006e76
+L_006e6c:
+        mov    0x4c7,%al
+L_006e6f:
+        cmp    $0x2,%al
+L_006e71:
+        jae L_006e73
+L_006e73:
+        jmp L_006d47
+L_006e76:
+        nop
+L_006e77:
+        mov    0x4c7,%al
+L_006e7a:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_006e7c:
+        je L_006e8b
+L_006e7e:
+        mov    $0x0,%ah
+L_006e80:
+        .byte 0x8b,0xc8  # forced-kept: gas re-encodes 'mov    %ax,%cx' differently
+L_006e82:
+        mov    $0x10,%bx
+L_006e85:
+        dec    %bx
+L_006e86:
+        jne L_006e85
+L_006e88:
+        dec    %cx
+L_006e89:
+        jne L_006e82
+L_006e8b:
+        ret
+L_006e8c:
+        nop
+L_006e8d:
+        mov    0x4cd(%si),%al
+L_006e91:
+        mov    %al,0x4c3
+L_006e94:
+        mov    0x50d(%si),%al
+L_006e98:
+        mov    %al,0x4c4
+L_006e9b:
+        call L_006f68
+L_006e9e:
+        mov    %al,0x4c5
+L_006ea1:
+        call L_006f68
+L_006ea4:
+        and    $0x7f,%al
+L_006ea6:
+        mov    %al,0x4c6
+L_006ea9:
+        jmp L_006df6
+L_006eac:
+        add    %ax,(%bp,%si)
+L_006eae:
+        add    (%si),%ax
+L_006eb0:
+        add    $0x706,%ax
+L_006eb3:
+        or     %cl,(%bx,%di)
+L_006eb5:
+        or     (%bp,%di),%cl
+L_006eb7:
+        or     $0xd,%al
+L_006eb9:
+        push   %cs
+L_006eba:
+        movups (%bx,%di),%xmm0
+L_006ebd:
+        add    (%bp,%di),%al
+L_006ebf:
+        add    $0x5,%al
+L_006ec1:
+        push   %es
+L_006ec2:
+        pop    %es
+L_006ec3:
+        .byte 0x08  # forced-kept: gas re-encodes 'or     %ah,0x47b(%bx,%si)' differently
