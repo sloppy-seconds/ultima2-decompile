@@ -68,6 +68,28 @@ grep -qE '"gold"[[:space:]]*:[[:space:]]*0' "$WORK/p_empty.out" \
     && ok "P with no character on disk loads nothing (the INSERT DISK path)" \
     || bad "P loaded a character from an empty directory"
 
+# --- the name is capped at 12 characters (asm/5BB7) -----------------------
+# The input loop stores a character, increments the index, and only continues
+# while the index is below 0x0c. Eighteen typed characters must therefore leave
+# exactly 12 in the record plus the 4 zero pad bytes the original writes, and
+# must not disturb the sex / class / race bytes that follow the field.
+printf 'ESC\nC\n' > "$WORK/longname.keys"
+for d in 2 0 2 0 1 5 1 5 1 0 1 0; do printf '%s\n' "$d" >> "$WORK/longname.keys"; done
+printf 'M\n1\n1\n' >> "$WORK/longname.keys"
+for ch in A B C D E F G H I J K L M N O P Q R; do printf '%s\n' "$ch" >> "$WORK/longname.keys"; done
+printf '0x0d\nY\n' >> "$WORK/longname.keys"
+mkdir -p "$WORK/longname"
+./u2 --headless --script "$WORK/longname.keys" --save-dir "$WORK/longname" \
+     > /dev/null 2>&1
+HEX=$(od -An -tx1 -N16 "$WORK/longname/PLAYER" 2>/dev/null | tr -d ' \n')
+[ "$HEX" = "4142434445464748494a4b4c00000000" ] \
+    && ok "name capped at 12 with 4 zero pad bytes, no overflow" \
+    || bad "name field wrong: got $HEX want 4142434445464748494a4b4c00000000"
+SEX=$(od -An -tx1 -j16 -N1 "$WORK/longname/PLAYER" 2>/dev/null | tr -d ' \n')
+[ "$SEX" = "4d" ] \
+    && ok "bytes after the name field survived a long name (sex = M)" \
+    || bad "name overflowed into the next fields: got $SEX want 4d"
+
 # --- interactive smoke test through a real pty ----------------------------
 # Both CP3 interactive bugs (seam_key_wait never blocking, and the creation form
 # never being presented) were invisible to every other test: headless reads the
