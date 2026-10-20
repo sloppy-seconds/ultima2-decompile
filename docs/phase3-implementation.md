@@ -299,3 +299,28 @@ Summary written to `disasm/phase3-summary.md`.
 **Gate:** owner approved 2026-10-20 after booting and playing
 `build/ultimaii-clean.bin` (the clean-tree rebuild, md5-identical to the
 original). **Phase 3 complete.**
+
+---
+
+## Post-CP6 — GitHub publishing prep — 2026-10-20
+
+Audit: LICENSE (Apache-2.0) present; `.gitignore` verified to cover all
+forbidden content (original/, references/, raw captures/, decompiled/, build/,
+vendored GPL/OWPL tool builds, bulky dumps, per-function mechanical slices);
+**git history audited clean** — no forbidden path ever committed.
+
+Changes for self-contained CI:
+* `asm/0000_data_prologue.asm` — MZ+PSP region committed as a data file so the
+  cleaned tree alone can rebuild the full binary.
+* `tools/check_func.py --no-compare` — assemble + length-check without the
+  copyrighted original (uses the known file size as a fact).
+* `tools/assemble_clean.sh` — two modes: local (byte-diff vs original) and CI
+  (no original present: rebuild + md5 vs the known checksum
+  `fe884d5117971073ac8097cc7a6aca25`). Verified in a simulated clean checkout
+  (tracked files only): `CLEAN REBUILD CHECKSUM-MATCH`.
+* `.github/workflows/build.yml` — rebuild + checksum on every push/PR; the
+  built binary is never uploaded as an artifact (no redistribution).
+* `README.md` — project statement, target provenance (Internet Archive pack,
+  appears community-patched, md5 stated), legal posture (no game files in
+  repo; derivative-work disclaimer; rights-holder contact path), verify-it-
+  yourself instructions, layout, toolchain and status.

@@ -28,6 +28,9 @@ import sys
 EXE = "original/ultimaii.exe"
 MAP = "disasm/function-map.tsv"
 BIAS = 0x200
+# known size of the original image (a fact, not content) — lets --no-compare
+# mode run in CI where the copyrighted original is (deliberately) absent
+EXPECTED_FILE_SIZE = 37344
 LABEL_DEF = re.compile(r"^([A-Za-z_$.][\w$.]*):")
 LABEL_REF = re.compile(r"\bL_([0-9a-fA-F]{6})\b")
 
@@ -65,6 +68,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("seg")
     ap.add_argument("--file")
+    ap.add_argument("--no-compare", action="store_true",
+                    help="assemble + length-check only; skip byte comparison "
+                         "against original/ (for CI without the copyrighted file)")
     ap.add_argument("-v", action="store_true")
     a = ap.parse_args()
     seg4 = a.seg.upper().removeprefix("0X")
@@ -73,12 +79,15 @@ def main():
 
     fs, fe, ev, hint = load_func(seg4)
     src = resolve_source(seg4, a.file)
-    orig = open(EXE, "rb").read()
+    orig = open(EXE, "rb").read() if os.path.exists(EXE) else None
+    if orig is None and not a.no_compare:
+        die(f"{EXE} not present; use --no-compare (CI mode)")
+    limit = len(orig) if orig is not None else EXPECTED_FILE_SIZE
     sfs, sfe = fs + BIAS, fe + BIAS
-    if sfe >= len(orig):
+    if sfe >= limit:
         # last function 8DCD: map range extends past EOF (segment padded to 0x9000,
         # file ends at 0x91E0); clamp to real bytes — assemble_all does the same.
-        sfe = len(orig) - 1
+        sfe = limit - 1
     length = sfe - sfs + 1
 
     body = open(src).read()
@@ -207,6 +216,10 @@ def main():
 
     subprocess.run(["objcopy", "-j", ".text", "-O", "binary",
                     f"{work}/check.o", f"{work}/check.bin"], check=True)
+    if a.no_compare:
+        print(f"PASS-NOCMP {seg4} {hint or 'sub_' + seg4.lower()} "
+              f"[{length} B] src={src}")
+        sys.exit(0)
     out = open(f"{work}/check.bin", "rb").read()
     mine = out[sfs:sfe + 1]
     if len(mine) < length:
