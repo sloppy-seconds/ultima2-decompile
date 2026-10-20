@@ -1,11 +1,12 @@
-# cmd_prompt_loop — main command prompt + letter dispatch loop
-# name-evidence: prints 'CMD: ', reads key, jump-table dispatch; cmd_done returns here
+# sub_277b — mechanical clean (bulk wave); behavior not yet reviewed
+# notes: 599 B region dominated by mis-decoded data (all forced-kept bytes);
+#        contains 'CMD: ' and 'Z' strings but structure not proven — NOT named.
 # func 277B..29D1  len 0257 B  evidence: seed+reko
 # strings: "CMD: "; "CMD: "; "PASS"; "ADVANCE" (+7 more)
 # calls: L_000911, L_000bfb, L_000c30, L_000c33, L_000e62, L_002a61, L_002b12, L_002b44 (+8 more)
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-cmd_prompt_loop:
+sub_277b:
 L_00297b:
         .byte 0xa2,0x70,0x00  # forced-kept: gas re-encodes 'mov    %al,0x70' differently
 L_00297e:

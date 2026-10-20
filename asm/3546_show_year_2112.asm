@@ -1,5 +1,5 @@
-# set_year_2112 — switches game calendar to ANOS 2112 A.D.
-# name-evidence: string 'ANOS: 2112 A.D.'
+# show_year_2112 — date-display branch for ANOS 2112 A.D. (time-period text)
+# name-evidence: string 'ANOS: 2112 A.D.'; body is a dispatch chain, calendar-write not proven
 # func 3546..3564  len 001F B  evidence: seed+reko
 # strings: "ANOS: 2112 A.D."
 # calls: L_000c33, L_0051df (str_out)

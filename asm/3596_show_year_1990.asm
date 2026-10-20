@@ -1,5 +1,5 @@
-# set_year_1990 — switches game calendar to ANOS 1990 A.D.
-# name-evidence: string 'ANOS: 1990 A.D.'
+# show_year_1990 — date-display branch for ANOS 1990 A.D. (time-period text)
+# name-evidence: string 'ANOS: 1990 A.D.'; body is a dispatch chain, calendar-write not proven
 # func 3596..35C0  len 002B B  evidence: reko
 # strings: "ANOS: 1990 A.D."
 # calls: L_000c33, L_0051df (str_out)

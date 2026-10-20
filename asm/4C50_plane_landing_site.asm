@@ -1,4 +1,4 @@
-# plane_landing_site — describes the plane landing site
+# plane_landing_site — location-description text block (landing-site context inferred)
 # name-evidence: strings 'IN THE WATER.' / 'IN A MARSH.'
 # func 4C50..4F10  len 02C1 B  evidence: seed+reko
 # strings: "IN THE WATER."; "GGER"; "CE"; "ORD" (+48 more)
