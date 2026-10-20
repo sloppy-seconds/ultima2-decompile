@@ -86,10 +86,26 @@ Do these in order; each is cheap and each changes the design.
    bottom-left (`CMD: NORTH` repeated, one line per command), status block
    bottom-right (`H.P.=6284`, `FOOD=1624`, `EXP.=2135`, `GOLD=0038`).
 
-   One tension left for the draw loop rather than argument: 11 tile-rows at 2 cells
-   is 22 cell-rows, leaving only 3 rows for a command echo that shows 4 lines in
-   the screenshot — so either the tile is not exactly 2x2, or the top row is
-   clipped, or the echo scrolls up into the map area.
+   **The row tension resolves from evidence already in hand, not from pixels.**
+   The status block is proven at rows 20, 21, 22 and 23 (`H.P.` r20c30, `FOOD` r21,
+   `EXP` r22, `GOLD` r23), and the command echo occupies the **same four rows on
+   the left** — the gameplay screenshot shows exactly that, four `CMD:` lines
+   beside four status lines. So the bottom boundary is fixed:
+
+   - rows 20-23: command echo (cols 0-28) + status block (cols 30-39)
+   - rows 0-19: the map, which is **20 cell-rows**
+
+   At 2 cells per tile that is **10 tile-rows, not 11**. The player is therefore
+   **not vertically centred**: it is 5 above + player + 4 below, or 4 + player + 5.
+   The owner's "5 above and below" is off by one, in the same way the width turned
+   out asymmetric. The width still lands exactly: 20 tiles x 2 cells = 40 columns,
+   full grid, split 9 + player + 10.
+
+   **Prediction to check against the draw loop:** the vertical offset should be a
+   fixed tile count that leaves 10 rows of map above row 20, and the horizontal
+   offset should be `player_tile_x - 9` or `- 10`. If the loop instead computes a
+   centred window, then the tile is not 2x2 cells and this whole reading is wrong.
+   Row 24 is unaccounted for — spare, border, or a fifth echo line.
 
    All four status values are a **single number zero-padded to 4 digits** (owner,
    2026-10-27). `H.P.=6284` is six thousand two hundred and eighty-four hit points,
