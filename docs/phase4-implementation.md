@@ -1436,7 +1436,8 @@ stage-then-flush renderer:
 holding **one byte per tile position**, 32 per row for 10 rows (320 tiles), and for
 each byte:
 
-```nmov    cl,[si+0x272]      ; staging byte = tile id
+```nasm
+mov    cl,[si+0x272]      ; staging byte = tile id
 or      cl,cl
 js      skip               ; bit 7 set => do not draw
 mov     di,cx
@@ -1497,6 +1498,78 @@ list of things to find but is clearly relevant to CP4: it reads sub-pixel offset
 four alignment cases, and ORs a byte from an 8-entry mask table at `CS:0x48D0`
 (`c0 30 0c 03 ff 11 88 cc`) into the destination. That is pixel-shifted blitting — the
 mechanism behind smooth camera movement rather than cell-at-a-time jumps.
+
+### The map byte -> tile index mapping, and a working render (2026-10-27)
+
+The fill loop is `asm/5AE1..5B6C` (runtime; the per-function files `asm/5B4D` and
+`asm/5C25` are fragments of it, which is why reading them alone was misleading — the
+function split cuts a single loop into pieces and the behaviour only appears when the
+range is re-decoded continuously). Re-decoding file `0x5C80..0x5DB0` gave the whole
+thing:
+
+```nasm
+mov      [0x03], al        ; DS:03 = y - 5      (stc; mov al,[0x01]; cmc; sbb al,5)
+mov      [0x02], al        ; DS:02 = x - 9      (same shape on DS:00, minus 9)
+loop:                          ; DS:04 = col, DS:05 = row
+  al = DS:04 + DS:02 ; cmp al,0x40 ; jae out_of_sector
+  al = DS:05 + DS:03 ; cmp al,0x40 ; jb  in_sector
+out_of_sector:
+  al = [0x12] ; jmp store        ; off-map tile comes from DS:12
+in_sector:
+  ...                            ; row/col -> linear index, add map pointer
+  al = [bx+si]                   ; the raw map byte
+  clc ; rcr al,1 ; and al,0xFE   ; <== the mapping
+store:
+  cmp al,[di+0x372] ; jne store_it
+  ...                             ; underlay comparison, see below
+store_it:
+  [di+0x272] = al ; inc di
+  inc DS:04 ; cmp DS:04,0x14 ; jne loop   ; 20 columns
+  inc DS:05 ; cmp DS:05,0x0a ; je  done   ; 10 rows
+```
+
+So, stated plainly:
+
+* **top-left map cell = (x - 9, y - 5)**, which puts the player at window tile (9, 5)
+  — the position measured from the screenshots, now derived from code.
+* **viewport = 20 x 10**, from `cmp $0x14` and `cmp $0xa`. Third independent
+  confirmation of the same geometry (screenshots, flush loop, fill loop).
+* **tile index = `(map_byte >> 1) & 0xFE`.** That is the answer to the question that
+  blocked the renderer: the map byte is *not* the tile index, the index lives in the
+  upper 7 bits with the low bit of the index forced clear.
+* **off-sector cells take their tile from `DS:12`**, which is why `DS:12 = 0xFF` in
+  the live capture reads back as an out-of-range marker rather than a tile.
+
+The underlay logic at the `store` label is a real feature and not obvious: if the
+computed index equals the corresponding byte in the **second buffer at `DS:0x372`**,
+the tile is suppressed with `or al,0x80` — the do-not-draw flag the flush loop honours.
+Two exceptions escape suppression: index 0 when `DS:0x54E == 0xFF`, and index `0x2E`.
+So `DS:0x372` is an underlay or background layer, and a top-layer tile that matches it
+is hidden. That is the mechanism, and reproducing it matters because without it the map
+renders with the wrong tiles blanked.
+
+**Verified end to end, not argued.** `tmp/proto_render.py` decodes the tile art, loads
+`mapx30` — the sector the live capture was actually in, from `DS:49=3, DS:4A=0` — and
+renders the 20x10 window at the captured position `x=33, y=23`. The result is
+unmistakably an Ultima II landscape: magenta dotted land, cyan water, mountain
+lattice, trees, and two humanoid figures standing in the world. Tile ids used by that
+sector are `{0, 4, 6, 8, 10, 16}`, spatially coherent, and the figures are *in the map
+data*, which says static figures are stored as ordinary map tiles rather than only as
+sprites.
+
+That also settles the owner's question — **yes, we know how to recreate the tile file**,
+and it is now demonstrated rather than proposed. The C port is mechanical.
+
+One genuine open item this surfaced, and it is a scope boundary rather than a bug: the
+map files fall into two families. The `*x0` sectors (`mapx10..mapx90`, `MAPG*0`) have
+max byte `0x4C` and **zero high-bit bytes**, and the mapping above works cleanly. The
+`*x4`/`*x5` sectors (`mapx15, 24, 25, 34, 35, 44, 45, 85`, `MAPG15/44/45/85`) are
+dominated by `0x00/0x40/0x80/0xC0/0xE0` with half the file high-bit, and those produce
+indices above 63, past the end of the 64-entry table. So they are not drawn by this
+path. Given `DS:4A` is the second filename digit and the live value was 0 with the
+overworld rendering correctly, the reasonable reading is that the high-bit family is a
+different map type with its own renderer — which is consistent with `*4`/`*5` being the
+last sectors of each planet. Flagged for CP5+, not CP4.
 
 ### Not yet done
 
