@@ -1,0 +1,9 @@
+# CP0 smoke script — drives the skeleton main loop, then quits.
+# Format: one key token per line ('#' starts a comment).
+#   single char | SP CR LF TAB ESC BS NUL DEL | 0xNN | WAIT | EOF
+# The loop echoes each key into the probe line at row 14; Q ends the run.
+P
+R
+0
+WAIT
+Q

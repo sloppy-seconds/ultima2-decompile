@@ -45,3 +45,23 @@ disasm/functions/
 # vendored jwasm build (Open Watcom Public License, re-fetchable; see tools/jwasm/README.md)
 tools/jwasm/*
 !tools/jwasm/README.md
+
+# local secrets (gh token etc.) — never commit
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------------------
+# Phase 4 engine.
+# engine/build/ holds extractor-generated gen_*.h derived from the user's own
+# copy of the game — generated game content is never committed (see AGENTS.md
+# Licensing & Commit Policy and engine/README.md).
+# ---------------------------------------------------------------------------
+engine/build/
+engine/u2
+engine/u2-sdl
+engine/tests/*.out
+
+# Raw output of the selfmod runtime-capture scans (scratch; the curated note
+# disasm/selfmod-capture.md is what is committed).
+disasm/selfmod-raw/

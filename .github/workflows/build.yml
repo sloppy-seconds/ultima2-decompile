@@ -27,3 +27,16 @@ jobs:
           for seg in 0100 2B8F 4FDF 363B 8DCD; do
             python3 tools/check_func.py "$seg" --no-compare
           done
+
+  # Phase 4: the portable C engine must build with nothing but a C11 compiler,
+  # and its headless smoke test must pass. No game content is involved: the CP0
+  # test runs on engine-authored placeholder text, so CI proves the automation
+  # substrate without shipping any of the original binary's strings.
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine (cc only, no dependencies)
+        run: make -C engine
+      - name: CP0 acceptance test
+        run: make -C engine test
