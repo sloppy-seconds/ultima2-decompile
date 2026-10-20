@@ -45,6 +45,86 @@ static void echo_cmd(u2_ctx *ctx, const char *word)
     seam_str_out(ctx, U2_S_CMD_PROMPT);
 }
 
+/*
+ * One packed-decimal `sbb`/`das` step, exactly as the original writes it.
+ *
+ * The original's idiom is `stc; cmc; sbb $imm,al; das; cmc; mov [..],al; jb
+ * death`. Two things about it are easy to get wrong and are the reason this is
+ * a named helper rather than inline arithmetic:
+ *
+ *   * `das` corrects on the **low nibble** too (the half-borrow the 8086 keeps
+ *     in AF, which `cmc` alone does not reproduce). Subtracting 0x0A from 0x00
+ *     gives 0xF6, and `das` turns that into 0x90 with a borrow — not 0xF6.
+ *     Skipping the AF term is how a food counter drifts into non-decimal bytes.
+ *   * the borrow the following `jb` tests is the byte borrow out, taken after
+ *     the correction.
+ *
+ * Verified against a reference model of the three-byte chain before it was
+ * ported: a fresh character (DS:53=04, DS:54=00, DS:55=00) dies on exactly the
+ * 4001st PASS, and the displayed pair DS:53/DS:54 reads 0399 after the first.
+ *
+ * Returns the corrected byte in *out and yields the borrow (1 = underflow).
+ */
+static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out)
+{
+    int af = ((a & 0x0Fu) < (sub & 0x0Fu) + (unsigned)borrow_in) ? 1 : 0;
+    int d = (int)a - (int)sub - borrow_in;
+    int cf = (d < 0) ? 1 : 0;
+    d &= 0xFF;
+    if ((d & 0x0Fu) > 9u || af) d = (d - 6) & 0xFF;
+    if (cf || (unsigned)d > 0x99u) d = (d - 0x60) & 0xFF;
+    *out = (unsigned)d;
+    return cf;
+}
+
+/*
+ * Time passes: one action, one BCD subtraction from the food triple.
+ *
+ * Proven shape (file 0x0B0D..0x0B33, the PASS arm of the walk loop): the
+ * original subtracts from DS:55 first and borrows upward through DS:54 and
+ * DS:53, each step followed by `das`, and a borrow out of the top jumps to
+ * runtime 0x0E62. PASS subtracts $0x0a; asm/2599 and asm/2626 subtract
+ * $0x19. The three bytes are one 6-digit packed-decimal number with the low
+ * byte at DS:55, while the status band prints only DS:53/DS:54 — the top four
+ * digits. That is why a fresh character's `FOOD=0400` is really 4000 units and
+ * one PASS moves the display only every tenth pass: the bytes say the last
+ * digit is real but invisible, so the engine keeps it rather than rounding it
+ * away.
+ *
+ * The borrow-out target is the whole of the "starvation" rule the bytes
+ * support: 0x0E62 (asm/0C62) zeroes DS:51..DS:59 — HP, FOOD, EXP and GOLD
+ * together — and calls the redraw. There is no separate "food at zero drains
+ * HP a little at a time" step anywhere in the tree; the owner's model said
+ * there would be, and the bytes disagree, so the bytes win and the
+ * disagreement is recorded rather than implemented.
+ *
+ * Returns 1 when the subtraction underflowed (the character just died).
+ */
+static int food_spend(u2_ctx *ctx, unsigned amount)
+{
+    u2_state *st = &ctx->state;
+    unsigned lo, mid, hi;
+    int borrow;
+
+    borrow = bcd_sbb(st->food_lo, amount & 0xFF, 0, &lo);
+    borrow = bcd_sbb(st->food_hi, (amount >> 8) & 0xFF, borrow, &mid);
+    borrow = bcd_sbb(st->food,    (amount >> 16) & 0xFF, borrow, &hi);
+
+    st->food_lo = (uint8_t)lo;
+    st->food_hi = (uint8_t)mid;
+    st->food    = (uint8_t)hi;
+
+    if (borrow) {
+        /* asm/0C62, runtime 0x0E62: every stat byte to zero, then redraw. */
+        st->hp = 0; st->unk_52 = 0;
+        st->food = 0; st->food_hi = 0; st->food_lo = 0;
+        st->exp_lo = 0; st->exp_hi = 0;
+        st->gold_lo = 0; st->gold_hi = 0;
+        return 1;
+    }
+    return 0;
+}
+
 int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 {
     echo_cmd(ctx, U2_S_Q_PROMPT);
@@ -79,6 +159,21 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
     if (u2_save_store(ctx) != U2_SAVE_OK)
         return 1;
     return 0;
+}
+
+/* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low
+ * byte of the food triple, with `das` — ten, in packed decimal. */
+#define U2_FOOD_PER_PASS 10u
+
+/* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low
+ * byte of the food triple, with `das` — ten, in packed decimal. */
+#define U2_FOOD_PER_PASS 10u
+
+/* Public wrapper over the same subtraction the PASS arm uses, so a test can
+ * drive it directly. Returns 1 when the subtraction underflowed (death). */
+int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount)
+{
+    return food_spend(ctx, amount);
 }
 
 /* Shared loader: everything after the spawn fields are set. */
@@ -221,6 +316,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case U2_KEY_LEFT:  dx = -1; word = U2_S_DIR_WEST;  break;
         case 'Q':
             u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
+            continue;
+        case ' ':
+            /* Space is PASS: the walk loop's own first arm (cmp $0x20 at file
+             * 0x0B3C). It prints PASS, then spends 10 food (file
+             * 0x0B0D..0x0B33). Underflow is death (asm/0C62). */
+            echo_cmd(ctx, U2_S_PASS);
+            if (food_spend(ctx, U2_FOOD_PER_PASS))
+                u2_status_draw(ctx);
             continue;
         default: continue;                                  /* not a move key */
         }

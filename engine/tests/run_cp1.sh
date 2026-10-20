@@ -115,14 +115,16 @@ grep -qE 'seam=char_print asm=5003 ch=0x(44|50|43) at=19,12' "$WORK/trace" \
     && ok "echoed choice lands after CHOICE: (row 19 col 12)" \
     || bad "echoed choice did not land on the CHOICE: line"
 
-# Fallback path, which is what CI gets: with no exe the two strings that live
-# inside the mis-decoded regions cannot be recovered from asm db lines, and the
-# extractor says so by yielding them empty. Everything else must still arrive.
+# Fallback path, which is what CI gets: with no exe the strings that live
+# inside the mis-decoded regions or inline in the code stream cannot be
+# recovered from asm db lines, and the extractor says so by yielding them
+# empty. Everything else must still arrive. The PASS echo (file 0x0B48) is one
+# of these: asm/0940 names it in its header but the split left no db line.
 python3 tools/extract/extractor.py --source asm --emit text >"$WORK/strings-asm" 2>/dev/null
 empty=$(awk -F'\t' '$2==""{n++} END{print n+0}' "$WORK/strings-asm")
 total=$(wc -l <"$WORK/strings-asm" | tr -d ' ')
-[ "$total" = "62" ] && [ "$empty" = "26" ] \
-    && ok "asm fallback yields $((total-empty))/$total strings (26 are exe-only by design)" \
+[ "$total" = "63" ] && [ "$empty" = "27" ] \
+    && ok "asm fallback yields $((total-empty))/$total strings (27 are exe-only by design)" \
     || bad "asm fallback yielded $((total-empty))/$total with $empty empty"
 
 # No game text may be committed: the generated header must stay ignored.

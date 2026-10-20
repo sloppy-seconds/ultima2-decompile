@@ -136,6 +136,11 @@ MANIFEST = [
     ("U2_S_Q_EARTH",           "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4005, 14)),
     ("U2_S_Q_FOOT",            "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4022, 13)),
     ("U2_S_Q_MOMENT",          "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4037, 18)),
+    # The PASS echo. The walk loop prints it from an inline string in the code
+    # stream (call at file 0x0B45, bytes "PASS\0" at 0x0B48), which is the same
+    # shape as the direction words; the split attributes it to no db line, so
+    # it uses a run locator verified against the raw bytes.
+    ("U2_S_PASS",              "0940_sub_0940.asm", ("run", 0x0B48, 4)),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')

@@ -90,7 +90,15 @@ typedef struct u2_state {
     /* 0x53 */ uint8_t food;          /* set to 4 at creation; BCD pair with 0x54,
                                         read at asm/5129_sub_5129.asm (FOOD=) */
     /* 0x54 */ uint8_t food_hi;
-    /* 0x55 */ uint8_t unk_55;        /* between food and exp; no site traced yet */
+    /* 0x55 */ uint8_t food_lo;       /* FOOD's third BCD byte. The status band
+                                         prints only 0x53/0x54 (4 digits), but the
+                                         drain routines subtract from 0x55 first and
+                                         borrow upward: PASS does `sbb $0x0a` on this
+                                         byte (file 0x0B10..0x0B15), so one PASS is
+                                         10 food. asm/2599/asm/2626 do the same with
+                                         $0x19 (19). Underflow is the death trigger
+                                         (jb to runtime 0x0E62, which zeroes
+                                         0x51..0x59). */
     /* 0x56 */ uint8_t exp_lo;        /* EXP.= display loads [0x56],[0x57] — note
                                          it is NOT 0x55; file 0x5367 */
     /* 0x57 */ uint8_t exp_hi;

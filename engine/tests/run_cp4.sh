@@ -145,6 +145,26 @@ else
     fi
 fi
 
+# --- time passes: the PASS action spends food, starvation kills -----------
+# file 0x0B0D spends 10 food per PASS and file 0x0B2E sends a borrow to the
+# death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/food_check" \
+   tests/food_check.c src/game/overworld.c src/game/status.c src/core/world.c \
+   src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
+   src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
+   src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
+   src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-food.err"
+if [ $? -ne 0 ]; then
+    bad "food test harness did not build: $(head -5 "$WORK/cc-food.err")"
+else
+    if "$WORK/food_check" > "$WORK/food.out" 2>&1; then
+        ok "food tick: PASS spends 10, underflow zeroes every stat ($(tail -1 "$WORK/food.out"))"
+    else
+        bad "food check failed:"
+        sed 's/^/        /' "$WORK/food.out"
+    fi
+fi
+
 # --- the map actually renders, when the player has their files ------------
 # The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
 # producing real pixels. Skips without the content, so CI stays honest.
