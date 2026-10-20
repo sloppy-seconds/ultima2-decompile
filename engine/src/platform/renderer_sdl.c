@@ -6,10 +6,12 @@
  * compiler, so the whole file is empty unless SDL was asked for.
  *
  * This is a presentation shell and nothing more: it uploads the u2_frame the
- * engine already composed and blits it to a window. All rendering semantics —
- * geometry, palette, the do-not-draw rule, clipping — live in core/frame.c, so
- * a backend cannot get the game wrong. That is the point of the split, and it is
- * what makes a hi-res or alternative renderer a *backend* rather than a fork.
+ * engine already composed, and for cell-only flows (title, menu, creation)
+ * renders the vram grid through core/font into its own text layer. All
+ * rendering semantics — geometry, palette, the do-not-draw rule, clipping —
+ * live in core/frame.c and core/font.c, so a backend cannot get the game
+ * wrong. That is the point of the split, and it is what makes a hi-res or
+ * alternative renderer a *backend* rather than a fork.
  */
 
 #ifdef U2_HAVE_SDL
@@ -19,6 +21,7 @@
 #include <stdlib.h>
 
 #include "core/ctx.h"
+#include "core/font.h"
 #include "core/frame.h"
 
 #define SDL_SCALE 2      /* 320x200 -> 640x400; integer, so pixels stay square */
@@ -30,6 +33,15 @@ typedef struct sdl_video {
     uint32_t     * staging;   /* 320x200 RGBA, filled from the indexed frame */
     Uint32        pal[4];
     unsigned      frames;
+    /* Text layer for the cell-only screens (title, menu, creation). The
+     * overworld composites its own text rows into the game frame, so this
+     * one belongs to the renderer and only serves flows that draw through
+     * renderer->cell. The grid copy exists so the cursor can be painted
+     * inverse at flush time and cleanly restored when it moves. */
+    u2_frame      text;
+    uint8_t       grid[U2_ROWS][U2_COLS];
+    int           cur_row, cur_col, cur_vis;
+    int           dumped;     /* --dump-screen already written */
 } sdl_video;
 
 static sdl_video *sv(u2_ctx *ctx) { return (sdl_video *)ctx->be_render; }
@@ -102,14 +114,21 @@ static int sdl_init(u2_ctx *ctx)
     }
 
     ctx->be_render = v;
+    u2_frame_clear(&v->text, U2_CGA_BLACK);
+    for (int r = 0; r < U2_ROWS; r++)
+        for (int c = 0; c < U2_COLS; c++)
+            v->grid[r][c] = ' ';
     return 0;
 }
 
-static int sdl_present_frame(u2_ctx *ctx, const struct u2_frame *f)
+/* Upload one composed frame and present it. Shared by the game-frame path
+ * (present_frame) and the text-layer path (flush), so both screens show the
+ * same palette and the same scaling and neither can drift from the other. */
+static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
 {
     sdl_video *v = sv(ctx);
     const u2_frame *fr = (const u2_frame *)f;
-    if (!v || !fr) return 0;
+    if (!v || !fr) return;
 
     for (int y = 0; y < U2_SCREEN_H; y++) {
         const uint8_t *src = fr->px[y];
@@ -122,23 +141,58 @@ static int sdl_present_frame(u2_ctx *ctx, const struct u2_frame *f)
     SDL_RenderCopy(v->ren, v->tex, NULL, NULL);
     SDL_RenderPresent(v->ren);
     v->frames++;
+
+    /* --dump-screen: the frame that was just presented is the window's
+     * content, so writing it out proves the cell->font->upload path without
+     * a display (SDL_VIDEODRIVER=dummy). The input backend ends the run once
+     * this flag is set. */
+    if (ctx->dump_screen && !v->dumped) {
+        uint8_t pal[4][3];
+        u2_frame_palette(pal);
+        if (u2_frame_write_ppm(fr, ctx->dump_screen, pal) == 0)
+            ctx->dump_screen_done = 1;
+        v->dumped = 1;
+    }
+}
+
+static int sdl_present_frame(u2_ctx *ctx, const struct u2_frame *f)
+{
+    sdl_upload(ctx, f);
     return 0;
 }
 
 static void sdl_cell(u2_ctx *ctx, int row, int col, uint8_t ch, uint8_t attr)
 {
-    /* The bitmap backend has no text grid. The original draws its text as tiles,
-     * so this is not a gap in the model — it is a reminder that the cell path is
-     * the approximation, and it stays silent rather than faking a glyph. */
-    (void)ctx; (void)row; (void)col; (void)ch; (void)attr;
+    sdl_video *v = sv(ctx);
+    (void)attr;   /* mode-4 text colour is white-on-black everywhere the
+                   * engine prints; real attribute mapping is CP9 work. */
+    if (!v || row < 0 || row >= U2_ROWS || col < 0 || col >= U2_COLS) return;
+    v->grid[row][col] = ch;
+    u2_font_draw_cell(&v->text, row, col, ch, U2_CGA_WHITE, U2_CGA_BLACK);
 }
 
 static void sdl_cursor(u2_ctx *ctx, int row, int col, int visible)
 {
-    (void)ctx; (void)row; (void)col; (void)visible;
+    sdl_video *v = sv(ctx);
+    if (!v) return;
+    v->cur_row = row; v->cur_col = col; v->cur_vis = visible;
 }
 
-static void sdl_flush(u2_ctx *ctx) { (void)ctx; }
+static void sdl_flush(u2_ctx *ctx)
+{
+    sdl_video *v = sv(ctx);
+    if (!v) return;
+    /* The grid is the truth; the cursor is painted on top of it, inverse
+     * video, and the previous cell is restored first so a moving cursor
+     * cannot leave a stale block behind. */
+    const uint8_t ch = v->grid[v->cur_row][v->cur_col];
+    u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch,
+                      U2_CGA_WHITE, U2_CGA_BLACK);
+    if (v->cur_vis)
+        u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch,
+                          U2_CGA_BLACK, U2_CGA_WHITE);
+    sdl_upload(ctx, &v->text);
+}
 
 static void sdl_shutdown(u2_ctx *ctx)
 {

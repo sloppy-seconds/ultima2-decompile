@@ -38,6 +38,9 @@ static void usage(const char *argv0)
         "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
         "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
+        "  --dump-screen F  (SDL build) save the first presented frame to F as\n"
+        "                    PPM and exit; with SDL_VIDEODRIVER=dummy this\n"
+        "                    proves the window pixel path with no display\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
@@ -133,6 +136,8 @@ int main(int argc, char **argv)
             map_dump_path = argv[++i];
         } else if (strcmp(a, "--dump-each") == 0) {
             ctx.dump_each = 1;
+        } else if (strcmp(a, "--dump-screen") == 0 && i + 1 < argc) {
+            ctx.dump_screen = argv[++i];
         } else if (strcmp(a, "--selftest") == 0) {
             ctx.selftest = 1;
         } else if (strcmp(a, "--trace") == 0) {

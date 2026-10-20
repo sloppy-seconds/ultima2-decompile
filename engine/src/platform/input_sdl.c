@@ -23,6 +23,11 @@
 static int sdl_poll(u2_ctx *ctx, u2_key *out)
 {
     SDL_Event e;
+    /* --dump-screen is a one-shot proof run: once the renderer has written
+     * the frame, the display is finished, which the flow reads as "the
+     * player left". Without a display this is the only exit, and with one
+     * it makes the flag terminate the run the same way. */
+    if (ctx && ctx->dump_screen_done) return -1;
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) {
             if (ctx) ctx->exit_code = 1;

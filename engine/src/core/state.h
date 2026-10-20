@@ -61,8 +61,23 @@ typedef struct u2_state {
     /* 0x46 */ uint8_t sex;           /* 'M' or 'F' as typed, not converted */
     /* 0x47 */ uint8_t pclass;        /* 0..3 after `sub $0x31`: FIGHTER..THIEF */
     /* 0x48 */ uint8_t race;          /* '1'..'4' as typed: HUMAN ELF DWARF HOBBIT */
-    /* 0x49 */ uint8_t unk_49;        /* set to 2 at creation; meaning unknown */
-    /* 0x4A */ uint8_t last_key;      /* last key byte consumed by the command loop */
+    /* 0x49 */ uint8_t sector_first;   /* first digit of the sector filename: asm/2290
+                                        * patches [0x49],[0x4A] into MAPXFF. Set to 2
+                                        * at creation (redecoded 5400 tail, file 0x5BE8),
+                                        * so a fresh character starts in sector 2x. */
+    /* 0x4A */ uint8_t last_key;       /* DUAL READING, open question: plan §1 says
+                                        * "last key", but the filename patch (asm/2290),
+                                        * the sector reload zeroing it (asm/243E), the
+                                        * town/tower writers (asm/343F) and the P-path
+                                        * branch `cmp $0x4; jb` (file 0x0A76) all say it
+                                        * is the sector's second digit / site kind
+                                        * (0 overworld, 1 village, 2 town, 4 tower).
+                                        * seam.c still writes polled keys here, which is
+                                        * only safe while the reading stays unresolved;
+                                        * the P path captures it at world entry and the
+                                        * creation tail zeroes it the way a fresh DS
+                                        * would be. Renaming needs the CP2 baseline
+                                        * moved — owner call. */
     /* 0x4B */ uint8_t stat_str;
     /* 0x4C */ uint8_t stat_agi;
     /* 0x4D */ uint8_t stat_sta;
@@ -81,8 +96,13 @@ typedef struct u2_state {
     /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site
                                          asm/5175_sub_5175.asm (string at file 0x5382) */
     /* 0x59 */ uint8_t gold_hi;
-    /* 0x5A */ uint8_t unk_5A;        /* set to 20 at creation; meaning unknown */
-    /* 0x5B */ uint8_t unk_5B;        /* set to 20 at creation; meaning unknown */
+    /* 0x5A */ uint8_t entry_x;        /* spawn x: the P path copies [0x5A]->[0x00]
+                                        * (file 0x0A26); creation sets 20 (file 0x5BDE);
+                                        * the sector reload restores [0x5A]->[0x00] too
+                                        * (asm/243E), so it is the entry point of the
+                                        * current sector. */
+    /* 0x5B */ uint8_t entry_y;        /* spawn y: [0x5B]->[0x01] (file 0x0A2C),
+                                        * creation sets 20 (file 0x5BE3) */
     /* 0x5C */ uint8_t reserved_5C[7];
     /* 0x63 */ uint8_t spell_pick;    /* readied spell slot */
     /* 0x64 */ uint8_t reserved_64[0x1D5];
@@ -120,6 +140,9 @@ _Static_assert(U2_OFF(cursor_col) == 0x02E, "cursor_col moved");
 _Static_assert(U2_OFF(cursor_row) == 0x02F, "cursor_row moved");
 _Static_assert(U2_OFF(right_margin)== 0x031, "right_margin moved");
 _Static_assert(U2_OFF(last_key)   == 0x04A, "last_key moved");
+_Static_assert(U2_OFF(sector_first)== 0x049, "sector_first moved");
+_Static_assert(U2_OFF(entry_x)    == 0x05A, "entry_x moved");
+_Static_assert(U2_OFF(entry_y)    == 0x05B, "entry_y moved");
 _Static_assert(U2_OFF(name)       == 0x036, "name moved — it anchors the save record");
 _Static_assert(sizeof(((u2_state *)0)->name) == 16, "name is 16 bytes");
 _Static_assert(U2_OFF(sex)        == 0x046, "sex moved");

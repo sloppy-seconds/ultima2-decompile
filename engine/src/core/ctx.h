@@ -39,6 +39,11 @@ typedef struct u2_ctx {
 
     int dump_state;         /* --dump-state */
     int dump_each;          /* --dump-each: print the grid after every present */
+    const char *dump_screen;/* --dump-screen F: SDL build saves the first
+                             * presented frame to F as PPM, then the run ends.
+                             * With SDL_VIDEODRIVER=dummy this makes the whole
+                             * cell->font->upload path testable with no display. */
+    int dump_screen_done;   /* set by the renderer after the dump */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
     uint32_t rng_rolls;     /* rolls served, for dumps and tests */
     unsigned seed;          /* PRNG seed byte, i.e. the 0x40:6C value (core/rng.h) */

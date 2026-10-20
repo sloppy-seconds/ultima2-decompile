@@ -58,6 +58,17 @@ typedef struct u2_overworld {
  */
 int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow);
 
+/*
+ * Spawn from the loaded player record instead of the probe: sector digits
+ * [DS:49][DS:4A] and entry pair [DS:5A]/[DS:5B], the 'P' contract proven at
+ * file 0x09E6..0x0A7F. Call after u2_save_load succeeded.
+ */
+int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow);
+
+/* The present/poll/move loop for an already-opened overworld. Returns
+ * non-zero when the display asked to quit. */
+int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow);
+
 /* Recomposite the frame from the current position: map window (pixel rows
  * 0..159) then the text rows 20..24 of the vram grid — status block, CMD
  * prompt and message history, one composited framebuffer. */

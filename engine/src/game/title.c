@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include "game/title.h"
 #include "game/creation.h"
+#include "game/overworld.h"
 #include "game/status.h"
 #include "core/save.h"
 #include "core/seam.h"
@@ -256,9 +257,13 @@ static void run_demo(u2_ctx *ctx)
  * byte means there is a character, so it continues into the game. A zero name
  * byte prints "(INSERT PLAYER DISK)" and waits for ESC, then retries.
  *
- * The read itself is core/save.c. What is NOT lifted is 0x9e6 onward: the world,
- * which is CP4. So a successful load shows the status block that CP3 proved and
- * names the checkpoint that owns the rest, rather than pretending to play. */
+ * The read itself is core/save.c. From 0x9e6 the original reads MONSTERS and
+ * the sector named by the record's digits, copies the entry pair to the
+ * position (file 0x0A26..0x0A2F) and enters the world — that path is now
+ * u2_overworld_init_state + u2_overworld_loop, taken whenever the renderer
+ * can show pixels. On cell-only backends the world has nothing to draw to,
+ * so those keep the CP3 stopgap: the status block the load proved, plus a
+ * note naming the display requirement rather than pretending to play. */
 static void run_play(u2_ctx *ctx)
 {
     for (;;) {
@@ -266,10 +271,26 @@ static void run_play(u2_ctx *ctx)
         u2_save_result r = u2_save_load(ctx);
 
         if (r == U2_SAVE_OK) {
-            /* The load is real; the world is not. CP4 owns the overworld, so the
-             * placeholder says so while still showing what was read from disk —
-             * the point is visual proof the save round-tripped, not a stub that
-             * implies one. */
+            if (ctx->renderer->present_frame) {
+                u2_overworld ow;
+                if (u2_overworld_init_state(ctx, &ow) == 0) {
+                    u2_overworld_loop(ctx, &ow);
+                    return;
+                }
+                /* The record loaded but the world did not (no --data-dir, no
+                 * tiles): say exactly which, and wait, instead of a blank
+                 * window or a silent return to the menu. */
+                seam_clear_screen(ctx);
+                seam_str_out_at(ctx, 1, 12, "[engine] world not available:");
+                seam_str_out_at(ctx, 1, 13, ow.note);
+                seam_present(ctx);
+                (void)wait_choice(ctx);
+                return;
+            }
+            /* The load is real; this backend has no pixel path. CP4 owns the
+             * overworld, so the placeholder says so while still showing what
+             * was read from disk — the point is visual proof the save
+             * round-tripped, not a stub that implies one. */
             seam_clear_screen(ctx);
             u2_status_draw(ctx);
             u2_status_draw_character(ctx);

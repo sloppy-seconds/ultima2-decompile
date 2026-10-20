@@ -12,7 +12,7 @@
  *     same value in a different representation.
  *   - the ten BCD bonuses for sex / race / class, and that STAMINA gets none
  *   - race and class stored 0..3 after `sub $0x31`; sex stored as the letter
- *   - starting values HP=4 FOOD=4 GOLD=4 and unk_49=2, unk_5A=unk_5B=20
+ *   - starting values HP=4 FOOD=4 GOLD=4 and sector_first=2, entry_x=entry_y=20
  *   - the 256-byte record written to a byte-compatible PLAYER file
  *
  * What is deliberately improved (docs/phase4-plan.md § 4a, deviations D1-D4):
@@ -426,7 +426,12 @@ static void commit(u2_ctx *ctx, form *f)
     memset(st->name, 0, sizeof st->name);
     memcpy(st->name, f->name, (size_t)f->name_len);
 
-    st->unk_5A = 20; st->unk_5B = 20; st->unk_49 = 2;   /* 0x5BDC..0x5BE8 */
+    st->entry_x = 20; st->entry_y = 20; st->sector_first = 2;  /* 0x5BDC..0x5BE8 */
+    /* The original's DS:4A is 0 at this point (fresh segment, creation never
+     * writes it) and it is saved into the record as the sector's second digit.
+     * The engine's seam writes polled keys there (see state.h dual reading),
+     * so zero it to match what the original puts on disk. */
+    st->last_key = 0;
     st->hp = 4; st->food = 4;                          /* 0x5BEB..0x5BF3 */
     st->gold_lo = 4; st->gold_hi = 0;
 }

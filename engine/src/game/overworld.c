@@ -31,16 +31,9 @@
  */
 #define U2_OVERWORLD_EMPTY_GATE 0
 
-int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
+/* Shared loader: everything after the spawn fields are set. */
+static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 {
-    if (!ctx || !ow) return -1;
-    memset(ow, 0, sizeof *ow);
-    ow->x = U2_OVERWORLD_PROBE_X;
-    ow->y = U2_OVERWORLD_PROBE_Y;
-    ow->sector_hi = U2_OVERWORLD_PROBE_SECTOR_HI;
-    ow->sector_lo = U2_OVERWORLD_PROBE_SECTOR_LO;
-    ow->off_map_tile = 0xFF;      /* DS:12 in the live capture */
-
     /* Tiles first: without art there is nothing to draw, and the reason the
      * player needs to hear is specific (no --data-dir vs a corrupt cache). */
     u2_tiles_result tr = u2_tiles_open(ctx, &ow->tiles, NULL, 0, NULL, 0);
@@ -82,6 +75,42 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
     return 0;
 }
 
+int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
+{
+    if (!ctx || !ow) return -1;
+    memset(ow, 0, sizeof *ow);
+    ow->x = U2_OVERWORLD_PROBE_X;
+    ow->y = U2_OVERWORLD_PROBE_Y;
+    ow->sector_hi = U2_OVERWORLD_PROBE_SECTOR_HI;
+    ow->sector_lo = U2_OVERWORLD_PROBE_SECTOR_LO;
+    ow->off_map_tile = 0xFF;      /* DS:12 in the live capture */
+    return overworld_open(ctx, ow);
+}
+
+/*
+ * Spawn from the loaded player record — the 'P' path, proven in the re-decode
+ * of file 0x09E6..0x0A7F: the game reads PLAYER, reads MONSTERS, reads the
+ * sector named by [DS:49][DS:4A], sets mode 4, then copies [DS:5A]->[DS:00]
+ * and [DS:5B]->[DS:01] and stamps DS:12 = 0xFF (the off-map tile, matching
+ * the live capture). The sector digits and the entry pair all come from the
+ * record, so a loaded character stands where the save left it.
+ *
+ * The second digit is read from state.last_key immediately after the load,
+ * before any further key can overwrite it (state.h documents the dual
+ * reading; the overworld captures the digits into ow at open time).
+ */
+int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
+{
+    if (!ctx || !ow) return -1;
+    memset(ow, 0, sizeof *ow);
+    ow->x = ctx->state.entry_x;
+    ow->y = ctx->state.entry_y;
+    ow->sector_hi = ctx->state.sector_first;
+    ow->sector_lo = ctx->state.last_key;
+    ow->off_map_tile = 0xFF;      /* file 0x0A67: mov $0xff,[0x12] */
+    return overworld_open(ctx, ow);
+}
+
 void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
 {
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
@@ -108,6 +137,11 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
         fprintf(stderr, "overworld: %s\n", ow->note);
         return -1;
     }
+    return u2_overworld_loop(ctx, ow);
+}
+
+int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
+{
     ctx->frame = &ow->frame;
 
     for (;;) {
