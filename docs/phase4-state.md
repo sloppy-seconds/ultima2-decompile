@@ -22,7 +22,11 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
-- **Everything is committed.** Working tree clean at `de68eb9`. No in-flight edits.
+- **Everything is committed.** Working tree clean at `7592d07`. No in-flight edits.
+- **CP3 form state**: stats are a two-digit shift register (D6), the budget may go
+  negative and creation requires exactly 00 (D7), name is capped at 12 with the
+  high bit masked (asm/5BB7, asm/5207). Deviations D1-D8 are all registered in the
+  header comment of `engine/src/game/creation.c` and in plan § 4a.
 - **All suites green**: CP0 0.04s, CP1 0.12s, CP2 0.32s, CP3 4.41s (~4.9s total,
   measured 2026-10-27). CP3's cost is two `sleep 1` waits in the pty tests, which
   pace the intro-skip apart from the body because a key burst is swallowed by the
@@ -32,9 +36,11 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 - **Open for the owner at the CP3 gate**:
   1. Whether HP/FOOD/GOLD are binary or packed decimal — `status.c` says binary,
      `--dump-state` says BCD and reports gold 400. They disagree; flagged, not
-     guessed. See `engine/src/game/status.h` OPEN QUESTION.
+     guessed. See `engine/src/game/status.h` OPEN QUESTION. (A typed stat landing
+     on the dots at col 26 is **settled** — asm/58B7 addresses column 26 and the
+     form's dots end there, so the value overwrites the last dots.)
   2. Whether the CP2 evidence baseline should keep being regenerated in place or
-     frozen with new files per checkpoint. It has moved three times, each
+     frozen with new files per checkpoint. It has moved four times, each
      deliberately and each recorded in the gate log.
   3. Play the form: `make play`, press `C`. Confirm Tab/arrows, re-editing, and
      that the field positions look right against the original.
