@@ -1301,6 +1301,62 @@ it), what the 128-byte tails of the `mapx` files hold (byte 0 is `0x1A` in all 8
 data files, and most map tails carry 127 further non-zero bytes that the 4096-byte
 read never touches), and why a literal `MAPX30` sits at file `0x7544`.
 
+### Tile art found: it is in the .exe, and it is a custom 16x16 sprite set
+
+The owner located it and every number checked out. This closes the question the
+inventory left open, and it also retracts my "no bitmap table in the exe" claim for
+the second time — my own earlier scan reported `longest run of <=2-colour bytes:
+file 0x7c40 len 4224` and I dismissed it as zero padding. It was the tile table.
+
+Verified mechanically (`tmp/tiles.py`, output reproduced below), all against
+`original/ultimaii.exe` read as bytes, never executed:
+
+| claim | result |
+| --- | --- |
+| index table at file `0x7BC0`, 64 little-endian words | **confirmed** — first entry `0x0630` |
+| entries step by exactly 66 | **confirmed** — the set of consecutive deltas is `{66}` |
+| tile N pixels at `0x7C42 + 66*N` | **confirmed** — first pixel offset is exactly `0x7C42` |
+| a 2-byte header `04 10` precedes every tile | **confirmed** — 0 of 64 tiles fail it |
+| one tile = 64 bytes = 16 rows x 4 bytes, 2bpp, leftmost pixel in the top 2 bits | **confirmed** — decodes to recognisable 16x16 art |
+| colour indices 0..3 = CGA black, cyan, magenta, white | **confirmed** by rendering |
+
+One cross-confirmation nobody planned: subtracting the first index entry from the
+first pixel offset gives a base of **file `0x7610`**, which is exactly the DS
+data-segment base derived independently earlier from `DS:0x26E` mapping to file
+`0x787E`. So the index holds **DS offsets**, and the tile art is part of the loaded
+data image — which is why it was never going to look like a file on disk.
+
+Rendering all 64 tiles (scaled 8x, saved to `tmp/tiles.png`, gitignored — it is
+game content) shows what the set actually contains:
+
+* terrain: magenta dot field, cyan dot field, cyan rocks, white mountain lattice,
+  a magenta bush, and a magenta/cyan checkerboard that is almost certainly an
+  unused or error tile;
+* structures: arches, gates, a building with windows, a doorway, a monolith, a
+  shield, a sword, stairs;
+* figures: the player humanoid, soldiers with weapons, a hooded wizard, **a horse
+  and cart**, **a ship** — the vehicles `asm/2FD6` and `asm/2FFE` name;
+* **custom letter glyphs A through Z.**
+
+That last group matters beyond the map. The site-name banners in the screenshots
+(`PORT BONIFICE`, `MUSEUM`) are drawn in letters that are not the CGA ROM font, and
+the CP1 log records an unresolved oddity: the extracted title strings contain
+literal `]` and `[` bytes where the game displays "II" (`ULTIMA ][`). A tile table
+holding bespoke letters is the obvious explanation for both, so the `][` question is
+now a mapping question about this table rather than a font-redefinition question —
+and there is no font redefinition in this binary, which CP1 already established.
+
+What is still open, and it is now a small question rather than a wall:
+
+1. **map byte -> table entry.** The mapping is not the identity: `mapx00` is
+   dominated by tile bytes `0x00` and `0x08`, and entry 0 is the magenta field while
+   entry 2 is the cyan one, so the ocean cannot be entry 0 read directly. Either the
+   byte indexes through a second table or the two-byte header selects the palette.
+2. **what the `04 10` header means.** In mode 4 each cell also carries an attribute
+   byte choosing the colour pair, and the same 2bpp pattern can therefore render
+   cyan or magenta depending on it. `04 10` is the prime suspect for exactly that,
+   which would explain how one pattern serves several terrains.
+
 ### Not yet done
 
 * the play draw loop: which function paints the sector, its row and column bounds,
