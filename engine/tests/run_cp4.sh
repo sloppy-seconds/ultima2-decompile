@@ -72,6 +72,54 @@ else
     fi
 fi
 
+# --- the framebuffer ------------------------------------------------------
+# Every display backend sits behind this, so a mistake here reaches all of them.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/frame_check" \
+   tests/frame_check.c src/core/frame.c src/core/view.c 2>"$WORK/cc-frame.err"
+if [ $? -ne 0 ]; then
+    bad "framebuffer test harness did not build: $(head -5 "$WORK/cc-frame.err")"
+else
+    if "$WORK/frame_check" > "$WORK/frame.out" 2>&1; then
+        ok "framebuffer: blit, clipping, compositing, PPM/BMP ($(grep -c '  ok  ' "$WORK/frame.out") checks)"
+    else
+        bad "framebuffer check failed:"
+        sed 's/^/        /' "$WORK/frame.out"
+    fi
+fi
+
+# --- the map actually renders, when the player has their files ------------
+# The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
+# producing real pixels. Skips without the content, so CI stays honest.
+MAPDIR=""
+for c in ../original ../original/updated; do
+    if [ -r "$c/ultimaii.exe" ] && [ -r "$c/mapx30" ]; then MAPDIR="$c"; break; fi
+done
+if [ -n "$MAPDIR" ]; then
+    if ./u2 --data-dir "$MAPDIR" --save-dir "$WORK/saves" \
+            --dump-map "$WORK/map.ppm" >"$WORK/dump.err" 2>&1; then
+        sz=$(wc -c < "$WORK/map.ppm" 2>/dev/null || echo 0)
+        if [ "$sz" -eq 192015 ]; then
+            ok "--dump-map renders the real sector to 320x200 pixels ($sz B)"
+        else
+            bad "--dump-map wrote $sz bytes, expected 192015 for a 320x200 PPM"
+        fi
+        # Second run must come from the cache the first run created.
+        if grep -q 'tiles from cache' <(./u2 --data-dir "$MAPDIR" \
+                --save-dir "$WORK/saves" --dump-map "$WORK/map2.ppm" 2>&1); then
+            ok "second run serves tiles from the cache it bootstrapped"
+            cmp -s "$WORK/map.ppm" "$WORK/map2.ppm" \
+                && ok "cached and extracted frames are byte-identical" \
+                || bad "cached frame differs from the extracted one"
+        else
+            bad "second run re-extracted: the cache did not bootstrap"
+        fi
+    else
+        bad "--dump-map failed: $(tail -2 "$WORK/dump.err")"
+    fi
+else
+    printf '  SKIP  no player content: --dump-map not exercised\n'
+fi
+
 # --- --data-dir is part of the documented contract ----------------------
 ./u2 --help 2>&1 | grep -q -- '--data-dir' \
     && ok "--data-dir is in the usage text" \

@@ -23,6 +23,7 @@
 #include "debug/trace.h"
 #include "debug/dump_state.h"
 #include "game/game.h"
+#include "game/overworld.h"
 static void usage(const char *argv0)
 {
     fprintf(stderr,
@@ -32,6 +33,8 @@ static void usage(const char *argv0)
         "  --headless      null renderer + script input + deterministic clock\n"
         "  --script FILE   key script (see tests/title.keys)\n"
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
+        "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
+        "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
@@ -87,6 +90,7 @@ int main(int argc, char **argv)
     u2_ctx ctx;
     const char *trace_arg = NULL;
     const char *report_path = NULL;
+    const char *map_dump_path = NULL;
     unsigned seed = U2_RNG_DEFAULT_SEED;
     int rng_probe = 0;
     memset(&ctx, 0, sizeof ctx);
@@ -110,6 +114,8 @@ int main(int argc, char **argv)
             rng_probe = (int)strtol(argv[++i], NULL, 0);
         } else if (strcmp(a, "--dump-state") == 0) {
             ctx.dump_state = 1;
+        } else if (strcmp(a, "--dump-map") == 0 && i + 1 < argc) {
+            map_dump_path = argv[++i];
         } else if (strcmp(a, "--dump-each") == 0) {
             ctx.dump_each = 1;
         } else if (strcmp(a, "--selftest") == 0) {
@@ -152,6 +158,14 @@ int main(int argc, char **argv)
         for (int i = 0; i < rng_probe; i++)
             printf("%u%s", u2_rand_byte(&ctx), i + 1 == rng_probe ? "\n" : ",");
         return 0;
+    }
+
+    if (map_dump_path) {
+        /* No backends, no display: this path exists so the real extracted tiles
+         * can be seen, and diffed, on a machine with no screen at all. */
+        const int rc = u2_overworld_dump(&ctx, map_dump_path);
+        u2_trace_close(&ctx);
+        return rc == 0 ? 0 : 1;
     }
 
     if (wire_backends(&ctx) != 0) {

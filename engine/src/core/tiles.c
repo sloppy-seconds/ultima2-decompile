@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "core/tiles.h"
@@ -239,6 +240,28 @@ u2_tiles_result u2_tiles_find_exe(char *buf, size_t bufsz, const u2_ctx *ctx)
     return U2_TILES_NOT_READY;
 }
 
+/* Create the cache's parent directory if absent.
+ *
+ * This is deliberately the opposite of the content directory rule. --data-dir is
+ * the player's and is never created, because inventing an empty world directory
+ * would hide a wrong path behind a silent empty map. The cache directory is
+ * ours, and a fresh install has no "our own spot" yet -- without this the cache
+ * silently never gets written and every start re-extracts, which is the exact
+ * behaviour the owner asked for and would otherwise never happen.
+ * Failure here is not fatal: extraction still works in memory.
+ */
+static void ensure_cache_dir(const char *cache_path)
+{
+    char dir[600];
+    const char *slash = strrchr(cache_path, '/');
+    if (!slash || slash == cache_path) return;      /* relative to cwd, or root */
+    if ((size_t)(slash - cache_path) >= sizeof dir) return;
+    memcpy(dir, cache_path, (size_t)(slash - cache_path));
+    dir[slash - cache_path] = '\0';
+    if (access(dir, W_OK) == 0) return;
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) return;
+}
+
 u2_tiles_result u2_tiles_open(u2_ctx *ctx, u2_tiles *t,
                               char *exe_out, size_t exe_sz,
                               char *cache_out, size_t cache_sz)
@@ -296,6 +319,7 @@ u2_tiles_result u2_tiles_open(u2_ctx *ctx, u2_tiles *t,
 
         /* Failing to cache is not fatal: the tiles are already in memory. The
          * next start-up pays extraction again, which is the pre-cache behaviour. */
+        ensure_cache_dir(cache);
         (void) u2_tiles_cache_store(cache, t);
         return U2_TILES_OK;
     }
