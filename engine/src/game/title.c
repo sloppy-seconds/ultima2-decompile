@@ -36,6 +36,7 @@
  */
 #include <stdio.h>
 #include "game/title.h"
+#include "game/creation.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "debug/trace.h"
@@ -259,8 +260,10 @@ int u2_title_flow(u2_ctx *ctx)
             run_demo(ctx);
             break;
         case 'C':                               /* asm/03A4 -> asm/5400 -> 03AC */
-            stub_not_implemented(ctx, "create (asm/5400)");
-            run_demo(ctx);
+            /* CP3: real creation flow (game/creation.c). The original returns
+             * here only after a disk swap, which the engine does not need. */
+            if (u2_creation_flow(ctx) < 0)
+                stub_not_implemented(ctx, "create: save path unusable");
             break;
         default:                                /* asm/03A6: redraw */
             break;

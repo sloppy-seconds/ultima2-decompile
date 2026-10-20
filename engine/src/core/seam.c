@@ -111,6 +111,18 @@ void seam_clear_row(u2_ctx *ctx, int row)
         seam_char_print(ctx, ' ');
 }
 
+/* seam: clear screen (asm/4C1C, inside asm/4BE0_sub_4be0.asm) — the whole grid
+ * is blanked and the cursor goes home. Reached from the title flow, from the
+ * disk prompts and from the tail of character creation, so it is a real seam
+ * rather than something game code should open-code with u2_vram_clear. */
+void seam_clear_screen(u2_ctx *ctx)
+{
+    u2_vram_clear(&ctx->vram, ctx->state.text_attr);
+    ctx->state.cursor_col = 0;
+    ctx->state.cursor_row = 0;
+    u2_trace(ctx, "clear_screen", "4C1C", "whole grid blanked");
+}
+
 int seam_key_poll(u2_ctx *ctx, u2_key *out)
 {
     int got = ctx->input->poll(ctx, out);

@@ -6,7 +6,10 @@
 #   ESC         ends the demo cycle and returns to the title
 #   P           play branch (asm/0764 stub)
 #   ESC         ends its demo
-#   C           create branch (asm/5400 stub); input then runs out and the flow ends
+#   C           create branch (asm/5400) — CP3 made this a real flow, so the
+#               route now completes a character: six stats of 15 (the 90-point
+#               budget exactly), MALE, HUMAN, FIGHTER, a name, and Y to accept.
+#   0x0d        dismiss the status screen creation ends on
 WAIT
 WAIT
 X
@@ -21,3 +24,28 @@ ESC
 P
 ESC
 C
+1
+5
+1
+5
+1
+5
+1
+5
+1
+5
+1
+5
+M
+1
+1
+B
+R
+I
+T
+I
+S
+H
+0x0d
+Y
+0x0d

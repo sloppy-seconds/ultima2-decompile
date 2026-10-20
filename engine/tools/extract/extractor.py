@@ -79,6 +79,31 @@ MANIFEST = [
     ("U2_S_POEM_5B",           "03AC_sub_03ac.asm", 9),
     ("U2_S_POEM_6A",           "03AC_sub_03ac.asm", 10),
     ("U2_S_POEM_6B",           "03AC_sub_03ac.asm", 11),
+    # CP3: character creation and the status line. Every "run" offset below is a
+    # string inside a region Phase 3 reconstructed as mis-decoded code, so the
+    # asm fallback cannot recover it; the offsets come from the STR lines in
+    # disasm/redecoded/5400_sub_5400.txt, which is our own decode.
+    ("U2_S_CREATE_BLANK",      "5400_sub_5400.asm", ("run", 0x5615, 28)),
+    ("U2_S_CREATE_NOTBLANK1",  "5400_sub_5400.asm", ("run", 0x566B)),
+    ("U2_S_CREATE_NOTBLANK2",  "5400_sub_5400.asm", ("run", 0x5689)),
+    ("U2_S_CREATE_GENERATION", "5400_sub_5400.asm", ("run", 0x569E)),
+    ("U2_S_CREATE_FORM",       "5400_sub_5400.asm", ("run", 0x56F4)),
+    ("U2_S_SEX_MALE",          "5400_sub_5400.asm", ("run", 0x595B)),
+    ("U2_S_SEX_FEMALE",        "5400_sub_5400.asm", ("run", 0x5988)),
+    ("U2_S_RACE_HUMAN",        "5400_sub_5400.asm", ("run", 0x59C9)),
+    ("U2_S_RACE_ELF",          "5400_sub_5400.asm", ("run", 0x59F7)),
+    ("U2_S_RACE_DWARF",        "5400_sub_5400.asm", ("run", 0x5A23)),
+    ("U2_S_RACE_HOBBIT",       "5400_sub_5400.asm", ("run", 0x5A54)),
+    ("U2_S_CLASS_FIGHTER",     "5400_sub_5400.asm", ("run", 0x5A9E)),
+    ("U2_S_CLASS_CLERIC",      "5400_sub_5400.asm", ("run", 0x5ACE)),
+    ("U2_S_CLASS_WIZARD",      "5400_sub_5400.asm", ("run", 0x5AFD)),
+    ("U2_S_CLASS_THIEF",       "5400_sub_5400.asm", ("run", 0x5B2F)),
+    ("U2_S_CREATE_TOPLAY",     "5400_sub_5400.asm", ("run", 0x5C1F)),
+    ("U2_S_CREATE_PROGMSTR",   "5400_sub_5400.asm", ("run", 0x5C43)),
+    ("U2_S_STATUS_HP",         "50F9_show_hitpoints.asm", 0),
+    ("U2_S_STATUS_FOOD",       "5129_sub_5129.asm", 0),
+    ("U2_S_STATUS_EXP",        "5154_sub_5154.asm", 0),
+    ("U2_S_STATUS_GOLD",       "5175_sub_5175.asm", 0),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')
@@ -164,8 +189,18 @@ def collect(source, exe, exe_path, warn):
         if isinstance(loc, tuple) and loc[0] == "run":
             off = loc[1]
             if exe is not None:
-                end = exe.find(b"\x00", off)
-                rows.append((sym, exe[off:end], f"exe@0x{off:04X}"))
+                # A 3-tuple gives an explicit byte length: some strings are not
+                # NUL-terminated (the '(INSERT A BLANK PLAYER DISK)' prompt) and
+                # reading to the next NUL would swallow following code bytes.
+                # A 2-tuple keeps the original semantics — read up to but not
+                # including the terminator — because the emitted C literal is
+                # terminated anyway and changing this silently altered the
+                # CP1 title strings.
+                if len(loc) >= 3:
+                    val = exe[off:off + loc[2]]
+                else:
+                    val = exe[off:exe.index(b"\x00", off)]
+                rows.append((sym, val, f"exe@0x{off:04X}"))
             else:
                 rows.append((sym, b"", "unavailable without the user's copy"))
             continue

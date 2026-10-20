@@ -23,6 +23,8 @@ void seam_str_out_at(u2_ctx *ctx, int col, int row, const char *s);
 void seam_goto(u2_ctx *ctx, int col, int row);
 /* blank one text row (asm/53A0_sub_53a0.asm: 40 spaces at column 0). */
 void seam_clear_row(u2_ctx *ctx, int row);
+/* clear the whole screen and home the cursor (asm/4C1C). */
+void seam_clear_screen(u2_ctx *ctx);
 /* seam: key_poll (asm/4F4D_key_poll.asm) — non-blocking key check. */
 int  seam_key_poll(u2_ctx *ctx, u2_key *out);
 /* blocking key read (INT 16h AH=00 sites). */

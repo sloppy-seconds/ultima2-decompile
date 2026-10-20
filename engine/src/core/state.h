@@ -68,7 +68,10 @@ typedef struct u2_state {
     /* 0x53 */ uint8_t food;          /* set to 4 at creation; BCD pair with 0x54,
                                         read at asm/5129_sub_5129.asm (FOOD=) */
     /* 0x54 */ uint8_t food_hi;
-    /* 0x55 */ uint8_t reserved_55[3];
+    /* 0x55 */ uint8_t unk_55;        /* between food and exp; no site traced yet */
+    /* 0x56 */ uint8_t exp_lo;        /* EXP.= display loads [0x56],[0x57] — note
+                                         it is NOT 0x55; file 0x5367 */
+    /* 0x57 */ uint8_t exp_hi;
     /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site
                                          asm/5175_sub_5175.asm (string at file 0x5382) */
     /* 0x59 */ uint8_t gold_hi;
@@ -120,6 +123,7 @@ _Static_assert(U2_OFF(stat_str)   == 0x04B, "stat_str moved");
 _Static_assert(U2_OFF(stat_int)   == 0x050, "stat_int moved");
 _Static_assert(U2_OFF(hp)         == 0x051, "hp moved");
 _Static_assert(U2_OFF(food)       == 0x053, "food moved");
+_Static_assert(U2_OFF(exp_lo)     == 0x056, "exp_lo moved");
 _Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
 _Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
 _Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");
