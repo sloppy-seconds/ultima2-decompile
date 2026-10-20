@@ -84,6 +84,10 @@ MANIFEST = [
     # asm fallback cannot recover it; the offsets come from the STR lines in
     # disasm/redecoded/5400_sub_5400.txt, which is our own decode.
     ("U2_S_CREATE_BLANK",      "5400_sub_5400.asm", ("run", 0x5615, 28)),
+    # asm/0764 (file 0x0964): 'P' reads the player record and, only when the
+    # name byte is zero, prints this and waits for ESC. Offset is the '(' — the
+    # preceding byte belongs to the jump that skips the prompt on the first pass.
+    ("U2_S_DISK_PLAYER",       "0764_sub_0764.asm", ("run", 0x0979, 20)),
     ("U2_S_CREATE_NOTBLANK1",  "5400_sub_5400.asm", ("run", 0x566B)),
     ("U2_S_CREATE_NOTBLANK2",  "5400_sub_5400.asm", ("run", 0x5689)),
     ("U2_S_CREATE_GENERATION", "5400_sub_5400.asm", ("run", 0x569E)),

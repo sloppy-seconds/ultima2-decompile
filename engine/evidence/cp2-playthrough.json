@@ -21,13 +21,12 @@
     {"at_key": 10, "screen": "0862690c5d27746b79d8ecd925d8b9361a489f77ffabbfcb5f310b86a83e7458", "state": "39d4b23221a74bf3ee462d2d36b3072d5feee33713a7dc811f225f3595da19f5", "rolls": 0},
     {"at_key": 11, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "9ca410f70e5d81f36bf79308052fa57dde95542f9147729fede68b2cf060022d", "rolls": 0},
     {"at_key": 12, "screen": "811daf350c896e93eb06ab39d5c0a20d9e07cdd39fdc23f0fb6568105c4055ad", "state": "24c4689756b57bdf0cf665e14e9138237ae49102891480c64766a48ef1883d7c", "rolls": 0},
-    {"at_key": 12, "screen": "261d67814a588d08c11a9a03c933eecbd06a4a4b2b557039655fa896cd0f2fd4", "state": "b8f2a17798e012c9fe7ff196a2fe49d56306c40d7cf651a95539b72aa8d5b036", "rolls": 0},
-    {"at_key": 12, "screen": "49cb2d2ab1323ea968a401fbd24a20d2b51aa1879c735f4b16f487797c9fa81f", "state": "a135e3a108fb59a4a8f692675cbe3fbadd7c4cda32d619f162218ba33d037072", "rolls": 0},
-    {"at_key": 13, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "4517cc9eecc8844f1f0007482129f16a3828930f1d74af94486b249a9e64c224", "rolls": 0},
-    {"at_key": 14, "screen": "1c809cd9516f349418beb3d8aed990186e351ace88f17a3b5ac61a77a1b2b667", "state": "4926bbe7bb3f2f11c149c181a81c1fb0541f87f19bbf96fb8a7594f7b77af3ef", "rolls": 0},
-    {"at_key": 14, "screen": "80f41dd13e123f60cee5da6dc3d9e7fb90b7105d10101d7274e764a4d3b4a20f", "state": "cd9c594b549b7d6fff81c9372fdd678fbf9dbc934d72ebf14236bd42bbd6bfc2", "rolls": 0},
-    {"at_key": 14, "screen": "d35cb31f122e59605f6b1aee6d406ad9d6f25b0a79c45ebbd18904389371683f", "state": "0e0a05ea098eebfeadf58eec4fb5d80d80ffbfef9c3ffb22b4c511f0226622ed", "rolls": 0}
+    {"at_key": 12, "screen": "6584eb1919e77e63944fae1a33971edf51d834d580fbbfdbf71f77e9894cfd1d", "state": "6120081459e80bd0dbd41177fca876625621c33313792f63d57b2cf1cfe24f58", "rolls": 0},
+    {"at_key": 13, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "127635cbd9d4ace9d728c8a3252f482538ea93d202587cdc8582294d4ba933ed", "rolls": 0},
+    {"at_key": 14, "screen": "1c809cd9516f349418beb3d8aed990186e351ace88f17a3b5ac61a77a1b2b667", "state": "fbfde40b72ab6a1d4ef87a9f5861a403683c1fce0bca704374f517fa22eff47b", "rolls": 0},
+    {"at_key": 14, "screen": "80f41dd13e123f60cee5da6dc3d9e7fb90b7105d10101d7274e764a4d3b4a20f", "state": "9f9966dd403b09985133003b14b3bd1377238a28df435b0529c55b2c9234aec8", "rolls": 0},
+    {"at_key": 14, "screen": "d35cb31f122e59605f6b1aee6d406ad9d6f25b0a79c45ebbd18904389371683f", "state": "2f6fa83cc9c4b57193df02b4d68e04dd037477cb416259157e57a597a9fe444e", "rolls": 0}
   ],
   "steps_truncated": false,
-  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2439,"cursor":{"row":19,"col":12,"visible":0}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":29},"text_attr":15,"story_flag":1,"last_key":13,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
+  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2380,"cursor":{"row":19,"col":12,"visible":0}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":29},"text_attr":15,"story_flag":1,"last_key":13,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
 }

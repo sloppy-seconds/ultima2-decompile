@@ -119,8 +119,8 @@ grep -qE 'seam=char_print asm=5003 ch=0x(44|50|43) at=19,12' "$WORK/trace" \
 python3 tools/extract/extractor.py --source asm --emit text >"$WORK/strings-asm" 2>/dev/null
 empty=$(awk -F'\t' '$2==""{n++} END{print n+0}' "$WORK/strings-asm")
 total=$(wc -l <"$WORK/strings-asm" | tr -d ' ')
-[ "$total" = "50" ] && [ "$empty" = "19" ] \
-    && ok "asm fallback yields $((total-empty))/$total strings (19 are exe-only by design)" \
+[ "$total" = "51" ] && [ "$empty" = "20" ] \
+    && ok "asm fallback yields $((total-empty))/$total strings (20 are exe-only by design)" \
     || bad "asm fallback yielded $((total-empty))/$total with $empty empty"
 
 # No game text may be committed: the generated header must stay ignored.

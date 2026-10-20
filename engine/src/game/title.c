@@ -37,6 +37,8 @@
 #include <stdio.h>
 #include "game/title.h"
 #include "game/creation.h"
+#include "game/status.h"
+#include "core/save.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "debug/trace.h"
@@ -232,6 +234,48 @@ static void run_demo(u2_ctx *ctx)
     }
 }
 
+/* asm/0764 (file 0x0964..0x09CB): the 'P' branch.
+ * It clears the screen, positions at row 12 col 10, and jumps straight to the
+ * read (0x0976 skips the prompt on the first pass): FCB random read of 256
+ * bytes into DS:36. Then `mov al,[0x36]; or al,al; jne 0x9e6` — a non-zero name
+ * byte means there is a character, so it continues into the game. A zero name
+ * byte prints "(INSERT PLAYER DISK)" and waits for ESC, then retries.
+ *
+ * The read itself is core/save.c. What is NOT lifted is 0x9e6 onward: the world,
+ * which is CP4. So a successful load shows the status block that CP3 proved and
+ * names the checkpoint that owns the rest, rather than pretending to play. */
+static void run_play(u2_ctx *ctx)
+{
+    for (;;) {
+        u2_key k;
+        u2_save_result r = u2_save_load(ctx);
+
+        if (r == U2_SAVE_OK) {
+            seam_clear_screen(ctx);
+            u2_status_draw(ctx);
+            seam_present(ctx);
+            if (seam_key_poll(ctx, &k)) return;   /* any key back to the menu */
+            seam_wait_ms(ctx, 600);
+            return;
+        }
+        if (r == U2_SAVE_ERROR) return;
+
+        /* U2_SAVE_BLANK, or the path is unusable: the original's own response
+         * to a disk with no character on it. */
+        seam_clear_screen(ctx);
+        seam_str_out_at(ctx, 10, 12, U2_S_DISK_PLAYER);
+        seam_present(ctx);
+        for (;;) {
+            if (!seam_key_poll(ctx, &k)) {
+                if (ctx->mode == U2_MODE_HEADLESS || ctx->exit_code) return;
+                seam_wait_ms(ctx, 20);
+                continue;
+            }
+            if (k.ch == 0x1b) return;            /* asm/0991: ESC to retry */
+        }
+    }
+}
+
 int u2_title_flow(u2_ctx *ctx)
 {
     ctx->content_source = U2_CONTENT_SOURCE;    /* from the generated header */
@@ -252,12 +296,8 @@ int u2_title_flow(u2_ctx *ctx)
         case 'D':                               /* asm/039B: jmp 0x3AF */
             run_demo(ctx);
             break;
-        case 'P':                               /* asm/03A0 -> asm/03AC */
-            /* asm/0764 is a small wrapper: emit the key, print a line at row 10
-             * column 0 and wait for a key (asm/0767 + asm/0776). The disk/load
-             * path behind it is not lifted yet, so only the wait is missing. */
-            stub_not_implemented(ctx, "play prompt (asm/0764)");
-            run_demo(ctx);
+        case 'P':                               /* asm/03A0 -> asm/0764 */
+            run_play(ctx);
             break;
         case 'C':                               /* asm/03A4 -> asm/5400 -> 03AC */
             /* CP3: real creation flow (game/creation.c). The original returns

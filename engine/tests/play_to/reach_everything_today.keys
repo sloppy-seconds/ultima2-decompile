@@ -4,8 +4,10 @@
 #   D           demonstration: the whole poem, asm/03AC
 #   WAIT x6     one per couplet, so all six are drawn
 #   ESC         ends the demo cycle and returns to the title
-#   P           play branch (asm/0764 stub)
-#   ESC         ends its demo
+#   P           play branch (asm/0764): reads the player record; with no
+#               character on the disk it prints (INSERT PLAYER DISK) and waits
+#               for ESC, which is exactly what the original does
+#   ESC         dismisses that prompt
 #   C           create branch (asm/5400) — CP3 made this a real flow, so the
 #               route now completes a character: six stats of 15 (the 90-point
 #               budget exactly), MALE, HUMAN, FIGHTER, a name, and Y to accept.

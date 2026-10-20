@@ -32,20 +32,40 @@ def load(path):
 
 
 def rerun(rep, out_path):
-    """Replay the report's keys and seed into a fresh report file."""
+    """Replay the report's keys and seed into a fresh report file.
+
+    The save directory has to be empty for every run, not just the first one.
+    Since CP3 the route reaches 'P', whose whole behaviour is "read the player
+    record": against a directory left behind by a previous run it loads a
+    character instead of asking for a disk, and the digests diverge for reasons
+    that have nothing to do with the engine. A playthrough transcript is only
+    evidence if it is self-contained, so verification always starts from a blank
+    disk.
+    """
     keys = rep.get("keys", [])
-    fd, kpath = tempfile.mkstemp(prefix="u2-playlog-", suffix=".keys", dir="/var/tmp")
+    tmp = tempfile.mkdtemp(prefix="u2-playlog-", dir="/var/tmp")
+    kpath = os.path.join(tmp, "keys")
+    savedir = os.path.join(tmp, "disk")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        with open(kpath, "w", encoding="utf-8") as f:
             f.write("\n".join(keys) + ("\n" if keys else ""))
         cmd = [BIN, "--headless", "--seed", str(rep.get("seed", 0)),
-               "--script", kpath, "--replay-report", out_path]
+               "--script", kpath, "--save-dir", savedir,
+               "--replay-report", out_path]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if proc.returncode != 0:
             sys.exit(f"playlog: engine exit {proc.returncode}: {proc.stderr.strip()[:200]}")
         return load(out_path)
     finally:
-        os.unlink(kpath)
+        for name in os.listdir(tmp):
+            p = os.path.join(tmp, name)
+            if os.path.isfile(p):
+                os.unlink(p)
+            else:
+                for sub in os.listdir(p):
+                    os.unlink(os.path.join(p, sub))
+                os.rmdir(p)
+        os.rmdir(tmp)
 
 
 def cmd_verify(args):

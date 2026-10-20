@@ -93,6 +93,7 @@ int u2_replay_write(u2_ctx *ctx, const char *path)
     emit_str(f, ctx->content_source ? ctx->content_source : "none");
     fprintf(f, ",\n");
     fprintf(f, "  \"seed\": %u,\n", ctx->seed);
+    fputs("  \"save_dir\": \"fresh\",\n", f);
     fputs("  \"keys\": [", f);
     for (int i = 0; i < r->n_keys; i++) {
         if (i) fputs(", ", f);

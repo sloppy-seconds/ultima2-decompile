@@ -16,6 +16,9 @@ bad() { printf '  FAIL  %s\n' "$1"; fail=1; }
 WORK=$(mktemp -d "${TMPDIR:-/var/tmp}/u2-cp3.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
+# 'P' after a character exists: ESC past the intro, P to load, ESC to leave.
+printf 'ESC\nP\n0x1b\n' > "$WORK/p_after.keys"
+
 printf 'engine CP3 test\n'
 
 # --- the save record is byte-compatible with the original -----------------
@@ -43,6 +46,27 @@ AFTER=$(find . -name PLAYER -not -path './build/*' | wc -l)
 [ "$BEFORE" = "$AFTER" ] \
     && ok "a headless run leaves no save file in the engine tree" \
     || bad "a run wrote a PLAYER file into the tree"
+
+# --- 'P' reads the player record (asm/0764) --------------------------------
+# Content-free check: a fresh state has gold 0, and the character created by the
+# route has gold 4. So 'P' loading a character is observable in the state dump
+# without comparing any game text.
+CREATED="$WORK/created"
+SEED="$WORK/empty"
+mkdir -p "$CREATED" "$SEED"
+./u2 --headless --script tests/play_to/reach_everything_today.keys --seed 0 \
+     --save-dir "$CREATED" > /dev/null 2>&1
+./u2 --headless --script "$WORK/p_after.keys" --save-dir "$CREATED" \
+     --dump-state > "$WORK/p_after.out" 2>&1
+./u2 --headless --script "$WORK/p_after.keys" --save-dir "$SEED" \
+     --dump-state > "$WORK/p_empty.out" 2>&1
+
+grep -qE '"gold"[[:space:]]*:[[:space:]]*4' "$WORK/p_after.out" \
+    && ok "P loads the saved character (gold 4 from disk)" \
+    || bad "P did not load the saved character"
+grep -qE '"gold"[[:space:]]*:[[:space:]]*0' "$WORK/p_empty.out" \
+    && ok "P with no character on disk loads nothing (the INSERT DISK path)" \
+    || bad "P loaded a character from an empty directory"
 
 # --- nothing generated may be committed -----------------------------------
 cat > "$WORK/probe_player" <<'EOF'

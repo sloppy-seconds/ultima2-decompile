@@ -5,7 +5,11 @@
  * INT 16h AH=00h sites. The original polled the BIOS key queue; here poll()
  * is a non-blocking read of stdin and wait() is a blocking one.
  */
+#define _POSIX_C_SOURCE 200809L   /* poll(), tcsetattr under -std=c11 */
+
+#include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -66,6 +70,20 @@ static int term_read(u2_ctx *ctx, u2_key *out, int block)
         fcntl(STDIN_FILENO, F_SETFL, fl & ~O_NONBLOCK);
     if (!block && !(fl & O_NONBLOCK) && !ti->raw)
         fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK);
+
+    /* Raw mode sets VMIN=0/VTIME=0 so that poll() can be non-blocking, and that
+     * also makes a plain read() return 0 with nothing typed — clearing
+     * O_NONBLOCK does not help, because the terminal, not the descriptor, is
+     * what is non-blocking here. A blocking wait therefore has to wait for
+     * readability itself. Without this, every seam_key_wait in interactive play
+     * returns "no key" instantly and character creation falls straight through
+     * (the CP3 'C does nothing' bug). */
+    if (block && ti->raw) {
+        struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN, .revents = 0 };
+        while (poll(&pfd, 1, -1) < 0) {
+            if (errno != EINTR) break;
+        }
+    }
 
     unsigned char c = 0;
     ssize_t n = read(STDIN_FILENO, &c, 1);
