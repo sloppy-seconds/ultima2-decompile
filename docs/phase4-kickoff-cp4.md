@@ -95,11 +95,17 @@ Do these in order; each is cheap and each changes the design.
    - rows 20-23: command echo (cols 0-28) + status block (cols 30-39)
    - rows 0-19: the map, which is **20 cell-rows**
 
-   At 2 cells per tile that is **10 tile-rows, not 11**. The player is therefore
-   **not vertically centred**: it is 5 above + player + 4 below, or 4 + player + 5.
-   The owner's "5 above and below" is off by one, in the same way the width turned
-   out asymmetric. The width still lands exactly: 20 tiles x 2 cells = 40 columns,
-   full grid, split 9 + player + 10.
+   At 2 cells per tile that is **10 tile-rows, not 11**. **Owner confirmed
+   (2026-10-27): 5 tiles above the player and 4 below**, so the player sits on tile
+   row 5 of a 10-row window and is not vertically centred. The width is likewise
+   20 tiles at 9 + player + 10. The recollection of "5 above and below" was off by
+   one in the same direction the width was asymmetric, which is worth noticing: a
+   player's memory of a window tends to round toward symmetry, so an uneven split
+   is a fact to extract from code rather than to ask about.
+
+   **Remaining unknown in the horizontal axis:** which side gets 9 and which gets
+   10, i.e. whether the offset is `player_tile_x - 9` or `- 10`. Readable from the
+   same draw loop in one line.
 
    **Prediction to check against the draw loop:** the vertical offset should be a
    fixed tile count that leaves 10 rows of map above row 20, and the horizontal
