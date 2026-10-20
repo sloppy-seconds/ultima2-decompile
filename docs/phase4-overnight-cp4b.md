@@ -29,34 +29,61 @@ win and the disagreement gets written down.
 
 Recon 2026-10-20 evening reframed this task. Proven:
 
-- Edge tests `asm/242D/2434`: `cmp $0x40; jae 243E` per axis; wrapped
-  decrements (0xFF) trip the same test, so both edges share one path.
-- `asm/243E`: position := entry pair `DS:5A/5B`, `DS:4A := 0`, reload
-  `mapx[49][4A]`. It never touches `DS:49` — the reload does not change
-  sector.
-- Sector changes are the arrival system: `DS:6E` arrival code, `asm/26B7`
-  (compare `DS:6E>>1` vs current), `asm/26C6` (set `DS:49` + reload),
-  `asm/2708` (set sector, entry (x,y) from the `cs:0x2798` table indexed
-  `8*sector + DS:6E` -> `DS:23/24`, stamp).
-- `DS:4A` reads as site kind (0 overworld, 2 town, 4 tower per `asm/343F`
-  strings), so `mapx22` = town in sector 2; the `*x4/*x5` odd-format family
-  = tower/dungeon maps (defect 4 stands).
-- Edge probe: mapx20 and mapx30 are ringed almost entirely by index-0 tiles
-  (water per the kickoff's art labels); many other sectors have mixed edges
-  (land links or impassable mountains — unknown until passability is decoded).
+- Walk loop (file 0x0B36..0x0BF1, fully re-decoded): each direction arm is
+  `inc/dec [DS:00]/[DS:01]` -> str_out direction word -> `call 0x2423`
+  (passability, AL = travel mode from [DS:15], stored to [DS:29]) -> if
+  result != 0: undo the step, echo `--INVALID MOVE!`.
+- `asm/2423` head: `[0x29]=al; if [0x4A]==0: JUMP 0x248B` (overworld path,
+  file 0x268B). The edge checks at 242D/2434 and the reload at 243E run
+  ONLY when DS:4A != 0 — they are the SITE-map exit path (walk off a town
+  map -> restore entry pair, set site kind 0, reload the sector map).
+- Overworld path (file 0x268B..0x2743, re-decoded but NOT yet understood):
+  branches on travel mode ([DS:29] & 0x7F): mode 2 applies a BCD -5 to the
+  HP pair (das chain at 0x2695..0x26AC) with a jump to runtime 0xE62 on
+  borrow (death?); mode 0x2E checks [DS:D6] and prints a message; a check
+  of [DS:26B] guards a "move only on foot" message; [DS:13] compared to
+  0x28. Every one of these needs a careful read before any of it is
+  implemented.
+- Sector arrival machinery: [DS:6E] is `2*sector + parity` (asm/26B7
+  compares [DS:6E]>>1 to [DS:49]); asm/2744 steps it by 2, masks &7, and
+  looks entry (x,y) from the cs:0x2798 table (file 0x2998) indexed
+  `8*[DS:49] + [DS:6E]` -> [DS:23]/[DS:24], then calls 0x52B3 (player
+  stamp). Table first bytes: 1d 38 1f 38 21 38 23 38 22 08 2f 1c 24 38
+  14 25 10 10 30 18 2a 18 13 34 38 34 1c 0c 21 17 14 34 12 17 32 22 34
+  18 08 0b — ends ~0x29BB (36 bytes, code resumes); the index formula and
+  extent must be reconciled in T1d (8*sector+dir would need 80).
+- Owner recollection (2026-10-20 night): west from the start sector shows
+  more map; he assumed seamless scroll into the neighbour. CONFIRMED
+  DISTINCTION by owner: town/site edge = FULL transition (reload, entry
+  restore — matches asm/243E exactly); overworld edge = SMOOTH continuation
+  into the neighbouring sector. The smooth mechanism is what T1a must find
+  in the 0x248B path or its callees; if the bytes disagree with "smooth",
+  the bytes win and the disagreement gets written down. Vehicles later:
+  frigate (water), plane (any) — the sector system stays relevant for them.
+- Edge probe: mapx20 and mapx30 are ringed almost entirely by index-0 tiles;
+  many other sectors have mixed edges (land links or impassable mountains —
+  unknown until passability is decoded).
 
 Tasks, in order:
 
-- T1a: decode `asm/2423` (passability, AL = travel mode at `DS:29`) and find
-  the terrain-ID -> blocked table. Cite every blocked tile id. NOTE: settle
-  the art-label question here — the kickoff calls art 0 "water (magenta
-  dashes)" but the renders show the magenta dotted field as the walkable
-  land the player stands on; the passability table is the arbiter, not the
-  label.
+- T1a: decode the overworld passability path at file 0x268B end to end (and
+  whatever it tail-calls): where the tile under the target cell is read
+  (note asm/50B3 indexes by [DS:23]/[DS:24], NOT [DS:00]/[DS:01] — find
+  where 23/24 are synced from 00/01), what makes a tile passable per travel
+  mode, and what happens at the wrapped edge (x=0xFF indexes where?).
+  Settle the art-label question here: the kickoff calls art 0 "water
+  (magenta dashes)" but renders show the magenta dotted field as walkable
+  land; the passability table is the arbiter, not the label. Cite every
+  blocked tile id to an address.
 - T1b: implement passability in `u2_overworld_run` for travel mode on foot:
   rejected step is undone and `--INVALID MOVE!` echoed through the CMD
   window (string proven in the movement loop). This alone makes the starting
   sector fully walkable and the boundary a natural wall.
+- T1b2: implement the SMOOTH overworld crossing per the T1a decode: sector
+  digit steps, map reloads, position continues at the opposite edge so the
+  player-centred viewport makes it seamless. Missing sector files (the
+  shipped gaps) must behave per the bytes — if the bytes offer no rule for
+  a missing neighbour, refuse the step and document it, never invent.
 - T1c: with passability in, re-probe every `*x0` sector: can a foot traveler
   reach an edge anywhere? If yes, implement the `243E` semantics faithfully
   (entry restore, site kind 0, reload) — the bytes do NOT support a
