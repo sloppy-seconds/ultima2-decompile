@@ -22,6 +22,13 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
+- **If resuming the live-capture work (Spice86 running, passability/combat),
+  read `docs/handoff-live-capture.md` first.** It lists what is proven, what is
+  now known wrong in the engine code, and the capture queue. The CP4b T1 finding
+  and part of T2 were **retracted** the same day — see
+  `docs/phase4-implementation.md § CP4b → RETRACTION` and
+  `docs/spice86-live-findings.md`.
+
 - **CP4 is mid-flight and everything is committed. To take over, paste
   `docs/phase4-kickoff-cp4b.md` to a fresh agent — it is the current handoff and
   supersedes the notes below on what to do next.** The headline it must not miss:
