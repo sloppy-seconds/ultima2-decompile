@@ -274,9 +274,72 @@ adds a `--data-dir` seam and reads the player's own files the way the original
       an out-of-range BCD nibble (e.g. `0x9A`), which would corrupt a counter.
       Tables and offsets: `docs/spice86-live-findings.md` § 11.
 
-- [ ] **Screen ring for the recorder.** `tools/turn_recorder.py` exists and is
-      turn-triggered, but a message that appears and scrolls within one turn is
-      still lost. See `docs/spice86-live-findings.md` § 10.
+- [ ] **Fix `tools/cfg_printed.py` — it currently uses the wrong source and
+      reports messages that never printed.** It reads `CfgBlocks`, which is
+      *discovered* blocks: Spice86 statically expands branch successors, so the
+      list included `MINAX IS DEAD!!`, `RING PROTECTS FROM FIELD!` and
+      `FIELD CAUSES 1000 DAMAGE!` from a session that never met Minax, a ring or
+      a force field. The correct source is `ExecutedInstructions` in
+      `spice86dumpExecutionFlow.json` — a list of `{Offset, Segment, Linear}`
+      dicts, ~2400 entries, which cleanly excludes all three and also excludes
+      `ARMS PARALIZED!` while keeping `LEGS PARALIZED!`. Address model, verified:
+      a block entry is a runtime offset; the inline string sits at
+      `runtime_offset + instr_offset + 3 + 0x200` in the file (do **not** add the
+      segment base as well — that bug silently found nothing). Messages are
+      prefixed with `0x0D`/`0x8D` control bytes which must be stripped before the
+      printable check or `KILLED--GOLD+` disappears. **Highest priority of these
+      items: a tool that confidently lies is worse than no tool.**
+
+- [ ] **`tools/replay.py` — turn replay from the recorder snapshots.** Pure
+      offline work on data already on disk, no emulator needed. Read
+      `/var/tmp/u2-turns/turns/NNNNN.ds` plus `index.jsonl`, render the zoomed
+      viewport or the full 64x64 map per turn, annotate each frame with detected
+      events, and emit an animated sequence or a text log. Proven feasible: 151
+      turns of the vga-test fight already yield the timeline, including the
+      monster adjacent at turn 149 and gone at turn 150 with `+13g +4xp`. Reuse
+      the glyph and monster-kind maps from `tools/map_render.py`.
+
+- [ ] **Ordered message log.** The CFG gives the *set* of messages a session
+      printed, never the order — `ExecutedInstructions` is a set of distinct
+      addresses with no timestamps and no counts. So "the thief stole it, then I
+      attacked" is not recoverable from a harvest. Two candidate fixes, neither
+      tried: MCP `add_breakpoint` on str_out at runtime `0x4FDF` to capture an
+      ordered print log (cheap, but pausing may upset game timing), or
+      `tools/vga_ring.py` sampling the framebuffer continuously.
+
+- [ ] **Run `tools/vga_ring.py` for the first time.** Written after the session
+      ended; syntax-checked only. It exists because combat text is drawn and
+      overwritten inside a single turn, so turn-boundary sampling provably cannot
+      catch it — 151 turns of a real fight yielded zero readable framebuffer text
+      while memory proved a kill.
+
+- [ ] **Fix `tools/turn_recorder.py`'s two known flaws.** Both cosmetic, neither
+      blocking, but they make the log harder to read. `DS:20` is scratch, not a
+      pure invalid-move counter — the harvest shows it decremented in the walk
+      loop and overwritten at `0x2BC7` — so including it in the change signature
+      fabricates `[reject]` rows. And position and food update non-atomically, so
+      one move can split across two samples and show as a false odometer
+      anomaly. Only 12 of 151 turns classified as a clean event.
+
+- [ ] **Screen ring for the recorder.** See `docs/spice86-live-findings.md` § 10.
+
+### Proven from the harvests, for whoever picks this up
+
+The CFG-plus-`ExecutedInstructions` technique settled several things without any
+new capture. Executed: `ATTACK--`, `--MISS`, `--HIT!!!`, `--EXP.+`,
+`KILLED--GOLD+`, `--INVALID MOVE!`, `LEGS PARALIZED!`, `--PARALIZED!`, and
+`A THIEF STOLE SOMETHING!`. Not executed: `MINAX IS DEAD!!`,
+`RING PROTECTS FROM FIELD!`, `FIELD CAUSES 1000 DAMAGE!`, `ARMS PARALIZED!`,
+`SAVED BY MAGICAL BOOTS!`. `create-test-live`, taken before any fighting, shows
+none of the combat strings — a clean negative control.
+
+Two consequences worth keeping. `A THIEF STOLE SOMETHING!` is printed from the
+same block that decrements `DS:D6+i`, so the theft of the staff is proven rather
+than inferred. And `--PARALIZED!` lives at runtime `0x2527`, *inside* the
+passability routine — so paralysis is enforced in the movement check itself and a
+paralyzed step takes the same reject path as walking into a mountain. That is why
+`--INVALID MOVE!` is what the owner saw while paralyzed, and it means the engine
+must model paralysis as a movement rejection, not a combat overlay.
 
 ## Invariants (checked at every checkpoint)
 
