@@ -294,23 +294,33 @@ bespoke messaging elsewhere in the binary.
 hp 0184 (184)   food 036244   exp 0010 (10)   gold 0452 (452, started 400)
 str 0x50  dex 0x12  int 0x18   boots DS:6D = 00 (none)   ready DS:61 = 00
 DS:76..0x8D  all zero          <-- NOT the inventory
-DS:D6..0xED  00 00 01 00 ... 01 00 ...   <-- items: index 2 and index 12
+DS:D6..0xED  00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00
+             index 2 = STAFF, index 10 = GREEN GEM
 ```
 
 The save file mirrors the same array at **save offset `0x0a0`**, holding only
-index 2 — so the second item was picked up after the last save. Save and live
+index 2 — so the green gem was picked up after the last save. Save and live
 memory agree.
 
-### Open discrepancy — do not close this silently
+### Resolved: there was never a gem discrepancy. I miscounted.
 
-Index 2 is `STAFF`, which matches the owner exactly. Index 12 is `BLUE TASSLE`,
-but the owner recalled a **green gem**. `GREEN GEM` is index 10, two away.
+An earlier draft of this section claimed the second item sat at index 12
+(`BLUE TASSLE`) and contradicted the owner's memory of a green gem. It does not.
+`DS:D6[10] = 1`, and index 10 is `GREEN GEM`. The owner was right throughout.
 
-The table order is the only evidence; nothing in `asm/` references these string
-addresses by pointer, so the table is indexed arithmetically and an off-by-two
-base would produce exactly this symptom. Unresolved on purpose. Settle it next
-session by watching the on-screen message at the moment of a drop rather than
-trusting either memory or the table.
+The error came from splitting a hex string by eye instead of computing it, and
+then reasoning confidently from the miscount. The table was never wrong.
+
+The display confirms the table independently: `asm/4881` prints a literal `"S"`
+for the plural, and `0x487A` skips that `S` when the index is 3 — which is
+`BOOTS`, the one already-plural entry. So the screen rendering `STAFFS-01
+GREEN GEMS-01` is `STAFF` + `S`, `GREEN GEM` + `S`, from the table at
+`0x501d`. Index 3 being the special case is the proof that this table is the one
+in use.
+
+**Method note worth keeping:** derive indices in code, never by reading hex
+aloud. Every other error this session came from an ambiguous byte; this one came
+from arithmetic I did not do.
 
 ### Paralysis resist — now backed by a string, not just a byte test
 
@@ -418,3 +428,46 @@ of `2423..2680`.
 `2BEC_combat_hit_msg`, `2E09_combat_miss_msg` and `2E3D_combat_attack_flow`. The
 thief-steal and paralysis questions raised during live play had named functions
 sitting in the tree the whole time.
+
+## 10. The screen is recoverable from the memory dump — `tools/vga_screen.py`
+
+The owner's question: is the fight and reward text that Spice86's UI fails to
+show actually present in the captured data?
+
+**Yes.** Ultima II runs in a text video mode. The dump's framebuffer at `B8000`
+is character/attribute pairs — 16384 bytes, exactly half printable — so the
+screen as the player saw it renders straight out of a capture we already have.
+No trace and no replayer needed.
+
+```
+ 0| TEST                        A LEVEL 00 MALE HUMAN FIGHTER
+ 1|                             WEAPON-HANDS        TORCHES-00
+ 2|   ARMOUR-SKIN    KEYS-00    SPELL-NONE          TOOLS-00
+ 3| STRENGTH-50  STAMINA-18  WISDOM-10  AGILITY-12  CHARISMA-10  INTELL.-15
+ 4|                             WEAPONS:
+ 6| ARMOUR:
+ 7| SPELLS:
+ 9| ITEMS: STAFFS-01 GREEN GEMS-01
+```
+
+Diffing two harvests shows the gain directly: the earlier dump has a bare
+`ITEMS:` and the later one has `ITEMS: STAFFS-01 GREEN GEMS-01`.
+
+### The honest limit
+
+This is a **snapshot at dump time, not a recording**. Both dumps above caught the
+inventory screen, and the combat messages had already scrolled away. So the
+missing fight text is not preserved retroactively; it is preserved only if the
+dump happens while it is still on screen.
+
+Consequences for how we capture:
+
+* dump immediately after an event of interest, before the player scrolls it off;
+* a real replayer would need Spice86's execution-trace recording, which the
+  current start script does not enable — the harvest holds CFG, execution flow,
+  registers and one memory snapshot, and no per-instruction trace;
+* cheap middle ground: poll the framebuffer at a few Hz into a ring of dumps, so
+  the last few screens survive any event.
+
+That last one is worth building before the next fight, because it converts "I
+missed the text" into "read the last screen".
