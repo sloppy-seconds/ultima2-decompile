@@ -200,7 +200,16 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         u2_key k;
         const int r = seam_key_poll(ctx, &k);
         if (r < 0) break;
-        if (r == 0) { seam_wait_ms(ctx, 16); continue; }   /* ~60 fps cadence */
+        if (r == 0) {
+            /* A window close (SDL_QUIT) or an exhausted script sets exit_code /
+             * input_exhausted without returning a key; seam_key_poll collapses
+             * both to 0, so the flag test is the only place the overworld can
+             * see them. The title flow does the same via flow_stopped()
+             * (title.c); without this the loop spun forever after the player
+             * closed the window mid-game. */
+            if (ctx->exit_code || ctx->input_exhausted) break;
+            seam_wait_ms(ctx, 16); continue;               /* ~60 fps cadence */
+        }
         if (k.ch == 0x1B) break;                           /* ESC leaves */
 
         int dx = 0, dy = 0;
