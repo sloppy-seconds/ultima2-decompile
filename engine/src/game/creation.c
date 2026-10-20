@@ -37,14 +37,15 @@
  *    reproduced; the control characters are dropped because they render as
  *    garbage and cannot be typed usefully.
  * D9 The confirm line reads [S]AVE / [R]ESET instead of SATISFACTORY (Y/N), and
- *    the form accepts r/R to reset it. The original asks "SATISFACTORY (Y/N)-"
- *    (asm/5B6E, printed by the form blob) and restarts the whole generation from
- *    scratch on N (asm/5BD5 -> 0x5698). "Not satisfactory" is not an instruction
- *    a player can guess, and it does not say what happens next; Save and Reset do.
- *    This is the one place the engine overwrites an extracted game string, so it
- *    paints over row 16 rather than editing the blob — the blob stays faithful to
- *    the binary and the override is visible as engine text. Both keys work from
- *    any field except the name, where S and R are ordinary letters.
+ *    it is a pair of fields you Tab to and press Enter on. The original asks
+ *    "SATISFACTORY (Y/N)-" (asm/5B6E, in the form blob) and restarts the whole
+ *    generation from scratch on N (asm/5BD5 -> 0x5698); "not satisfactory" is
+ *    not an instruction a player can guess and does not say what happens next.
+ *    These are deliberately not hotkeys: as r/R shortcuts they fired the moment
+ *    anyone typed the name BRITISH. This is the one place the engine overwrites
+ *    an extracted game string, so it paints over row 16 rather than editing the
+ *    blob — the blob stays faithful to the binary and the override is visible as
+ *    engine text.
  * D10 Every stat starts at 10, the minimum the original enforces, so the player
  *    distributes the 30 points left over rather than building all 90 from zero.
  *    Same solution set — six stats of at least 10 summing to 90 — but an illegal
@@ -83,7 +84,7 @@
 #define CONFIRM_COL    10      /* the original indents that line by 10 spaces */
 #define CONFIRM_TEXT   "[S]AVE   [R]ESET"
 
-typedef enum { F_STAT, F_SEX, F_RACE, F_CLASS, F_NAME } field_kind;
+typedef enum { F_STAT, F_SEX, F_RACE, F_CLASS, F_NAME, F_SAVE, F_RESET } field_kind;
 
 typedef struct {
     field_kind kind;
@@ -91,13 +92,18 @@ typedef struct {
     int index;                 /* stat index for F_STAT */
 } field;
 
-/* Order is the order the original asks in, so Tab walks the form the same way. */
+/* Order is the order the original asks in, so Tab walks the form the same way.
+ * SAVE and RESET are the last two stops: they are fields you navigate to and
+ * press Enter on, not hotkeys. They started life as r/R shortcuts and that
+ * failed the first time anyone typed the name BRITISH. */
 static const field FIELDS[] = {
     { F_STAT,  4, STAT_COL, 0 }, { F_STAT,  5, STAT_COL, 1 },
     { F_STAT,  6, STAT_COL, 2 }, { F_STAT,  7, STAT_COL, 3 },
     { F_STAT,  8, STAT_COL, 4 }, { F_STAT,  9, STAT_COL, 5 },
     { F_SEX,   11, PROMPT_COL, -1 }, { F_RACE,  12, PROMPT_COL, -1 },
     { F_CLASS, 13, PROMPT_COL, -1 }, { F_NAME,  14, PROMPT_COL, -1 },
+    { F_SAVE,  CONFIRM_ROW, CONFIRM_COL, -1 },
+    { F_RESET, CONFIRM_ROW, CONFIRM_COL + 9, -1 },   /* "[S]AVE   " is 9 cols */
 };
 #define NFIELDS ((int)(sizeof FIELDS / sizeof FIELDS[0]))
 
@@ -225,6 +231,9 @@ static void draw_field(u2_ctx *ctx, form *f, int which)
         for (int i = f->name_len; i < NAME_MAX; i++) seam_char_out(ctx, ' ');
         break;
     }
+    case F_SAVE:
+    case F_RESET:
+        break;                          /* static labels, nothing to redraw */
     }
 }
 
@@ -238,6 +247,8 @@ static void place_cursor(u2_ctx *ctx, form *f)
     case F_RACE:
     case F_CLASS: col += 6; break;
     case F_NAME: col += 6 + f->name_len; break;
+    case F_SAVE:
+    case F_RESET: break;               /* cursor sits on the label itself */
     }
     /* D4: the original gives no indication of the active field. */
     ctx->vram.visible = 1;
@@ -303,7 +314,7 @@ static int edit_field(u2_ctx *ctx, form *f, int c)
     f->note[0] = '\0';
     /* The original upper-cases the keys it matches on (asm/4F4D `and $0xdf`), so
      * case never matters for a choice. The name is the one field that keeps it. */
-    if (fd->kind != F_NAME && c >= 'a' && c <= 'z') c -= 32;
+    if (fd->kind != F_NAME) c = up(c);
 
     switch (fd->kind) {
     case F_STAT: {
@@ -377,6 +388,9 @@ static int edit_field(u2_ctx *ctx, form *f, int c)
         }
         draw_field(ctx, f, f->sel);
         return 0;
+    case F_SAVE:
+    case F_RESET:
+        return 0;                       /* activated by Enter, not by typing */
     }
     return 0;
 }
@@ -453,19 +467,25 @@ int u2_creation_flow(u2_ctx *ctx)
                 f.sel = (f.sel + NFIELDS - 1) % NFIELDS;
                 f.typed = 0;
                 draw_form(ctx, &f);
-            } else if (c == '\r' || c == '\n' || up(c) == 'S') {
-                /* Enter or [S]AVE, from any field. The original restarts the
-                 * whole generation on N (asm/5BD5 -> 0x5698). */
-                char why[48];
-                if (!complete(&f, why, sizeof why)) {
-                    snprintf(f.note, sizeof f.note, "%s", why);
-                    draw_form(ctx, &f);
-                    continue;
+            } else if (c == '\r' || c == '\n') {
+                /* Enter walks the form and activates whatever it lands on. On
+                 * SAVE it validates and commits; on RESET it rebuilds. Nothing
+                 * else, so no letter you can type into the name is also a
+                 * command. */
+                if (FIELDS[f.sel].kind == F_RESET) { done = -1; break; }
+                if (FIELDS[f.sel].kind == F_SAVE) {
+                    char why[48];
+                    if (!complete(&f, why, sizeof why)) {
+                        snprintf(f.note, sizeof f.note, "%s", why);
+                        draw_form(ctx, &f);
+                        continue;
+                    }
+                    commit(ctx, &f);
+                    done = 1;
+                } else {
+                    f.sel = (f.sel + 1) % NFIELDS;
+                    f.typed = 0;
                 }
-                commit(ctx, &f);
-                done = 1;
-            } else if (up(c) == 'R' && FIELDS[f.sel].kind != F_NAME) {
-                done = -1; break;              /* [R]ESET: rebuild an empty form */
             } else {
                 int adv = edit_field(ctx, &f, c);
                 if (adv) { f.sel = (f.sel + 1) % NFIELDS; f.typed = 0; }
@@ -480,6 +500,6 @@ int u2_creation_flow(u2_ctx *ctx)
             if (u2_save_store(ctx) != U2_SAVE_OK) return -1;
             return 1;
         }
-        /* done == -1: the player pressed R; the outer loop rebuilds an empty form */
+        /* done == -1: RESET was activated; the outer loop rebuilds an empty form */
     }
 }

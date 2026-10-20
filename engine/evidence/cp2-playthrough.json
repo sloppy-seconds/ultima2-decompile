@@ -5,7 +5,7 @@
   "content_source": "exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25",
   "seed": 0,
   "save_dir": "fresh",
-  "keys": ["WAIT", "WAIT", "X", "D", "WAIT", "WAIT", "WAIT", "WAIT", "WAIT", "WAIT", "ESC", "P", "ESC", "C", "1", "5", "1", "5", "1", "5", "1", "5", "1", "5", "1", "5", "M", "1", "1", "B", "R", "I", "T", "I", "S", "H", "0x0d", "S", "0x0d"],
+  "keys": ["WAIT", "WAIT", "X", "D", "WAIT", "WAIT", "WAIT", "WAIT", "WAIT", "WAIT", "ESC", "P", "ESC", "C", "1", "5", "1", "5", "1", "5", "1", "5", "1", "5", "1", "5", "M", "1", "1", "B", "R", "I", "T", "I", "S", "H", "0x0d", "0x0d", "0x0d"],
   "steps": [
     {"at_key": 0, "screen": "e541695ce7a29815c7eff5a1a2e4391bdebff301c32507dbbf5da0ef9bf5cae2", "state": "2f60efa62a8327d90ecb400955dce9e98196d0141027363407a83fa47ec1b112", "rolls": 0},
     {"at_key": 1, "screen": "3abf2af8ed2a1f28a657d4d5400998aa08ca8cc663ac8a90aa60970661bcb847", "state": "50b55a4b0a13e183b283bc6944ba4eca8b42623c94b8f53aa3afbfed1d003027", "rolls": 0},
@@ -46,14 +46,11 @@
     {"at_key": 14, "screen": "8395d828baace403d20ff23016dc0a8489bb02358615b2cfb3a9831f021830b9", "state": "c9c080addb6d649c76051c6d013f3c6ff32763890d5f7eda77fc5f0b1587ea94", "rolls": 0},
     {"at_key": 14, "screen": "982fc9b85cbe2183e0a77d36a0239b335f15d02dd1c4426ea79685e8456894c4", "state": "605fe33bb7de75e568b8238e0997181a0e43a2539148b27324be58e981266520", "rolls": 0},
     {"at_key": 14, "screen": "766d2376345e3e24585a06a5f8086bda01f7d7fde29781f2a86e93bb480cea47", "state": "e50cde006eaff37500c7d65702291f99de9e7d33591b541f5ee4d23f87eeabf7", "rolls": 0},
-    {"at_key": 14, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "16231c93a043828a0288c49a2f9d6640996eab77cf001b68c3985a16de3d9418", "rolls": 0},
-    {"at_key": 36, "screen": "755235482ea9ed9c20afff1f646dc0016615ab850ce553b5a79c9a1648b64487", "state": "290857240a28d1c827498c158e9ca76a937bbab2e6315e61dd524701231d7f37", "rolls": 0},
-    {"at_key": 36, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "283246eaa1e1df962c86ef3650b8b38946cf39621cb59d617a388005cf77f41d", "rolls": 0},
-    {"at_key": 37, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "21a3e379eb54206f439c2996dd35de342fc418744cefd328cc4c3626dff5df35", "rolls": 0},
-    {"at_key": 38, "screen": "b7bd631bc5d67c60405575cda3d038e67910d70c8b45c04627260511d76ddd3f", "state": "4f923e0a57bb74edb314825c59e08bf589d5377e012491e1fbcc5c3f90e9445a", "rolls": 0},
-    {"at_key": 38, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "6b823c65ce9293ede40332b114d7196c9ad0674c0c5d7da9cd0201aaeb66464c", "rolls": 0},
-    {"at_key": 39, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "be4ae52c4314bf474ab2a5d665640aecc7dc4e264c50115443600dfcdfc7adc4", "rolls": 0}
+    {"at_key": 14, "screen": "ce61b7e61b7d5a64804e8cff7cf437462dee8e2d8ebbc59be5e6aa4140467ee7", "state": "ec2be15c7caa4c6b7a685d68c0109d60dbdbc027994b3c90e7778ce235c13d4c", "rolls": 0},
+    {"at_key": 14, "screen": "0113216347924464a1c41b8455a8912e51a488c253281a72f68568dca6d56e3d", "state": "3e638f4e79fccb90ba8c380c9e75c523cca0ee0528f9ab305d3e3bdf05fa3d7b", "rolls": 0},
+    {"at_key": 14, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "95046ba8934d197d83aa5147ec4b3d5d06ca611c132463a505a76f523361bbf5", "rolls": 0},
+    {"at_key": 39, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "abf683628eddec26694dee80eea88460395a38081dce5b9dcf2097a6e497ebe0", "rolls": 0}
   ],
   "steps_truncated": false,
-  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2731,"cursor":{"row":19,"col":12,"visible":1}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":40},"text_attr":15,"story_flag":1,"last_key":13,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
+  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2246,"cursor":{"row":19,"col":12,"visible":1}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":40},"text_attr":15,"story_flag":1,"last_key":13,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
 }

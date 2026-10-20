@@ -79,7 +79,7 @@ printf 'M\n1\n1\n' >> "$WORK/longname.keys"
 # The name must avoid the letter R: outside the name field R is the reset
 # shortcut (D9), and the 13th character onwards lands on other fields.
 for ch in A B C D E F G H I J K L M N O P Q S; do printf '%s\n' "$ch" >> "$WORK/longname.keys"; done
-printf '0x0d\nS\n' >> "$WORK/longname.keys"
+printf '0x0d\n0x0d\n' >> "$WORK/longname.keys"
 mkdir -p "$WORK/longname"
 ./u2 --headless --script "$WORK/longname.keys" --save-dir "$WORK/longname" \
      > /dev/null 2>&1
@@ -112,7 +112,9 @@ if command -v script >/dev/null 2>&1; then
     # \021 is Ctrl-Q: the run ends on its own instead of being killed at the
     # timeout, which is what used to make this suite take ~40 seconds.
     invalid_bytes=$(pty_run 'X\021' "$WORK/d_invalid")
-    create_bytes=$(pty_run 'C\n151515151515M11BRITISH\rS\021' "$WORK/d_create")
+    # No newline after C: Enter walks the form now, so a stray one would shift
+    # every field by one before the first digit lands.
+    create_bytes=$(pty_run 'C151515151515M11BRITISH\r\r\021' "$WORK/d_create")
     [ "$create_bytes" -gt $((invalid_bytes * 2)) ] \
         && ok "C draws a form in a real terminal (${create_bytes}B vs ${invalid_bytes}B for an invalid key)" \
         || bad "C produced no more screen output than an invalid key (${create_bytes}B vs ${invalid_bytes}B)"
