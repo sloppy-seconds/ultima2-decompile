@@ -10,7 +10,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
 | CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
-| CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow (point-buy from a packed-BCD 90 budget, sex/race/class BCD bonuses) + status block at proven positions; `seam_clear_screen` added; 21 CP3 content entries. CP3 test 4/4 + 23-assertion `save_check`. **CP2 evidence baseline moved deliberately** — see gate log | 2026-10-27 |
+| CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
@@ -19,6 +19,29 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP8 | Endgame + full playthrough 🔒 | todo | | |
 | CP9 | SDL2 CGA renderer | todo | needs owner approval for system packages | |
 | CP10 | Sign-off 🔒 | todo | | |
+
+## Resume notes (read this first after a compaction)
+
+- **Everything is committed.** Working tree clean at `de68eb9`. No in-flight edits.
+- **All suites green**: CP0 0.04s, CP1 0.12s, CP2 0.32s, CP3 4.41s (~4.9s total,
+  measured 2026-10-27). CP3's cost is two `sleep 1` waits in the pty tests, which
+  pace the intro-skip apart from the body because a key burst is swallowed by the
+  intro's key-holds. Ctrl-Q **is** passed and **does** terminate the runs.
+- **Phase 3 invariants green**: `make test` runs them (clean rebuild byte-match
+  37344 B, `original/` md5, `asm/` untouched).
+- **Open for the owner at the CP3 gate**:
+  1. Whether HP/FOOD/GOLD are binary or packed decimal — `status.c` says binary,
+     `--dump-state` says BCD and reports gold 400. They disagree; flagged, not
+     guessed. See `engine/src/game/status.h` OPEN QUESTION.
+  2. Whether the CP2 evidence baseline should keep being regenerated in place or
+     frozen with new files per checkpoint. It has moved three times, each
+     deliberately and each recorded in the gate log.
+  3. Play the form: `make play`, press `C`. Confirm Tab/arrows, re-editing, and
+     that the field positions look right against the original.
+- **Not yet done**: the CP11 cheap accommodations (constant registry, accessor
+  reads, random-creation seam), and the branch audit as a standing gate rule is
+  written in `docs/phase4-acceptance.md` but not yet applied retroactively to
+  CP1/CP2.
 
 ## Gate log
 
