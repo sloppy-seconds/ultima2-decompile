@@ -1416,6 +1416,88 @@ Also useful and non-controversial: `PICCAS` is present here, so the missing sixt
 demonstration picture can be tested for CP9 without waiting on the original pack —
 while still being marked as upgrade-sourced content, never committed.
 
+### The draw path, read end to end (2026-10-27, second pass)
+
+**First, a convention trap I walked into and must not walk into again.** The `asm/`
+filenames are **runtime** offsets; the bytes live at **file = runtime + 0x200**. The
+`L_004c74`-style labels inside `asm/4A74_sub_4a74.asm` are the *file* offsets, which is
+what made the two look interchangeable. I passed `--range 4860:4960` to `redecode.py`
+meaning runtime `0x4A64` and got the **status bar** code instead (repeated
+`call $0x53eb` string draws plus `mov al,[0x4b]; call $0x55b5`, the BCD printer, for
+`DS:4B..4E`). Verified the right way rather than assuming: `asm/4A74` begins with six
+pushes (`50 53 52 57 56 06`), and those bytes are at file `0x4C74`, not `0x4A74`.
+`redecode.py` even prints the rule in its own header note; reading the note would have
+saved the detour.
+
+With the correct range (`--range 4c60:4d60`) the cluster decodes as a coherent
+stage-then-flush renderer:
+
+**`asm/4ABB` (runtime) is the flush loop.** It walks a staging buffer at `DS:0x272`
+holding **one byte per tile position**, 32 per row for 10 rows (320 tiles), and for
+each byte:
+
+```nmov    cl,[si+0x272]      ; staging byte = tile id
+or      cl,cl
+js      skip               ; bit 7 set => do not draw
+mov     di,cx
+mov     cx,[di+0x5b0]      ; tile id -> DS offset of that tile's pixels
+call    0x4c74             ; blit
+```
+
+Three things fall out of those six instructions. The **tile id is the staging byte
+itself**, so the map byte -> table entry question reduces to whatever writes `DS:0x272`.
+**Bit 7 of a staging byte is a "do not draw" flag**, which is a real feature to
+reproduce, not a curiosity. And the index table at `DS:0x5B0` is confirmed as the very
+table found at file `0x7BC0` — the owner's find and the asm now point at the same
+object from two directions.
+
+**`asm/4A74` is the blit.** `si = cx` (tile pixels), `add si,2` skips the two-byte
+header, `dl = 0x10` loops 16 times, and each iteration copies **4 bytes** — one row of
+16 pixels at 2bpp — then `si += 4` for the next row. That independently confirms the
+tile geometry derived from the file layout, and it confirms `04 10` is a header and not
+pixel data, because the code steps over it.
+
+The part that looked unexplained for a minute was the destination, and it turned out to
+be readable straight out of the file, because the prefix is `%cs:` not `DS:` —
+`asm/4A89` and four siblings all write `mov %cs:0x48dc(%bx),%ax`. So the table is
+**static data baked into the code segment** at `CS:0x48DC` (file `0x4ADC`), 160 words,
+all distinct, and it alternates planes:
+
+```
+b800 ba00 b805 ba05 b80a ba0a b80f ba0f ... b986 bb86 b98b bb8b
+```
+
+i.e. entry `2k` = `B800 + 5k` and entry `2k+1` = `BA00 + 5k`. `+5` paragraphs is `+80`
+bytes, which is one 320-pixel graphics row at 2bpp **and** one 40-cell text row — the
+CGA row stride is 80 bytes either way, which is why the table works for both. The
+alternation means consecutive tile rows `y` and `y+1` land on the same screen row in
+the two different planes, so a tile's 16 four-byte rows become 8 screen rows written
+twice. **What that implies about cell geometry is the one thing I have not settled**, and
+it is the only open item: 2 cells wide matches the measured 16-pixel tile, but 8 screen
+rows does not obviously match a 16-pixel-tall tile, so either the tile record is cell
+pairs rather than pixel rows, or the plane alternation means something narrower than I
+assumed. Recording it as unknown rather than guessing, because the 20x10 loop bound
+below is solid and I do not want it contaminated by a guess.
+
+Two further confirmations from the same decode. The flush loop's bounds are `ax` stepping
+`0x10` while `< 0x140` (**20 iterations**) and `bx` stepping `0x10` while `< 0xa0` (**10
+iterations**) — so the code draws exactly **20 x 10 tiles**, which is precisely the
+viewport measured independently from the screenshots. Code and pixels agree. And the
+destination offset is `col * 4` bytes, 20 columns x 4 = 80 bytes = one full CGA row,
+which is the same stride the table encodes.
+
+Adjacent and now identified: `asm/4A64` is the two-buffer clear (`[bx+0x272]`,
+`[bx+0x372]`), and `asm/4CE6`/`asm/4CF1` call a common `asm/4CFC` with a descriptor
+pointer loaded from `DS:0x79C0` and `DS:0x79EE` — a second, sprite-style draw path
+reading `bx=[si+2]`, `cx=[si+4]`, `ax=[si+6]`, `dl=0xf`.
+
+Right after the blit cluster there is a **fine-scroll routine**, which was not on the
+list of things to find but is clearly relevant to CP4: it reads sub-pixel offsets from
+`DS:0x479`/`DS:0x47A`, adds base values at `DS:0x4BF`/`DS:0x4C1`, takes `and $0x3` for
+four alignment cases, and ORs a byte from an 8-entry mask table at `CS:0x48D0`
+(`c0 30 0c 03 ff 11 88 cc`) into the destination. That is pixel-shifted blitting — the
+mechanism behind smooth camera movement rather than cell-at-a-time jumps.
+
 ### Not yet done
 
 * the play draw loop: which function paints the sector, its row and column bounds,
