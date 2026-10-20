@@ -1218,6 +1218,38 @@ as unverifiable. A screenshot still cannot settle motion — whether the view sc
 per step, what happens at a sector edge — and those came from `asm/` instead (the
 `>= 0x40` sector reload).
 
+## Standing validation directives (owner, 2026-10-27)
+
+Two rules the owner set while CP4 was in flight. They outlive the checkpoint, so
+they are in the plan rather than only in a commit message.
+
+1. **Validate the engine against the screenshots as it is built, as a test.** Not
+   "the owner eyeballs it at the gate". The mechanism: derive the 40x25 colour-class
+   grid from a screenshot, render the same sector and player position headlessly,
+   and compare. The screenshots and the player's own `mapxNN` files together make
+   this a genuine differential test, which is the closest thing to the byte-diff
+   harness the owner declined. Because the images are gitignored, the test runs when
+   the evidence is on disk and **SKIPs with a named reason** in CI, exactly like the
+   content-directory check in `tests/run_cp4.sh`. It becomes live as soon as the map
+   draw exists.
+2. **Use the REA MCP to validate the engine as well.** What REA is good for here, and
+   what it is not:
+   * **Good:** `verify_reconstruction` against a finite typed spec of the engine's
+     claims, so "faithful" becomes a checked ledger instead of a prose assertion.
+     `capture_process_scenario` + `compare_process_captures` to run the engine under
+     a PTY and diff behaviour between runs or against a golden capture.
+     `record_unknown` for the open questions, with the authority each still needs.
+     Independent identity: REA/Ghidra confirmed `original/ultimaii.exe` as DOS MZ,
+     x86-16 real mode, sha256 `d7cc110c…`, module 36832 B at file 512, with the one
+     known relocation applied at linear `0x10101` (evidence `ev_ee3c581c…`). That
+     matches the project's own md5 invariant from an independent tool.
+   * **Not useful:** re-deriving function boundaries. `procedure_pseudo_code` at the
+     address of `map_tile_ptr` returns *no procedure exists there*, which is expected
+     and already documented: this game reaches its handlers through a `jmp *%bx` jump
+     table, so Ghidra and Reko find only a fraction of the real routine starts. The
+     byte-proven `asm/` tree is the stronger artifact and stays ground truth. REA
+     corroborates findings; it does not replace them.
+
 ### Not yet done
 
 * the play draw loop: which function paints the sector, its row and column bounds,
