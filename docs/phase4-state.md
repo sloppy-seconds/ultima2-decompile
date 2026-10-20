@@ -260,6 +260,23 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 | PIC picture files during the intro | deferred to CP9 (no bitmap pipeline before then) | `engine/src/game/title.c` header |
 | Live (non-replay) play API / MCP wrapper | optional, build only if a harness needs it; the CLI contract is the substrate | `docs/phase4-plan.md` §7 |
 
+## Backlog
+
+- [ ] **`tools/u2_edit.py` — save-file and live-memory editor.** Owner request,
+      2026-10-21. Must do two jobs with one set of tables: edit a `player` save
+      file on disk, and patch a live session through the Spice86 MCP
+      (`local-mcp_write_memory`, segment/offset as decimal integers). Needs the
+      lookup tables below, must handle packed BCD rather than binary, and must
+      warn the user that the status band is a **cached render** — writes land in
+      memory instantly but the screen only repaints on the game's own status
+      draw, so "it still says 50" does not mean the write failed. Refuse to write
+      an out-of-range BCD nibble (e.g. `0x9A`), which would corrupt a counter.
+      Tables and offsets: `docs/spice86-live-findings.md` § 11.
+
+- [ ] **Screen ring for the recorder.** `tools/turn_recorder.py` exists and is
+      turn-triggered, but a message that appears and scrolls within one turn is
+      still lost. See `docs/spice86-live-findings.md` § 10.
+
 ## Invariants (checked at every checkpoint)
 
 | Check | Command | CP0 result |

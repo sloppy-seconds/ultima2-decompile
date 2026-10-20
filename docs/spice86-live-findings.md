@@ -471,3 +471,90 @@ Consequences for how we capture:
 
 That last one is worth building before the next fight, because it converts "I
 missed the text" into "read the last screen".
+
+## 11. Offsets and lookup tables for a save / live-memory editor
+
+Everything here was written and read back through the Spice86 MCP on a live
+session on 2026-10-21, so the DS column is byte-proven. The save column is
+partly inferred and marked as such.
+
+### Live data segment
+
+`DS = 0x08BE` this session. The MCP takes **decimal** integers for segment and
+offset, not hex strings: `segment=2238, offset=75`.
+
+| DS | field | encoding | notes |
+| --- | --- | --- | --- |
+| `0x00` / `0x01` | player x, y | byte | **viewport** coords; masked `& 0x3F` on accept |
+| `0x13` | player tile id | byte | `0x78` = on foot |
+| `0x20` | invalid-move counter | byte | increments on each rejected step |
+| `0x23` / `0x24` | attempted destination | byte | valid to read on a reject; nothing scrolls |
+| `0x49` / `0x4A` | sector hi / lo | byte | |
+| `0x4B` | STRENGTH | BCD | |
+| `0x4C` | AGILITY | BCD | gates weapon equip: `index*8 < AGILITY` |
+| `0x4D` | STAMINA | BCD | |
+| `0x4E` | WISDOM | BCD | |
+| `0x4F` | CHARISMA | BCD | |
+| `0x50` | INTELLIGENCE | BCD | attribute order is STR, AGI, STA, WIS, CHA, INT |
+| `0x51` / `0x52` | HP | BCD, high pair first | `0x40 0x00` = 4000 |
+| `0x53..0x55` | food | BCD, 3 bytes | the turn odometer: -19 per move, -10 per pass |
+| `0x56` / `0x57` | EXP | BCD | display site runtime `0x5167` loads `[56]`,`[57]` |
+| `0x58` / `0x59` | GOLD | BCD | display site runtime `0x5188` loads `[58]`,`[59]` |
+| `0x61` | readied weapon | index | into the weapon table below; `0` = HANDS |
+| `0x62` | worn armour | index | into the armour table below; `0` = SKIN |
+| `0x64` / `0x65` / `0x66` | torches / keys / tools | BCD | |
+| `0x6D` | boots | count | non-zero gates the paralysis save at runtime `0x22FD` |
+| `0x76 + i` | weapons owned | count | `i` indexes the weapon table |
+| `0xD6 + i` | items held | count | `i` indexes the item table, 16 slots |
+| `0x137+i` `0x157+i` `0x1B7+i` `0x197+i` | monster x, y, tile, kind | byte | stride 1, 32 slots |
+| `0x23F..0x244` | PRNG state | 6 bytes | |
+| `[0x472]` | sector map buffer | 4096 B | 64x64 tile bytes, player and monsters stamped in |
+
+### Name tables (file offsets in `original/ultimaii.exe`)
+
+Weapons, from `0x4F53` — `DS:61` and `DS:76+i` index this:
+
+```
+0 HANDS   1 DAGGER  2 MACE    3 AXE     4 BOW     5 SWORD
+6 GREAT SWORD       7 LIGHT SWORD      8 PHASER  9 QUICK SWORD
+```
+
+Armour, from `0x4F9E` — `DS:62` indexes this. Eight entries, which is why the
+damage roll is masked `& 7`:
+
+```
+0 SKIN  1 CLOTH  2 LEATHER  3 CHAIN  4 PLATE  5 REFLECT  6 POWER  7 NONE
+```
+
+Items, from `0x501D` — `DS:D6+i` indexes this. Exactly sixteen entries; index 16
+is `STRENGTH`, where the attribute table begins.
+
+```
+0 RING      1 WAND      2 STAFF     3 BOOTS     4 CLOAK     5 HELM
+6 GEM       7 ANKH      8 RED GEM   9 SKULL KEY 10 GREEN GEM 11 BRASS BUTTON
+12 BLUE TASSLE  13 STRANGE COIN  14 GREEN IDOL  15 TRI-LITHIUM
+```
+
+The display appends a literal `S` for the plural (`asm/4881`) and skips it for
+index 3 only, because `BOOTS` is already plural — which is what proves this table
+is the one in use.
+
+### Save file (`player`, 384 bytes)
+
+| offset | field | confidence |
+| --- | --- | --- |
+| `0x00..0x0B` | name, NUL-padded | proven (`TEST`) |
+| `0x15..0x1A` | STR, AGI, STA, WIS, CHA, INT | proven by value match against the live block |
+| `0x22..0x23` | gold | proven by value match |
+| `0x0A0..0x0AF` | item counts, same 16-slot table | proven by value match |
+| `0x100` | `0x1A` | the DOS EOF marker, not data |
+
+### Two traps for whoever writes the editor
+
+1. **Packed BCD, not binary.** Writing `0x9A` into a counter produces invalid
+   BCD and corrupts it. Validate both nibbles are `0..9`.
+2. **The status band is a cached render, and `Z` pauses the game on it.** Writes
+   take effect in memory immediately and combat reads them live, but the screen
+   only repaints on the game's own status draw. A frozen `Z` screen will keep
+   showing pre-write values, and while paused the game generates no turns, so a
+   turn-triggered recorder records nothing.
