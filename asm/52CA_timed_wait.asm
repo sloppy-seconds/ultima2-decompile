@@ -1,8 +1,9 @@
-# sub_52ca — mechanical clean (bulk wave); behavior not yet reviewed
+# timed_wait — delay loop (called with AH=28h, CX=0x4000, DX=0 by cmd_C)
+# name-evidence: cmd_C call-site evidence + loop over CX; already annotated in cmd_C
 # func 52CA..52E6  len 001D B  evidence: seed+call+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-sub_52ca:
+timed_wait:
 L_0054ca:
         pop    %bx
 L_0054cb:

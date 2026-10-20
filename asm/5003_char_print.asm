@@ -1,8 +1,9 @@
-# sub_5003 — mechanical clean (bulk wave); behavior not yet reviewed
+# char_print — display character in AL with CR special-casing; command-loop entry
+# name-evidence: and 0x7F / cmp 0x0D prologue; target of char_print_wrap and cmd_done chain; fan-in 10
 # func 5003..500C  len 000A B  evidence: seed+call+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-sub_5003:
+char_print:
 L_005203:
         push   %bx
 L_005204:

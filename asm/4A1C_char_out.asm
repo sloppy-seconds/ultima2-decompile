@@ -1,9 +1,10 @@
-# sub_4a1c — mechanical clean (bulk wave); behavior not yet reviewed
+# char_out — BIOS teletype output of AL (INT 10h AH=01h)
+# name-evidence: 6-byte wrapper: mov ax,1 + int 10h; tail-called by cmd_Z
 # func 4A1C..4A21  len 0006 B  evidence: seed+call+reko
 # seams: video_int10
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-sub_4a1c:
+char_out:
 L_004c1c:
         push   %ax
 L_004c1d:

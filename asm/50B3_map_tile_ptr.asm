@@ -1,8 +1,9 @@
-# sub_50b3 — mechanical clean (bulk wave); behavior not yet reviewed
+# map_tile_ptr — address of the current map tile: y(DS:0024)*64 + x(DS:0023) + table DS:0472
+# name-evidence: shl 6 of DS:0024, add DS:0023, add word at DS:0472; 26 call sites
 # func 50B3..50D7  len 0025 B  evidence: seed+call+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-sub_50b3:
+map_tile_ptr:
 L_0052b3:
         push   %bx
 L_0052b4:

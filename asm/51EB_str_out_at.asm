@@ -1,9 +1,10 @@
-# sub_51eb — mechanical clean (bulk wave); behavior not yet reviewed
+# str_out_at — string display at cursor position: stores DI/SI to DS:002E/002F then prints
+# name-evidence: saves di/si to the cursor vars, tail-calls str_out_core; 27 call sites
 # func 51EB..51FA  len 0010 B  evidence: seed+call+reko
 # calls: L_0053fd
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
-sub_51eb:
+str_out_at:
 L_0053eb:
         push   %bx
 L_0053ec:
