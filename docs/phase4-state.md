@@ -9,7 +9,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP0 | Skeleton + automation substrate 🔒 | done (owner approved 2026-10-27) | `engine/` builds with cc only; term + null renderers, term + script input, beep + null audio, posix + script clocks; seam layer with asm-cited `--trace`; `--dump-state` screen grid + JSON; `make test` PASS incl. reproducibility; selfmod question resolved from 45 existing runtime captures (`disasm/selfmod-capture.md`) — cluster is not patched, CP3 unblocked | 2026-10-27 |
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
 | CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
-| CP3 | Character creation + status line | **in-progress** | owner decision recorded (byte-compatible saves, no `rng_state` in them). Recon done, no engine code written yet for CP3. See impl log § CP3 (in progress) for the recovered creation-form blob, the proven status-bar positions, and the one open question that gates the save work | 2026-10-27 |
+| CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
+| CP3 | Character creation + status line | **in-progress** | recon complete — see § CP3 and § CP2.5 in the impl log. Engine code not yet written | 2026-10-27 |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
@@ -21,12 +22,15 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 ## Gate log
 
 - **2026-10-27 (owner): save-format decision, binding for CP3 onward.** Engine
-  save games must be **byte-compatible with the original 384-byte player
-  record**, so `rng_state` (and anything else that is not in the original
+  save games must be **byte-compatible with the original player record**,
+  so `rng_state` (and anything else that is not in the original
   record) must **not** go into the save file. Character creation proceeds on
   that basis. If extra state ever needs persisting, the fallback is a separate
   sidecar meta file next to the save, and only once there is a strong reason —
-  not by default. Breadcrumbs to revisit are left in
+  not by default. Correction after this decision was recorded: the record the
+  game writes is **256 bytes at `DS:36..135`**, not 384 — the *file* is 384
+  bytes (proven at CP2.5, three independent write/read sites). The decision is
+  unaffected; only the size was wrong. Breadcrumbs to revisit are left in
   `engine/src/core/save.h` (`DEFERRED` block) and in
   `docs/phase4-state.md` § Deferred decisions.
 - **2026-10-27 (owner):** CP2 route change **approved in conversation**: the CLI
@@ -42,7 +46,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   `--rng-sequence` added; vectors asserted. Consequence for the plan: replay
   determinism comes from the PRNG itself, so the CP2 play-API needs no clock
   trickery, and monster spawns/encounters are reproducible by construction. The
-  seed is per launch, not per new game, and is not part of the 384-byte save
+  seed is per launch, not per new game, and is not part of the saved player
   record. Details in `docs/phase4-implementation.md`.
 - **2026-10-27 — CP1 owner review round 1.** Owner feedback applied: the echoed
   choice now lands on the `CHOICE:` line (title draw order was wrong —
@@ -108,8 +112,9 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 | decision | status | breadcrumb |
 | --- | --- | --- |
-| Persist the PRNG seed/state for replayable saves | **rejected for the save file by owner** — engine saves must stay byte-compatible with the original 384-byte record, which does not store `DS:0x23F..0x244`. A sidecar meta file is the only fallback, and only with a strong reason. Revisit when CP3's save work lands | this section, and `docs/phase4-implementation.md` § CP3 |
-| Exact saved span and write path of the player record | **open question, first CP3 task** — see impl log § CP3 "the disk-write puzzle" | `docs/phase4-implementation.md` § CP3 |
+| Persist the PRNG seed/state for replayable saves | **rejected for the save file by owner** — engine saves stay byte-compatible with the original player record (256 bytes at `DS:36..135`), which does not store `DS:0x23F..0x244`. A sidecar meta file is the only fallback, and only with a strong reason. Revisit when CP3's save work lands | this section, and `docs/phase4-implementation.md` § CP3 |
+| Exact saved span and write path of the player record | **RESOLVED at CP2.5** — FCB random read/write (AH=27h/28h) via the `asm/52CA` DOS wrapper, 256 bytes at `DS:36..135`, FCB name `PLAYER  ` | `docs/phase4-implementation.md` § CP2.5 |
+| What the 128-byte tail of the 384-byte player file is (one non-zero byte, `0x1a` at offset 256) | **open question** — no write path found; do not guess | `docs/phase4-implementation.md` § CP2.5 |
 | `][` glyph mapping ("II") | deferred to CP9 (SDL2 font decision) | `engine/README.md` § Known limits |
 | PIC picture files during the intro | deferred to CP9 (no bitmap pipeline before then) | `engine/src/game/title.c` header |
 | Live (non-replay) play API / MCP wrapper | optional, build only if a harness needs it; the CLI contract is the substrate | `docs/phase4-plan.md` §7 |

@@ -380,8 +380,8 @@ Consequences, all of them good:
 * The seed is per **program launch**, not per new game. The only other caller of
   the seeding stub is the `INSERT PROGRAM MASTER` restart at the tail of
   `asm/5400` (`call L_000300` followed by a halt loop). The RNG state is *not*
-  in the 384-byte save record (`DS:0x36..0x1B6`), so the original cannot save or
-  restore a dice sequence.
+  in the saved player record (`DS:36..135`, 256 bytes — proven at CP2.5), so the
+  original cannot save or restore a dice sequence.
 
 Engine changes: `core/rng.c`/`rng.h` rewritten to the shift register with a
 citation per step; `u2_state.rng_state[6]` at `0x23F` replaces the three fake
@@ -504,8 +504,9 @@ from `asm/` and `original/` in this session and is safe to build on.
 
 ### Owner decisions binding this checkpoint
 
-* Engine saves must be **byte-compatible with the original 384-byte player
-  record**. Therefore `rng_state` (and anything else outside that record) must
+* Engine saves must be **byte-compatible with the original player record**
+  (256 bytes at `DS:36..135`; the *file* is 384 bytes). Therefore
+  `rng_state` (and anything else outside that record) must
   **not** be written into saves. A sidecar meta file is the only fallback and
   only with a strong reason. No sidecar is to be added speculatively.
 * No subagents for this project (GPU contention with the local model).
@@ -587,9 +588,9 @@ what the original writes, through which call, and to which sector or file. Do
 this before writing `core/save.c`.
 
 Evidence available without running the game: `references/ultima2/player` (the
-pristine 384-byte blank record, read-only; per `captures/README.md` it is all
-zero except `0x1a` at offset `0x100`, and that exact content is what makes the
-game accept a new character). Note `references/` is gitignored, so no test may
+pristine blank player file, 384 bytes, read-only; **re-verified at CP2.2** — it
+is all zero except `0x1a` at offset `0x100`, and a zero first byte is what makes
+the game generate a new character). Note `references/` is gitignored, so no test may
 depend on it — assert layout with synthetic buffers instead.
 
 ### Field offsets: what is proven vs. what is doc-only
@@ -597,7 +598,7 @@ depend on it — assert layout with synthetic buffers instead.
 Proven from the asm in this session: food is the BCD pair at `DS:53/54`
 (`asm/5129` region reads them right after printing `FOOD=`).
 
-Doc-only, from `captures/README.md` (live dumps, **not yet re-verified against
+Doc-only, from the project's earlier capture notes (**not yet re-verified against
 the asm**): record starts at `DS:36`; name 16 bytes; `DS:46/47/48` =
 sex/class/race; `DS:4B..50` = STR/AGI/STA/CHA/WIS/INT; `DS:51/52` = hit points;
 `DS:58/59` = gold; `DS:61/62/63` = readied weapon / worn armour / readied spell;
@@ -605,14 +606,106 @@ sex/class/race; `DS:4B..50` = STR/AGI/STA/CHA/WIS/INT; `DS:51/52` = hit points;
 armour array (7); `DS:B6` magic; `DS:D6` items; `DS:137` monsters stride `0x20`.
 
 Caution recorded so nobody re-inherits it: the monster table at `DS:137` with
-stride `0x20` × 32 slots would run to `DS:537`, well past the 384-byte record
-(`DS:36..1B5`). So that table is live DS state, not save content — the capture
-doc's table mixes both. Verify each field against the asm before putting it in a
-byte-compatible struct.
+stride `0x20` × 32 slots would run to `DS:537`, well past the saved record.
+**Resolved at CP2.5:** the saved record is 256 bytes at `DS:36..135`, so the
+monster table at `DS:137` starts immediately *after* it and is live DS state,
+not save content. That earlier offset table mixes both; verify each field
+against the asm before putting it in a byte-compatible struct.
 
 ### Not yet started
 
 `engine/src/core/save.[ch]`, `engine/src/game/creation.c`, `engine/src/game/status.c`,
 the extractor entries for the form blob, and `engine/tests/run_cp3.sh`. Nothing
 in `engine/` was modified during this recon.
+
+---
+
+## CP2.5 — Re-decode tooling — done 2026-10-27
+
+Owner approved a scoped pass: build the tool, prove it on the two functions CP3
+needs, and do the other three only if it turns out cheap. It was cheap: all five
+in 0.07 s, 96 KB of output.
+
+### `tools/redecode.py` -> `disasm/redecoded/<func>.txt`
+
+`asm/` is byte-exact but five functions carry all 3097 `db 0x..` blob lines
+("split: branch target inside data") — bytes proven, behaviour never reviewed.
+Reading those routines meant disassembling them, so the decode is now a
+committed tool plus committed listings instead of a per-session hand decode.
+
+* `--func asm/5400_sub_5400.asm`, `--range START:STOP`, `--all`, `--out -`.
+* Output is a reading aid: `FILE_OFFSET [len] mnemonic`. **`asm/` remains ground
+  truth**; nothing here reassembles, so the byte-exact invariant is untouched.
+* Inline strings are detected and collapsed, which is what makes a mis-decoded
+  region readable — the disassembler walks *through* strings otherwise.
+
+Three defects found and fixed while proving it, each of which was silently
+wrong rather than visibly wrong:
+
+1. A mnemonic whitelist turned valid instructions into `??` (58 of them) and
+   bought nothing — x86 mnemonic names are the ISA's standard vocabulary. Now
+   passes through, normalised toward our notation (`$imm`, `[0x2f]`).
+2. Short runs of printable **opcode** bytes were eaten as strings — `3c 4d 75 29`
+   is `cmp al,'M'` + `jne` but reads as `"<Mu)"`, deleting four instructions
+   from the listing. Strings now require a NUL terminator or length >= 8.
+3. **The address-space trap again.** Phase 2's `# func START..END` header is in
+   *runtime* addresses; the `L_xxxxxx` labels are *file* offsets (+0x200). The
+   first version used the header verbatim and decoded the wrong window, cutting
+   40% off `asm/5400` — including the save write. `func_range()` now converts
+   and **asserts** against the file's lowest label, so a future mapping change
+   fails loudly instead of quietly shifting every address.
+
+### What the decode settled: the save path
+
+This was the open question gating byte-compatible saves.
+
+* **`asm/52CA` is not a timed wait — it is a generic DOS-call wrapper with
+  retry.** The caller passes the DOS function in AH; the wrapper stages
+  AH/CX/DX into `cs:4F04..4F0A` and `asm/535A` loads `%cs:0x4f04,%ah` before
+  `int 21h`. That is why a scan of all `int` sites found only four INT 21h uses
+  and no write function: **the function numbers are dynamic and invisible to
+  static grep.**
+* Player I/O is **FCB random read/write**: AH=27h read, AH=28h write, CX=0x100,
+  `lea dx,[0x36]`, with the FCB name `PLAYER  ` sitting inline in the code
+  stream. DTA is positioned with AH=1Ah.
+* **The saved span is 256 bytes at `DS:36..135`, not 384.** Three independent
+  sites agree: the creation read (`563B`), the creation write (`5BF6`) and the
+  in-game save `asm/3823` (`lea 0x36,%dx; mov $0x28,%ah; mov $0x100,%cx`).
+  The "384-byte record" figure was **my own error**, propagated from an earlier
+  session note into `docs/phase4-state.md` — `captures/README.md` never stated
+  it. 384 is the *file* size; the extra 128
+  bytes are not written by any of these paths. Correcting the doc is a small
+  follow-up.
+* Blank-disk test is `cmp byte [0x36],0`: zero -> generate a character;
+  non-zero -> `NOT A BLANK` / `PLAYER DISK`. Verified against the pristine
+  `references/ultima2/player`: 384 bytes, exactly one non-zero byte, `0x1a` at
+  offset 256. **What that tail byte is remains unknown** — logged as an open
+  question, not guessed at.
+* Starting values are written explicitly at `5BEB..5BF3`: **HP=4, FOOD=4,
+  GOLD=4** into `DS:51`, `DS:53`, `DS:58`. Those three offsets are now proven by
+  assignment, not inferred.
+
+### What the decode settled: character creation
+
+* Six stats rolled into `DS:4B..50` (STR, AGI, STA, CHA, WIS, INT), each printed
+  at row 4..9, column 26. Pattern per stat: set cursor (`call 53eb`) -> roll
+  (`call 53b0` -> AL) -> store -> print (`call 5c66`).
+* Sex at `DS:46`, read via `call 55d0`, accepted only as `M` or `F`, otherwise
+  the prompt loops.
+* Race at `DS:48`, accepted `1`..`4` (HUMAN/ELF/DWARF/HOBBIT). Each branch
+  applies a **+5 BCD stat bonus** (`add al,5; daa; mov [stat],al`): HUMAN ->
+  INT, ELF -> AGI, DWARF -> STR. HOBBIT's target still to be read.
+* `SATISFACTORY (Y/N)-` re-rolls the whole set; the form blob is printed as one
+  `str_out`.
+* The whole creation flow lives in `disasm/redecoded/5400_sub_5400.txt` (641
+  lines, 20 string runs) — readable at last.
+
+### Side observation worth flagging
+
+`asm/8387` decodes to repeating table-shaped instructions (`add [bx+si],0x80`
+over and over) with 3 strings in 1193 lines. That is a **data region Phase 2
+classified as a function**, not mis-decoded code. It does not affect byte
+fidelity, but it means the function corpus contains at least one non-function.
+Left as-is; noted so nobody spends a session "fixing" it.
+
 
