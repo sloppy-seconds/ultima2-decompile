@@ -71,6 +71,29 @@ Do these in order; each is cheap and each changes the design.
    status block positions were proven from the code that sets `DS:0x2E` and
    `DS:0x2F`.
 
+   **Play viewport (owner, 2026-10-27, from a real gameplay screenshot).** The
+   player figure is **one tile**, and there are **5 tile-spaces above and below**
+   and **about 10 to each side**. So the window is **11 tile-rows** (5+1+5) by
+   **20 tile-columns**. In the screenshot the figure spans about 2 text cells
+   across, which puts a tile at **2x2 text cells (16x16 px)** — and that size is
+   forced from two directions: 20 tiles x 2 cells = 40 columns, exactly the full
+   grid width, and 21 tiles would need 42 columns and cannot fit. So the left/right
+   split has to be asymmetric, 9 + player + 10, which is why the owner
+   half-remembered an odd split. It also means the view is computed as a fixed
+   offset from the player rather than centred.
+
+   Play layout in that screenshot: map full-width across the top, command echo
+   bottom-left (`CMD: NORTH` repeated, one line per command), status block
+   bottom-right (`H.P.=6284`, `FOOD=1624`, `EXP.=2135`, `GOLD=0038`).
+
+   Two things to settle from the draw loop rather than by argument. First, 11
+   tile-rows at 2 cells is 22 cell-rows, leaving only 3 rows for a command echo
+   that shows 4 lines — so either the tile is not exactly 2x2, or the top row is
+   clipped, or the echo scrolls up into the map area. Second, `H.P.=6284` may be
+   two 2-digit values (current 62 / maximum 84) rather than one 4-digit 6284; HP is
+   the one pair where 6284 is implausible for a mid-game character. Check the code
+   that writes `DS:0x51` and `DS:0x52` before assuming a single number.
+
 6. **Does the viewport ever straddle two sectors?** The viewport is a window onto
    a larger map, so the map scrolls as the player moves (owner, 2026-10-27). That
    makes the sector files a partition of one continuous world rather than

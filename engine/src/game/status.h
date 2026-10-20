@@ -22,10 +22,12 @@
  *
  * RESOLVED 2026-10-27, was an open question: the pair is packed decimal and the
  * print helper is asm/55B5, which emits a byte as its two nibbles each OR'd with
- * '0' with no zero suppression. asm/53A5 calls it on the low byte then the high
- * byte, so a 4-digit BCD value held little-endian renders byte-swapped: food 3
- * (stored 03 00) displays "0300". Owner-confirmed against the original — four
- * digits, food 0300, gold 1200. Reproduced exactly, quirk included.
+ * '0' with no zero suppression. asm/53A5 calls it on the low address first, so
+ * the pair is a 4-digit packed-BCD number written most-significant-pair-first.
+ * A gameplay screenshot settles the direction: GOLD=0038 for 38 gold, so a fresh
+ * character's 0400 is 400 gold, not 4. An intermediate reading in this project
+ * claimed the original printed the bytes in the wrong order; that was wrong and
+ * is recorded in plan § 7 so nobody re-derives it. Ceiling is 9999, not 255.
  */
 
 #include "core/ctx.h"

@@ -16,15 +16,17 @@
 #include "core/seam.h"
 #include "gen_content.h"
 
-/* asm/53A5 prints a status pair as two packed-decimal bytes, low byte first:
+/* asm/53A5 prints a status pair as two packed-decimal bytes, low address first:
  *   call 0x55b5 (al = [lo]) ; mov ax,di (di = [hi]) ; call 0x55b5
  * and asm/55B5 emits one byte as its two nibbles each OR'd with '0', with no
- * zero suppression at all. So the value is a 4-digit packed-BCD number held in a
- * little-endian word, and the original renders the bytes in the wrong order:
- * food 3 is stored 03 00 and displays "0300", not "0003". Owner-confirmed
- * against the original (2026-10-27): four digits, food 0300, gold 1200.
- * Reproduced as-is. The semantic value is the low byte (creation stores
- * `mov al,$0x4` there), so this is a display quirk, not a x100 scale. */
+ * zero suppression. So the pair is a 4-digit packed-BCD number written
+ * most-significant-pair-first: [lo] holds the thousands and hundreds, [hi] the
+ * tens and units. A gameplay screenshot settles the direction (owner-supplied,
+ * 2026-10-27): GOLD=0038 for 38 gold. A byte-swapped display would read 3800.
+ * An earlier reading in this file claimed the original printed the bytes in the
+ * wrong order and that food 3 displayed as 0300; that was wrong, and the real
+ * consequence is that a fresh character's 0400 is 400 gold, not 4.
+ * Ceiling is 9999. */
 static void draw_line(u2_ctx *ctx, int row, const char *label, uint8_t lo, uint8_t hi)
 {
     char buf[24];
