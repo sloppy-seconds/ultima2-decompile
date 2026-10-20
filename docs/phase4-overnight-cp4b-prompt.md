@@ -45,8 +45,10 @@ project, autonomously, while the owner sleeps.
    digest (see the three prior moves in `docs/phase4-state.md`). A move you
    cannot tie to evidence means you guessed — pass the task instead.
 5. **Never**: edit `asm/`, `original/`, `references/`, `captures/`; touch
-   anything outside the project root; delete or overwrite files you did not
-   create; `git push`; run subagents; write scratch outside `/var/tmp`.
+   anything outside the project root — with the single exception of reading
+   this project's pi session transcripts for T9 (see T9's source rules);
+   delete or overwrite files you did not create; `git push`; run subagents;
+   write scratch outside `/var/tmp`.
 6. **Environment**: SDL runs need `XDG_RUNTIME_DIR=/run/user/1000` and
    `WAYLAND_DISPLAY=wayland-0`. `make test` is the gate; `make sdl` must
    compile. Host `ai`, Bazzite 44.

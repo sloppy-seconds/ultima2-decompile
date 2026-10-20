@@ -212,9 +212,16 @@ a lessons-learned retro framed as a **sailboat retro** (anchors = what held
 us back; sails = what drove us forward; rocks = hazards we hit; currents =
 conditions of the project; island = where this is heading).
 
-Source material (all inside the project — the implementation log is the
-journal):
+Source material (the implementation log is the journal; plus one owner-
+granted exception):
 
+- `~/.pi/agent/sessions/--var-home-paul-Projects-decompile-u2-v2--/*.jsonl`
+  — the pi chat transcripts for THIS PROJECT ONLY (owner permission
+  2026-10-20 night, scoped to the blog/retro task). Read-only, bounded:
+  never open other projects' session directories; never copy transcripts
+  wholesale into drafts (short quotes only); never quote anything that looks
+  like a credential or token; the files are ~19 MB of JSONL — mine them with
+  grep/jq for user messages and decision points, do not read them whole.
 - `docs/phase4-implementation.md` (the full CP0–CP4b narrative with every
   correction and retraction — the honest version, not the highlight reel)
 - `docs/phase4-state.md` gate log (baseline moves, owner decisions)
