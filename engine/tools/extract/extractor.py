@@ -91,6 +91,12 @@ MANIFEST = [
     ("U2_S_CREATE_NOTBLANK1",  "5400_sub_5400.asm", ("run", 0x566B)),
     ("U2_S_CREATE_NOTBLANK2",  "5400_sub_5400.asm", ("run", 0x5689)),
     ("U2_S_CREATE_GENERATION", "5400_sub_5400.asm", ("run", 0x569E)),
+    # The running total does NOT follow the GENERATION heading. asm/56C8 prints
+    # this line and asm/5C85 addresses the value at column 33 row 2, which is
+    # where this string's trailing ": " leaves the cursor. The db listing splits
+    # the run at 0x56C8 ("INTS LEFT...") because the preceding bytes decode as
+    # code, so the locator is the true start found in the binary.
+    ("U2_S_CREATE_POINTS",     "5400_sub_5400.asm", ("run", 0x56C6)),
     ("U2_S_CREATE_FORM",       "5400_sub_5400.asm", ("run", 0x56F4)),
     ("U2_S_SEX_MALE",          "5400_sub_5400.asm", ("run", 0x595B)),
     ("U2_S_SEX_FEMALE",        "5400_sub_5400.asm", ("run", 0x5988)),

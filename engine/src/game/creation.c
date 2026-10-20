@@ -36,6 +36,21 @@
  *    left, so a control character really can land in the name field. The mask is
  *    reproduced; the control characters are dropped because they render as
  *    garbage and cannot be typed usefully.
+ * D9 The confirm line reads [S]AVE / [R]ESET instead of SATISFACTORY (Y/N), and
+ *    the form accepts r/R to reset it. The original asks "SATISFACTORY (Y/N)-"
+ *    (asm/5B6E, printed by the form blob) and restarts the whole generation from
+ *    scratch on N (asm/5BD5 -> 0x5698). "Not satisfactory" is not an instruction
+ *    a player can guess, and it does not say what happens next; Save and Reset do.
+ *    This is the one place the engine overwrites an extracted game string, so it
+ *    paints over row 16 rather than editing the blob — the blob stays faithful to
+ *    the binary and the override is visible as engine text. Both keys work from
+ *    any field except the name, where S and R are ordinary letters.
+ * D10 Every stat starts at 10, the minimum the original enforces, so the player
+ *    distributes the 30 points left over rather than building all 90 from zero.
+ *    Same solution set — six stats of at least 10 summing to 90 — but an illegal
+ *    value now needs deliberate effort instead of a careless keystroke. The
+ *    original starts at 0 and throws the generation away when a stat is under 10
+ *    (asm/5C69 `cmp al,$0xa; jb` -> asm/5C96).
  * None of these change what is achievable or what lands in DS or on disk.
  *
  * All display text comes from the generated content header; nothing here is a
@@ -64,8 +79,9 @@
                                 * in the original (it just ends the field), and
                                 * 13..16 would be a name the original can never
                                 * produce, so the cap is a rule, not UX. */
-#define SAT_ROW        16
-#define SAT_COL        29
+#define CONFIRM_ROW    16      /* the blob's SATISFACTORY line, overwritten (D9) */
+#define CONFIRM_COL    10      /* the original indents that line by 10 spaces */
+#define CONFIRM_TEXT   "[S]AVE   [R]ESET"
 
 typedef enum { F_STAT, F_SEX, F_RACE, F_CLASS, F_NAME } field_kind;
 
@@ -103,6 +119,8 @@ typedef struct {
     int     sel;            /* index into FIELDS */
     char    note[48];       /* engine-authored status line */
 } form;
+
+static int up(int c) { return (c >= 'a' && c <= 'z') ? c - 32 : c; }
 
 static int pack_bcd(int d) { return ((d / 10) << 4) | (d % 10); }
 static int unpack_bcd(int p) { return (p >> 4) * 10 + (p & 0x0F); }
@@ -165,11 +183,9 @@ static void print_budget(u2_ctx *ctx, int v)
 
 static void draw_budget_line(u2_ctx *ctx, const form *f)
 {
-    /* Repaint just the running total, in place, so typing a digit does not have
-     * to clear and redraw the whole form. Same position draw_form uses: the
-     * digits follow the GENERATION label on row 0. BUDGET_ROW is where the form
-     * blob starts, not where the total lives. */
-    seam_goto(ctx, (int)strlen(U2_S_CREATE_GENERATION), 0);
+    /* asm/5C7D..5C89: after every stat the original goes to column 33 row 2 and
+     * prints the new total there. That is the value slot of the POINTS line. */
+    seam_goto(ctx, BUDGET_COL, BUDGET_ROW);
     print_budget(ctx, remaining(f));
 }
 
@@ -234,6 +250,11 @@ static void draw_form(u2_ctx *ctx, form *f)
     /* asm/569E prints the heading and asm/56EB prints the budget right after it,
      * on the same line — not at (0,0), which is what collided before. */
     seam_str_out(ctx, U2_S_CREATE_GENERATION);
+    /* The GENERATION heading carries no number. asm/56C8 prints "POINTS LEFT TO
+     * DISTRIBUTE : " and asm/5C85 addresses the total at column 33 row 2, which
+     * is where this 28-character line leaves the cursor when it starts at col 5. */
+    seam_goto(ctx, BUDGET_COL - (int)strlen(U2_S_CREATE_POINTS), BUDGET_ROW);
+    seam_str_out(ctx, U2_S_CREATE_POINTS);
     print_budget(ctx, remaining(f));
     /* The blob carries its own layout as CR/LF, and the original addresses the
      * stat prompts at absolute rows 4..9 (asm/58B0 etc.), M/F at 11, RACE 12,
@@ -242,6 +263,11 @@ static void draw_form(u2_ctx *ctx, form *f)
      * shifted every field up two rows and wrote values over the wrong labels. */
     seam_goto(ctx, 0, 2);
     seam_str_out(ctx, U2_S_CREATE_FORM);
+    /* D9: paint over the blob's "SATISFACTORY (Y/N)-" line. The blob itself is
+     * left exactly as extracted — this is a presentation override, not an edit
+     * to the content. */
+    seam_clear_row(ctx, CONFIRM_ROW);
+    seam_str_out_at(ctx, CONFIRM_COL, CONFIRM_ROW, CONFIRM_TEXT);
     for (int i = 0; i < NFIELDS; i++)
         draw_field(ctx, f, i);
     if (f->note[0]) {
@@ -275,11 +301,17 @@ static int edit_field(u2_ctx *ctx, form *f, int c)
 {
     const field *fd = &FIELDS[f->sel];
     f->note[0] = '\0';
+    /* The original upper-cases the keys it matches on (asm/4F4D `and $0xdf`), so
+     * case never matters for a choice. The name is the one field that keeps it. */
+    if (fd->kind != F_NAME && c >= 'a' && c <= 'z') c -= 32;
 
     switch (fd->kind) {
     case F_STAT: {
-        if (c == '\b') {                    /* D6: shift the digits back out */
-            f->val[fd->index] /= 10;
+        if (c == '\b') {
+            /* Backspace returns the stat to its minimum. The original has no
+             * editing at all — a bad value throws the generation away — so there
+             * is no behaviour to match here, only something that makes sense. */
+            f->val[fd->index] = STAT_MIN;
             f->typed = 0;
             draw_field(ctx, f, f->sel);
             draw_budget_line(ctx, f);
@@ -287,13 +319,19 @@ static int edit_field(u2_ctx *ctx, form *f, int c)
         }
         if (c < '0' || c > '9') {
             /* D3: refuse in place rather than discarding the generation. */
-            snprintf(f->note, sizeof f->note, "[engine] stat is two digits (00-99)");
+            snprintf(f->note, sizeof f->note, "[engine] %s is two digits",
+                     "that stat");
             return 0;
         }
         /* D6: shift left and take the new digit in the units place, so 5 reads
-         * 05 and a following 0 reads 50. The original puts the first digit in
-         * the tens place instead (asm/53B0), which is why typing 5 there means 50. */
+         * 05 and a following 0 reads 50. The first digit into a field starts a
+         * fresh number, so it replaces the prefilled minimum instead of shifting
+         * it. The original puts the first digit in the tens place (asm/53B0),
+         * which is why typing 5 there means 50. */
+        if (f->typed == 0) f->val[fd->index] = 0;
         int nv = (f->val[fd->index] * 10 + (c - '0')) % 100;
+        /* No clamp here: a half-typed value like 05 is normal mid-entry. The
+         * minimum is enforced in complete(), where it is a useful message. */
         f->val[fd->index] = nv;
         f->typed++;
         draw_field(ctx, f, f->sel);
@@ -379,19 +417,10 @@ static void commit(u2_ctx *ctx, form *f)
     st->gold_lo = 4; st->gold_hi = 0;
 }
 
-/* SATISFACTORY (Y/N): the original restarts generation on N (asm/5BD5 -> 0x5698)
- * and re-prompts on anything else. Here N clears the form in place (D3). */
-static int satisfactory(u2_ctx *ctx, form *f)
-{
-    for (;;) {
-        place_cursor(ctx, f);
-        seam_present(ctx);
-        int c = wait_key(ctx);
-        if (c < 0) return -1;
-        if (c == 'N') return 0;
-        if (c == 'Y') return 1;
-    }
-}
+/* [S]AVE / [R]ESET are standing shortcuts on the confirm line (D9), handled in
+ * the main loop rather than as a modal prompt: the original only asks the
+ * question once the form is already complete, and a player who presses the key
+ * early deserves an answer about what is missing, not a swallowed keystroke. */
 
 int u2_creation_flow(u2_ctx *ctx)
 {
@@ -404,6 +433,11 @@ int u2_creation_flow(u2_ctx *ctx)
     for (;;) {
         form f;
         memset(&f, 0, sizeof f);
+        /* Every stat starts at the minimum the original enforces (asm/5C69:
+         * `cmp al,$0xa; jb` fail). Six stats at 10 consume 60 of the 90, so the
+         * player distributes the remaining 30 — the same solution set as "90
+         * total, each at least 10", with no way to type an illegal value. */
+        for (int i = 0; i < 6; i++) f.val[i] = STAT_MIN;
         draw_form(ctx, &f);
 
         int done = 0;
@@ -419,18 +453,19 @@ int u2_creation_flow(u2_ctx *ctx)
                 f.sel = (f.sel + NFIELDS - 1) % NFIELDS;
                 f.typed = 0;
                 draw_form(ctx, &f);
-            } else if (c == '\r' || c == '\n') {
+            } else if (c == '\r' || c == '\n' || up(c) == 'S') {
+                /* Enter or [S]AVE, from any field. The original restarts the
+                 * whole generation on N (asm/5BD5 -> 0x5698). */
                 char why[48];
                 if (!complete(&f, why, sizeof why)) {
                     snprintf(f.note, sizeof f.note, "%s", why);
                     draw_form(ctx, &f);
                     continue;
                 }
-                int ok = satisfactory(ctx, &f);
-                if (ok < 0) return 0;
-                if (ok == 0) { done = -1; break; }  /* N: rebuild the form */
                 commit(ctx, &f);
                 done = 1;
+            } else if (up(c) == 'R' && FIELDS[f.sel].kind != F_NAME) {
+                done = -1; break;              /* [R]ESET: rebuild an empty form */
             } else {
                 int adv = edit_field(ctx, &f, c);
                 if (adv) { f.sel = (f.sel + 1) % NFIELDS; f.typed = 0; }
@@ -445,6 +480,6 @@ int u2_creation_flow(u2_ctx *ctx)
             if (u2_save_store(ctx) != U2_SAVE_OK) return -1;
             return 1;
         }
-        /* done == -1: the player said not satisfactory; loop rebuilds the form */
+        /* done == -1: the player pressed R; the outer loop rebuilds an empty form */
     }
 }
