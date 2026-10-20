@@ -34,18 +34,45 @@ headless: engine
 	    --save-dir /var/tmp/u2-play --dump-state
 
 # --- tests ---------------------------------------------------------------
-# Both halves matter. The engine tests prove the engine does what we say; the
-# Phase 3 checks prove we never disturbed the byte-exact reconstruction that the
-# engine is derived from.
+# Two tiers, because the two halves cost wildly different amounts of time.
+#
+# `make test` is the loop you stay in: engine suites plus a cheap guard on the
+# Phase 3 artefacts. About 6 seconds.
+#
+# `make test-full` adds the clean re-assemble of all 1299 reconstructed
+# functions with jwasm. That is ~73 of the 78 seconds, and it only proves
+# something new when asm/ has changed - which Phase 4 never does. CI runs it on
+# every push, so the fast tier is not skipping the check, just not paying for it
+# on every keystroke-sized iteration.
+#
+# The cheap guard is not a no-op: it fails if original/ is modified or if asm/, 
+# original/ or references/ are dirty, and it tells you to run test-full when
+# asm/ has moved since HEAD.
 
-test: test-engine test-phase3
-	@printf '\nALL CHECKS PASSED\n'
+test: test-engine test-phase3-quick
+	@printf '\nALL CHECKS PASSED (fast tier; run make test-full for the clean rebuild)\n'
+
+test-full: test-engine test-phase3
+	@printf '\nALL CHECKS PASSED (full tier)\n'
 
 test-engine: engine
 	@$(MAKE) -C engine test
 
+# Cheap: sub-second, and catches the two things that actually go wrong.
+test-phase3-quick:
+	@printf '\nphase 3 guard (cheap)\n'
+	@md5sum original/ultimaii.exe | grep -q fe884d5117971073ac8097cc7a6aca25 \
+	    && echo "  ok    original/ultimaii.exe unchanged" \
+	    || { echo "  FAIL  original/ has changed"; exit 1; }
+	@git status --porcelain -- asm original references | grep -q . \
+	    && { echo "  FAIL  asm/ original/ or references/ are dirty - run make test-full"; exit 1; } \
+	    || echo "  ok    asm/ original/ references/ untouched"
+	@if git diff --quiet HEAD -- asm 2>/dev/null; then :; else \
+	    echo "  NOTE  asm/ differs from HEAD; run make test-full"; fi
+
+# Expensive: the clean re-assemble. ~73s, run by CI and by make test-full.
 test-phase3:
-	@printf '\nphase 3 invariants\n'
+	@printf '\nphase 3 invariants (full)\n'
 	@bash tools/assemble_clean.sh $(CLEANBIN) >/var/tmp/u2-clean.log 2>&1 \
 	    && tail -1 /var/tmp/u2-clean.log \
 	    || { echo "  FAIL  clean rebuild"; tail -5 /var/tmp/u2-clean.log; exit 1; }
