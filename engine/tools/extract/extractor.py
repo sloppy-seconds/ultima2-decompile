@@ -114,6 +114,16 @@ MANIFEST = [
     ("U2_S_STATUS_FOOD",       "5129_sub_5129.asm", 0),
     ("U2_S_STATUS_EXP",        "5154_sub_5154.asm", 0),
     ("U2_S_STATUS_GOLD",       "5175_sub_5175.asm", 0),
+    # The CMD prompt and the four direction words. The prompt is its own
+    # routine (asm/087D); the direction words are standalone strings in the
+    # movement arms (asm/0955/097C/09A3/09C9 — the echo sites named in
+    # docs/phase4-implementation.md § CP4 "The movement model"). The CP4b
+    # status band needs all five as content, not engine-typed text.
+    ("U2_S_CMD_PROMPT",        "087D_cmd_prompt.asm", 0),
+    ("U2_S_DIR_NORTH",         "0955_sub_0955.asm", 0),
+    ("U2_S_DIR_SOUTH",         "097C_sub_097c.asm", 0),
+    ("U2_S_DIR_WEST",          "09A3_sub_09a3.asm", 0),
+    ("U2_S_DIR_EAST",          "09C9_sub_09c9.asm", 0),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')

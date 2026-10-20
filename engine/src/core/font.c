@@ -52,3 +52,15 @@ int u2_font_draw_text(u2_frame *f, int row, int col, const char *s,
     }
     return n;
 }
+
+void u2_font_draw_vram_rows(u2_frame *f, const u2_vram *v, int top_row,
+                            int bottom_row)
+{
+    if (!f || !v) return;
+    if (top_row < 0) top_row = 0;
+    if (bottom_row >= U2_ROWS) bottom_row = U2_ROWS - 1;
+    for (int r = top_row; r <= bottom_row; r++)
+        for (int c = 0; c < U2_COLS; c++)
+            u2_font_draw_cell(f, r, c, v->cell[r][c].ch,
+                              U2_CGA_WHITE, U2_CGA_BLACK);
+}

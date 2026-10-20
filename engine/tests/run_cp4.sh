@@ -104,6 +104,26 @@ else
     fi
 fi
 
+# --- the status band and the CMD message window ----------------------------
+# CP4b task 1: the owner's model of the block — four rows, live prompt at the
+# bottom, completed commands scrolling up, status block outside the scroll
+# rect — as tested behaviour, not folklore.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/status_check" \
+   tests/status_check.c src/game/status.c src/core/seam.c src/core/vram.c \
+   src/core/state.c src/core/font.c src/core/frame.c src/core/view.c \
+   src/core/rng.c src/core/timer.c src/core/replay.c src/core/sha256.c \
+   src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-status.err"
+if [ $? -ne 0 ]; then
+    bad "status test harness did not build: $(head -5 "$WORK/cc-status.err")"
+else
+    if "$WORK/status_check" > "$WORK/status.out" 2>&1; then
+        ok "status band + CMD window: BCD lines, prompt, scroll history ($(grep -c '  ok  ' "$WORK/status.out") checks)"
+    else
+        bad "status check failed:"
+        sed 's/^/        /' "$WORK/status.out"
+    fi
+fi
+
 # --- the map actually renders, when the player has their files ------------
 # The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
 # producing real pixels. Skips without the content, so CI stays honest.

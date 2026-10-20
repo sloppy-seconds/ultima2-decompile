@@ -10,10 +10,13 @@
 #include <string.h>
 
 #include "game/overworld.h"
+#include "game/status.h"
+#include "core/font.h"
 #include "core/seam.h"
 #include "core/tiles.h"
 #include "core/view.h"
 #include "core/world.h"
+#include "gen_content.h"
 
 /*
  * The underlay buffer (the DS:0x372 analogue) has no identified producer in the
@@ -61,6 +64,15 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
         return -1;
     }
 
+    /* The status band and the command prompt, printed once on entering the
+     * world (CP4b task 1). The four value lines go through the proven status
+     * sites (asm/50F9..5175, packed BCD); the prompt is asm/087D's "CMD: "
+     * at row 23 col 0, leaving the cursor at col 5 where the next echo
+     * lands — the same position the fresh-state screenshot shows. */
+    u2_status_draw(ctx);
+    seam_goto(ctx, 0, U2_MSG_BOTTOM);
+    seam_str_out(ctx, U2_S_CMD_PROMPT);
+
     snprintf(ow->note, sizeof ow->note,
              "sector %d%d via %s, %s%s",
              ow->sector_hi, ow->sector_lo,
@@ -70,7 +82,7 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
     return 0;
 }
 
-void u2_overworld_draw(u2_overworld *ow)
+void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
 {
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
                  ow->off_map_tile, NULL, U2_OVERWORLD_EMPTY_GATE);
@@ -82,6 +94,12 @@ void u2_overworld_draw(u2_overworld *ow)
     u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles,
                        U2_OVERWORLD_PLAYER_ART,
                        U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+
+    /* One framebuffer, per the CP4b decision: the map window owns pixel rows
+     * 0..159 and the text grid owns rows 20..24 — status block, CMD prompt
+     * and message history. The grid is the same storage the terminal renderer
+     * paints, so both backends show identical text with no second model. */
+    u2_font_draw_vram_rows(&ow->frame, &ctx->vram, U2_MSG_TOP, U2_ROWS - 1);
 }
 
 int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
@@ -93,7 +111,7 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
     ctx->frame = &ow->frame;
 
     for (;;) {
-        u2_overworld_draw(ow);
+        u2_overworld_draw(ctx, ow);
         if (seam_present_frame(ctx)) break;      /* window closed */
 
         u2_key k;
@@ -103,11 +121,12 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
         if (k.ch == 0x1B) break;                           /* ESC leaves */
 
         int dx = 0, dy = 0;
+        const char *word = NULL;
         switch (k.ch) {
-        case U2_KEY_UP:    dy = -1; break;
-        case U2_KEY_DOWN:  dy =  1; break;
-        case U2_KEY_LEFT:  dx = -1; break;
-        case U2_KEY_RIGHT: dx =  1; break;
+        case U2_KEY_UP:    dy = -1; word = U2_S_DIR_NORTH; break;
+        case U2_KEY_DOWN:  dy =  1; word = U2_S_DIR_SOUTH; break;
+        case U2_KEY_RIGHT: dx =  1; word = U2_S_DIR_EAST;  break;
+        case U2_KEY_LEFT:  dx = -1; word = U2_S_DIR_WEST;  break;
         default: continue;                                  /* not a move key */
         }
 
@@ -120,6 +139,17 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
         }
         ow->x = nx;
         ow->y = ny;
+
+        /* The echo, reproduced as the original prints it: one compound string
+         * "NORTH\rCMD: " (asm/38B0, file 0x3ce5 — direction word, CR, prompt).
+         * The word lands after the waiting prompt at col 5, the CR is the
+         * game's newline (col := left margin, row++, scroll rows 20..23 at
+         * row 24 — asm/500D/501A/5025), and the fresh prompt prints on the
+         * blank bottom row. That is the owner's model of the block: bottom
+         * row always current, completed commands stacked above it. */
+        seam_str_out(ctx, word);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
     }
     ctx->frame = NULL;
     return 0;
@@ -132,7 +162,7 @@ int u2_overworld_dump(u2_ctx *ctx, const char *path)
         fprintf(stderr, "overworld: %s\n", ow.note);
         return -1;
     }
-    u2_overworld_draw(&ow);
+    u2_overworld_draw(ctx, &ow);
 
     uint8_t pal[4][3];
     u2_frame_palette(pal);

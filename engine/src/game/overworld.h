@@ -50,11 +50,18 @@ typedef struct u2_overworld {
  * Returns 0 on success. On failure `ow->note` explains why in terms the player
  * can act on — a missing content directory and a corrupt tile cache need
  * different advice, and the engine must not draw an invented world either way.
+ *
+ * The status band and the CMD prompt are printed into the vram grid here, once,
+ * exactly as the original prints them once on entering the world: the status
+ * block through the proven status sites, then "CMD: " (asm/087D) at row 23
+ * col 0, leaving the cursor at col 5 where the next echo lands.
  */
 int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow);
 
-/* Recomposite the frame from the current position. */
-void u2_overworld_draw(u2_overworld *ow);
+/* Recomposite the frame from the current position: map window (pixel rows
+ * 0..159) then the text rows 20..24 of the vram grid — status block, CMD
+ * prompt and message history, one composited framebuffer. */
+void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow);
 
 /*
  * Render one frame of the probe sector and write it to `path` as PPM. This is

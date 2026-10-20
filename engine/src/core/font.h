@@ -24,6 +24,7 @@
 
 #include <stdint.h>
 #include "core/frame.h"
+#include "core/vram.h"
 
 #define U2_FONT_CELL_W 8
 #define U2_FONT_CELL_H 8
@@ -39,5 +40,20 @@ void u2_font_draw_cell(u2_frame *f, int row, int col, uint8_t ch,
  * bytes can never corrupt a screen. Returns the number of cells consumed. */
 int u2_font_draw_text(u2_frame *f, int row, int col, const char *s,
                       uint8_t fg, uint8_t bg);
+
+/*
+ * Composite the text rows of the cell grid into the framebuffer — the one
+ * framebuffer decision from the CP4b kickoff: map pixels and text share a
+ * frame, so a screenshot of the window is a screenshot of the game.
+ *
+ * The overworld calls this for rows 20..24 after drawing the map window:
+ * the status block and the CMD message window live in the vram grid (where
+ * the terminal renderer already paints them), and this is the pixel side of
+ * the same storage. Attributes are not honoured yet: mode-4 text colour is
+ * white-on-black everywhere the engine prints, and real attribute mapping is
+ * CP9 work.
+ */
+void u2_font_draw_vram_rows(u2_frame *f, const u2_vram *v, int top_row,
+                            int bottom_row);
 
 #endif /* U2_FONT_H */
