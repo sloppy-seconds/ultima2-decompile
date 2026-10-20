@@ -11,7 +11,8 @@
 
 #include <string.h>
 #include "game/creation.h"
-#include "game/status.h"
+    /* unused include removed: 'C' now returns to the menu instead of drawing
+     * the status block (owner acceptance, CP3). */
 #include "core/save.h"
 #include "core/seam.h"
 #include "gen_content.h"
@@ -120,10 +121,18 @@ static int generate(u2_ctx *ctx)
     stats[3] = &st->stat_cha; stats[4] = &st->stat_wis; stats[5] = &st->stat_int;
 
     /* file 0x56E6: budget, then the form as one str_out (CR/LF carry the
-     * layout, which is exactly what seam_char_print implements). */
+     * layout, which is exactly what seam_char_print implements).
+     *
+     * seam_present() matters here and after every field below: the original
+     * writes straight to video memory so every character is visible at once,
+     * while this engine only pushes the grid to the renderer on present.
+     * Without it the whole form is drawn into the vram and never shown, which
+     * is invisible to headless tests (they read the grid directly) and looks
+     * exactly like "press C, nothing happens" in a terminal. */
     seam_goto(ctx, 0, 0);
     print_pair(ctx, budget);
     seam_str_out(ctx, U2_S_CREATE_FORM);
+    seam_present(ctx);
 
     for (i = 0; i < 6; i++) {
         int v;
@@ -140,6 +149,7 @@ static int generate(u2_ctx *ctx)
         print_pair(ctx, v);
         seam_goto(ctx, BUDGET_COL, BUDGET_ROW);
         print_pair(ctx, budget);
+        seam_present(ctx);
     }
 
     /* Sex: file 0x594E. Loops until M or F; stored as typed. */
@@ -148,9 +158,11 @@ static int generate(u2_ctx *ctx)
         int c = read_any(ctx);
         if (c < 0) return -1;
         if (c == 'M') { seam_str_out(ctx, U2_S_SEX_MALE);   st->sex = 'M';
-                        st->stat_str = bcd_add(st->stat_str, 0x05); break; }
+                        st->stat_str = bcd_add(st->stat_str, 0x05);
+                        seam_present(ctx); break; }
         if (c == 'F') { seam_str_out(ctx, U2_S_SEX_FEMALE); st->sex = 'F';
-                        st->stat_cha = bcd_add(st->stat_cha, 0x10); break; }
+                        st->stat_cha = bcd_add(st->stat_cha, 0x10);
+                        seam_present(ctx); break; }
     }
 
     /* Race: file 0x59AD. '1'..'4', one BCD bonus each, stored 0..3. */
@@ -170,6 +182,7 @@ static int generate(u2_ctx *ctx)
         default:  seam_str_out(ctx, U2_S_RACE_HOBBIT);
                   st->stat_wis = bcd_add(st->stat_wis, 0x10); break;
         }
+        seam_present(ctx);
         break;
     }
 
@@ -190,6 +203,7 @@ static int generate(u2_ctx *ctx)
         default:  seam_str_out(ctx, U2_S_CLASS_THIEF);
                   st->stat_agi = bcd_add(st->stat_agi, 0x10); break;
         }
+        seam_present(ctx);
         break;
     }
 
@@ -198,6 +212,7 @@ static int generate(u2_ctx *ctx)
     memset(st->name, 0, sizeof st->name);
     seam_goto(ctx, NAME_COL, NAME_ROW);
     seam_str_out(ctx, "                ");
+    seam_present(ctx);
     {
         int n = 0;
         for (;;) {
@@ -215,6 +230,7 @@ static int generate(u2_ctx *ctx)
             if (n < NAME_MAX) {
                 st->name[n++] = (uint8_t)c;
                 seam_char_out(ctx, (uint8_t)c);
+                seam_present(ctx);
             }
         }
     }
@@ -263,14 +279,11 @@ int u2_creation_flow(u2_ctx *ctx)
 
     if (u2_save_store(ctx) != U2_SAVE_OK) return -1;
 
-    /* The original clears the screen and asks for the program disk here, then
-     * waits for ESC before restarting (file 0x5C43..0x5C5F). The engine has no
-     * disk to swap, so it shows what was just created and waits for a key:
-     * without the wait the menu loop redraws the title straight over the status
-     * block and there is nothing for the CP3 gate to look at. */
-    seam_clear_screen(ctx);
-    u2_status_draw(ctx);
-    seam_present(ctx);
-    (void)wait_key(ctx);
+    /* Owner acceptance for CP3: completing the form writes the save and goes
+     * back to the main menu, which is what the caller does with this return
+     * value. The original instead prints INSERT PROGRAM MASTER and restarts,
+     * because the player had to put the program disk back; there is no disk to
+     * swap here, so returning to the menu is the faithful equivalent. The new
+     * character is visible through 'P', which loads it from disk. */
     return 1;
 }

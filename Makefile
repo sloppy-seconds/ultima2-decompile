@@ -21,17 +21,15 @@ help:
 	@echo "make content     regenerate build/gen_content.h from original/"
 	@echo "make clean       remove engine build output"
 
-engine: $(BIN)
-
-$(BIN):
+engine:
 	@$(MAKE) -C engine all
 
-run: $(BIN)
+run: engine
 	@$(BIN)
 
 play: run
 
-headless: $(BIN)
+headless: engine
 	@$(BIN) --headless --script engine/tests/play_to/reach_everything_today.keys \
 	    --save-dir /var/tmp/u2-play --dump-state
 
@@ -43,7 +41,7 @@ headless: $(BIN)
 test: test-engine test-phase3
 	@printf '\nALL CHECKS PASSED\n'
 
-test-engine: $(BIN)
+test-engine: engine
 	@$(MAKE) -C engine test
 
 test-phase3:

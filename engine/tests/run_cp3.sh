@@ -68,6 +68,42 @@ grep -qE '"gold"[[:space:]]*:[[:space:]]*0' "$WORK/p_empty.out" \
     && ok "P with no character on disk loads nothing (the INSERT DISK path)" \
     || bad "P loaded a character from an empty directory"
 
+# --- interactive smoke test through a real pty ----------------------------
+# Both CP3 interactive bugs (seam_key_wait never blocking, and the creation form
+# never being presented) were invisible to every other test: headless reads the
+# grid directly and never calls the renderer, so "presented to a terminal" is
+# simply untested by the rest of the suite. This drives the game through a real
+# pty via script(1) and compares output volume, which keeps the assertion free
+# of game text: pressing C must change the screen far more than pressing an
+# invalid key does.
+if command -v script >/dev/null 2>&1; then
+    pty_run() {   # $1 = keys, $2 = save dir
+        printf '%b' "$1" | timeout 20 script -qec "./u2 --save-dir $2" \
+            "$WORK/pty.out" >/dev/null 2>&1
+        wc -c <"$WORK/pty.out"
+    }
+    mkdir -p "$WORK/d_invalid" "$WORK/d_create"
+    invalid_bytes=$(pty_run '\033X' "$WORK/d_invalid")
+    create_bytes=$(pty_run '\033C\n151515151515M11BRITISH\rY' "$WORK/d_create")
+    [ "$create_bytes" -gt $((invalid_bytes * 2)) ] \
+        && ok "C draws a form in a real terminal (${create_bytes}B vs ${invalid_bytes}B for an invalid key)" \
+        || bad "C produced no more screen output than an invalid key (${create_bytes}B vs ${invalid_bytes}B)"
+    # The pty run above completed a whole character; prove it reached the disk.
+    # (A "no input" case is not testable here: script(1) keeps the pty master
+    # open after its stdin closes, so a blocked read is correct behaviour, not
+    # a hang — the game is waiting for a key a real player would press.)
+    if [ -s "$WORK/d_create/PLAYER" ]; then
+        nz=$(python3 -c "import sys;d=open('$WORK/d_create/PLAYER','rb').read();print(sum(1 for b in d if b))")
+        [ "$nz" -gt 1 ] \
+            && ok "the pty creation run wrote a populated player record ($nz non-zero bytes)" \
+            || bad "pty creation run left a blank record ($nz non-zero bytes)"
+    else
+        bad "pty creation run produced no PLAYER file"
+    fi
+else
+    printf '  SKIP  script(1) unavailable, interactive pty test not run\n'
+fi
+
 # --- nothing generated may be committed -----------------------------------
 cat > "$WORK/probe_player" <<'EOF'
 EOF

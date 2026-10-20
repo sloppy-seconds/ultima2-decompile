@@ -171,7 +171,12 @@ static int present_poem(u2_ctx *ctx)
     if (hold_for_esc(ctx, 800))
         return 1;
 
-    for (int i = 0; i < NARR(POEM); i += 2) {
+    /* Owner acceptance for CP3: 'D' shows the first block of the poem and
+     * returns. The real demonstration is recorded gameplay with graphics, which
+     * needs the CP9 bitmap pipeline and the CP4 world; running the whole poem
+     * here stood in for a demo that does not exist yet and made 'D' look like a
+     * feature rather than a placeholder. */
+    for (int i = 0; i < 2 && i < NARR(POEM); i += 2) {
         seam_clear_row(ctx, 23);
         seam_clear_row(ctx, 24);
         if (POEM[i].s[0])
@@ -251,11 +256,14 @@ static void run_play(u2_ctx *ctx)
         u2_save_result r = u2_save_load(ctx);
 
         if (r == U2_SAVE_OK) {
+            /* The load is real; the world is not. CP4 owns the overworld, so the
+             * placeholder says so while still showing the CP3 status block, so
+             * the loaded character is visible rather than implied. */
             seam_clear_screen(ctx);
+            seam_str_out_at(ctx, 1, 12, "[engine] OVERWORLD GOES HERE (CP4)");
             u2_status_draw(ctx);
             seam_present(ctx);
-            if (seam_key_poll(ctx, &k)) return;   /* any key back to the menu */
-            seam_wait_ms(ctx, 600);
+            (void)wait_choice(ctx);
             return;
         }
         if (r == U2_SAVE_ERROR) return;

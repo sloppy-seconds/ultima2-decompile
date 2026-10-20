@@ -92,12 +92,14 @@ else
 fi
 
 # The demonstration path must actually run: the 'D' branch sets the story flag
-# (DS:0x239) and the poem draws its six couplets into rows 23 and 24. Only the
-# poem writes row 24, so that is the clean counter.
+# (DS:0x239) and draws the first couplet of the poem into rows 23 and 24. Only
+# the poem writes row 24, so that is the clean counter. CP3 review narrowed 'D'
+# to the first block on purpose — the real demo is recorded gameplay with
+# graphics (CP9), and running the whole poem made a placeholder look finished.
 ./u2 --headless --script tests/title.keys --trace="$WORK/trace" >/dev/null
 poem_lines=$(grep -cE 'seam=str_out_at asm=51EB col=[0-9]+ row=24' "$WORK/trace")
-[ "$poem_lines" -ge 6 ] && ok "demonstration poem drew $poem_lines couplet lines in row 24" \
-                        || bad "demonstration poem drew only $poem_lines row-24 lines"
+[ "$poem_lines" -ge 1 ] && ok "demonstration drew the first poem block ($poem_lines row-24 lines, capped by design)" \
+                        || bad "demonstration drew no poem text"
 
 grep -qE '"story_flag"[[:space:]]*:[[:space:]]*1' "$WORK/full.out" \
     && ok "story flag set by the demo path" || bad "story flag not set"

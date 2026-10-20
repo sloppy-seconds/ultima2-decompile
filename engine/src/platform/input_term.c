@@ -75,18 +75,35 @@ static int term_read(u2_ctx *ctx, u2_key *out, int block)
      * also makes a plain read() return 0 with nothing typed — clearing
      * O_NONBLOCK does not help, because the terminal, not the descriptor, is
      * what is non-blocking here. A blocking wait therefore has to wait for
-     * readability itself. Without this, every seam_key_wait in interactive play
-     * returns "no key" instantly and character creation falls straight through
-     * (the CP3 'C does nothing' bug). */
-    if (block && ti->raw) {
+     * readability itself, and a read() of 0 afterwards is EOF, not "no key".
+     * Without this, every seam_key_wait in interactive play returns "no key"
+     * instantly and character creation falls straight through (the CP3
+     * 'C does nothing' bug). */
+    if (ti->raw) {
         struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN, .revents = 0 };
-        while (poll(&pfd, 1, -1) < 0) {
-            if (errno != EINTR) break;
+        int want = block ? -1 : 0;
+        int r;
+        do {
+            r = poll(&pfd, 1, want);
+        } while (r < 0 && errno == EINTR);
+        if (r == 0) return 0;               /* nothing available, not EOF */
+        if (r < 0) return 0;
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            ctx->input_exhausted = 1;
+            return 0;
         }
     }
 
     unsigned char c = 0;
     ssize_t n = read(STDIN_FILENO, &c, 1);
+
+    /* EOF on stdin (a closed pipe, a redirected file, a hung-up terminal).
+     * Without this the menu loop polls forever and the game never exits, so a
+     * scripted or piped run hangs until something kills it. */
+    if (n == 0) {
+        ctx->input_exhausted = 1;
+        return 0;
+    }
 
     if (block && ti->nonblock)
         fcntl(STDIN_FILENO, F_SETFL, fl);
