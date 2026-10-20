@@ -124,6 +124,18 @@ MANIFEST = [
     ("U2_S_DIR_SOUTH",         "097C_sub_097c.asm", 0),
     ("U2_S_DIR_WEST",          "09A3_sub_09a3.asm", 0),
     ("U2_S_DIR_EAST",          "09C9_sub_09c9.asm", 0),
+    # The Q save flow (asm/3DC7 cmd_Q + the location guards asm/3DE4/3DFA).
+    # The split attributed none of these as db lines (the prompt's line ends
+    # ",0" not ",0x00"), so all five use run locators at their file addresses,
+    # verified against the raw bytes. Note each guard string is preceded by a
+    # 0x8d line-marker byte (the same high-bit convention as the tlkx files),
+    # so the string starts one byte after the call: 0x3FCA, 0x3FE8, 0x4005,
+    # 0x4022, 0x4037.
+    ("U2_S_Q_PROMPT",          "3DC7_cmd_Q.asm", ("run", 0x3FCA, 18)),
+    ("U2_S_Q_OUTDOORS",        "3DE4_offer_only_outdoors.asm", ("run", 0x3FE8, 14)),
+    ("U2_S_Q_EARTH",           "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4005, 14)),
+    ("U2_S_Q_FOOT",            "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4022, 13)),
+    ("U2_S_Q_MOMENT",          "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4037, 18)),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')

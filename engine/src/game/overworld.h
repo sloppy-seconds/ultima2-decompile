@@ -69,6 +69,34 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow);
  * non-zero when the display asked to quit. */
 int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow);
 
+/*
+ * Save-gate policy — the single decision point for Q's location checks.
+ *
+ * The faithful defaults reproduce the original's three gates (asm/3DC7 with
+ * the guards asm/3DE4/asm/3DFA): save only outdoors (DS:4A == 0), only on
+ * Earth (DS:6D == 0), only on foot (DS:13 >= 0x78). A common community patch
+ * lets the player save anywhere; CP11's enhanced rules surface will override
+ * this struct rather than edit the loop, so the loop must consult only the
+ * policy and never the raw gates.
+ */
+typedef struct u2_save_policy {
+    int allow_indoors;    /* skip the outdoors gate (DS:4A) */
+    int allow_off_earth;  /* skip the Earth gate (DS:6D)   */
+    int allow_in_vehicle; /* skip the on-foot gate (DS:13) */
+} u2_save_policy;
+
+extern const u2_save_policy U2_SAVE_POLICY_ORIGINAL;
+
+/*
+ * The Q handler. Echoes the prompt and any gate refusal into the CMD window,
+ * then performs the save the original performs at file 0x24FD: entry pair
+ * [DS:5A]/[DS:5B] := live position, write the sector back, write the player
+ * record. Returns 0 when saved, 1 when a gate refused (the refusal message
+ * is already echoed). The monsters write (256 B from DS:137) is not lifted:
+ * the engine does not load monsters until CP5.
+ */
+int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol);
+
 /* Recomposite the frame from the current position: map window (pixel rows
  * 0..159) then the text rows 20..24 of the vram grid — status block, CMD
  * prompt and message history, one composited framebuffer. */

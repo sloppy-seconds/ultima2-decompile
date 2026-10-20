@@ -12,6 +12,7 @@
 #include "game/overworld.h"
 #include "game/status.h"
 #include "core/font.h"
+#include "core/save.h"
 #include "core/seam.h"
 #include "core/tiles.h"
 #include "core/view.h"
@@ -30,6 +31,55 @@
  * but the value is kept faithful rather than convenient.
  */
 #define U2_OVERWORLD_EMPTY_GATE 0
+
+const u2_save_policy U2_SAVE_POLICY_ORIGINAL = { 0, 0, 0 };
+
+/* Echo one message through the CMD window: the word lands after the waiting
+ * prompt, the game's newline scrolls it up, a fresh prompt prints below —
+ * the same compound print the original uses for direction echoes
+ * ("NORTH\rCMD: ", asm/38B0 file 0x3ce5). */
+static void echo_cmd(u2_ctx *ctx, const char *word)
+{
+    seam_str_out(ctx, word);
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_CMD_PROMPT);
+}
+
+int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
+{
+    echo_cmd(ctx, U2_S_Q_PROMPT);
+
+    /* The three location guards (asm/3DE4/3DFA). Only the outdoors gate has
+     * live state yet: the engine has no planets until CP7 (DS:6D) and no
+     * vehicles until CP6 (DS:13), so those two pass trivially — the policy
+     * hooks exist so CP11 can open all three without touching this loop. */
+    if (!pol->allow_indoors && ow->sector_lo != 0) {
+        echo_cmd(ctx, U2_S_Q_OUTDOORS);
+        return 1;
+    }
+    if (!pol->allow_off_earth) { /* DS:6D == 0: always Earth until CP7 */ }
+    if (!pol->allow_in_vehicle) { /* DS:13 >= 0x78: always on foot until CP6 */ }
+
+    echo_cmd(ctx, U2_S_Q_MOMENT);
+
+    /* The save body, file 0x24FD: the entry pair takes the live position
+     * (0x2520..0x2529) so the next 'P' restores exactly where the player
+     * stood, then the sector and the record go to disk. */
+    ctx->state.entry_x       = (uint8_t)ow->x;
+    ctx->state.entry_y       = (uint8_t)ow->y;
+    ctx->state.sector_first  = (uint8_t)ow->sector_hi;
+    ctx->state.sector_second = (uint8_t)ow->sector_lo;
+
+    /* The original rewrites the sector unconditionally; the engine's contract
+     * is to store only dirty sectors (world.h), and nothing dirties tiles
+     * until combat and town visits exist. */
+    if (ow->world.map_dirty)
+        u2_world_store(ctx, &ow->world, 1);
+
+    if (u2_save_store(ctx) != U2_SAVE_OK)
+        return 1;
+    return 0;
+}
 
 /* Shared loader: everything after the spawn fields are set. */
 static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
@@ -160,6 +210,9 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case U2_KEY_DOWN:  dy =  1; word = U2_S_DIR_SOUTH; break;
         case U2_KEY_RIGHT: dx =  1; word = U2_S_DIR_EAST;  break;
         case U2_KEY_LEFT:  dx = -1; word = U2_S_DIR_WEST;  break;
+        case 'Q':
+            u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
+            continue;
         default: continue;                                  /* not a move key */
         }
 
@@ -180,9 +233,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * row 24 — asm/500D/501A/5025), and the fresh prompt prints on the
          * blank bottom row. That is the owner's model of the block: bottom
          * row always current, completed commands stacked above it. */
-        seam_str_out(ctx, word);
-        seam_char_print(ctx, '\r');
-        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        echo_cmd(ctx, word);
     }
     ctx->frame = NULL;
     return 0;

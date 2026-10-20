@@ -124,6 +124,27 @@ else
     fi
 fi
 
+# --- the Q save round trip --------------------------------------------------
+# The owner's test: walk, Q saves the live position into the record, restart,
+# P lands where the player stood. Plus the outdoors guard and the CP11
+# save-anywhere policy hook.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/save_q_check" \
+   tests/save_q_check.c src/game/overworld.c src/game/status.c src/core/world.c \
+   src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
+   src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
+   src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
+   src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-saveq.err"
+if [ $? -ne 0 ]; then
+    bad "save-Q test harness did not build: $(head -5 "$WORK/cc-saveq.err")"
+else
+    if "$WORK/save_q_check" "$WORK/saveq" > "$WORK/saveq.out" 2>&1; then
+        ok "Q save round trip: guards, dirty rule, policy hook, P restore ($(grep -c '  ok  ' "$WORK/saveq.out") checks)"
+    else
+        bad "save-Q check failed:"
+        sed 's/^/        /' "$WORK/saveq.out"
+    fi
+fi
+
 # --- the map actually renders, when the player has their files ------------
 # The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
 # producing real pixels. Skips without the content, so CI stays honest.
