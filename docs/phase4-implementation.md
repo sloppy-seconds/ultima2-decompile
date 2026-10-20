@@ -1594,3 +1594,117 @@ last sectors of each planet. Flagged for CP5+, not CP4.
    are unresolved; `--data-dir` itself is still unwritten
 
 
+
+## CP4b — overnight run (T1..T8) — 2026-10-20/21
+
+Autonomous run under the prove-or-pass contract (`docs/phase4-overnight-cp4b.md`).
+Each task's outcome is in the morning report in that file; this section is the
+durable technical record of what the bytes said.
+
+### T1 — the passability premise is false: the overworld walk loop never reads a tile
+
+The overnight list opened with "the real gate-unblocker is the `asm/2423`
+passability table". It is not, and the evidence is a full decode of the call
+chain, not an inference:
+
+* **The walk loop** (file `0x0B36..0x0BF1`, re-decoded continuously) has four
+  direction arms. Each does `inc/dec [DS:00]/[DS:01]`, prints the direction
+  word, then `call 0x2623` and `cmp al,$0x0; je <accept>`. A non-zero return
+  undoes the step and prints `--INVALID MOVE!` (file `0x0C02`).
+* **`asm/2423` (runtime; file `0x2623`) never reads a tile.** Its whole body:
+  store the travel mode to `DS:29`; branch on `[DS:4A]==0`. On the overworld
+  (`DS:4A==0`) it jumps to file `0x268B`, which only handles **vehicle** costs:
+  mode `2` spends 5 HP (a `das` chain on the HP pair, `jb` to death on
+  underflow), mode `0x2E` is the dungeon force-field event. For on-foot travel
+  every path falls through to `ret` with `AL=0`. On a site map (`DS:4A!=0`) it
+  checks `x>=0x40`/`y>=0x40` and, if crossed, restores the entry pair and
+  reloads the sector (`asm/243E`) — still returning 0.
+* **Conclusion:** on the overworld, `asm/2423` returns 0 for every on-foot step.
+  `--INVALID MOVE!` is reachable only from the vehicle/force-field paths, never
+  from walking into terrain. There is no tile passability table to implement,
+  because the original has none on this path. Implementing one would have been
+  the doubling bug again — a plausible mechanic the bytes do not support.
+
+What the bytes *do* establish about tiles, from three independent consumers:
+
+| tile byte | meaning | evidence |
+| --- | --- | --- |
+| `0x00` | **water** (the cyan dotted field) | `cmd_X` (`asm/44D4`) allows casting when the tile is `0x00` and mode is `0x24` (frigate); the location table at file `0x4E61` leads with "IN THE WATER." |
+| `0x04` | **land / grass** | `cmd_X` casts on tile `0x04`; plane landing (`asm/38B0`, file `0x3D56`) accepts only tile `0x08`... see below |
+| `0x08` | the plane-landing tile | `asm/38B0` file `0x3D56`: `cmp $0x8; je LAND PLANE` else `LAND--NOT HERE!!!!!` |
+| `0x78` | the player figure | staging byte at the player cell in the live capture; `asm/29D2` treats `>=0x78` as a figure |
+| `0x04,0x08,...` step 4 | terrain family | the location-description table at file `0x4E61` is a run of NUL-terminated strings ("IN THE WATER.", "IN A MARSH.", "ON GRASS.", "IN WOODS.", "IN THE MTS.", "NEAR A VILLAGE.", ...) indexed by tile/4 |
+
+This **settles the art-label question** the kickoff flagged: the kickoff called
+art 0 "water (magenta dashes)" but the renders show the magenta dotted field as
+walkable. The passability path is the arbiter the task asked for, and it says
+there is no walk-block at all — so neither label was load-bearing. The tile->art
+mapping `(map_byte>>1)&0xFE` (already proven) stands unchanged.
+
+### T1 — the sector-crossing mechanism, found (it is not the walk loop)
+
+Walking does not change the sector digit. The crossing is a separate arrival
+system keyed on `DS:6E`, reached from the overworld entry (`asm/0C2B`, file
+`0x0E2B`), not from a step:
+
+* `asm/26B7` compares `DS:49` (first sector digit) against `DS:6E >> 1`.
+* `asm/26CC` indexes a table at `cs:0x2798` (file `0x2998`) with
+  `8*DS:49 + DS:6E` and loads the (x,y) pair into `DS:00/01`, then redraws.
+* `asm/2708` does the same index into `DS:23/24` (the tile coords) and calls
+  `map_tile_ptr`.
+* `asm/2744` steps `DS:6E` by 2, masks `&7`, and looks up the same table.
+* The table is **36 bytes** (file `0x2998..0x29BB`), so the index
+  `8*DS:49 + DS:6E` only fits for `DS:49 in 0..3` and `DS:6E in 0..7`. The
+  extent question the overnight list raised (80 needed for `8*sector+dir`) is
+  answered: it is not a per-sector table, it is a small per-planet arrival
+  table. This is vehicle/planet arrival (CP7 territory), not foot crossing.
+
+The owner's recollection was "west from the start shows more map, seamless
+scroll into the neighbour." The bytes disagree for the foot path: the walk loop
+has no neighbour-digit logic, and the fill loop (`asm/5AE1`) has two variants —
+when `DS:12==0xFF` (the overworld spawn value) out-of-sector cells take the
+`DS:12` void tile with **no** mask; when `DS:12!=0xFF` (a site) the same cells
+are masked `&0x3F` and wrap inside the one sector. Neither draws a neighbouring
+sector. So "smooth crossing" is not implemented by the bytes on the foot path,
+and per the never-invent rule it is **not** implemented in the engine. The
+engine currently refuses an out-of-range step (the honest placeholder); the
+faithful behaviour is to let the position go out of range and render the void
+tile, which is a small, well-evidenced change deferred to the owner's review
+because it changes what a walk to the edge looks like.
+
+### T2 — food drains on PASS, and starvation is instant, not gradual
+
+Proven and implemented (see commit `phase4: T2 (partial...)` and
+`engine/tests/food_check.c`). The two places the owner's model and the bytes
+disagreed are recorded in the commit and in the test header: no gradual
+food-then-HP drain (underflow zeroes DS:51..59 at once, `asm/0C62`), and the
+food triple is 6 BCD digits with only the top 4 displayed, so a fresh
+character dies on the 4001st PASS, not the 41st.
+
+### T3, T4, T6 — one root cause class: loops testing the wrong stop flag
+
+Three confirmed defects, one shape. `seam_key_poll` collapses a finished input
+(closed window, exhausted script, `--dump-screen`, and now SIGTERM) to a `0`
+return and raises `input_exhausted`; backends that also set `exit_code` do so
+inconsistently (SDL_QUIT sets 1, the signal path set 0). Several loops tested
+only `exit_code`, so they spun:
+
+* **T3** `u2_overworld_loop` idle branch — now also breaks on
+  `exit_code || input_exhausted`.
+* **T4** `hold_for_esc` — slept its whole budget through SIGTERM (gdb showed
+  the main thread in `nanosleep`); now tests the flags, and the SDL signal
+  handler sets `exit_code=1` (0 reads as "no exit"). Root cause of the SIGTERM
+  survival was two-deep: `sdl2-compat` ignores `SDL_HINT_NO_SIGNAL_HANDLERS`
+  and re-applies its own disposition, so the handler is asserted from
+  `sdl_poll`; and the `exit_code=0` bug above.
+* **T6** `wait_choice` — hung after `--dump-screen` wrote its frame; now tests
+  `input_exhausted`. `run_cp4.sh` drives the dummy driver headlessly and
+  asserts size + ink (poison-checked).
+
+### Not done tonight
+
+T5 (creation tail into the world) moves the CP2 baseline and is marked
+`[OWNER: pre-approved?]` in the task list; the contract says a baseline move
+needs evidence *and* the owner's pre-approval flag resolved, so it is held for
+an owner decision rather than guessed. T7 (screenshot differential) needs PIL
+and the gitignored screenshots; T8 is this write-up plus the state row.
