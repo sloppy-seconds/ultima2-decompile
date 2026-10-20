@@ -324,3 +324,16 @@ Changes for self-contained CI:
   appears community-patched, md5 stated), legal posture (no game files in
   repo; derivative-work disclaimer; rights-holder contact path), verify-it-
   yourself instructions, layout, toolchain and status.
+
+### Publishing follow-ups (post-release discussion) — 2026-10-20
+
+* Decision: **do not publish the rebuilt binary** (byte-identical = the game
+  itself; redistribution risk). Breadcrumbs instead: IA item link, checksum
+  oracle, build-from-source instructions.
+* README: Internet Archive item link in provenance; "How to play" = download
+  own copy → build → copy our binary over the original → DOSBox Staging.
+* `Containerfile` (quay.io/fedora/fedora:41 + binutils + python3): the image
+  build itself runs the full rebuild + checksum verification; runtime writes
+  the binary to a mounted /out (`:Z,U` for rootless podman/SELinux).
+  `.dockerignore` guarantees no game files or secrets enter the image.
+  Tested end-to-end: container-produced binary md5 == original.

@@ -1,0 +1,16 @@
+# never bake copyrighted or bulky local material into the image
+.env
+.env.*
+original/
+references/
+captures/
+decompiled/
+build/
+tmp/
+disasm/functions/
+disasm/*.asm
+tools/spice86/
+tools/reko/
+tools/jwasm/
+**/__pycache__/
+.git/

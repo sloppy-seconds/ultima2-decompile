@@ -19,7 +19,9 @@ the known checksum. The rebuild has been booted and played.
 ## Target & provenance — read this
 
 * The analyzed binary is the **Ultima II distribution available on the
-  Internet Archive**, not a factory-shipped copy. The pack **appears to
+  Internet Archive** — the DOS software-library item is
+  [archive.org/details/msdos_Ultima_II_-_Revenge_of_the_Enchantress_1983](https://archive.org/details/msdos_Ultima_II_-_Revenge_of_the_Enchantress_1983)
+  — not a factory-shipped copy. The pack **appears to
   already include community patches**, so "byte-exact" here means byte-exact
   to *this* image:
   `ultimaii.exe`, 37,344 bytes, md5 `fe884d5117971073ac8097cc7a6aca25`.
@@ -53,6 +55,50 @@ python3 tools/check_func.py 4FDF      # prove one function (str_out)
 CI runs the rebuild on every push/PR and fails if any byte of the output
 deviates from the known checksum. The built binary is deliberately never
 uploaded as a CI artifact.
+
+### No toolchain handy? Use the container
+
+The build needs only `binutils` + `python3`. A `Containerfile` is included
+(podman or docker — it verifies the checksum during the image build itself):
+
+```bash
+podman build -t u2-rebuild .
+podman run --rm -v "$PWD/build:/out:Z,U" u2-rebuild   # writes build/u2-clean-rebuild.bin
+```
+
+## How to play
+
+We publish source and proofs, never the game — you supply your own legally
+obtained copy. The classic workflow: download the original pack, build our
+reconstruction, and **copy our binary over the original executable** — they
+are byte-identical, and that substitution is the point.
+
+```bash
+# 1. Get your own copy of Ultima II from the Internet Archive (see the item
+#    linked under Target & provenance) and unzip it into a game folder:
+mkdir -p ~/u2 && cd ~/u2
+#    download + extract the IA pack here, so the folder holds the game's
+#    original executable (ultimaii.exe / ULTIMA2.EXE)
+
+# 2. Build the reconstruction from this repo (no original needed):
+cd /path/to/this-repo
+bash tools/assemble_clean.sh build/ULTIMA2.EXE
+#    -> "CLEAN REBUILD CHECKSUM-MATCH ... md5 OK"
+
+# 3. Copy our binary over the original in your game folder:
+cp build/ULTIMA2.EXE ~/u2/
+
+# 4. Run it in a DOS emulator. On Linux, DOSBox Staging is the modern pick:
+#    Fedora:  sudo dnf install dosbox-staging
+#    Debian/Ubuntu: sudo apt install dosbox-staging
+#    Flatpak: flatpak install flathub com.dosbox.DOSBox
+dosbox -c 'mount c ~/u2' -c 'c:' -c 'ULTIMA2.EXE'
+```
+
+Ultima II is famously a single-file game — the 37 KB executable you just
+rebuilt *is* the game. (Optional extra proof: place your original as
+`original/ultimaii.exe` before step 2 and `tools/assemble_clean.sh` will
+additionally byte-diff every function against it.)
 
 ## Repository layout
 
