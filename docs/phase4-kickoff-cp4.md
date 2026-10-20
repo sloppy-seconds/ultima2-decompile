@@ -71,6 +71,28 @@ Do these in order; each is cheap and each changes the design.
    status block positions were proven from the code that sets `DS:0x2E` and
    `DS:0x2F`.
 
+6. **Does the viewport ever straddle two sectors?** The viewport is a window onto
+   a larger map, so the map scrolls as the player moves (owner, 2026-10-27). That
+   makes the sector files a partition of one continuous world rather than
+   self-contained screens, and it forces a second question: when the player walks
+   across a sector boundary, does the view scroll smoothly through it, or does the
+   display jump to the new sector's origin?
+
+   The two answers need different loaders. Smooth straddling means the engine must
+   hold an adjacent sector (or two, at a corner) and index across them, and the
+   sector-to-coordinate mapping has to be exact at the seam. Boundary snapping
+   means one sector at a time and a much simpler loader.
+
+   Decide it from the draw code and the sector arithmetic, not from how it feels to
+   play. A 21x11 viewport inside a sector that is plausibly 32x32 means most
+   movement is within-sector and only the edges are in question, so the seam
+   behaviour is a small, specific thing to find rather than a pervasive design.
+
+   This also predicts a visible artefact worth checking in the original: if the
+   view scrolls smoothly and the loader only ever had one sector resident, the
+   edge tiles would have to come from somewhere, and the way they do is a clue to
+   the mapping.
+
    Related constraint already known: the status block occupies column 30 and rows
    20-23, and `right_margin` alternates between `0x28` (40) and `0x1d` (29), so
    the map region cannot use the full width. A 21-wide window inside a 40-column
