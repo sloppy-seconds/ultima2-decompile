@@ -1,5 +1,10 @@
 # CP4b kickoff — status band, SDL text screens, and the two display paths
 
+> **Correction added after writing this file:** the "two display paths" claim in
+> the title is **not established** — read the warning below before relying on it.
+> The tile/map half is solid and verified against the original's pixels. The text
+> half is not, and it gates the status band and the SDL text screens.
+
 Paste this to start a fresh agent on the work left in CP4. It assumes CP4(a) is
 done: sector model, tile cache, viewport mapping, framebuffer, SDL window, all
 committed and green.
@@ -13,7 +18,62 @@ committed and green.
 **Hard rule from `AGENTS.md`:** work only inside
 `/var/home/paul/Projects/decompile-u2-v2/`. Never read sibling projects.
 
-## The single most important thing to internalise
+## ⚠ The text path is NOT settled — and as of 2026-10-20 it no longer blocks us
+
+**Owner decision: we may render text our own way.** The requirement is readable
+text in the right place with the right values, not a reproduction of 1983 BIOS
+plumbing. Phase 3 was the byte-matching work and it is signed off; Phase 4 is a
+behavioural reconstruction, so the mechanism is an implementation choice.
+
+This demotes "resolve the text path" from blocker to curiosity, and it removes the
+font-licensing problem: see task 2, where the recommended route is an
+engine-authored 8x8 bitmap font committed in the repo.
+
+**The one distinction to keep.** Mechanism is ours; observable output is not.
+
+- **Ours to choose:** how a string becomes pixels for the status band, menu and
+  creation form.
+- **Still faithfulness to content:** the site-name banners (`PORT BONIFICE`,
+  `MUSEUM`) are drawn with the game's own custom A-Z tile letters (art 32-57,
+  including the Q-as-vertical-bars quirk). Those are things the player sees, so
+  use the real tile letters there, not our font.
+- **Still required:** the 40x25 grid, the message window at rows 20-23 with its
+  scrolling behaviour, and the status values as packed BCD.
+
+### Background: why the earlier claim was wrong (kept so nobody re-derives it)
+
+An earlier draft asserted that text goes through INT 10h teletype into text-mode
+video memory. That cannot be right as stated: the game sets video mode 4
+(320x200 graphics, `asm/4A3E`), and in a graphics mode there is no hardware text
+path — teletype writes to text-mode memory that is not being displayed.
+
+The more likely reading, still unverified: the 40x25 grid is the game's own
+software text layer composited into the graphics framebuffer (320/8 = 40 columns,
+200/8 = 25 rows), which is consistent with the row-clear loop printing 40 spaces
+and the margins being 0x26/0x28.
+
+What is actually known:
+
+- `asm/51EB_str_out_at` saves DI/SI to `DS:0x2E/0x2F` and tail-calls
+  `str_out_core` at runtime `0x51FD`. That is a fact.
+- The seam map labels `str_out_core` as "INT 10h AH=02 cursor set" and `char_out`
+  as "INT 10h AH=01h". **AH=01h is set-cursor-shape, not teletype, on a real
+  BIOS** — so the seam labels are themselves imprecise and are not evidence of a
+  mechanism.
+- The 64-record tile table has A-Z (art 32-57) and **no digits**; there is no
+  second tile batch (zero `04 10` headers in the 1312 bytes after the last
+  record). So whatever draws digits is not in that table.
+- `CS:0x48DC` alternates `B800+5k` / `BA00+5k`. In mode 4 `B800+5k` is graphics
+  row k, but `BA00` = `B800:2000` = byte 8192 = row 102.4, **not row-aligned**.
+  Still unexplained; the strongest sign the blit destination model is incomplete.
+
+If anyone wants to close this out for its own sake, the probe is: trace what the
+status-bar code (runtime `~0x4660`, file `0x4860`) stages for the digit `9`, via
+the BCD printer at runtime `0x53B5` (not `0x55B5` — redecode prints *file*
+addresses), and follow where that value resolves. Optional now.
+
+## The text path, as previously believed (SUPERSEDED — see above)
+
 
 **The original has two display paths, and they are not interchangeable.**
 
@@ -122,12 +182,37 @@ Get eyes on the picture early — the owner's, or a screenshot diff.
 
 ## Tasks, in order
 
-### 1. Status band (start here)
+### 0. Text mechanism — decided, no longer a blocker
 
-Draw `H.P.= / FOOD= / EXP.= / GOLD=` and `CMD:` in the bottom rows, via the
-**text path** (`core/vram` + `seam_str_out_at`), not tiles. Values come from the
-player record: `state.h` has `stat_*` and the BCD fields; the original keeps gold,
-food and exp as packed BCD pairs, hundreds byte first (`u2_bcd16()`).
+Owner decision 2026-10-20: **render text our own way.** Readable, correctly
+placed, correct values. Do not spend time re-deriving the original's text
+mechanism before building the status band or the SDL screens.
+
+Recommended route, and it has no licensing exposure (see **Font licensing
+decision** below for the full reasoning and what bundling a third-party font would
+require):
+
+- **A-Z: use the game's own tile letters**, art 32-57, `art = ch - 33`. Extracted
+  at run time from the player's executable, so nothing is committed and no
+  third-party right is involved. Note the quirk: **Q is drawn as vertical bars**
+  and must not be "corrected".
+- **Digits and punctuation: author the glyphs** as engine data under Apache-2.0,
+  using Px437's CGA 8x8 as a visual reference only — look at it, do not copy its
+  bytes. Roughly 40 glyphs x 8 bytes = 320 bytes, trivial to commit and to test.
+- Blit the result into `u2_frame`. One mechanism for banners and status text.
+
+Cover at least ASCII 32-126: A-Z, a-z (or fold to uppercase if the original has no
+lowercase), digits, space and `= . : + - / ! ? , ( )`.
+
+### 1. Status band
+
+Draw `H.P.= / FOOD= / EXP.= / GOLD=` and `CMD:` in the bottom rows using the
+engine font from task 0. Do not attempt it from the tile table — there are no
+digit glyphs there and verifying that cost real time.
+
+Values come from the player record: `state.h` has `stat_*` and the BCD fields; the
+original keeps gold, food and exp as packed BCD pairs, hundreds byte first
+(`u2_bcd16()`).
 
 Reference for what it should look like: `captures/screenshots/move-after.png`
 shows `H.P.=9997 FOOD=0359 EXP.=0007 GOLD=0000` and `CMD:`.
@@ -137,11 +222,104 @@ The map window occupies pixel rows 0..159; the status block is below it.
 ### 2. SDL text rendering
 
 The SDL backend currently implements only `present_frame`; `cell()` is a no-op,
-so title/menu/creation draw nothing in the window. To render the cell grid in
-SDL, blit the **CGA ROM font** (8x8 for mode 4) into the framebuffer. The plan
-already anticipated this at CP9: "Bitmap CGA font (open-licensed)". Source an
-open-licensed 8x8 CGA font and add it as a build-time asset — it must not be
-extracted from the game binary if a licensed substitute exists.
+so title/menu/creation draw nothing in the window. Render the cell grid by
+blitting the engine-authored font from task 0 into the framebuffer.
+
+## Font licensing decision (owner, 2026-10-20)
+
+**Decision: Px437 is a visual reference only. Do not commit any Px437 data into
+this repository.** Use the game's own tile letters for A-Z and author the
+remaining glyphs ourselves. The reasoning is recorded below because the analysis
+is subtle and a future agent will otherwise re-litigate it — and because the
+owner may revisit the call later with this in hand.
+
+### The candidates, assessed
+
+- **scriven** (`github.com/smithkm/scriven`, **SIL OFL 1.1**) — licence is
+  compatible with Apache-2.0 and it is includable in principle. But it is an
+  outline pseudo-medieval / constructed-script font (Runic, Gargish, Ophidian,
+  Cirth) with no 8x8 CGA bitmap variant, so it is the wrong tool for status text.
+  It may be genuinely interesting later for Ultima's runic scripts; that is a
+  separate decision, not this one.
+- **Px437 / The Ultimate Oldschool PC Font Pack** (int10h.org, VileR) — has exact
+  IBM CGA reimplementations including the 8x8 CGA font, i.e. the correct glyphs.
+  Licensed **CC-BY-SA 4.0**. Not committed here; see below for what bundling would
+  actually require, because the common shorthand ("ShareAlike is viral, can't
+  touch it") is **wrong** and was stated wrongly in an earlier draft of this file.
+
+### Why Px437 could legally be shipped — the accurate reading
+
+ShareAlike in CC-BY-SA 4.0 attaches to **Adapted Material**: work you translate,
+alter, arrange, transform or build upon. Including an **unmodified** file inside a
+larger work is a **collection**, and the licence expressly allows a collection to
+be distributed under the distributor's own chosen terms, provided the licence
+notice and attribution for the included work are kept. So bundling the TTF
+unmodified does **not** relicense this project's code.
+
+Two further facts from the pack's own readme matter:
+
+1. The author's copyright claim is scoped to the **files**, not the glyph shapes:
+   *"The **font files in this pack** (TTF and FON remakes and enhancements) are my
+   own work, hereby licensed under CC-BY-SA 4.0."*
+2. He explicitly disclaims the underlying data: *"I do not claim any rights to the
+   **original** raster binary data charsets, which this work is based on"*, and
+   states that *"the raw bitmap typefaces are not copyrightable, unlike fonts in
+   specific formats such as .fon and TrueType (which qualify as software)"*.
+
+### The trap: what would actually cause infection
+
+The route this project would most want — extracting glyph bitmaps and committing
+them as a C header of pixel data — is the **adaptation** case, not the collection
+case. Converting his TTF into committed bitmap arrays is transforming his
+work-product, and ShareAlike would attach to that converted data. That is the
+specific move to avoid, and it is exactly the shape of "just embed the font as a
+header file" that a well-meaning agent would reach for first.
+
+### If the owner later decides to bundle it anyway
+
+These are the conditions that keep it a collection rather than an adaptation.
+Treat them as mandatory, and get a real legal read (or an email to VileR, who is
+approachable and has clearly researched the question) before doing it.
+
+1. **Ship the file unmodified** — the original `.ttf` or `.fon`, byte-for-byte, in
+   its own directory. Never convert it to a header, never subset it, never
+   re-encode it into project-owned data. Subsetting and re-encoding are
+   adaptations.
+2. **Load it at runtime, do not link it in.** Read the file from the data
+   directory and rasterise it; do not compile its contents into the binary.
+3. **Keep the licence text with it** — a full copy of CC-BY-SA 4.0 alongside the
+   file, unaltered.
+4. **Attribution, exactly as the author requests**: credit the handle **"VileR"**
+   plus a link to the int10h.org home page, in a `NOTICE` or `THIRD-PARTY-LICENSES`
+   file that ships with the distribution and is visible in the app's about/credits
+   screen. "Appropriate credit" is a licence condition, not a courtesy; missing it
+   is the most likely way to breach this.
+5. **Do not describe the font as project work** anywhere in the repo, docs, or
+   commit messages.
+6. **Resolve the `AGENTS.md` policy question first.** The project rule is stricter
+   than the law: *"anything not compatible with Apache-2.0 must never be
+   committed."* The FSF lists CC-BY-SA as incompatible with Apache-2.0. So even
+   where bundling is legally defensible as a collection, it may still violate the
+   repo's own rule. That rule is the owner's to interpret — an agent must not
+   quietly waive it.
+
+I am not a lawyer; the above is a careful reading of the licence and the author's
+own stated position, not legal advice.
+
+### The route chosen, and why it is better anyway
+
+- **A-Z: use the game's own tile letters**, art 32-57 (`art = ch - 33`), extracted
+  at run time from the player's own executable. There is no third-party right in
+  play at all, because the data is never committed and comes from the user's copy —
+  the same posture as the map and tile art. It is also more faithful: those are the
+  glyphs the original uses for banners.
+- **Digits and punctuation: author ~40 glyphs** as engine data, committed under
+  Apache-2.0, using Px437's CGA 8x8 as a **visual reference only** (look at it,
+  do not copy its bytes). Roughly 95 glyphs x 8 bytes is trivial to commit and to
+  test as plain data.
+- **Zero third-party licence surface**, no attribution obligation, no ShareAlike
+  question, and one rendering mechanism for both banners and status text — which
+  is simpler than the two-path split an earlier draft of this file assumed.
 
 Decide and record: does the SDL build render text into the same framebuffer as
 the map (one composited frame), or a separate surface? One framebuffer is closer
