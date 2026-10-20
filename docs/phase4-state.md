@@ -8,8 +8,8 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | --- | --- | --- | --- | --- |
 | CP0 | Skeleton + automation substrate 🔒 | done (owner approved 2026-10-27) | `engine/` builds with cc only; term + null renderers, term + script input, beep + null audio, posix + script clocks; seam layer with asm-cited `--trace`; `--dump-state` screen grid + JSON; `make test` PASS incl. reproducibility; selfmod question resolved from 45 existing runtime captures (`disasm/selfmod-capture.md`) — cluster is not patched, CP3 unblocked | 2026-10-27 |
 | CP1 | Extractor + title screen 🔒 | **awaiting-gate (owner eyeball vs DOSBox)** | `tools/extract/extractor.py` (exe source + asm db-line fallback + `--check`/`--emit text`); `game/title.c` = intro, title, menu, 'D' poem, CP3/CP4 stubs; `make test` = CP0 9/9 + CP1 9/9; **architecture correction: the grid is 40x25, not 80x25** (evidence in `engine/README.md`); `--selftest` keeps the CP0 substrate probe testable | 2026-10-27 |
-| CP2 | MCP play-API | todo | | |
-| CP3 | Character creation + status line | todo | selfmod capture dependency removed — see `disasm/selfmod-capture.md` | |
+| CP2 | Play contract + evidence 🔒 | done (owner route change 2026-10-27) | MCP wrapper replaced by the CLI contract per owner decision; `docs/playing.md` is the agent interface; in-tree SHA-256 + `--replay-report` + `tools/playlog.py verify`; committed transcript `evidence/cp2-playthrough.json` (14 keys, 23 frames) reproduces; CP2 test 12/12 | 2026-10-27 |
+| CP3 | Character creation + status line | todo | selfmod capture dependency removed — see `disasm/selfmod-capture.md`; RNG seed is per launch, not per game, and is not in the save record — decide at CP3 whether the engine persists `rng_state` in saves | |
 | CP4 | Overworld + movement | todo | | |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
@@ -20,6 +20,11 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Gate log
 
+- **2026-10-27 (owner):** CP2 route change **approved in conversation**: the CLI
+  is the contract, an MCP wrapper can be added later on top of it. Also recorded:
+  **no subagents for this project** — a second local model contends for the GPU;
+  work stays in-process. Plan §2/CP2/acceptance-#5 amended and §7 added with
+  every evidence-backed correction so far.
 - **2026-10-27 — correction logged (no gate needed):** `rand_byte` is a
   six-byte feedback shift register at `DS:0x23F..0x244`, seeded once at program
   launch from the BIOS keyboard flags at `0x40:6C` — not a tick-counter sampler
@@ -98,4 +103,4 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | Mechanical rebuild | `bash tools/assemble_all.sh` | byte-identical |
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
-| Engine test | `make -C engine test` | CP0 11/11 PASS, CP1 9/9 PASS |
+| Engine test | `make -C engine test` | CP0 11/11, CP1 9/9, CP2 12/12 PASS |

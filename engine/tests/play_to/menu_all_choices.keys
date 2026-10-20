@@ -1,0 +1,14 @@
+# Visit every menu branch once: demo, an invalid letter, play, create.
+# This is the CP2 route: everything the engine implements today.
+ESC
+D
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+X
+P
+ESC
+C

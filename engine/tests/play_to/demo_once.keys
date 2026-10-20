@@ -1,0 +1,10 @@
+# Reach the menu, run one full demonstration poem, then leave.
+# Six WAITs = the six couplets of asm/03AC, each ending its hold with no key.
+ESC
+D
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT

@@ -1,0 +1,23 @@
+# Visit every screen the engine implements today (CP2 evidence route).
+#   WAIT WAIT   let both presentation screens finish their holds (asm/0688)
+#   X           not a choice: asm/03A6 redraws the title
+#   D           demonstration: the whole poem, asm/03AC
+#   WAIT x6     one per couplet, so all six are drawn
+#   ESC         ends the demo cycle and returns to the title
+#   P           play branch (asm/0764 stub)
+#   ESC         ends its demo
+#   C           create branch (asm/5400 stub); input then runs out and the flow ends
+WAIT
+WAIT
+X
+D
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+WAIT
+ESC
+P
+ESC
+C

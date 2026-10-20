@@ -36,6 +36,9 @@ typedef struct u2_ctx {
     int dump_each;          /* --dump-each: print the grid after every present */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
     uint32_t rng_rolls;     /* rolls served, for dumps and tests */
+    unsigned seed;          /* PRNG seed byte, i.e. the 0x40:6C value (core/rng.h) */
+    int keys_consumed;      /* script tokens consumed so far (input_script sets it) */
+    void *replay;           /* u2_replay* when --replay-report is active */
     int rng_probe;          /* --rng-sequence N: print N rolls and exit */
     int input_exhausted;    /* set by the script backend when the keys run out;
                                the flow treats it as "the player left" */

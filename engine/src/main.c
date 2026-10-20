@@ -19,6 +19,7 @@
 #include "core/timer.h"
 #include "core/state.h"
 #include "core/rng.h"
+#include "core/replay.h"
 #include "debug/trace.h"
 #include "debug/dump_state.h"
 #include "game/game.h"
@@ -33,6 +34,7 @@ static void usage(const char *argv0)
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
+        "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
         "  --rng-sequence N  print N rand_byte values and exit (test vector)\n"
         "  --trace[=FILE]  log every seam call with its asm address\n",
@@ -72,9 +74,9 @@ int main(int argc, char **argv)
 {
     u2_ctx ctx;
     const char *trace_arg = NULL;
+    const char *report_path = NULL;
     unsigned seed = U2_RNG_DEFAULT_SEED;
     int rng_probe = 0;
-
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
@@ -86,6 +88,8 @@ int main(int argc, char **argv)
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
+        } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {
+            report_path = argv[++i];
         } else if (strcmp(a, "--rng-sequence") == 0 && i + 1 < argc) {
             rng_probe = (int)strtol(argv[++i], NULL, 0);
         } else if (strcmp(a, "--dump-state") == 0) {
@@ -121,6 +125,12 @@ int main(int argc, char **argv)
      * restart at asm/5400's tail. --seed overrides it so a run can be made
      * reproducible or deliberately different. */
     u2_rng_seed(&ctx, (uint8_t)seed);
+    ctx.seed = seed & 0xFFu;
+
+    if (report_path) {
+        u2_replay_begin(&ctx);
+        u2_replay_set_keys(&ctx, ctx.script_path);
+    }
 
     if (rng_probe > 0) {
         for (int i = 0; i < rng_probe; i++)
@@ -149,6 +159,12 @@ int main(int argc, char **argv)
         u2_dump_screen(&ctx, stdout);
         u2_dump_state_json(&ctx, stdout);
     }
+    if (report_path && u2_replay_write(&ctx, report_path) != 0) {
+        fprintf(stderr, "u2: cannot write replay report '%s'\n", report_path);
+        ctx.exit_code = 1;
+    }
+    free(ctx.replay);
+    ctx.replay = NULL;
     u2_trace_close(&ctx);
     return ctx.exit_code;
 }

@@ -9,14 +9,22 @@ remains the only proven artefact — see `disasm/phase3-summary.md`.
 
 ```sh
 make                      # cc only, C11, no third-party dependencies
-make test                 # CP0 + CP1 acceptance tests
+make test                 # CP0 + CP1 + CP2 acceptance tests
 ./u2                      # interactive terminal play
 ./u2 --headless --script tests/title.keys --dump-state
 ./u2 --headless --script tests/title.keys --dump-each   # frame-by-frame grid log
 ./u2 --headless --script tests/title.keys --trace=trace.log
+./u2 --headless --script tests/play_to/reach_everything_today.keys --seed 0 \
+     --replay-report /var/tmp/run.json                  # verifiable transcript
+python3 tools/playlog.py verify /var/tmp/run.json       # REPRODUCES | DIVERGES
 ./u2 --headless --selftest --script tests/selftest.keys --dump-state
 make content              # regenerate build/gen_content.h only
 ```
+
+`--headless`, `--script`, `--dump-state`, `--dump-each`, `--trace`, `--seed` and
+`--replay-report` are the agent-facing contract — see [docs/playing.md](docs/playing.md).
+
+`build/`, `u2` and every generated header are gitignored.
 
 `build/`, `u2` and every generated header are gitignored.
 

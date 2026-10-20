@@ -1,0 +1,3 @@
+# Reach the title menu and stop.
+# ESC aborts the presentation (asm/0688 polls it and jumps to asm/0242).
+ESC

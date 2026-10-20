@@ -13,8 +13,11 @@ Owner decisions baked in (2026-10-20):
 * **No differential harness against the original** (Spice86 replay determinism
   judged too costly — RNG reads tick counters, wall-clock animation).
 * **Automation designed in from CP0**: headless mode, scripted input, state
-  dump; an MCP play-API on top (CP2) so agents can produce playthrough evidence
-  before owner playthroughs.
+  dump; a documented **CLI play contract** on top (CP2) so agents can produce
+  playthrough evidence before owner playthroughs.
+  *(Amended 2026-10-27: the owner replaced the planned MCP wrapper with the CLI
+  contract itself — "we can always implement the mcp any time if we have a good
+  contract from the cli". See `engine/docs/playing.md` and §7.)*
 * Verification = semantic review against `asm/` + scripted playthroughs +
   **owner playthrough gates at milestones** (the CP6 acceptance model).
 
@@ -58,8 +61,8 @@ engine/
                  audio_beep.c, time_posix.c
   src/debug/     --dump-state json, --trace (seam calls + asm address cited)
   tools/extract/ extractor.py: user's ultimaii.exe -> engine/build/gen_*.h
-  tools/u2_mcp/  MCP server (python): launch headless engine; tools:
-                 read_screen / send_keys / dump_state / run_script / play_to
+  tools/playlog.py  verify/show/digest a --replay-report transcript
+  docs/playing.md   the CLI play contract agents use (replaces the MCP wrapper)
   Makefile       cc only (C11, no deps) for terminal build; SDL2 optional target
 ```
 
@@ -92,11 +95,19 @@ parse our own `asm/` db lines) into generated headers. Title/menu flow
 **Test:** scripted keys reach menu; screen text matches `asm/014B..0375` strings.
 **Acceptance:** green test + owner eyeball vs DOSBox screenshot (one-off).
 
-### CP2 — MCP play-API
-`tools/u2_mcp`: stdio MCP server wrapping the headless engine
-(read_screen/send_keys/dump_state/run_script). An agent plays
-title-menu-character-creation through MCP only.
-**Acceptance:** agent-produced playthrough transcript committed as evidence.
+### CP2 — Play contract + evidence (route amended by owner)
+Originally "MCP play-API". The owner redirected: the CLI is the contract, and an
+MCP wrapper can be added later on top of it if a harness needs one. Substance of
+the checkpoint is unchanged — an agent drives the game through a documented
+interface only and produces re-verifiable evidence.
+
+`engine/docs/playing.md` documents the contract: `--headless`, `--script`,
+`--dump-state`, `--dump-each`, `--trace`, `--seed`, `--replay-report`.
+`--replay-report` writes a commit-safe transcript (seed, keys, per-frame
+screen/state digests, roll counts, final state — no game text) and
+`tools/playlog.py verify` re-runs it and compares every digest.
+**Acceptance:** agent-produced playthrough transcript committed under
+`engine/evidence/`, and `playlog.py verify` prints REPRODUCES.
 
 ### CP3 — Character creation + status line
 Stats, sex (`print_sex_*`), `show_hitpoints`, `status_*` lines, food/exp/gold
@@ -146,7 +157,8 @@ modules), honest limits (unverified corners, selfmod interpretation), tag
 2. Full game completable natively (owner-confirmed) + via scripted playthrough.
 3. Every engine module cites its asm spec; review lines logged per milestone.
 4. Phase 3 invariants still green at every checkpoint (CI).
-5. MCP play-API working and used as evidence at CP2 and CP8.
+5. Play contract used as evidence at CP2 and CP8 (MCP wrapper optional, added
+   only if a harness needs it).
 
 ## 5. Known limits to record, not hide
 
@@ -162,3 +174,28 @@ modules), honest limits (unverified corners, selfmod interpretation), tag
 Gates (CP0, CP8, CP10); any need for new system packages (SDL2 install = ask);
 game-content questions (anything that would commit extracted strings/tables);
 blockers after two recovery attempts; scope changes.
+
+## 7. Amendments during execution (evidence-backed corrections to this plan)
+
+Facts stated in §1/§2 that later reading proved wrong, with the evidence that
+settled each one. Kept here so a fresh agent does not re-derive or re-trust them.
+
+| plan claim | what the bytes say | evidence |
+| --- | --- | --- |
+| §1 selfmod cluster `0x5120..0x5151` is runtime-patched; CP0 must capture patched bytes | not patched: 44 of 50 bytes observed as executed across 44 runtime captures, zero differing from the static image; the 6 unobserved are the inline string at `0x5136`. The Phase 1/2 verdict was a static mis-decode | `disasm/selfmod-capture.md`, `tools/selfmod_scan.py` |
+| §1 `DS:0x2E/0x2F` = "cursor page/col" | `0x2E` = **column**, `0x2F` = **row** (`mov 0x2f,%dh` / `mov 0x2e,%dl`, BH=0 before INT 10h AH=02h) | `asm/51FD_str_out_core.asm` |
+| §2 "vram grid (80x25 char+attr)" | the text grid is **40x25**: row clear prints 40 spaces, margins 0x26/0x28, scroll window 0..margin, video mode 4 = 320x200 | `asm/53A0`, `asm/456B`, `asm/48A7`, `asm/4A2F`, `asm/5025`, `asm/4A3E` |
+| §1 `key_poll` is a non-blocking probe | it probes **and consumes** (INT 16h AH=01h then AH=00h), folds control bytes, and upper-cases `a-z`; AH=0xFF means "a key was consumed" | `asm/4F4D..4FDE` (Phase 3 split it mid-routine) |
+| §1 `0x240/0x243/0x244` are "tick counters" feeding `rand_byte` | they are a six-byte **feedback shift register** at `DS:0x23F..0x244`, seeded once at launch from BIOS `0x40:6C`; nothing else writes them and no clock is involved | `asm/5217` + `asm/522B` + `asm/5236` read whole, `asm/0100_sub_0100.asm`, vectors in `engine/tests/run_cp0.sh` |
+| §2/CP2 "MCP play-API (python)" | the CLI is the contract; an MCP wrapper is optional sugar added later only if a harness needs one | owner decision 2026-10-27, `engine/docs/playing.md` |
+
+Two consequences worth stating plainly:
+
+* **Determinism is a property of the game, not of the test harness.** Because the
+  PRNG is a seeded shift register and no game logic reads a clock, a key script
+  plus a seed reproduces a run exactly — encounters, combat rolls and monster
+  spawns included. That is what makes the CP2 report verifiable and will make
+  CP8's end-to-end playthrough checkable rather than eyeballed.
+* **Standing rule for the rest of Phase 4:** game logic never reads the clock;
+  only presentation delays may. If that is broken, replay evidence stops being
+  sound and §7 needs a new entry.

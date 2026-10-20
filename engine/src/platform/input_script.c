@@ -99,6 +99,7 @@ static int script_input_poll(u2_ctx *ctx, u2_key *out)
     if (!si || si->i >= si->n)
         return -1; /* finished: the flow may stop instead of spinning */
     u2_key k = si->keys[si->i++];
+    ctx->keys_consumed = (int)si->i;   /* recorded in the replay report */
     if (k.ch == 0xFF)
         return 0; /* WAIT: no key this poll, input still open */
     *out = k;

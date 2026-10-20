@@ -1,34 +1,23 @@
-/* dump_state.c — screen grid + JSON state dump (see debug/dump_state.h). */
+/*
+ * dump_state.c — screen grid + JSON state dump (see debug/dump_state.h).
+ *
+ * The text builders (u2_screen_text, u2_state_json) are separate from the
+ * printers so core/replay.c can digest exactly what a human sees, without a
+ * FILE in the way.
+ */
 #include <stdio.h>
 #include <string.h>
 #include "debug/dump_state.h"
 
-#define U2_ENGINE_VERSION "0.0-cp0"
-
-static void json_escape(FILE *out, const char *s)
+void u2_engine_version(char *out, int outsz)
 {
-    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-        switch (*p) {
-        case '"':  fputs("\\\"", out); break;
-        case '\\': fputs("\\\\", out); break;
-        case '\b': fputs("\\b", out); break;
-        case '\f': fputs("\\f", out); break;
-        case '\n': fputs("\\n", out); break;
-        case '\r': fputs("\\r", out); break;
-        case '\t': fputs("\\t", out); break;
-        default:
-            if (*p < 0x20 || *p >= 0x7F)
-                fprintf(out, "\\u%04X", *p);
-            else
-                fputc((int)*p, out);
-        }
-    }
+    snprintf(out, outsz, "%s", U2_ENGINE_VERSION);
 }
 
 void u2_dump_screen(const u2_ctx *ctx, FILE *out)
 {
     char line[U2_COLS + 1];
-    /* ASCII only: the grid is parsed by scripts and the MCP play-API. */
+    /* ASCII only: the grid is parsed by scripts and by the replay digests. */
     fputc('+', out);
     for (int i = 0; i < U2_COLS; i++) fputc('-', out);
     fputs("+\n", out);
@@ -43,43 +32,60 @@ void u2_dump_screen(const u2_ctx *ctx, FILE *out)
     fputs("+\n", out);
 }
 
-void u2_dump_state_json(const u2_ctx *ctx, FILE *out)
+int u2_screen_text(const u2_ctx *ctx, char *out, int outsz)
+{
+    char line[U2_COLS + 1];
+    int used = 0;
+
+    for (int r = 0; r < U2_ROWS && used < outsz - 1; r++) {
+        int n = u2_vram_row_text(&ctx->vram, r, line, (int)sizeof line);
+        int written = snprintf(out + used, (size_t)(outsz - used), "%s%s",
+                               line, r + 1 < U2_ROWS ? "\n" : "");
+        if (written < 0) break;
+        used += written;
+        (void)n;
+    }
+    return used;
+}
+
+int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
 {
     const u2_state *s = &ctx->state;
+    char ver[32];
 
-    fprintf(out, "{\n");
-    fprintf(out, "  \"engine\": \"");
-    json_escape(out, U2_ENGINE_VERSION);
-    fprintf(out, "\",\n");
-    fprintf(out, "  \"mode\": \"%s\",\n", ctx->mode == U2_MODE_HEADLESS ? "headless" : "term");
-    fprintf(out, "  \"platform\": {\"renderer\": \"%s\", \"input\": \"%s\", "
-                 "\"audio\": \"%s\", \"clock\": \"%s\"},\n",
-            ctx->renderer->name, ctx->input->name, ctx->audio->name, ctx->clock->name);
-    fprintf(out, "  \"screen\": {\"cols\": %d, \"rows\": %d, \"cells_written\": %llu, "
-                 "\"cursor\": {\"row\": %d, \"col\": %d, \"visible\": %d}},\n",
-            U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
-            ctx->vram.row, ctx->vram.col, ctx->vram.visible);
-    /* One entry per DS offset the engine models today; the list grows with
-     * each checkpoint and every field cites its asm function in core/state.h. */
-    fprintf(out, "  \"state\": {\n");
-    fprintf(out, "    \"player_x\": %u,\n", s->player_x);
-    fprintf(out, "    \"player_y\": %u,\n", s->player_y);
-    fprintf(out, "    \"cursor\": {\"row\": %u, \"col\": %u},\n", s->cursor_row, s->cursor_col);
-    fprintf(out, "    \"margins\": {\"left\": %u, \"right\": %u},\n", s->left_margin, s->right_margin);
-    fprintf(out, "    \"text_attr\": %u,\n", s->text_attr);
-    fprintf(out, "    \"story_flag\": %u,\n", s->story_flag);
-    fprintf(out, "    \"last_key\": %u,\n", s->last_key);
-    fprintf(out, "    \"gold_bcd\": [%u, %u],\n", s->gold_lo, s->gold_hi);
-    fprintf(out, "    \"gold\": %d,\n", u2_bcd16(s->gold_lo, s->gold_hi));
-    fprintf(out, "    \"spell_pick\": %u,\n", s->spell_pick);
-    fprintf(out, "    \"rng\": {\"state\": [%u, %u, %u, %u, %u, %u], \"rolls\": %u},\n",
-            s->rng_state[0], s->rng_state[1], s->rng_state[2],
-            s->rng_state[3], s->rng_state[4], s->rng_state[5],
-            ctx->rng_rolls);
-    fprintf(out, "    \"map_base\": %u\n", s->map_base);
-    fprintf(out, "  },\n");
-    fprintf(out, "  \"content\": \"");
-    json_escape(out, ctx->content_source ? ctx->content_source : "none");
-    fprintf(out, "\"\n");
-    fprintf(out, "}\n");
+    u2_engine_version(ver, (int)sizeof ver);
+    return snprintf(out, (size_t)outsz,
+        "{\"engine\":\"%s\",\"mode\":\"%s\","
+        "\"platform\":{\"renderer\":\"%s\",\"input\":\"%s\",\"audio\":\"%s\",\"clock\":\"%s\"},"
+        "\"screen\":{\"cols\":%d,\"rows\":%d,\"cells_written\":%llu,"
+        "\"cursor\":{\"row\":%d,\"col\":%d,\"visible\":%d}},"
+        "\"state\":{\"player_x\":%u,\"player_y\":%u,"
+        "\"cursor\":{\"row\":%u,\"col\":%u},"
+        "\"margins\":{\"left\":%u,\"right\":%u},"
+        "\"text_attr\":%u,\"story_flag\":%u,\"last_key\":%u,"
+        "\"gold_bcd\":[%u,%u],\"gold\":%d,\"spell_pick\":%u,"
+        "\"rng\":{\"state\":[%u,%u,%u,%u,%u,%u],\"rolls\":%u},"
+        "\"map_base\":%u},"
+        "\"content\":\"%s\"}",
+        ver,
+        ctx->mode == U2_MODE_HEADLESS ? "headless" : "term",
+        ctx->renderer->name, ctx->input->name, ctx->audio->name, ctx->clock->name,
+        U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
+        ctx->vram.row, ctx->vram.col, ctx->vram.visible,
+        s->player_x, s->player_y, s->cursor_row, s->cursor_col,
+        s->left_margin, s->right_margin, s->text_attr, s->story_flag, s->last_key,
+        s->gold_lo, s->gold_hi, u2_bcd16(s->gold_lo, s->gold_hi), s->spell_pick,
+        s->rng_state[0], s->rng_state[1], s->rng_state[2],
+        s->rng_state[3], s->rng_state[4], s->rng_state[5],
+        ctx->rng_rolls, s->map_base,
+        ctx->content_source ? ctx->content_source : "none");
+}
+
+void u2_dump_state_json(const u2_ctx *ctx, FILE *out)
+{
+    char buf[U2_STATE_JSON_MAX];
+
+    u2_state_json(ctx, buf, (int)sizeof buf);
+    fputs(buf, out);
+    fputc('\n', out);
 }

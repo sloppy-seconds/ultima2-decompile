@@ -99,7 +99,7 @@ poem_lines=$(grep -cE 'seam=str_out_at asm=51EB col=[0-9]+ row=24' "$WORK/trace"
 [ "$poem_lines" -ge 6 ] && ok "demonstration poem drew $poem_lines couplet lines in row 24" \
                         || bad "demonstration poem drew only $poem_lines row-24 lines"
 
-grep -q '"story_flag": 1' "$WORK/full.out" \
+grep -qE '"story_flag"[[:space:]]*:[[:space:]]*1' "$WORK/full.out" \
     && ok "story flag set by the demo path" || bad "story flag not set"
 
 a=$(./u2 --headless --script tests/title.keys --dump-state)

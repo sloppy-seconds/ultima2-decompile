@@ -21,6 +21,7 @@
 #include <string.h>
 #include "core/seam.h"
 #include "core/rng.h"
+#include "core/replay.h"
 #include "core/timer.h"
 #include "debug/dump_state.h"
 #include "debug/trace.h"
@@ -165,7 +166,11 @@ void seam_tone(u2_ctx *ctx, uint16_t divisor, uint32_t ms)
 
 void seam_present(u2_ctx *ctx)
 {
+    int changed = ctx->vram.dirty;
+
     u2_vram_flush(&ctx->vram, ctx);
+    if (changed && ctx->replay)
+        u2_replay_record(ctx);
     if (ctx->dump_each) {
         u2_dump_screen(ctx, stdout);
         fflush(stdout);
