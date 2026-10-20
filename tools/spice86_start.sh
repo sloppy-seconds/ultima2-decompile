@@ -37,6 +37,9 @@ usage: spice86_start.sh [options]
   --cycles N         emulated CPU cycles per ms (default 3000; approximates the
                      1983 machine the game calibrates against)
   --name LABEL       label for the run and the harvest directory
+  --player FILE      seed the run with an existing player file instead of the
+                     pristine blank (e.g. tmp/<run>/player from an earlier
+                     session). Lets 'P' load a character you already made.
   --harvest          dump the CFG of the running session and exit
   --http-port P      HTTP API port (default: first free at/above 20180)
   --mcp-port P       MCP port (default: first free at/above 20181)
@@ -49,6 +52,7 @@ MODE=watch
 CYCLES=3000
 LABEL=""
 DO_HARVEST=0
+PLAYER_FILE=""
 HTTP_PORT=""
 MCP_PORT=""
 GDB_PORT=""
@@ -59,6 +63,7 @@ while [ $# -gt 0 ]; do
         --headless)  MODE=headless; shift ;;
         --cycles)    CYCLES=$2; shift 2 ;;
         --name)      LABEL=$2; shift 2 ;;
+        --player)    PLAYER_FILE=$2; shift 2 ;;
         --harvest)   DO_HARVEST=1; shift ;;
         --http-port) HTTP_PORT=$2; shift 2 ;;
         --mcp-port)  MCP_PORT=$2; shift 2 ;;
@@ -116,6 +121,15 @@ echo "copying pristine game files into $RUN_DIR"
 cp -- "$REFS"/ultimaii.exe "$REFS"/player "$RUN_DIR"/
 cp -- "$REFS"/mapx*  "$REFS"/monx*  "$REFS"/tlkx*  "$RUN_DIR"/ 2>/dev/null || true
 cp -- "$REFS"/pic*   "$REFS"/monsters "$RUN_DIR"/ 2>/dev/null || true
+
+if [ -n "$PLAYER_FILE" ]; then
+    # Overwrite the blank with a previously created character. The game only
+    # accepts the blank template for *creation*; an existing record is what 'P'
+    # loads. Copied, never moved: the source run dir stays usable.
+    [ -f "$PLAYER_FILE" ] || { echo "--player: no such file: $PLAYER_FILE" >&2; exit 1; }
+    cp -- "$PLAYER_FILE" "$RUN_DIR/player"
+    echo "seeding player from $PLAYER_FILE"
+fi
 
 : "${HTTP_PORT:=$(s86_pick_port 20180)}"
 : "${MCP_PORT:=$(s86_pick_port 20181)}"
