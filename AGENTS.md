@@ -6,9 +6,9 @@ This document defines the high-level architecture, compiler selection, automated
 > code/data separation, per-function asm corpus) and Phase 3 (clean byte-exact ASM
 > reconstruction, MASM dialect via jwasm target) are **complete and signed off** — see
 > `disasm/phase1-summary.md`, `disasm/phase2-summary.md` and `disasm/phase3-summary.md`.
-> Phase 4 (C lifting from the cleaned `asm/` tree) has a deferred draft in
-> `docs/phase4-draft-c-lift.md`. A session should read `AGENTS.md` §0, then the phase plan,
-> then the phase state file to resume.
+> Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
+> to start a fresh agent on it, paste `docs/phase4-kickoff.md`. The earlier per-function
+> C-lift draft (`docs/phase4-draft-c-lift.md`) is superseded by the engine route.
 
 ---
 
