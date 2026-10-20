@@ -87,6 +87,23 @@ else
     fi
 fi
 
+# --- the engine font -------------------------------------------------------
+# CP4b: text in the framebuffer is drawn with the vendored public-domain
+# 8x8 font, so every string screen (status band, menu, creation) rests on
+# these glyph semantics.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/font_check" \
+   tests/font_check.c src/core/font.c src/core/frame.c src/core/view.c 2>"$WORK/cc-font.err"
+if [ $? -ne 0 ]; then
+    bad "font test harness did not build: $(head -5 "$WORK/cc-font.err")"
+else
+    if "$WORK/font_check" > "$WORK/font.out" 2>&1; then
+        ok "engine font: glyphs, grid, clipping, determinism ($(grep -c '  ok  ' "$WORK/font.out") checks)"
+    else
+        bad "font check failed:"
+        sed 's/^/        /' "$WORK/font.out"
+    fi
+fi
+
 # --- the map actually renders, when the player has their files ------------
 # The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
 # producing real pixels. Skips without the content, so CI stays honest.

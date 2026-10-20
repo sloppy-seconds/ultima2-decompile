@@ -1,0 +1,54 @@
+/*
+ * font.c — 8x8 glyph blitting into the framebuffer.
+ *
+ * The single text-to-pixels mechanism for the framebuffer (kickoff CP4b,
+ * task 0: "Blit into u2_frame. One rendering mechanism for the framebuffer.").
+ * Both the game-side compositing (status band) and the SDL backend's cell
+ * path go through these two functions, so a glyph cannot disagree with itself
+ * depending on which screen drew it.
+ *
+ * The glyph data is vendored Public Domain (font8x8_basic.h, included here
+ * and nowhere else). Nothing in this file is derived from the game binary.
+ */
+
+#include <string.h>
+
+#include "core/font.h"
+#include "core/font8x8_basic.h"
+
+_Static_assert(sizeof font8x8_basic / sizeof font8x8_basic[0] == 128,
+               "font8x8_basic must cover U+0000..U+007F");
+
+void u2_font_draw_cell(u2_frame *f, int row, int col, uint8_t ch,
+                       uint8_t fg, uint8_t bg)
+{
+    if (!f || row < 0 || col < 0 ||
+        row >= U2_SCREEN_H / U2_FONT_CELL_H || col >= U2_SCREEN_W / U2_FONT_CELL_W) {
+        return;
+    }
+    const unsigned char *glyph = font8x8_basic[ch & 0x7F];
+    const int x0 = col * U2_FONT_CELL_W;
+    const int y0 = row * U2_FONT_CELL_H;
+
+    for (int y = 0; y < U2_FONT_CELL_H; y++) {
+        const unsigned char bits = glyph[y];
+        for (int x = 0; x < U2_FONT_CELL_W; x++) {
+            /* LSB is the leftmost pixel (font8x8 convention). */
+            f->px[y0 + y][x0 + x] = (bits & (1u << x)) ? fg : bg;
+        }
+    }
+}
+
+int u2_font_draw_text(u2_frame *f, int row, int col, const char *s,
+                      uint8_t fg, uint8_t bg)
+{
+    if (!f || !s) return 0;
+    int n = 0;
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++, n++) {
+        /* Control bytes and the engine's pseudo-key codes never render: a
+         * stray 0x0d from a game string must not punch holes in a screen. */
+        const uint8_t ch = (*p >= 32 && *p < 127) ? *p : ' ';
+        u2_font_draw_cell(f, row, col + n, ch, fg, bg);
+    }
+    return n;
+}

@@ -1,0 +1,29 @@
+# Third-party licences
+
+Project code is Apache-2.0 (see `LICENSE`). This file records every third-party
+work that ships **inside** the repository, with provenance, so the audit trail
+is a lookup and not an archaeology dig.
+
+Game content (`original/`, `references/`, `captures/`) is never committed, so it
+never appears here. Tool builds fetched as infrastructure (`tools/spice86/`,
+`tools/reko/`) are gitignored and are not distributed by this repository.
+
+## font8x8 — Public Domain
+
+- **Where:** `engine/src/core/font8x8_basic.h`
+- **What:** 8x8 monochrome bitmap font, U+0000..U+007F, used for engine text
+  (status band, menu, creation form) in the framebuffer.
+- **Author:** Daniel Hepper <daniel@hepper.net>, derived from an earlier header
+  by Marcel Sondaar citing "International Business Machines (public domain VGA
+  fonts)".
+- **Source:** https://github.com/dhepper/font8x8 , file `font8x8_basic.h`,
+  fetched 2026-10-20.
+- **Licence:** Public Domain (per the file's own header). No attribution is
+  required by the licence; it is given here anyway so the provenance is
+  auditable. Decision and rejected alternatives (Px437 CC-BY-SA, romfont
+  unlicensed, SeaBIOS GPL, scriven OFL): `docs/phase4-kickoff-cp4b.md`
+  § "Font licensing decision".
+- **Modifications:** the array declaration was changed from
+  `char font8x8_basic[128][8]` to `static const unsigned char` so the header
+  can be included by one translation unit without external linkage. The glyph
+  bytes are untouched.
