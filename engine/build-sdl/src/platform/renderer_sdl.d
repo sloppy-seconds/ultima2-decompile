@@ -50,7 +50,7 @@ build-sdl/src/platform/renderer_sdl.o: src/platform/renderer_sdl.c \
  /home/linuxbrew/.linuxbrew/include/SDL2/SDL_version.h \
  /home/linuxbrew/.linuxbrew/include/SDL2/SDL_locale.h \
  /home/linuxbrew/.linuxbrew/include/SDL2/SDL_misc.h src/core/ctx.h \
- src/platform/platform.h src/core/vram.h src/core/state.h \
+ src/platform/platform.h src/core/vram.h src/core/state.h src/core/font.h \
  src/core/frame.h src/core/tiles.h src/core/view.h src/core/world.h
 /home/linuxbrew/.linuxbrew/include/SDL2/SDL.h:
 /home/linuxbrew/.linuxbrew/include/SDL2/SDL_main.h:
@@ -107,6 +107,7 @@ src/core/ctx.h:
 src/platform/platform.h:
 src/core/vram.h:
 src/core/state.h:
+src/core/font.h:
 src/core/frame.h:
 src/core/tiles.h:
 src/core/view.h:

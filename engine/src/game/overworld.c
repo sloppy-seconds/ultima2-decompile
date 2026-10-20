@@ -6,6 +6,7 @@
  * (asm/4ABB), honouring the do-not-draw flag rather than drawing tile 0.
  */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -165,9 +166,63 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
  * byte of the food triple, with `das` — ten, in packed decimal. */
 #define U2_FOOD_PER_PASS 10u
 
-/* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low
- * byte of the food triple, with `das` — ten, in packed decimal. */
-#define U2_FOOD_PER_PASS 10u
+/* The food an accepted move costs. Proven twice, inline in the passability
+ * routine at runtime 0x2599 and 0x2626: `sbb $0x19` then `das` on the food
+ * triple — nineteen, packed decimal. Both the accept arms carry it, so the
+ * drain belongs to movement itself and not to any one travel mode.
+ * evidence: runtime 0x2599, 0x2626 — confidence: proven */
+#define U2_FOOD_PER_MOVE 19u
+
+/* The overworld is a torus. The accept path of the passability routine masks
+ * both coordinates rather than bounds-checking them: runtime 0x2664 is
+ * `and byte ptr DS:[0],0x3F` / `and byte ptr DS:[1],0x3F` then `mov al,0; ret`.
+ * Confirmed live twice over: the player crossed x=63->0, and a monster wrapped
+ * 63->0->1->2 while the player stood still.
+ * evidence: runtime 0x2664; live wrap sightings 2026-10-21 — confidence: proven
+ */
+#define U2_SECTOR_MASK (U2_SECTOR_EDGE - 1)
+
+/* Which tile ids this file has actually measured, as a bitmask over 0..63.
+ * Anything outside it is unmeasured: the engine still lets you step on it, but
+ * it records the id here so a test or a capture run can see that the engine
+ * guessed. A permissive default that announces itself beats a permissive
+ * default that hides, which is the mistake this loop used to make. */
+static uint64_t g_unmeasured_tiles;
+
+uint64_t u2_overworld_unmeasured_tiles(void)
+{
+    return g_unmeasured_tiles;
+}
+
+/* On-foot passability for the tile ids measured so far.
+ *
+ * The original's routine (runtime 0x2423, asm/2423) takes a travel-mode byte
+ * and returns 0 to accept or 0xFF to reject, and it has two distinct reject
+ * returns (0x2538 and 0x25FF). Only the on-foot verdicts observed live are
+ * encoded here.
+ *
+ * evidence: runtime 0x2423; accept 0x2664; reject 0x2538 and 0x25FF.
+ *           Live 2026-10-21: tile 0x00 rejected 22 times on foot; 0x08 and
+ *           0x0C stood on repeatedly.
+ * confidence: partial.
+ * open: which tile id is mountain. It is NOT 0x10 - the player was recorded
+ *       standing on 0x10, and the owner states mountains are never passable
+ *       on foot, so 0x10 is some other terrain. Needs a named sample.
+ * open: what the mode argument (DS:15 / DS:18) selects for boat, plane or
+ *       rocket. "Mountains block on foot" implies they do not block
+ *       everything, and that dispatch is not yet read.
+ */
+static int u2_tile_passable(const u2_world *w, int x, int y)
+{
+    const uint8_t t = u2_world_tile_at(w, x, y);
+
+    if (t == 0x00) return 0;                 /* water: measured blocked */
+    if (t == 0x08 || t == 0x0C) return 1;    /* measured passable */
+
+    if (t < 64)
+        g_unmeasured_tiles |= (uint64_t)1 << t;
+    return 1;
+}
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
  * drive it directly. Returns 1 when the subtraction underflowed (death). */
@@ -320,7 +375,10 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case ' ':
             /* Space is PASS: the walk loop's own first arm (cmp $0x20 at file
              * 0x0B3C). It prints PASS, then spends 10 food (file
-             * 0x0B0D..0x0B33). Underflow is death (asm/0C62). */
+             * 0x0B0D..0x0B33). Underflow is death (asm/0C62).
+             * Not modelled here: the original also auto-PASSes on an idle
+             * timer (~7.6 s at --Cycles 3000) and that same tick advances
+             * monsters. Stubbed, not guessed — see u2_tile_passable's notes. */
             echo_cmd(ctx, U2_S_PASS);
             if (food_spend(ctx, U2_FOOD_PER_PASS))
                 u2_status_draw(ctx);
@@ -328,15 +386,26 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         default: continue;                                  /* not a move key */
         }
 
-        const int nx = ow->x + dx, ny = ow->y + dy;
-        if (nx < 0 || nx >= U2_SECTOR_EDGE || ny < 0 || ny >= U2_SECTOR_EDGE) {
-            /* See the header: the reload semantics are unproven, so refuse
-             * rather than guess. The step is not applied, exactly as the
-             * original refuses an invalid move. */
+        /* The original does not refuse the edge, it wraps: the accept path
+         * masks the coordinates (see U2_SECTOR_MASK). The previous code here
+         * refused out-of-range steps and cited that as faithful to the
+         * original's refusal of an invalid move; that was a guess, and the
+         * live capture disproved it. */
+        const int nx = (ow->x + dx) & U2_SECTOR_MASK;
+        const int ny = (ow->y + dy) & U2_SECTOR_MASK;
+
+        if (!u2_tile_passable(&ow->world, nx, ny)) {
+            /* Blocked. The original rolls the step back before anything is
+             * drawn, so no direction word is echoed and the frame is not
+             * repainted - only the complaint. */
+            echo_cmd(ctx, U2_S_INVALID_MOVE);
             continue;
         }
+
         ow->x = nx;
         ow->y = ny;
+        if (food_spend(ctx, U2_FOOD_PER_MOVE))
+            u2_status_draw(ctx);
 
         /* The echo, reproduced as the original prints it: one compound string
          * "NORTH\rCMD: " (asm/38B0, file 0x3ce5 — direction word, CR, prompt).

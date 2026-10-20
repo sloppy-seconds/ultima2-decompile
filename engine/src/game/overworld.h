@@ -132,4 +132,10 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
  */
 int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount);
 
+/* Bitmask over tile ids 0..63 that the engine stepped onto without a measured
+ * passability verdict. Zero means every tile the player entered had evidence
+ * behind it; non-zero names exactly which ids still need a live sample.
+ * Tests assert on this so a permissive default can never pass unnoticed. */
+uint64_t u2_overworld_unmeasured_tiles(void);
+
 #endif /* U2_OVERWORLD_H */

@@ -141,6 +141,10 @@ MANIFEST = [
     # shape as the direction words; the split attributes it to no db line, so
     # it uses a run locator verified against the raw bytes.
     ("U2_S_PASS",              "0940_sub_0940.asm", ("run", 0x0B48, 4)),
+    # Rejected move. asm/0A02 is a whole routine whose only content is the
+    # str_out call plus its inline string, so the db-index locator is exact and
+    # needs no hand-checked file offset.
+    ("U2_S_INVALID_MOVE",      "0A02_invalid_move_msg.asm", 0),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')
