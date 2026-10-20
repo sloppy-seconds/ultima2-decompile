@@ -86,13 +86,17 @@ Do these in order; each is cheap and each changes the design.
    bottom-left (`CMD: NORTH` repeated, one line per command), status block
    bottom-right (`H.P.=6284`, `FOOD=1624`, `EXP.=2135`, `GOLD=0038`).
 
-   Two things to settle from the draw loop rather than by argument. First, 11
-   tile-rows at 2 cells is 22 cell-rows, leaving only 3 rows for a command echo
-   that shows 4 lines — so either the tile is not exactly 2x2, or the top row is
-   clipped, or the echo scrolls up into the map area. Second, `H.P.=6284` may be
-   two 2-digit values (current 62 / maximum 84) rather than one 4-digit 6284; HP is
-   the one pair where 6284 is implausible for a mid-game character. Check the code
-   that writes `DS:0x51` and `DS:0x52` before assuming a single number.
+   One tension left for the draw loop rather than argument: 11 tile-rows at 2 cells
+   is 22 cell-rows, leaving only 3 rows for a command echo that shows 4 lines in
+   the screenshot — so either the tile is not exactly 2x2, or the top row is
+   clipped, or the echo scrolls up into the map area.
+
+   All four status values are a **single number zero-padded to 4 digits** (owner,
+   2026-10-27). `H.P.=6284` is six thousand two hundred and eighty-four hit points,
+   not current 62 over maximum 84; there are no separators and no second value
+   hidden in the pair. That makes the 9999 packed-BCD ceiling a real, reachable
+   number rather than a theoretical one, which CP5 combat needs to know before it
+   picks a damage or experience representation.
 
 6. **Does the viewport ever straddle two sectors?** The viewport is a window onto
    a larger map, so the map scrolls as the player moves (owner, 2026-10-27). That
