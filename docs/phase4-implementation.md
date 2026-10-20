@@ -1039,6 +1039,90 @@ Not adopted: no `--mode ega` flag, no speculative EGA renderer, and no running o
 patching `U2EGA.EXE`. Those binaries are third-party work derived from the game
 and are Apache-2.0 incompatible, so they stay where they are and out of git.
 
+### Direction keys: proven, and they are the arrows
+
+The owner's recollection (arrows, Up=N Down=S Left=W Right=E) is confirmed by a
+**scancode -> character table in the code stream** at `CS:0x4F09` (file
+`0x5109`), read by the key seam:
+
+```
+48 0e    Up arrow    -> 0x0E   -> NORTH
+50 19    Down arrow  -> 0x19   -> SOUTH
+4d 05    Right arrow -> 0x05   -> EAST
+4b 17    Left arrow  -> 0x17   -> WEST
+```
+
+`asm/4FBE` / `asm/4FCC` scan the four pairs backwards (`bx` from 6, step -2,
+`cmp %cs:0x4f09(%bx),%ah` then `mov %cs:0x4f0a(%bx),%al`), and the seam only
+consults the table when `AL == 0` — i.e. only for extended keys. So the arrows are
+**translated into internal direction codes**, they are not keys the player types.
+
+Those codes are then compared against **four bytes of data** at `DS:0x26E..0x271`,
+initialised in the DS image at file `0x787E` to `0e 19 05 17` and confirmed by the
+live capture (`captures/spice86/live-ds-4f4d.bin`). That is why no direction key
+literal appears anywhere in `asm/`: the keymap is data, and the comparison sites
+(`asm/094F`, `asm/0976`, `asm/099D`, `asm/09C3`, `asm/2396..23A8`, `asm/38B0_cmd_L`)
+all read it indirectly.
+
+Two side effects of the same seam, both worth reproducing:
+
+* `Ctrl-E`, `Ctrl-N` and `Ctrl-W` are **swallowed** (`asm/4F4D` region, file
+  `0x5158..0x5166`: `mov al,$0x0` and return) — the control equivalents of three
+  of the four generated codes cannot be typed at all, so only the arrows move the
+  character.
+* `Ctrl-S` (`0x13`) toggles the flag at `DS:0x54D` and returns `AH=0` rather than
+  the `AH=0xFF` "consumed" marker, so it never reaches the game as a key. Two
+  function keys (`AX=0x7300` / `0x7400`) adjust `[DS:0x74]` by `±0x200` bounded by
+  `[DS:0x554]` and `0x3a00` and then call `asm/08ED` — an in-game control of
+  something, unidentified, and interesting because the fan patch added its own
+  speed control independently.
+
+### The movement model, proven
+
+Main input loop, file `0x0B36..0x0BF1` (re-decoded; the `asm/` fragments
+`094F`/`096C`, `0976`/`0993`, `099D`/`0x09B9`, `09C3`/`09DF` are its rollback
+arms):
+
+```
+key = seam_key_wait()                 ; AH==0xFF means "a key was consumed"
+if key == ' ':  print "PASS"                       ; file 0x0B48
+if key == [DS:26E]: y = y - 1; print "NORTH"       ; file 0x0B4F
+if key == [DS:26F]: y = y + 1; print "SOUTH"
+if key == [DS:270]: x = x + 1; print "EAST"
+if key == [DS:271]: x = x - 1; print "WEST"
+    al = [DS:15]; call asm/2623       ; passability check, AL = travel mode
+    if al != 0: undo the step; print "--INVALID MOVE!"
+else if key >= 'A': dispatch through the command jump table at cs:0x730
+```
+
+The position is **`DS:0x00` = x, `DS:0x01` = y**, and `asm/38B0_cmd_L` shows the
+wrap explicitly: `adc` the delta, then **`and $0x3f`** (file `0x3c9b..0x3cb2`). So
+the sector is a **64x64 torus** and the viewport **never straddles a sector
+boundary** — kickoff § 2 item 6 has an answer, and it is neither "smooth scroll"
+nor "snap": walking off an edge reappears on the opposite edge of the same file.
+That makes the loader one-sector-at-a-time, which is the simple case.
+
+The direction words are printed by the game followed by `0x0d` and `"CMD: "`
+(`asm/38B0_cmd_L`, file `0x3ce5` etc.), which is exactly the stacked
+`CMD: NORTH` echo in the owner's gameplay screenshot — the echo is game output,
+not terminal line editing.
+
+Caveat to close: the `and $0x3f` is proven in the launch loop. The main movement
+path above uses bare `inc`/`dec` on `DS:00`/`DS:01`, so either the wrap happens
+inside `asm/2623` or the edge tiles reject it. One more pass on `asm/2623` settles
+it, and it decides whether the engine masks or the terrain does.
+
+### Viewport: still open, and what it is not
+
+The draw routine has not been found yet, but the shape of the answer has narrowed:
+the screen is **text in CGA graphics mode 4**, not a bitmap. `asm/4B26` and
+`asm/4B4E` set `ES` to `0xB800` (the font plane) and then `0xBA00` (the CGA
+attribute plane) and call a common writer — that is the standard mode-4 text
+layout, 40x25 cells of 8x8 pixels, and it means the earlier "the original mixes
+bitmap and text" reading of those four sites was **wrong**: they are the text
+writer, not a tile blit. So a tile is drawn with characters, and the kickoff's
+tile-size question is back on the table as 1x1 or 2x2 cells.
+
 ### Open for the owner
 
 1. **Does `--data-dir` get written to?** The original writes the sector back
@@ -1051,13 +1135,14 @@ and are Apache-2.0 incompatible, so they stay where they are and out of git.
 
 ### Not yet done
 
-* the play draw loop, and with it the viewport geometry, the tile size in cells,
-   and whether the view straddles sectors. New evidence makes the kickoff's
-   "tile = 2x2 text cells" reading doubtful: the binary writes **directly to
-   `0xB800`** (`asm/5351`, `asm/4B26`, `asm/4B4E`, `asm/310B_cmd_C`) while text
-   goes through BIOS, so the original mixes bitmap and text on one screen and the
-   map is probably a bitmap blit, not cell output.
-* the terrain ID -> properties table, encounter rates, direction messages
-* `invalid_move_msg`, `move_only_on_foot`, the `--data-dir` seam itself
+* the play draw loop: which function paints the sector, its row and column bounds,
+   the player offset inside the window, and whether a tile is 1x1 or 2x2 cells.
+   Start from the callers of `asm/4B26` / `asm/4B4E` (the mode-4 text writer) and
+   from `asm/08ED`, not from the tile reader.
+* whether the 64-tile wrap is applied by `asm/2623` or by the edge terrain
+* the terrain ID -> properties table (needed by `asm/2623`), encounter rates,
+   and the `DS:0x4A` "last key vs site kind" collision
+* `move_only_on_foot` (`asm/33AE`) is only a message site so far, and its callers
+   are unresolved; `--data-dir` itself is still unwritten
 
 

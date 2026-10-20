@@ -12,7 +12,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
 | CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
-| CP4 | Overworld + movement | **in-progress (recon)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows** (owner). Viewport still open | 2026-10-27 |
+| CP4 | Overworld + movement | **in-progress (recon)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: position `DS:00`/`DS:01` wrapped `and $0x3f`, so the sector is a 64x64 torus and the viewport never straddles files. Play draw loop still open | 2026-10-27 |
 | CP5 | Combat | todo | | |
 | CP6 | Towns + full command set | todo | | |
 | CP7 | Time travel + space + dungeons | todo | | |
@@ -24,11 +24,17 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 - **CP4 recon is in flight.** Kickoff § 2 items 1-2 are answered and logged in
   `docs/phase4-implementation.md` § CP4, with two rows added to plan § 7 (the
-  tile geometry, and `DS:0x4A` now in doubt as "last key"). Next task is the
-  **play draw loop**: start from the direct-`0xB800` writers (`asm/5351`,
-  `asm/4B26`, `asm/4B4E`, `asm/310B_cmd_C`), because the original mixes bitmap
-  and text on one screen and the kickoff's "tile = 2x2 text cells" reading looks
-  wrong. No engine code written yet for CP4.
+  tile geometry, and `DS:0x4A` now in doubt as "last key"). Movement is also
+  proven: the **arrow keys** are translated through a scancode table at
+  `CS:0x4F09` (file `0x5109`) into direction codes held as data at
+  `DS:0x26E..0x271`, position is `DS:00`/`DS:01` wrapped with `and $0x3f` (so the
+  sector is a 64x64 torus and the viewport never straddles files), and a rejected
+  step is undone before `--INVALID MOVE!`. Next task is the **play draw loop**:
+  start from the callers of `asm/4B26`/`asm/4B4E` (the mode-4 text writer, `ES`=
+  `0xB800` font plane then `0xBA00` attribute plane) and from `asm/08ED`, not from
+  the tile reader. The four direct-`0xB800` sites are text output, not a tile blit,
+  so a tile is 1x1 or 2x2 cells and that is still open. No engine code written yet
+  for CP4.
 - **Everything is committed.** Working tree clean at the commit that folded D6-D13
   into the plan. No in-flight edits.
 - **CP3 form state**: stats prefill at 10 and are a two-digit shift register (D6,
