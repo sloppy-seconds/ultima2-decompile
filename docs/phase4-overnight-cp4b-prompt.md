@@ -10,8 +10,9 @@ project, autonomously, while the owner sleeps.
 **Read first, in this order:**
 
 1. `AGENTS.md` (project root) — isolation, licensing, script rules. Hard law.
-2. `docs/phase4-overnight-cp4b.md` — the task list (T1..T8), rules of
-   engagement, and the recon already banked. This is your work order.
+2. `docs/phase4-overnight-cp4b.md` — the task list (T1..T9), rules of
+   engagement, and the recon already banked. This is your work order. T9
+   (blog series + sailboat retro) runs only if T1–T8 are done or passed.
 3. `docs/phase4-state.md` — standing directives and gate history.
 4. `docs/phase4-implementation.md` § CP4 — proven facts with asm citations.
 

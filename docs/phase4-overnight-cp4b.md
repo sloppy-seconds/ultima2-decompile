@@ -205,6 +205,53 @@ flush path.
   entries for baseline moves.
 - Morning report section below: shipped (commit list), open, owner decisions.
 
+## T9 — Blog post series + sailboat retro (only if T1–T8 are done or passed)
+
+Goal: turn this stretch of work into a publishable series of blog posts plus
+a lessons-learned retro framed as a **sailboat retro** (anchors = what held
+us back; sails = what drove us forward; rocks = hazards we hit; currents =
+conditions of the project; island = where this is heading).
+
+Source material (all inside the project — the implementation log is the
+journal):
+
+- `docs/phase4-implementation.md` (the full CP0–CP4b narrative with every
+  correction and retraction — the honest version, not the highlight reel)
+- `docs/phase4-state.md` gate log (baseline moves, owner decisions)
+- `git log --format='%h %s'` — the commit messages are written as
+  mini-narratives and are a ready spine for the series
+- `docs/phase4-overnight-cp4b.md` + its morning report (the autonomous-run
+  experiment itself is one of the posts)
+
+Suggested series arc (agent may restructure if the material says so):
+
+1. *Byte-matching an impossible binary* — Phases 1–3, the pipeline, why
+   1983 assembly resists modern decompilers (jump tables, self-patching
+   filenames).
+2. *The doubling bug* — every structural check passed, the render was wrong,
+   a human with a screenshot caught it. Evidence vs plausibility.
+3. *The byte that was two things* — DS:4A "last key" vs "sector digit": a
+   plausible wrong model quietly corrupted saves until a live bug report
+   became the evidence. Include the retirement of the wrong reading.
+4. *Teaching a game's UI to an agent, and vice versa* — the CMD window:
+   owner recollection cross-referenced against asm (0x0d as newline), the
+   four-row model becoming 17 tests.
+5. *The overnight contract* — prove-or-pass autonomy, why "pass with a
+   reason" beats "guess with confidence", the progress-report discipline.
+6. *Sailboat retro* — the lessons post. Anchors: the selfmod false premise,
+   the torus misreading, heredoc traps, the sibling-directory contamination
+   incident. Sails: redecode.py, tamper checks catching every baseline
+   move, screenshots-as-tests, the owner-in-the-loop catches. Rocks:
+   plausible-but-wrong renders, evidence that lived only in chat.
+
+Rules: no game content or game-derived images in the drafts; cite real
+addresses/commits so every claim is checkable; write drafts to
+`docs/blog/` (one file per post, `NN-slug.md`), status `draft` in
+frontmatter. Commit each draft separately.
+
+Acceptance: 5–6 post drafts + the retro draft, each under ~1200 words,
+each opening with a concrete story rather than a thesis.
+
 ## Explicitly NOT tonight
 
 - No CP5+ scope beyond T2's proven tick (no combat, towns, monsters content,
