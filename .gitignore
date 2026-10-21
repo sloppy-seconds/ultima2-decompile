@@ -86,4 +86,8 @@ engine/tests/*.out
 # Raw output of the selfmod runtime-capture scans (scratch; the curated note
 # disasm/selfmod-capture.md is what is committed).
 disasm/selfmod-raw/
-pycache
+
+# Python bytecode caches from the tools/ scripts. The previous pattern here was
+# `pycache`, which matches nothing: gitignore is not a substring match, so the
+# directory is named `__pycache__` and needed the underscores.
+__pycache__/

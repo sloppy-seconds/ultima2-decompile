@@ -22,6 +22,31 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
+- **2026-10-21 correction to the T2 closure.** T2 recorded "no `INT 1Ah` exists
+  in the corpus". That was true of the decoded `asm/` tree and **false of the
+  binary**: `CD 1A` occurs at file `0x8AE`, `0x8C0`, `0x8CE` and `0x8FD0`
+  (runtime `0x6AE`, `0x6C0`, `0x6CE`, `0x8DD0`). The auto-PASS conclusion is not
+  automatically wrong — those sites still have to be shown reachable from the
+  PASS path — but the evidence cited for it does not hold as written, so T2 is
+  downgraded from closed to **re-open, needs re-proof**. Same lesson as F6: a
+  negative result from a probe over a partially decoded tree is not a negative
+  result about the binary.
+
+- **2026-10-21 passability re-decode: read `docs/passability-findings.md`.** The
+  full routine (file `0x2623..0x287F`) was decoded contiguously and it contains
+  **no read of the target tile** — its single `map_tile_ptr` call writes `0x50`.
+  A second, previously unread ladder at runtime `0x25C0..0x25F6` decides on
+  `DS:29 & 0x7F` alone. The mode chain is `DS:2CB -> DS:15` and `DS:2DE -> DS:18`
+  (runtime `0x5B77/0x5B83`), and `DS:2CB`/`DS:2DE` have **no direct writers
+  anywhere in the exe**, so the tile dependence enters through an indirect table
+  write the static route cannot attribute. `DS:13 = 0x78` in every in-world
+  sample, so it is the player stamp, not terrain — which retires the "travel
+  mode" reading of `DS:13` in `state.h`. `create-test-live` is a clean controlled
+  experiment proving the decision is tile-dependent. Also: `tools/redecode.py`
+  mis-decodes 21 bytes of real code at file `0x27D2` as a printable string, so
+  any `STR` line inside a code span in `disasm/redecoded/` must be re-checked
+  before being cited. Next step is one breakpoint capture at runtime `0x2423`.
+
 - **Read `docs/handoff-live-capture.md` first.** Rewritten 2026-10-21 evening for
   a fresh context: running state (nothing running, tree clean, CI green, how to
   push with `GH_TOKEN`), the true T1–T9 status, what is proven and must not be

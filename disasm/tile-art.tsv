@@ -1,0 +1,87 @@
+# tile-art.tsv — what each of the 64 art entries in the exe looks like
+
+# Source: `tools/tile_atlas.py` rendered every entry from `original/ultimaii.exe`
+# (index table file `0x7BC0`, pixels `0x7C42 + 66*n`, 16x16 at 2bpp, CGA mode-4
+# palette) to `tmp/tiles/tile_NN.png`, `tmp/tiles/atlas.png` and
+# `tmp/tiles/atlas_nonletter.png`. PNGs are game content and stay gitignored;
+# this table is our own description of shape.
+#
+# Decode confidence: the 2bpp/16x16/leftmost-in-high-bits decode is validated,
+# not assumed — entries 0x20..0x39 decode as legible capital letters A..Z, which
+# a wrong bit order or bit depth cannot produce.
+#
+# Colour counts are computed from the bytes, not eyeballed. An eyeballed first
+# pass had 0x1D as solid white (it is solid black) and 0x3B as solid white (it is
+# 210 black / 46 white).
+#
+# IMPORTANT: this names ART ENTRIES, not map semantics. The map byte -> art index
+# transform is still unknown, so no row here is a statement about what a mapxNN
+# byte means. See docs/passability-findings.md.
+#
+# kind: terrain | object | creature | font | block
+
+	id	hex	kind	description	glyph	notes
+	00	00	terrain	magenta dashes in loose diagonal rows on black	:	most common byte in every *x0 sector
+	01	01	terrain	sparse cyan and white single pixels	.	
+	02	02	terrain	sparser cyan-only pixels on black	,	
+	03	03	terrain	solid cyan plus-shaped blobs	~	only entry dominated by cyan; water candidate
+	04	04	terrain	white diamond lattice, diagonal crosshatch	^	mountain candidate
+	05	05	object	five small white rings	(	
+	06	06	object	four hollow white squares in 2x2 with a centre dot	#	masonry or windowed wall
+	07	07	object	solid white tower with two prongs at the top	|	rook silhouette
+	08	08	object	white gate frame, two posts under a lintel	+	NOT a plane; corrects the old 8=plane note
+	09	09	terrain	white diamond lattice with an arch opening at bottom centre	!	cave or pass through a range
+	0A	0A	object	solid white cross standing on a base	/	monument
+	0B	0B	object	magenta field with a white arch and a white mound	[	doorway set in a field
+	0C	0C	creature	white humanoid, arms down, legs apart	\	first NPC figure
+	0D	0D	creature	white humanoid, arms raised out to the sides	]	
+	0E	0E	creature	white humanoid beside a magenta-topped staff	{	
+	0F	0F	creature	two white humanoids close together, magenta above	}	group of figures
+	10	10	creature	white humanoid in a wide cape or robe	(	
+	11	11	creature	quadruped, head at left, four legs and a tail	)	horse candidate
+	12	12	object	boat hull with mast and yard	<	frigate candidate
+	13	13	object	crossbar over a vertical post on a base	>	signpost or well
+	14	14	object	white spire, pointed top, flared base	=	rocket candidate, NOT 0x08
+	15	15	object	white square frame enclosing an S curve	?	dungeon mouth candidate
+	16	16	object	diagonal stroke with a small cross at the foot	'	
+	17	17	block	magenta, cyan and white checkerboard rows	"	
+	18	18	creature	white humanoid, arms out and down	;	
+	19	19	creature	white figure, arms raised in a V, legs crossed	`	
+	1A	1A	creature	small white humanoid	~	small stature, child or hobbit
+	1B	1B	creature	white humanoid, arms bent inward		
+	1C	1C	terrain	magenta vertical dashes on black (56 magenta px)		
+	1D	1D	block	solid black (256 black px)		corrects an eyeballed first pass
+	1E	1E	block	solid white (256 white px)		
+	1F	1F	block	white strip at the left edge (32 white px)		
+	20	20	font	capital A with bars above and below	A	
+	21	21	font	capital B	B	
+	22	22	font	capital C	C	
+	23	23	font	capital D	D	
+	24	24	font	capital E	E	
+	25	25	font	capital F	F	
+	26	26	font	capital G	G	
+	27	27	font	capital H	H	
+	28	28	font	capital I	I	
+	29	29	font	capital J	J	
+	2A	2A	font	capital K	K	
+	2B	2B	font	capital L	L	
+	2C	2C	font	capital M	M	
+	2D	2D	font	capital N	N	
+	2E	2E	font	capital O	O	
+	2F	2F	font	capital P	P	
+	30	30	object	vertical bars, no letter	Q slot holds bars, not Q
+	31	31	font	capital R	R	
+	32	32	font	capital S	S	
+	33	33	font	capital T	T	
+	34	34	font	capital U	U	
+	35	35	font	capital V	V	
+	36	36	font	capital W	W	
+	37	37	font	capital X	X	
+	38	38	font	capital Y	Y	
+	39	39	font	capital Z	Z	
+	3A	3A	block	near-black, 46 white px in a thin arrangement		NOT solid black
+	3B	3B	block	near-black, 46 white px, arrangement differs from 0x3A		NOT solid white
+	3C	3C	creature	white humanoid, arms out		
+	3D	3D	creature	white humanoid holding a blade up and to the right		
+	3E	3E	creature	white humanoid beside a tall vertical bar	sword upright
+	3F	3F	creature	white humanoid holding a curved bow		

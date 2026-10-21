@@ -130,18 +130,25 @@ def func_range(path: pathlib.Path) -> tuple[int, int]:
 def printable_runs(data: bytes, start: int, stop: int, minrun: int) -> dict[int, int]:
     """Map file offset -> end offset for runs that are plausibly strings.
 
-    A run counts if it is NUL-terminated (game strings always are) or long
-    enough that code bytes are unlikely to fake it. Without this, short runs of
-    printable *opcode* bytes get eaten -- e.g. `3c 4d 75 29` is `cmp al,'M'`
-    followed by `jne`, but reads as the text "<Mu)" and silently removes four
-    instructions from the listing.
+    A run counts ONLY if it is NUL-terminated, because every game string in this
+    binary is. The previous rule also accepted any printable run of 8 bytes or
+    more on the theory that code bytes are unlikely to fake that. They are, and
+    this still ate 21 bytes of real code at file 0x27D2 on 2026-10-21:
+    `74 2B 3C 22 74 2C 3C 24 ...` is a chain of `je rel8` / `cmp al,imm8`, and it
+    rendered as `STR 't+<>"t,<"t(<&t$<(t <*t'`. Those were the accept/reject
+    branch targets of the passability mode ladder, so the listing silently deleted
+    the decision it was being used to find. A plausible STR line is the worst
+    possible output for a disassembly aid: it looks like an answer.
+
+    Without the NUL requirement this function also eats short runs of printable
+    *opcode* bytes -- e.g. `3c 4d 75 29` is `cmp al,'M'` followed by `jne`, but
+    reads as the text "<Mu)" and silently removes four instructions.
     """
     runs: dict[int, int] = {}
     for m in re.finditer(rb"[\x20-\x7e]{%d,}" % minrun, data[start:stop]):
         s, e = m.start() + start, m.end() + start
-        nul = data[e:e + 1] == b"\x00"
-        if nul or (e - s) >= 8:
-            runs[s] = e + (1 if nul else 0)
+        if data[e:e + 1] == b"\x00":
+            runs[s] = e + 1
     return runs
 
 
