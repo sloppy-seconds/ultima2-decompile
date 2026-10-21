@@ -142,6 +142,12 @@ Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
 
 ## Next checkpoint
 
+**Overnight queue armed 2026-10-21:** `docs/phase4-overnight-cp5.md` is a
+owner-independent task queue (T1..T10) and `docs/phase4-overnight-cp5-prompt.md` is the
+text to paste to a fresh agent to run it. Nothing in it needs the owner; anything that
+would has been left out rather than approximated. Results land in
+`docs/phase4-overnight-cp5-report.md`.
+
 **CP4 — overworld + movement.** Start a fresh session from
 `docs/phase4-kickoff-cp4.md`, which records the one decision that shapes the
 whole checkpoint: the map is **runtime data** (`original/mapxNN`, ~30 files of
