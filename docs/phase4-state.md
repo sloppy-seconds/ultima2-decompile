@@ -449,6 +449,26 @@ adds a `--data-dir` seam and reads the player's own files the way the original
       Lesson kept because it generalises: a tool that confidently lies is worse
       than no tool, and a silent filter is the hardest lie to notice.
 
+      **Follow-up, 2026-10-22 (overnight T1): the 2026-10-21 fix was still
+      incomplete and dropped a real site.** It gated the *executed test* on
+      `ExecutedInstructions` but still *discovered* sites by walking CFG block asm
+      and still split inline bytes on the first NUL. `LAND--NOT HERE!!!!!` (runtime
+      `0x3B72`) is in `ExecutedInstructions` yet was not reported: its inline bytes
+      are `LAND--NOT HERE!!!!!\rCMD: \x00` — the message is terminated by `\r` and
+      the next string follows before any NUL, so the NUL-split run
+      `LAND--NOT HERE!!!!!\rCMD: ` failed the printable check and `extract()`
+      returned `None` silently. The tool now (a) derives sites from
+      `ExecutedInstructions` as the primary source (scan executed code-segment
+      instructions for `E8` near-calls to str_out `0x4FDF`), with CFG blocks only a
+      secondary seed for `--all`; (b) reads a message up to the first
+      non-printable byte, not the first NUL; (c) fails loudly on an unrecognized
+      dump shape instead of returning an empty list; and (d) carries
+      `--selftest`, a positive/negative control (`LAND--NOT HERE!!!!!` present in
+      `dungeon-35-live`; `MINAX CRIES: DIE FOOL!` and all combat strings absent in
+      `dungeon-35-live` and `create-test-live`). Same lesson, sharper: fixing the
+      *executed gate* was not enough — the *site-discovery* path and the *terminator*
+      were the second and third silent filters hiding behind the first.
+
 - [ ] **`tools/replay.py` — turn replay from the recorder snapshots.** Pure
       offline work on data already on disk, no emulator needed. Read
       `/var/tmp/u2-turns/turns/NNNNN.ds` plus `index.jsonl`, render the zoomed

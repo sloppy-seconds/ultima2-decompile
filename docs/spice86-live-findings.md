@@ -896,6 +896,14 @@ inference rather than a measurement.
   runtime `0x3B72` is present in `ExecutedInstructions`. A tool that silently drops a
   real executed site is the failure mode `AGENTS.md` warns about; until it is fixed,
   check `ExecutedInstructions` directly for any negative result it reports.
+  **Fixed 2026-10-22 (overnight T1).** Root cause: the site was discovered, but
+  `extract()` split the inline bytes on the first NUL and required the whole run to
+  be printable; `LAND--NOT HERE!!!!!` is terminated by `\r` with the next string
+  (`CMD: `) before any NUL, so the run failed the printable check and returned
+  `None`. The tool now derives sites from `ExecutedInstructions` (primary) rather
+  than CFG blocks, reads a message up to the first non-printable byte, fails loudly
+  on an unrecognized dump shape, and carries a `--selftest` positive/negative
+  control. See `docs/phase4-overnight-cp5-report.md § T1`.
 * A probe that caches the 4 KB grid at startup produces **stale tile labels**, because
   the map mutates during play. That is what made me describe a vehicle depot that did
   not exist. `tools/dungeon_capture.py` re-reads the grid every sample for this
