@@ -19,10 +19,22 @@ per-sample move flag to agree with the decomposed move count: the game writes
 player position and food non-atomically, so one accepted move can be sampled as
 (delta=0, moved=True) on one poll and (delta=19, moved=False) on the next. That
 split is a sampling artifact, not a lost turn or a model violation. Measured on
-the 2026-10-21 castle-03 fight (3000 turns): every one of the 87 positive food
-deltas was exactly 10 or 19 (0 non-decomposable, 0 negative), so the 19/move and
-10/pass model holds; all 76 prior "anomalies" were such split pairs or zero-cost
-rejects, i.e. the old check was over-coupling food to a non-atomic position read.
+the 2026-10-21 castle-03 fight (3000 turns), re-derived 2026-10-22 directly from
+the raw `turns/*.ds` blobs: of the 2999 consecutive-sample deltas, 2912 spent no
+food at all (a rejected or idle step) and exactly 87 spent any, and every one of
+those 87 spent exactly 19. Zero non-decomposable deltas.
+
+Two accuracy notes, because the earlier wording invited a misreading:
+
+  * "positive" here means food CONSUMED (previous minus current). Food itself
+    falls; the raw readings are all decreases. A reader who took "positive" as
+    "food went up" would conclude the opposite of what the bytes show.
+  * No delta of 10 appears anywhere in this capture, so the 10/pass half of the
+    model is UNEXERCISED by this data, not confirmed by it. The 19/move half is
+    confirmed 87 times. Do not cite this capture as evidence for the pass cost.
+
+All 76 prior "anomalies" were such split pairs or zero-cost rejects, i.e. the old
+check was over-coupling food to a non-atomic position read.
 
 Polling is fast on purpose: the memory API sustains 250 req/s at 0.3 ms with no
 errors (measured 2026-10-21). The old 3 Hz limit belonged to the windowed CFG
