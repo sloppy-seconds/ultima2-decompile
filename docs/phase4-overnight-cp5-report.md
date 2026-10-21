@@ -108,3 +108,5 @@ tests already accept.
 
 `asm/` untouched, so the byte-exact invariant is unaffected. `make -C engine test`
 green.
+
+**Commit: `2c2f3c4`.**
