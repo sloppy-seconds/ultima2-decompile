@@ -465,18 +465,21 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         const int ny = (ow->y + dy) & U2_SECTOR_MASK;
 
         if (!u2_tile_passable(&ow->world, nx, ny)) {
-            /* Blocked. Owner report (2026-10-21): the original prints the
-             * direction word first and then adds --INVALID MOVE! — "WEST" then
-             * "--INVALID MOVE!" on the following prompt line.
+            /* Blocked. The direction word and the complaint share a line:
+             * "CMD: WEST--INVALID MOVE!" then a fresh prompt below.
              *
-             * An earlier version of this branch asserted the opposite ("no
-             * direction word is echoed") and cited that as observed. It was not
-             * observed; it was inferred, and it was wrong. The step is still not
-             * taken and the map is not repainted, which is what was actually
-             * being described.
+             * Evidence, not inference this time. asm/0A02_invalid_move_msg.asm is
+             * call str_out + the literal "--INVALID MOVE!" + jmp, and the bytes
+             * at file 0x0C05 confirm the string carries no CR and no direction
+             * word of its own. So the word must already be on the line when the
+             * complaint prints, which means the word is echoed WITHOUT the CR that
+             * echo_cmd appends. echo_cmd twice was wrong: it put the two on
+             * separate prompt lines.
              */
-            echo_cmd(ctx, word);
-            echo_cmd(ctx, U2_S_INVALID_MOVE);
+            seam_str_out(ctx, word);                  /* no CR: same line */
+            seam_str_out(ctx, U2_S_INVALID_MOVE);
+            seam_char_print(ctx, '\r');               /* the game's newline */
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
             continue;
         }
 
