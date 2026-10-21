@@ -118,7 +118,34 @@ drawing is creative expression in a way that a dot field is not. For those, favo
 the most generic, schematic figure that still reads, and deliberately avoid
 reproducing any particular pose, silhouette or costume detail you may have seen.
 
-## 6. Per-tile specification
+## 6. Colour roles
+
+The palette is fixed in § 3. Which colour each tile *uses* is deliberately not
+fixed here, but it is not free either: colour is how a map is read at a glance,
+so the assignment has to satisfy constraints. These are functional requirements,
+not a design brief - with four colours and seven ground types the space of
+workable assignments is small, and a colour choice is not the protectable part of
+any tile.
+
+**The implementer chooses the assignment.** These say what must be true of it.
+
+| # | constraint | why |
+| --- | --- | --- |
+| C1 | The seven ground tiles must be mutually distinguishable **by colour**, not by texture alone. | A map is read from a distance; two ground types that share a colour and differ only in speckle density collapse into each other. |
+| C2 | Water (`00`) and grass (`02`) must differ in **hue**, not merely in how much ink they carry. | They are the two most common tiles in the game. If they share a hue the map loses its primary read. |
+| C3 | Mountain (`04`) must differ from grass (`02`) in **brightness** as well as pattern. | Both are sparse-on-dark; brightness is what separates high ground from open ground. |
+| C4 | Every ground tile must remain distinguishable when the set is viewed in **greyscale**. | Guards against an assignment that only works because two hues happen to differ. |
+| C5 | Letters (`20`-`39`) must contrast against **every** ground tile they can sit on. | Shop signs are placed on varied ground; a letter that merges with its backdrop is unreadable, and legibility is the whole job of these tiles. |
+| C6 | Structures must read against both ground and blank tiles. | They are placed on whatever terrain surrounds them. |
+| C7 | Creatures must not be confusable with any ground tile. | Creatures are stamped into the map at runtime, so they are seen *on* ground, not beside it. |
+
+**Diverging from the original colour scheme is acceptable, and arguably useful.**
+The engine loads the player's own extracted art when present and falls back to
+this set otherwise. If the substitute set looked identical, nobody could tell
+which was in use. A visible difference is a feature - just make it a recorded
+decision in the provenance note rather than an accident of generation.
+
+## 7. Per-tile specification
 
 ### Ground
 
@@ -213,7 +240,7 @@ than as letters. That is the map's business; draw them as letters.
 | `3A` | `0xE8` | dark fill A | near-black with a small light motif |
 | `3B` | `0xEC` | dark fill B | near-black, motif clearly different from `3A` |
 
-## 7. Acceptance criteria
+## 8. Acceptance criteria
 
 1. 64 files, `tile_00.svg` … `tile_3F.svg`, each a valid `16×16` SVG.
 2. Only the four palette colours appear anywhere in the set.
@@ -222,8 +249,14 @@ than as letters. That is the map's business; draw them as letters.
 5. No file was produced by tracing, importing, or converting original game art.
 6. A provenance note exists per § 2, naming the implementer, the date, and the
    inputs used.
+7. Constraints C1-C7 in § 6 hold.
+8. **Proof sheets are composited on black, not white.** Tiles are transparent and
+   the engine clears to black before drawing, so any tile whose ink is white is
+   invisible on a white sheet. A checker that renders on white silently cannot see
+   those tiles and will report success while two ground types render blank. If a
+   near-blank or white-ink tile exists, the proof must show it.
 
-## 8. What happens to the output
+## 9. What happens to the output
 
 Place the result in the engine's own asset directory, clearly labelled as original
 substitute art, and reference it from `LICENSE`/`NOTICE` as such. The engine should
