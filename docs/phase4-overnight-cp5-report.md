@@ -565,4 +565,4 @@ the existing backlog item and was **not** attempted here (out of scope).
 `CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`; `make -C engine test` green
 (CP0..CP4).
 
-**Commit: `<pending>`.**
+**Commit: `b71c6a1`.**
