@@ -30,12 +30,31 @@ transcribable at all — a concrete demonstration of why the isolation rule exis
 
 **Measured 2026-10-21, and it overrides everything below this section.**
 
+**Correction, same day.** The paragraph below blamed the absence of a window
+manager. That was wrong and is kept only as a warning about diagnosing from one
+symptom. This host runs **KDE Plasma on Wayland** (`kwin_wayland --socket
+wayland-0 --xwayland-display :0`), so a compositor absolutely exists. The real
+cause is Wayland: **XWayland refuses synthetic focus and activation**, so
+`xdotool windowfocus --sync` sets a property and returns 0 while KWin never hands
+the real focus to SDL. Every layer reports success; the input goes nowhere.
+
+Separately, **capture does not need focus, only a mapped window** - so
+`xdotool search` for the window id plus `import -window <id>` (ImageMagick is
+installed, as are `spectacle` and `ffmpeg`) can grab the emulator frame even
+under XWayland. It was input that was blocked, not output.
+
+There is **no Xvfb, Xephyr, Xvnc, Xnest or weston** on this host, and Bazzite is
+rpm-ostree immutable so installing one needs a reboot. `podman` is available and
+`fedora:44` is cached locally, which is the route to a real virtual display.
+
+---
+
+**Original (partly wrong) note:**
+
 `xdotool` does **not** deliver keys to Spice86 on this machine. The chain that
 fools you: `xdotool search --class Spice86` finds the window, `windowfocus
 --sync` sets X input focus and reports success, and `xdotool key` exits 0. None
-of it works. `xdotool getactivewindow` returns nothing, which means **no window
-manager is running**, so `windowactivate` cannot do its job and SDL never receives
-a focus event. Keys vanish silently. Every layer reports success.
+of it works. Keys vanish silently. Every layer reports success.
 
 The working path is the emulator's own MCP: `local-mcp_send_keyboard_key` with
 `{key, isPressed}`, called twice for down then up. It needs no window manager,
