@@ -1,6 +1,18 @@
-# sub_2d07 — mechanical clean (bulk wave); behavior not yet reviewed
+# item_slot_add_one — add 1 to one held-item count, slot given by %di
+# name-evidence: bytes, whole function read (observed). Body is
+#           `mov $0x0,%ah; mov %ax,%di; clc; mov 0xd6(%di),%al; adc $0x1,%al; daa;
+#           mov %al,0xd6(%di)`. DS:D6+i is the held-item count array, 16 slots,
+#           per docs/save-format.md (proven); the slot index arrives in AL and is
+#           zero-extended into DI. Renamed from sub_2d07 on 2026-10-22 by
+#           tools/bcd_census.py. No `call L_002f07` exists in asm/, so entry is
+#           indirect and the game action is unproven; named for the arithmetic.
+# label: kept as `sub_2d07` on purpose. CP0 (engine/tests/run_cp0.sh) pins every
+#           non-comment line across a rename, so only the filename and the header
+#           may carry a discovered name. Do not "tidy" the label to match.
 # func 2D07..2D16  len 0010 B  evidence: seed+reko
-# confidence: low (bytes proven by check_func.py)
+# provenance: static:tools/bcd_census.py
+# confidence: high for the arithmetic (16-byte whole function, no clamp, so a slot
+#           wraps 99 -> 00); low for the caller and for which item %di selects.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_2d07:
 L_002f07:
