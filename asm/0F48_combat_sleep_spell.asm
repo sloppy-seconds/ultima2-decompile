@@ -3,7 +3,15 @@
 # func 0F48..0F8D  len 0046 B  evidence: call+reko
 # strings: "SLEEP SPELL!"; "SAVED BY IDOL!"
 # calls: L_004d26, L_0051df (str_out), L_005417, L_0061c3
-# confidence: low (bytes proven by check_func.py)
+# provenance: live:castle-03-live — both strings executed in the 2026-10-21
+#           sector-00 caster fight; [DS:26D] was read non-zero (8) live.
+#           Reached only from the dispatch at asm/0AD3.
+# notes: gate is [DS:E4], the GREEN IDOL slot of the item array at DS:D6+i, tested
+#           at file 0x1162 (`mov al,[ds:e4]; or al,al; je ...`). Without the idol
+#           sleep lands unconditionally; with it the L_005417 roll must be >= 0x40,
+#           so an idol is a ~75% resist, not immunity. On a failed resist
+#           [DS:26D] = rand & 0xF, i.e. 0..15 turns.
+# confidence: high (gate, roll and effect variable proven by bytes and live memory)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_sleep_spell:
 L_001148:

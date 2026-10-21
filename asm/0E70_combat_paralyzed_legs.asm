@@ -3,12 +3,19 @@
 # func 0E70..0EC1  len 0052 B  evidence: call+reko
 # strings: "LEGS PARALIZED!"; "SAVED BY MAGICAL BOOTS!"
 # calls: L_004d26, L_0051df (str_out), L_005417, L_0061c3
-# provenance: owner — owner was paralysed by a casting monster on 2026-10-21 and
-#           had no boots, matching 'SAVED BY MAGICAL BOOTS!'. The boots gate seen
-#           live at runtime 0x22FD (return early when [DS:6D] != 0) is consistent
-#           but NOT yet joined to this event by a traced edge. Do not treat the
-#           boots resist as proven until that edge exists.
-# confidence: low (bytes proven by check_func.py)
+# provenance: live:castle-03-live — both strings are in the executed print set of
+#           the 2026-10-21 sector-00 caster fight, and [DS:26B] was read non-zero
+#           (9) mid-fight. Reached only from the dispatch at asm/0AD3.
+# notes: gate is [DS:D9], the BOOTS slot of the item array at DS:D6+i, tested at
+#           file 0x108D (`cmp byte [ds:d9],0`) INSIDE this function. Without the
+#           item the paralysis lands unconditionally; with it the L_005417 roll
+#           must be >= 0x40, so boots are a ~75% resist, not immunity. On a
+#           failed resist [DS:26B] = rand & 0xF, i.e. 0..15 turns.
+# CORRECTION 2026-10-21: the earlier note claiming a [DS:6D] gate at runtime 0x22FD
+#           is wrong. A thief took the boots during the session and [DS:D9] fell
+#           to 0 while [DS:6D] stayed 1 and the resist stopped firing. [DS:6D] is
+#           the save-record slot and does not track theft; [DS:D9] is the live gate.
+# confidence: high (gates, roll and effect variable proven by bytes and live memory)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_paralyzed_legs:
 L_001070:
