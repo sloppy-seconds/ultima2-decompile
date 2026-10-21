@@ -552,6 +552,14 @@ boots, while the live gate `DS:D9` correctly went to 0. The engine needs a singl
 source of truth for item counts, and any resist check must read it rather than a
 cached boolean.
 
+**C2's discrimination is now CI-enforced, not asserted.** `engine/tests/combat_check.c`
+runs on every `make test` against two shipped fixture models: `combat_model_faithful.c`
+(must pass: 4051 checks, 0 failures) and `combat_model_boolean_wrong.c` (must fail:
+70 failures, caught on all three tickets). If the spec ever stops rejecting the
+boolean-immunity model, `test-cp5` goes red. Building this also exposed that
+`run_cp5.sh` was exiting 0 unconditionally while `combat.c` was absent, so the gate
+could not fail at all — fixed in the same commit.
+
 ## BCD counter tickets — wrap vs cap (scoped 2026-10-22, not started)
 
 T4 proved one instance; `tools/bcd_census.py` proves it is the house style. Every
@@ -593,7 +601,7 @@ Ceilings, from the proven widths in `docs/save-format.md`:
 
 | ID | Ticket | Status |
 | --- | --- | --- |
-| B1 | **Original mode reproduces the wrap.** Replace the clamp in `u2_bcd16_encode()` (`engine/src/core/state.c:18`, `if (value > 9999) value = 9999`) with the discarded-carry behaviour. Pinned by a measured expectation, not a contrived one: `9999 + 15 -> 14` and `9999 + 2 -> 1` (T4, `asm/2DC1`, `asm/2DEE`). Name the helper so a reader does not "fix" it — the wrap is deliberate and must say so with the asm citation inline. | todo |
+| B1 | **Original mode reproduces the wrap.** Replace the clamp in `u2_bcd16_encode()` (`engine/src/core/state.c:18`, `if (value > 9999) value = 9999`) with the discarded-carry behaviour. Pinned by a measured expectation, not a contrived one: `9999 + 15 -> 14` and `9999 + 2 -> 1` (T4, `asm/2DC1`, `asm/2DEE`). Name the helper so a reader does not "fix" it — the wrap is deliberate and must say so with the asm citation inline. | **decided by owner 2026-10-22: original mode reproduces the wrap.** Implementation todo |
 | B2 | **Enhanced mode clamps at the ceiling and says so.** Catch the carry/borrow that original mode discards, clamp at the field's ceiling, and print a message (`NO ROOM` / `DENIED AT MAX`) in the existing message window. The same flag serves both modes, which is why honouring the BCD mechanics needs no policy layer. The message must be **enhanced-only**: the original prints nothing when gold wraps. | todo |
 | B3 | **Cap override is downward-only.** The ceiling is a property of the storage width, so a value above it is unrepresentable in the save format — the save record is `DS:36..135` copied verbatim (`engine/src/core/save.c:103,129`). An override above the ceiling must be refused, not silently truncated. Raising a cap would require an enhanced-mode save format change, which is a separate and much larger decision. Follow the `auto_pass_polls` precedent in `engine/src/core/ctx.h` for the enhanced-knob shape. | todo |
 | B4 | **Never normalise loaded BCD.** Invalid nibbles are reachable: BCD underflow manufactures them (`0x10-0x0B -> 0xFF`, `0x30-0x1F -> 0x0B`). The engine currently **repairs** them on a decode/encode round-trip — measured: `9A 99 -> 10099 -> 99 99`, and `1B 05 -> 21 05` with no clamp involved. The loader is verbatim today, so the rule is narrow: `u2_bcd16_encode()` is for arithmetic results, never for normalising bytes that came off disk. | todo |
