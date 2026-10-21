@@ -26,9 +26,60 @@ locally. Note that the sibling project addresses its segments differently
 (`199F:4F4D`, `0B2A:4542`) from this one (`DS = 0x08BE`), so their numbers are not
 transcribable at all — a concrete demonstration of why the isolation rule exists.
 
-## Which input path actually works on this host
+## `local-mcp_screenshot` is broken upstream, and the frame is unrecoverable
+
+**Measured 2026-07-21 by calling the emulator's MCP endpoint directly at
+`http://127.0.0.1:20181/mcp`, bypassing the pi adapter entirely.**
+
+The tool returns a PNG, but Spice86 **decodes the PNG bytes as UTF-8 text**
+before serialising them into the JSON `data` field. Observed response fragment:
+
+```
+"data":"\uFFFDPNG\r\n\u001A\n\u0000\u0000\u0000\rIHDR..."
+```
+
+The PNG magic is `89 50 4E 47 0D 0A 1A 0A`. The first byte, `0x89`, is not valid
+UTF-8 on its own, so it arrives as U+FFFD. Every byte >= 0x80 is destroyed the
+same way, and a deflate-compressed PNG is mostly such bytes.
+
+Consequences:
+
+* pi's `Invalid Base64 string` error is **correct** - it is rejecting garbage.
+  The bug is in Spice86, not the adapter. Do not go looking for the fault in pi.
+* The image **cannot be recovered** from the response. U+FFFD is lossy; there is
+  no re-encoding that gets the bytes back. Verified: scanning the raw response
+  for the PNG magic and IEND markers finds neither.
+* The MCP endpoint is `/mcp` (not `/`, `/sse`, `/message`, `/tools`), and the
+  tool name over the wire is `screenshot`, not `local-mcp_screenshot`.
+* The plain HTTP API on 20180 has **no** frame or screenshot endpoint. Its full
+  advertised list is memory byte/range, status, status/pause, status/unpause.
+
+So the only ways to see the screen are (a) decode video memory ourselves, or
+(b) capture the window with a real screen tool. See below.
+
+## Capturing the screen instead
+
+`read_video_state_detailed` over MCP is reliable and is the right way to learn
+the mode: it reported `BiosVideoMode 4`, 320x200, 2bpp, `MemoryModel Cga`,
+`StartSegment 47104` (= 0xB800), `BufferSize 64000`.
+
+Decoding `0xB800:0` by hand (16000 bytes, 4 px/byte, leftmost in bits 7:6) gave
+**legible text** - `CMD:` reads correctly - and visible tile motifs, but the
+vertical order was wrong. Real CGA mode-4 interleaving
+`off = (y AND 3)*4000 + (y SHR 2)*80` and plain linear both produced nearly
+identical scrambled output, so the row mapping is not the remaining problem;
+the likely cause is sampling between the game's staging write and its flush.
+This is unresolved.
+
+The untried alternative is a real capture tool: `spectacle`, `import`
+(ImageMagick) and `ffmpeg` are all installed, and **capture needs only a mapped
+window, not focus**. `xdotool search` for the window id plus `import -window
+<id>` should work on an XWayland window even though synthetic focus does not.
+
 
 **Measured 2026-10-21, and it overrides everything below this section.**
+
+## Which input path actually works on this host
 
 **Correction, same day.** The paragraph below blamed the absence of a window
 manager. That was wrong and is kept only as a warning about diagnosing from one
