@@ -102,52 +102,18 @@ see the recipe in this file's history, or `tools/map_render.py`.
 
 ## 6. Placing the player: edit the save, do not poke memory
 
-**The save record is `DS:0x36..0x135` - 256 bytes, verbatim.** Proven 2026-10-21
-by loading a character and comparing all 256 live DS bytes against the file:
-254/256 identical, the only exceptions being `DS:74/75`, live scratch that is not
-persisted. So:
+Covered properly in `docs/save-format.md`. The two facts that matter for map work:
 
-    save_offset = DS_offset - 0x36
+* **Writing `DS:00/01` live does not teleport.** The write lands and reads back,
+  but movement then stops working entirely - it is a mirror, not the source.
+  Edit the save and reload instead: `python3 tools/u2_edit.py setpos <save> X Y`.
+* **Sector is two decimal digits** at `DS:49/4A` (patched into the filename
+  `MAPXFF`), so sector 20 is the pair `2,0`, and a numeric read gives 512.
+  `tools/u2_edit.py set <save> sector 71` handles the split. Verified: digits
+  `1,0` boots into sector 10.
 
-Use `tools/u2_edit.py`, which encodes this mapping:
-
-    python3 tools/u2_edit.py show   <save>
-    python3 tools/u2_edit.py set    <save> sector 71
-    python3 tools/u2_edit.py setpos <save> 20 20
-    python3 tools/u2_edit.py maxout <save>
-
-**Sector is two decimal digits, not an integer.** `DS:49/4A` are patched into the
-filename `MAPXFF`, so sector 20 is the pair `2,0`. A numeric read of that pair
-yields 512, which is a trap. Verified: writing digits `1,0` boots the character
-into sector 10, confirmed by both `DS:49/4A` and a screenshot of different terrain.
-
-**Several counters are BCD, including HP.** `0x51/52` is a 4-digit BCD pair, so
-`hp=4, 0x52=0` displays as `H.P.=0400`. Writing a raw `255` puts `0xFF` in the
-high byte, whose nibbles are not decimal digits, and the game prints `??`.
-Max valid HP is `9999`. Same story for food (`0x53..55`, 6 digits, top 4
-displayed), exp (`0x56/57`) and gold (`0x58/59`).
-
-**Inventory and equipment slots are NOT located.** They live somewhere in
-`DS:64..135`, which reads as all zeros for a character carrying nothing, so the
-slots cannot be identified from an empty save. `u2_edit.py` refuses `items`
-rather than guessing. Finding them needs a save that actually holds gear - buy or
-find items in-game, save, then diff live DS against the file.
-
-**Writing `DS:00/01` in the live emulator does not teleport.** The write lands and
-reads back correctly, but movement then stops working entirely - `DS:00/01` is a
-mirror the game updates, not the value it drives movement from. This cost real
-time to discover.
-
-Save file `player` is 384 bytes:
-
-| offset | meaning |
-| --- | --- |
-| `0x00..0x03` | name, ASCII, NUL padded |
-| `0x10` | `0x4D` ('M') |
-| `0x15` | `0x50` |
-| `0x24` | **x** - mirrors `DS:00` once loaded |
-| `0x25` | **y** - mirrors `DS:01` once loaded |
-| `0x100` | `0x1A` |
+Since the save record is `DS:36..135` verbatim, a probe map plus a teleport can
+put the character on any tile of any sector without walking there.
 
 **Sector is not stored in the save.** The game tracks it separately, so this
 places you within whatever sector you land in; it cannot move you between
