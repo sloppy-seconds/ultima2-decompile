@@ -24,7 +24,11 @@ captures/spice86/*.json
 decompiled/
 
 # Vendored third-party tool builds — GPL / re-fetchable, not our source.
-tools/spice86/
+# GPL build, never committed. The glob also covers dated backups kept when a
+# vendored build is replaced (e.g. spice86.pre-b64fix-20261021), so a stray
+# `git add -A` cannot pull 160 MB of GPL binaries into the repo. Trailing slash
+# means directories only, so tools/spice86_start.sh and friends stay tracked.
+tools/spice86*/
 tools/reko/
 
 # Scratch run directories (timestamped Spice86 gameplay runs, captures).
