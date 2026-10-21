@@ -97,3 +97,8 @@ disasm/selfmod-raw/
 __pycache__/
 
 .playwright-mcp/
+
+# engine/build-sdl/ is the SDL build tree: compiler output and dep files, same
+# rationale as engine/build/ above. It was missed when the sdl target was added, so
+# 64 .o files were being tracked and showed as modified on every `make sdl`.
+engine/build-sdl/
