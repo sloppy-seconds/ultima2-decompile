@@ -157,22 +157,71 @@ does `MoveChars` then `ClearCharacters` on the vacated row, and a
 `GraphicalMoveChars` path exists, so the implementation is mode-aware rather
 than naively text-only.
 
-### The remaining candidate
+### Resolution: the graphics scroll move was a no-op
 
-`AH=06h` scroll-up in **graphics mode 4**, with the cursor on the last row of a
-24-row model while the renderer draws 25 rows. If the scroll window coordinates
-(`CL`/`CH`/`DL`/`DH`, `AL`=lines, `BH`=attribute) that the game passes are
-interpreted against a row count that disagrees with what is drawn, the scrolled
-line can be cleared or land off the hashed band - which matches the measured
-A->B->A `window=0` signature.
+The `AH=06h` probe settled it. Every `P` press issues exactly one scroll:
 
-Next measurement, now pointed at one specific call rather than the whole
-pipeline: log the `AH=06h` parameters every time `P` is pressed, and compare
-against the same call captured under DOSBox-X. That is a single narrow probe.
+```
+AL=1 CL=0 CH=20 DL=29 DH=23 BH=0x00
+```
+
+That is `INT 10h AH=06h`: scroll the window from `(col 0, row 20)` to
+`(col 29, row 23)` up by one line, blanking the vacated row with attribute 0.
+It is the game's message history scroll, and it starts at **column 0**.
+
+The bug was a geometry mix-up in `VgaFunctionality.GraphicalMoveChars`, which
+built the copy operation from window *coordinates* where it needed window
+*extents*:
+
+```csharp
+operation.X = area.Width * 8;        // was: extent, used as start
+operation.Width = destination.X * 8; // was: start col, used as extent
+operation.Y = area.Height * characterHeight;
+operation.Height = destination.Y * characterHeight;
+```
+
+With `CL=0`, `destination.X` is 0, so the copy **width** became 0. With the
+window's own height feeding the wrong field, the copy **row count** collapsed
+too. The move did nothing, and `Scroll` then blanked the vacated row as
+scheduled - so the line the game had just printed was erased instead of shifted
+up one row.
+
+That is exactly the measured signature: the band changes, then reverts on the
+next frame with `window=0`, because the scroll writes the blank line without
+ever relocating the text above it. It also explains why every render-pipeline
+experiment was inert - the content really was destroyed before the next frame
+boundary, and no amount of frame-skip or handoff tuning can recover a line that
+was never moved.
+
+Verified by applying the corrected geometry and running the game: `PASS` now
+appears and lingers, scrolling up as later turns push it, matching DOSBox-X.
+
+A regression test accompanies the fix:
+`tests/Spice86.Tests/Resources/VgaTests/graphics_scroll_moves_rows.asm`, which
+fills rows, scrolls a graphics window by one line, and asserts the rows were
+*copied* rather than blanked - a no-op move fails it.
+
+### What this says about the earlier dead ends
+
+Six render-pipeline hypotheses were killed by experiment before the cause was
+found, and none of them could have worked: the fault was upstream of the
+renderer entirely, in a BIOS service that silently did nothing. The lesson worth
+keeping is that the write-time band hash - the one measurement that looked at
+VRAM *between* frame boundaries - is what localised it, after every
+frame-boundary observation had come back "nothing changed".
 
 ## State of the tree
 
-All instrumentation was removed and verified by reading the lines back. Branch
-`fix/video-frame-skip-drops-updates` in `~/Projects/ai/spice86` is identical to
-`master` at `6f27fcd`, nothing uncommitted. The `CompleteFrame` guard tried
-during this investigation was dropped, since this note shows it cannot help.
+The fix is in `VgaFunctionality.GraphicalMoveChars` on branch
+`fix/video-frame-skip-drops-updates` in `~/Projects/ai/spice86`, alongside its
+asm regression test and catalog wiring. All render-pipeline instrumentation and
+the `CompleteFrame` guard were removed and verified by reading the lines back -
+this note shows the guard could not have helped.
+
+**Follow-up worth doing:** the vendored build in `tools/spice86/` is stock
+upstream plus the local screenshot patch, so **it still contains this scroll
+bug**. Any capture work that depends on message text will silently lose it until
+the vendored build is rebuilt with this fix. See `docs/tooling-procedures.md`.
+
+The `CompleteFrame` guard tried during the investigation was dropped, since this
+note shows it cannot help.
