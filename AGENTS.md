@@ -1,14 +1,22 @@
 # AGENTS.md — Linux-Native DOS Game Decompilation & Byte-Matching Pipeline
 
-This document defines the high-level architecture, compiler selection, automated diffing tools, testing strategies, and execution protocols for AI agents (and human collaborators) reverse engineering early 16-bit real-mode DOS binaries (e.g., *Ultima II*) into assembly, re-engineering into C where appropriate, and verifying exact byte-for-byte fidelity.
+This document defines the rules, isolation policy, and evidence discipline for AI
+agents (and human collaborators) reverse engineering early 16-bit real-mode DOS
+binaries (e.g., *Ultima II*) into assembly, re-engineering into C, and verifying
+exact byte-for-byte fidelity.
 
 > **Executable work orders:** Phase 1 (evidence capture), Phase 2 (function boundaries,
 > code/data separation, per-function asm corpus) and Phase 3 (clean byte-exact ASM
 > reconstruction, MASM dialect via jwasm target) are **complete and signed off** — see
 > `disasm/phase1-summary.md`, `disasm/phase2-summary.md` and `disasm/phase3-summary.md`.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
-> to start a fresh agent on it, paste `docs/phase4-kickoff.md`. The earlier per-function
-> C-lift draft (`docs/phase4-draft-c-lift.md`) is superseded by the engine route.
+> the live task queue is `docs/phase4-state.md` and the running log is
+> `docs/phase4-implementation.md`. To start a fresh agent, read
+> `docs/handoff-live-capture.md` first, then `docs/phase4-state.md`.
+
+> **What this file is.** Rules and orientation only. It does not contain source
+> code, tool listings, or reference material — those live in the files named
+> here. Anything that quotes a file will drift from it and then lie.
 
 ---
 
@@ -84,236 +92,86 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
 
 ---
 
-## 1. Important Domain Context: Compiler & Tool Selection
+## 1. Domain Context: Compiler & Tool Selection
 
-When working on early 16-bit DOS games (early-to-mid 1980s vs late 80s/90s), choosing the right compilation target is critical:
+*Ultima II* was hand-coded in 6502 assembly for Apple II and ported to x86 MS-DOS
+as **pure assembly** — there is no C compiler output in the original binary.
 
-### A. Assembly (`.asm`) vs. High-Level C
-* **Early DOS Era (e.g., *Ultima II*, 1982/1983):** *Ultima II* was originally hand-coded in **6502 assembly** for Apple II by Richard Garriott and later ported to x86 MS-DOS via **pure assembly**. There is **no C compiler output in the original binary**. 
-  * *Strategy:* For strict byte-for-byte matching on pure assembly games, the primary decompilation target **must be an assembler** (`MASM` or `NASM`).
-  * *Secondary Lift:* Higher-level C logic can be generated for portability/readability, but matching binary opcodes byte-for-byte against the original binary requires matching MASM/JWasm output.
-* **Mid-to-Late DOS Era (e.g., *Ultima IV/V*, *Alone in the Dark*):** Games compiled from C sources (e.g., Borland Turbo C, MSC 4.0/5.1).
-  * *Strategy:* Matching compilation requires recreating C functions and targeting the historical C compiler.
+* Strict byte-for-byte matching therefore targets an **assembler** (JWasm, MASM
+  dialect), which is what Phase 3 did and what CI verifies.
+* The C engine in `engine/` is a **reimplementation**, not a byte-matching
+  exercise: behavioural fidelity argued from the asm tree and confirmed by
+  testing and playthroughs. It is not byte-proven and never will be.
+* For mid-to-late DOS era titles compiled from C (Ultima IV/V and later), the
+  historical compiler itself becomes the target. That does not apply here.
 
-### B. Compiler / Assembler Matrix for Linux Host Environments
+## 2. Pipeline and Current Reality
 
-| Target Type | Toolchain | Linux Integration Strategy | Suitability for Byte-Matching |
-| :--- | :--- | :--- | :--- |
-| **Pure Assembly (Original)** | **MASM 4.0/5.0** or **JWasm** | Run MASM via `dosemu2` / `JWasm` natively on Linux. | **Highest** for early DOS games (*Ultima I-III*). |
-| **Ported Assembly** | **NASM** | Native Linux executable. | High, provided segment/alignment directives match original. |
-| **Historical C Code** | **Turbo C 2.0 / 3.0** | Run inside `dosemu2` or `DOSBox-Staging` via CLI scripts. | Mandatory for 100% C-matching on Borland-compiled games. |
-| **Modern C Cross-Compile** | **Open Watcom (`wcl`)** | Native 16-bit x86 target (`wcl -m[s\|c\|l] -2 -386`) on Linux. | Excellent for functional ports, but won't match Turbo C opcodes. |
+| phase | state | artefact |
+| --- | --- | --- |
+| 1 evidence capture | done | `captures/`, `disasm/phase1-summary.md` |
+| 2 boundaries + code/data split | done | `disasm/phase2-summary.md` |
+| 3 byte-exact asm reconstruction | done, CI-verified | `asm/`, `disasm/phase3-summary.md` |
+| 4 portable C engine | **in progress** | `engine/`, `docs/phase4-state.md` |
+| 5 portable build behind INT/port seams | planned | — |
 
----
+Verification, in two independent layers:
 
-## 2. High-Level Pipeline Architecture
+* **the proof** — `bash tools/assemble_clean.sh` rebuilds the whole binary from
+  `asm/` and checks it against the known md5; `python3 tools/check_func.py <SEG>`
+  proves one function. CI workflow `asm-checksum` runs this on every push and
+  must never be red.
+* **the engine** — `make -C engine && make -C engine test` runs CP0..CP4
+  acceptance tests. CI workflow `engine-tests`. The two workflows are separate
+  on purpose: engine work-in-progress must not look like a regression in the
+  reconstruction proof.
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ Phase 1: Static & Dynamic Tracing (Spice86 + Ghidra / Reko)                      │
-│ - Capture CFG, ES/DS segment maps, memory dumps, function signatures.           │
-└────────────────────────┬─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ Phase 2: Ground-Truth Assembly Extraction (`.asm`)                               │
-│ - Disassemble to MASM/NASM syntax; achieve 100% byte match via `jwasm` / `nasm`. │
-└────────────────────────┬─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ Phase 3: Pseudo-C Lifting & Struct Recovery                                     │
-│ - Convert assembly routines to readable 16-bit C (far/near pointers, structs).    │
-└────────────────────────┬─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ Phase 4: Automated Linux-Native Byte-Matching Loop                               │
-│ - Compile -> Slice Opcode Bytes -> Run `bindiff.py` -> Feed diff to AI Agent.    │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
+## 3. Working Rules
 
----
+* **Never run the game in place.** The game rewrites its own `player` file.
+  `tools/spice86_start.sh` copies pristine `references/ultima2/` into a fresh
+  timestamped dir under `tmp/` for every launch. Scratch and logs go to
+  `/var/tmp`, never `/tmp` (which is tmpfs here and takes RAM from the model).
+* **Never edit a file with a script.** Use the edit tool. A `str.replace` that
+  does not match returns the string unchanged and exits 0, so a no-op and a
+  success are indistinguishable. Same trap as `sed -i` with a pattern that
+  misses.
+* **Never heredoc a non-trivial script.** Write the file, syntax-check it, run
+  the file.
+* **Ask before capturing, and never block for minutes.** Long foreground captures
+  swallow the owner's queued messages. Run detached and check between turns.
+* **`make test` must be green at every commit.** Baseline moves (CP2 evidence)
+  need owner approval and a named reason in the gate log in
+  `docs/phase4-state.md`.
+* **Spice86 polling:** the memory API sustains ~250 req/s (`tools/poll_probe.py`).
+  The old 3 Hz limit belonged to the windowed CFG view model, not to reads.
 
-## 3. Automated Binary Diffing & Verification Setup
+## 4. Repository Layout
 
-### A. Python Automated Function/Binary Matcher (`tools/bindiff.py`)
+| path | contents | git |
+| --- | --- | --- |
+| `asm/` | the reconstruction: one file per function (`<ADDR>_<name>.asm`), headers carry evidence, confidence and provenance | tracked |
+| `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
+| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
+| `docs/` | phase plans, state, implementation logs, live-capture findings | tracked |
+| `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
+| `captures/` | runtime captures and screenshots | **gitignored** |
+| `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |
+| `references/` | pristine read-only backup | **gitignored** |
+| `decompiled/` | bulk decompiler output, regenerable | **gitignored** |
+| `tmp/` | per-launch game copies | **gitignored** |
+| `build/` | build output | **gitignored** |
 
-Save this script in `tools/bindiff.py` to compare compiled function byte slices against original binary offsets.
-
-```python
-#!/usr/bin/env python3
-import sys
-import argparse
-from typing import Tuple
-
-def load_bytes(filepath: str, offset: int, length: int) -> bytes:
-    with open(filepath, 'rb') as f:
-        f.seek(offset)
-        return f.read(length)
-
-def compare_slices(orig_file: str, orig_offset: int, 
-                   built_file: str, built_offset: int, 
-                   length: int) -> Tuple[bool, float, list]:
-    orig_bytes = load_bytes(orig_file, orig_offset, length)
-    built_bytes = load_bytes(built_file, built_offset, length)
-    
-    matches = 0
-    diff_report = []
-    
-    for idx, (b1, b2) in enumerate(zip(orig_bytes, built_bytes)):
-        if b1 == b2:
-            matches += 1
-        else:
-            diff_report.append(
-                f"  +0x{idx:04X} ({idx:04d}): Orig 0x{b1:02X} <---> Built 0x{b2:02X}"
-            )
-            
-    match_percentage = (matches / float(length)) * 100.0 if length > 0 else 100.0
-    return (matches == length), match_percentage, diff_report
-
-def main():
-    parser = argparse.ArgumentParser(description="16-Bit DOS Byte-Matching Verifier")
-    parser.add_argument("--orig", required=True, help="Path to original executable")
-    parser.add_argument("--orig-offset", type=lambda x: int(x, 0), required=True)
-    parser.add_argument("--built", required=True, help="Path to compiled build artifact")
-    parser.add_argument("--built-offset", type=lambda x: int(x, 0), default=0)
-    parser.add_argument("--len", type=lambda x: int(x, 0), required=True, help="Function length in bytes")
-    
-    args = parser.parse_args()
-    
-    is_match, percent, diffs = compare_slices(
-        args.orig, args.orig_offset, args.built, args.built_offset, args.len
-    )
-    
-    print(f"=== BYTE-MATCH VERIFICATION ===")
-    print(f"Match Level: {percent:.2f}% ({'MATCH SUCCESS' if is_match else 'MATCH FAILURE'})")
-    
-    if not is_match:
-        print("\nDiscrepancies Found:")
-        for line in diffs[:20]: # Print first 20 diffs
-            print(line)
-        if len(diffs) > 20:
-            print(f"  ... and {len(diffs) - 20} more diffs.")
-        sys.exit(1)
-    else:
-        print("Opcode bytes match identically.")
-        sys.exit(0)
-
-if __name__ == "__main__":
-    main()
-```
-
----
-
-## 4. Linux-Native Verification & Test Runner
-
-### A. Makefile Protocol (`Makefile`)
-
-The Makefile integrates `dosemu2` (or `JWasm` / `Open Watcom`) natively on a Linux host to build and test function matches automatically.
-
-```makefile
-# Environment configuration
-ORIG_BIN = original/ULTIMA2.EXE
-BUILD_DIR = build
-TOOLS_DIR = tools
-
-# Function Verification Targets
-# Example: Testing main video init routine (Length 0x4A bytes at offset 0x0120)
-FUNC_OFFSET = 0x0120
-FUNC_LEN = 0x004A
-
-.PHONY: all clean verify_asm verify_c
-
-all: verify_asm
-
-# 1. Assemble ground-truth ASM using JWasm (Linux Native MASM-compatible)
-$(BUILD_DIR)/engine_asm.obj: disasm/engine.asm
-	@mkdir -p $(BUILD_DIR)
-	jwasm -bin -fo=$(BUILD_DIR)/engine_asm.bin disasm/engine.asm
-
-# 2. Compile candidate C code using Open Watcom 16-bit real-mode cross compiler
-$(BUILD_DIR)/engine_c.bin: src/engine.c
-	@mkdir -p $(BUILD_DIR)
-	wcl -ms -1 -s -zp1 -o -s -fe=$(BUILD_DIR)/engine_c.bin src/engine.c
-
-# 3. Verify ASM disassembly matches target original binary slice
-verify_asm: $(BUILD_DIR)/engine_asm.obj
-	python3 $(TOOLS_DIR)/bindiff.py \
-		--orig $(ORIG_BIN) --orig-offset $(FUNC_OFFSET) \
-		--built $(BUILD_DIR)/engine_asm.bin --built-offset 0x00 \
-		--len $(FUNC_LEN)
-
-# 4. Verify C Decompiled matching
-verify_c: $(BUILD_DIR)/engine_c.bin
-	python3 $(TOOLS_DIR)/bindiff.py \
-		--orig $(ORIG_BIN) --orig-offset $(FUNC_OFFSET) \
-		--built $(BUILD_DIR)/engine_c.bin --built-offset 0x00 \
-		--len $(FUNC_LEN)
-
-clean:
-	rm -rf $(BUILD_DIR)/*
-```
-
----
-
-## 5. Automated AI Agent Prompt Guidelines
-
-When feeding assembly diffs back into an AI agent during **Phase 4**, enforce these exact guidelines:
-
-```
-[SYSTEM PROMPT FOR RE MATCHING AGENT]
-You are a 16-bit x86 reverse engineering agent working on Linux.
-Your goal is to adjust C/ASM source code to produce identical machine code bytes.
-
-Rules for byte-matching iteration:
-1. Stack Frames: Check if target expects standard BP prologue ('push bp; mov bp, sp').
-2. Pointer Types: Ensure pointers are explicitly declared 'far' or 'near' based on segment overrides in diffs.
-3. Variable Sizes: Remember in 16-bit Real Mode: 'sizeof(int) == 2', 'sizeof(long) == 4', 'sizeof(near*) == 2', 'sizeof(far*) == 4'.
-4. Register Allocation: If the diff shows 'MOV AX, [SI]' vs 'MOV AX, [BX]', adjust local variable declaration order or register keyword hints.
-```
-
----
-
-## 6. Project Directory Layout
-
-```
-/var/home/paul/Projects/decompile-u2-v2/
-├── original/               # WORKING COPY of the original DOS game files (read/write)
-│   └── ultimaii.exe        # Original DOS binary (Internet Archive pack, may carry community patches)
-├── references/
-│   └── ultima2/            # PRISTINE read-only backup of original/ — restore only, never edit
-├── docs/                   # Project documentation (decompiling.md, spice86-capture.md)
-├── captures/               # Runtime capture artefacts from Spice86 (ground-truth evidence)
-│   └── spice86/
-│       ├── spice86-cfg.json        # Runtime CFG: 845 basic blocks, real executed entry points
-│       ├── spice86-functions.json  # 83 discovered functions with call counts
-│       └── live-ds-4f4d.bin        # 4 KB data-segment dump (DS:0000 onward)
-├── disasm/
-│   ├── main.asm            # Ground truth assembly (MASM syntax)
-│   └── engine.asm
-├── src/
-│   ├── main.c              # Lifted C sources
-│   └── engine.c
-├── tools/
-│   ├── env.sh              # source to wire GHIDRA_HOME / SPICE86_DLL / REKO_DLL
-│   ├── bindiff.py          # Python byte comparison script
-│   ├── parse_spice_trace.py# Spice86 JSON trace parser
-│   ├── ghidra/             # Ghidra headless scripts (DecompileMz/All, MarkInlineData, RetryDecompile; Apache-2.0, generic tooling)
-│   ├── spice86/            # Vendored self-contained Spice86 linux-x64 build (gitignored; see its README)
-│   └── reko/               # Vendored Reko 0.12.5 decompiler, reko.dll (gitignored; see docs/reko-install.md)
-├── build/                  # Generated binary artifacts
-├── Makefile                # Linux-native build & test pipeline
-└── AGENTS.md               # Pipeline instructions & standards
-```
-
-> Note: `original/` is the working copy agents operate on. `references/ultima2/` is an immutable safety copy of the same files — see Section 0.
+Known names in `asm/` include the 26 command handlers `cmd_A`..`cmd_Z`,
+`str_out`, and OS seam labels (`video_int10`, `key_int16`, `dos_int21`,
+`speaker_tone`) marking hardware/DOS call sites — the replacement surface for
+the engine.
 
 > **`captures/spice86/spice86-cfg.json` is the authoritative source for routine entry points.** This game's command handlers are reached by `jmp *%bx` through a jump table, not `call`/`ret`, so Ghidra and Reko cannot discover them statically. Blocks in the runtime CFG were actually executed — use their start addresses (segment `017D`, `file_offset = offset + 0x200`) as the seed list for both decompilers. See `captures/README.md` for the schema, address mapping, and the relocation caveat (runtime bytes differ from file bytes wherever an MZ fixup applies).
 >
 > **Correction, 2026-10-21: CFG *blocks* are not proof of execution.** `spice86dumpCfgBlocks.json` lists **discovered** blocks — Spice86 statically expands branch successors — so a block can appear without ever having run. It reported `MINAX IS DEAD!!`, `RING PROTECTS FROM FIELD!` and `FIELD CAUSES 1000 DAMAGE!` for a session that met none of them. The authority for "this ran" is `ExecutedInstructions` inside `spice86dumpExecutionFlow.json` (a list of `{Offset, Segment, Linear}` dicts). Use block entries as a seed list, which is what they are good for, but never as evidence that code executed. See `tools/cfg_printed.py`, which gets this right.
 
-## 7. Evidence Discipline (READ BEFORE ASSERTING ANYTHING)
+## 5. Evidence Discipline (READ BEFORE ASSERTING ANYTHING)
 
 Grade every claim, and say which grade you are asserting:
 

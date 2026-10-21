@@ -94,7 +94,7 @@ that localised the whole combat path in seconds.
 
 ## Standing rules that cost time today
 
-These are now codified in **`AGENTS.md § 7 Evidence Discipline`** — read that
+These are now codified in **`AGENTS.md § 5 Evidence Discipline`** — read that
 first; the list below is the short version of what happened.
 * **Compute indices in code; never split hex by eye.** A miscount invented a false
   "green gem vs blue tassle" discrepancy.
