@@ -1,4 +1,12 @@
-# sub_6000 — mechanical clean (bulk wave); behavior not yet reviewed
+# dungeon_sample — dungeon path: reads three grid cells around the monster via dungeon_grid_byte
+# name-evidence: called only from asm/1151 dungeon_darkness (measured). Sets [DS:23]/[DS:24] to
+#           (0,1), ([DS:2],1+[DS:3]) and (-[DS:2],1-[DS:3]) and calls asm/68C0 dungeon_grid_byte
+#           three times, storing the results to [DS:14],[DS:15],[DS:16]. This is a DIFFERENT writer
+#           of [DS:14] from the overworld walk path (asm/5B71/asm/5C49 mode_table_copy, which sets
+#           [DS:14]=[DS:2DF]); the proven [DS:14]=map_byte>>1 belongs to the walk path and is not
+#           contradicted here. The y*16+x addressing that looked anomalous against a 64-wide grid is
+#           asm/68C0 indexing the 16-wide dungeon grid (see that file's header).
+# provenance: measured (asm/6000 body + caller grep + asm/68C0 addressing)
 # func 6000..6077  len 0078 B  evidence: reko
 # calls: L_006278, L_006344, L_006ac0, L_006aed
 # confidence: low (bytes proven by check_func.py)

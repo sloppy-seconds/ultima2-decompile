@@ -713,6 +713,26 @@ the executed set of `captures/spice86/dungeon-35-live` - gate `cmp` at runtime
 **Still open:** the `[DS:14]` writer at file `0x6238` calls `0x6AC0`, whose index
 arithmetic came out as `y*16 + x` against a 64-wide grid. Unexplained.
 
+~~Unexplained~~ **Resolved 2026-10-22 (overnight T7), measured.** `asm/68C0` (file
+`0x6AC0`) is not the sector-tile lookup. Its address is
+`word[DS:472] + [DS:25]*256 + [DS:24]*16 + [DS:23]` — the map-grid buffer
+(`word[DS:472] = 0x1800` in every live capture) read as a **16-wide grid with a
+256-byte page selector `[DS:25]`**, not the 64-wide `y*64+x` that
+`asm/50B3 map_tile_ptr` uses. It is reached only from the dungeon path
+(`asm/6000` ← `asm/1151 dungeon_darkness`; `asm/6078` ← `asm/6000`), and the
+dungeon map `mapx35` decomposes into **16 pages of 16×16 cells** that all use the
+same 7 dungeon bytes, with dungeon player/monster coordinates in **0..15**
+(measured in `dungeon-35-live`). So `y*16 + x` is the dungeon grid's row-major
+index within a page, and the anomaly was only an artefact of assuming the array
+was the overworld sector grid. `[DS:25]` as a floor/page selector is **inferred**
+(it is 0 in every capture, so the multi-page path is reasoned from the `*256`
+term, not witnessed). This is a different `[DS:14]` writer from the overworld
+walk path (`asm/5B71`/`asm/5C49` set `[DS:14] = [DS:2DF]`), so the proven
+`[DS:14] = map_byte >> 1` is untouched. Files renamed to
+`asm/68C0_dungeon_grid_byte.asm` and `asm/6000_dungeon_sample.asm`; bodies byte-
+identical (clean rebuild 37344 B). The full dungeon geometry (how a 16×16 page
+becomes the first-person wireframe) remains the backlog item, out of scope here.
+
 ### The castle is a sector link, not a separate map format
 
 **Correction to the first draft of this section, which had the conclusion backwards.**

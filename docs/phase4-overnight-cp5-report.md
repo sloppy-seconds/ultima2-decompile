@@ -15,7 +15,7 @@ logical commit.
 | T4 | DONE |
 | T5 | DONE |
 | T6 | DONE |
-| T7 | todo |
+| T7 | DONE |
 | T8 | todo |
 | T9 | todo |
 | T10 | todo |
@@ -479,3 +479,90 @@ same store § 13 found for dungeons and vehicles.
 `asm/` untouched; no engine code changed. `make -C engine test` green.
 
 **Commit: `aaf9bb0`.**
+
+---
+
+## T7 — the `y*16 + x` anomaly at file `0x6AC0`
+
+**Status: DONE.** The array is the **dungeon grid**, not the overworld sector
+grid. Grade: **measured** (the addressing arithmetic, the base value, the caller
+chain and the dungeon coordinate range), with one **inferred** piece (that
+`[DS:25]` is a floor/page selector).
+
+### The addressing, decoded (measured)
+
+`asm/68C0` (file `0x6AC0`) builds a DS address from three bytes and dereferences
+it. Reading the body instruction by instruction:
+
+```
+mov 0x25,%ah ; mov $0x0,%al ; add 0x472,%ax   ; AX = word[DS:472] + [DS:25]*256
+mov %ah,0x488                                  ; [DS:488] = high byte (page)
+mov 0x24,%al ; add %al,%al x4 ; adc 0x23,%al   ; AL = [DS:24]*16 + [DS:23]  (low byte)
+mov %al,0x487                                  ; [DS:487] = low byte
+mov 0x487,%bx ; mov (%bx,%si),%al              ; return byte at DS:word[DS:487]
+```
+
+So the effective address is **`word[DS:472] + [DS:25]*256 + [DS:24]*16 + [DS:23]`**.
+This is the *same* map-grid buffer that `asm/50B3 map_tile_ptr` reads —
+`map_tile_ptr` computes `word[DS:472] + y*64 + x` (the 64-wide sector grid) —
+but `asm/68C0` reads it with a **16-wide** row stride and a **256-byte page
+selector** `[DS:25]`. The low byte of `word[DS:472]` is discarded and replaced by
+`y*16+x`, which is only correct because `word[DS:472]` is 256-aligned.
+
+Measured against every live DS dump: `word[DS:472] = 0x1800` (the map grid base,
+matching the T5/T6 finding that the grid lives at `DS:1800`) and `[DS:25] = 0` in
+all 10 captures. So in every captured state the address is `0x1800 + y*16 + x`.
+
+### Why it is the dungeon grid, not the sector grid (measured)
+
+Three independent facts converge:
+
+1. **Caller chain.** `asm/68C0` is called only from `asm/6000` and `asm/6078`;
+   `asm/6000` is called only from `asm/1151 dungeon_darkness` (the dark-dungeon /
+   torch routine). The whole cluster is dungeon-only. `asm/6000` sets
+   `[DS:23]/[DS:24]` to `(0,1)`, `([DS:2], 1+[DS:3])`, `(-[DS:2], 1-[DS:3])` and
+   stores the three reads to `[DS:14]`, `[DS:15]`, `[DS:16]` — a forward-cell
+   probe around the player, not a tile-under-player lookup.
+2. **Dungeon coordinates are 0..15.** In `dungeon-35-live` the player is at
+   `(4,5)` and all 27 live monsters have `x,y ∈ 1..15`. A 64-wide grid would
+   allow 0..63; the observed range is exactly a 16-wide grid. (Contrast the
+   overworld `castle-03-live`, player x = 62.)
+3. **`mapx35` is 16 pages of 16×16.** Splitting the 4096-byte dungeon map into
+   sixteen 256-byte pages, every page uses the same 7 dungeon geometry bytes
+   (`0x00,0x10,0x20,0x40,0x80,0xC0,0xE0`) with ~130-190 non-zero cells each. So
+   the dungeon map is a stack of 16×16 pages, and `[DS:25]` (the `*256` term)
+   selects the page.
+
+So `y*16 + x` is the row-major index **within a 16×16 dungeon page**, and the
+"against a 64-wide grid" framing was the error: the array was never the overworld
+sector grid.
+
+### The `[DS:14]` non-contradiction
+
+`asm/6000` is a **dungeon-path** writer of `[DS:14]`. The proven
+`[DS:14] = map_byte >> 1` was measured on overworld **walk** samples and is
+written by a different routine (`asm/5B71`/`asm/5C49 mode_table_copy`, which set
+`[DS:14] = [DS:2DF]`). Two mode-specific writers of the same scratch byte; the
+T7 finding does not touch the proven walk-path relationship.
+
+### Inferred, stated as such
+
+`[DS:25]` as a **floor/page** selector is inferred from the `*256` term plus the
+16-page structure of `mapx35` and the 0..15 coordinate range. It is `0` in every
+capture, so the multi-page path is reasoned from the code, not witnessed. The
+full dungeon geometry (how a 16×16 page becomes the first-person wireframe) is
+the existing backlog item and was **not** attempted here (out of scope).
+
+### Files
+
+* `asm/68C0_sub_68c0.asm` → `asm/68C0_dungeon_grid_byte.asm` (renamed, header written; body byte-identical)
+* `asm/6000_sub_6000.asm` → `asm/6000_dungeon_sample.asm` (renamed, header written; body byte-identical)
+* `docs/spice86-live-findings.md` § 12 (open item resolved, retraction-style: the original "Unexplained" line stays visible)
+* `docs/phase4-state.md` (C7 note: the `y*16+x` residual struck through and resolved)
+* `docs/phase4-overnight-cp5-report.md` (this section)
+
+`check_func.py 68C0` and `6000` PASS; `bash tools/assemble_clean.sh` prints
+`CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`; `make -C engine test` green
+(CP0..CP4).
+
+**Commit: `<pending>`.**
