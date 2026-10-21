@@ -42,10 +42,23 @@ Fields, all proven by live correlation or by cited asm in state.h:
     0x25  5B    entry y   <- the game copies this to DS:01 on load
     0x2D  63    readied spell
 
-NOT YET LOCATED: the inventory and equipment slots. They live somewhere in
-DS:64..135, which reads as all zeros for a character carrying nothing, so the
-slots cannot be identified until a save that actually holds items is compared.
-`items` is therefore refused rather than guessed.
+Equipment, consumables and inventory ARE located and editable:
+
+    DS:61  readied weapon index   (0 HANDS .. 9 QUICK SWORD)
+    DS:62  worn armour index      (0 SKIN .. 6 POWER, 7 NONE)
+    DS:64/65/66  torches / keys / tools   (BCD, one byte each)
+    DS:6D  boots count            (non-zero gates the paralysis save)
+    DS:76+i  weapons owned, one count per weapon
+    DS:D6+i  items held, 16 slots, one count per item
+
+Name tables cited to file offsets in original/ultimaii.exe: weapons 0x4F53,
+armour 0x4F9E, items 0x501D. See docs/spice86-live-findings.md section 11.
+`maxout` builds a fully kitted, effectively unkillable character in one shot.
+
+DISPUTED: which of DS:4E / DS:4F is WIS and which is CHA. state.h says cha/wis,
+the live findings table lists wis/cha, and it is not provable from a character
+where both are equal. Do not treat the editor's labels for those two bytes as
+settled.
 
 Usage:
     python3 tools/u2_edit.py show player
@@ -53,6 +66,9 @@ Usage:
     python3 tools/u2_edit.py set player sector 71
     python3 tools/u2_edit.py set player pos 20 20
     python3 tools/u2_edit.py maxout player
+    python3 tools/u2_edit.py set player weapon 9
+    python3 tools/u2_edit.py set player armour 6
+    python3 tools/u2_edit.py set player keys 20
     python3 tools/u2_edit.py set player str 40 -o /var/tmp/tp/player
 """
 import argparse
@@ -70,17 +86,23 @@ FIELDS = {
     'class':  (0x47, 1, 3, 'int'),
     'race':   (0x48, 1, 3, 'int'),
     'sector': (0x49, 2, 99, 'sector'),
-    'str':    (0x4B, 1, 255, 'int'),
-    'agi':    (0x4C, 1, 255, 'int'),
-    'sta':    (0x4D, 1, 255, 'int'),
-    'cha':    (0x4E, 1, 255, 'int'),
-    'wis':    (0x4F, 1, 255, 'int'),
-    'int':    (0x50, 1, 255, 'int'),
-    'hp':     (0x51, 2, 9999, 'bcd'),    # 4-digit BCD across 0x51,0x52: hp=4,
-                                          # 0x52=0 displays as H.P.=0400. A raw
-                                          # byte write of 255 gives 0xFF, whose
-                                          # nibbles are not decimal digits, and
-                                          # the game prints "??" for those.
+    # Stats are BCD, one byte each: byte 0x40 means 40, not 64. Writing a raw
+    # integer displays the wrong number (40 -> 0x28 -> "28").
+    'str':    (0x4B, 1, 99, 'bcd'),
+    'agi':    (0x4C, 1, 99, 'bcd'),
+    'sta':    (0x4D, 1, 99, 'bcd'),
+    # 0x4E/0x4F are the DISPUTED pair: state.h labels them cha/wis, the live
+    # findings table lists wis/cha. Not provable from a character where both are
+    # equal. See docs/spice86-live-findings.md section 11.
+    'cha':    (0x4E, 1, 99, 'bcd'),
+    'wis':    (0x4F, 1, 99, 'bcd'),
+    'int':    (0x50, 1, 99, 'bcd'),
+    'hp':     (0x51, 2, 9999, 'bcd'),    # 4-digit BCD across 0x51,0x52:
+                                          # hp=4 with 0x52=0 displays as
+                                          # H.P.=0400. A raw byte write of 255
+                                          # gives 0xFF, whose nibbles are not
+                                          # decimal digits, and the game prints
+                                          # "??" for those.
     'food':   (0x53, 3, 999999, 'bcd'),   # 6-digit counter; the status band
                                           # prints only the top 4 digits, so
                                           # 40000 displays as FOOD=0400
@@ -89,15 +111,39 @@ FIELDS = {
     'entry_x': (0x5A, 1, 63, 'int'),
     'entry_y': (0x5B, 1, 63, 'int'),
     'spell':  (0x63, 1, 255, 'int'),
+    # Equipment and consumables. Proven in docs/spice86-live-findings.md s11 by
+    # live read/write-back, with the name tables cited to file offsets.
+    'weapon': (0x61, 1, 9, 'int'),       # readied weapon index; 0 = HANDS
+    'armour': (0x62, 1, 7, 'int'),       # worn armour index; 0 = SKIN
+    'torches': (0x64, 1, 99, 'bcd'),
+    'keys':   (0x65, 1, 99, 'bcd'),
+    'tools':  (0x66, 1, 99, 'bcd'),
+    'boots':  (0x6D, 1, 255, 'int'),     # non-zero gates the paralysis save
 }
+
+WEAPONS = ['HANDS', 'DAGGER', 'MACE', 'AXE', 'BOW', 'SWORD',
+           'GREAT SWORD', 'LIGHT SWORD', 'PHASER', 'QUICK SWORD']
+ARMOURS = ['SKIN', 'CLOTH', 'LEATHER', 'CHAIN', 'PLATE', 'REFLECT', 'POWER', 'NONE']
+ITEMS = ['RING', 'WAND', 'STAFF', 'BOOTS', 'CLOAK', 'HELM', 'GEM', 'ANKH',
+         'RED GEM', 'SKULL KEY', 'GREEN GEM', 'BRASS BUTTON', 'BLUE TASSLE',
+         'STRANGE COIN', 'GREEN IDOL', 'TRI-LITHIUM']
 CLASS_NAMES = {0: 'fighter', 1: 'mage', 2: 'paladin', 3: 'thief'}
 RACE_NAMES = {0: 'human', 1: 'elf', 2: 'dwarf', 3: 'hobbit'}
 
-# A durable test character. Stats are what the creation roller produced for the
-# TEST character (str 80 was observed live); 40 is a conservative "strong" value
-# rather than a proven cap - the real maximum is not established by the asm.
+# A durable test character: strong, unkillable, fully kitted.
+# Power armour (6) + quick sword (9) + keys and torches, one of every item and
+# every weapon owned. Stats 40 are a conservative "strong", NOT a proven cap;
+# the TEST character was observed live with str=50 (BCD 0x50).
 MAXOUT = {'str': 40, 'agi': 40, 'sta': 40, 'cha': 40, 'wis': 40, 'int': 40,
           'hp': 9999, 'food': 999999, 'gold': 9999, 'exp': 9999}
+ARMOUR_BASE = 0x76      # weapons owned, DS:76+i
+ITEM_BASE = 0xD6        # items held, DS:D6+i
+
+
+def set_counts(d, base, n, value):
+    """Write n count bytes starting at DS offset `base`."""
+    for i in range(n):
+        d[base + i - BASE] = value
 
 
 def bcd_decode(raw):
@@ -174,7 +220,14 @@ def show(d):
     print('exp     %d' % get(d, 'exp'))
     print('entry   (%d, %d)' % (get(d, 'entry_x'), get(d, 'entry_y')))
     print('spell   %d' % get(d, 'spell'))
-    print('\nitems/equipment: NOT LOCATED (see module docstring)')
+    w, a = get(d, 'weapon'), get(d, 'armour')
+    print('wield   %d (%s)' % (w, WEAPONS[w] if w < len(WEAPONS) else '?'))
+    print('wearing %d (%s)' % (a, ARMOURS[a] if a < len(ARMOURS) else '?'))
+    print('torches %d  keys %d  tools %d  boots %d'
+          % (get(d, 'torches'), get(d, 'keys'), get(d, 'tools'), get(d, 'boots')))
+    held = [(ITEMS[i], d[ITEM_BASE + i - BASE]) for i in range(16)]
+    held = [(n, c) for n, c in held if c]
+    print('items   %s' % (', '.join('%s x%d' % hc for hc in held) or '(none)'))
 
 
 def main():
@@ -203,7 +256,17 @@ def main():
     if a.cmd == 'maxout':
         for k, v in MAXOUT.items():
             put(d, k, v)
-        print('maxout applied: %s' % ', '.join('%s=%s' % kv for kv in MAXOUT.items()))
+        put(d, 'weapon', 9)      # QUICK SWORD
+        put(d, 'armour', 6)      # POWER
+        put(d, 'torches', 50)
+        put(d, 'keys', 20)
+        put(d, 'tools', 20)
+        put(d, 'boots', 1)
+        set_counts(d, ARMOUR_BASE, len(WEAPONS), 1)   # own every weapon
+        set_counts(d, ITEM_BASE, 16, 1)               # one of every item
+        print('maxout applied: stats/hp/food/gold/exp, QUICK SWORD, POWER armour,')
+        print('               50 torches, 20 keys, 20 tools, boots,')
+        print('               all %d weapons and all %d items x1' % (len(WEAPONS), 16))
     elif a.cmd == 'setpos':
         if len(a.args) != 2:
             sys.exit('setpos needs X and Y')
@@ -215,7 +278,8 @@ def main():
             sys.exit('set needs FIELD VALUE')
         f, v = a.args
         if f == 'items':
-            sys.exit('item slots are not located yet; refusing to guess')
+            sys.exit("there is no single 'items' field; the 16 slots live at DS:D6+i "
+                     "(see ITEMS in this file), or run `maxout`")
         if f not in FIELDS:
             sys.exit('unknown field %r; known: %s' % (f, ', '.join(sorted(FIELDS))))
         put(d, f, v)

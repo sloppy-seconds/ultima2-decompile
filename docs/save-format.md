@@ -107,39 +107,72 @@ sector", which removes the need to synthesise probe maps for most experiments.
 
 ## 4. The maxed test character
 
-`python3 tools/u2_edit.py maxout <save>` sets str/agi/sta/cha/wis/int to 40,
-`hp` 9999, `food` 999999, `gold` 9999, `exp` 9999. Verified live: the loaded
-character displays `H.P.=9999 FOOD=9999 EXP=9999 GOLD=9999`.
+Superseded by section 6, which covers the full kit. Kept only for the note that
+the stat value used is a conservative "strong", not a proven cap.
 
-The stat value 40 is a conservative "strong", **not a proven cap** - the real
-maximum is not established by the asm. The TEST character was observed live with
-`str=80`, so the cap is at least that.
+## 5. Equipment, consumables and inventory
 
-This character is durable but **not equipped**: see § 5.
+**Correction, same day.** An earlier draft of this file said the item slots were
+not located. They were - already proven and written up in
+`docs/spice86-live-findings.md` section 11, which I did not check before
+asserting a gap. That is the `AGENTS.md` rule about listing the corpus before
+harvesting, broken again, and it produced a confidently wrong doc.
 
-## 5. Not yet known: inventory and equipment
+All offsets are `DS:`; the slots are inside the saved record, so they are
+editable.
 
-The item and equipment slots are somewhere in `DS:64..135` and have **not** been
-located. They cannot be located from the saves examined so far, because TEST
-carries nothing and that whole region reads as zeros. An empty region does not
-identify a field.
+| DS | field | encoding |
+| --- | --- | --- |
+| `0x61` | readied weapon | index, 0 = HANDS |
+| `0x62` | worn armour | index, 0 = SKIN |
+| `0x64` / `0x65` / `0x66` | torches / keys / tools | BCD, one byte each |
+| `0x6D` | boots count | non-zero gates the paralysis save at runtime `0x22FD` |
+| `0x76 + i` | weapons owned | one count per weapon, 10 entries |
+| `0xD6 + i` | items held | one count per item, 16 slots |
 
-`tools/u2_edit.py` therefore refuses `set <save> items` rather than guessing.
+Name tables, cited to file offsets in `original/ultimaii.exe`:
 
-The path to finding them, which is also the workflow wanted for other reasons:
+* weapons at `0x4F53`: `HANDS DAGGER MACE AXE BOW SWORD "GREAT SWORD"
+  "LIGHT SWORD" PHASER "QUICK SWORD"`
+* armour at `0x4F9E`: `SKIN CLOTH LEATHER CHAIN PLATE REFLECT POWER NONE` -
+  eight entries, which is why the damage roll masks `& 7`
+* items at `0x501D`: `RING WAND STAFF BOOTS CLOAK HELM GEM ANKH "RED GEM"
+  "SKULL KEY" "GREEN GEM" "BRASS BUTTON" "BLUE TASSLE" "STRANGE COIN"
+  "GREEN IDOL" TRI-LITHIUM`
 
-1. Teleport next to a town.
-2. Walk in, buy or pick up gear - armour, a weapon, keys, torches.
-3. Save, then diff live `DS:64..135` against the saved file. Slots appear as
-   newly non-zero bytes.
-4. Cross-check by dropping one item and re-diffing, so a slot is only named when
-   it both appears and disappears.
+The plural handling proves this is the live table: the display appends a literal
+`S` (`asm/4881`) but skips index 3, because `BOOTS` is already plural.
 
-Which sector holds which town is also not yet recorded. `DS:4A`'s site-kind
-values (1 village, 2 town, 4 tower) plus the map byte table in
-`docs/map-format.md` give a way to search for entrances.
+**Not independently re-verified this session.** The editor writes these fields and
+round-trips them through the file, but the in-game inventory display was not
+opened - `I` is not the inventory command, and the correct key is not yet
+recorded. The slot identities rest on the earlier value-match proof, not on
+today's run.
 
-## 6. Safety
+### Disputed: WIS versus CHA
+
+`state.h` labels `DS:4E` `stat_cha` and `DS:4F` `stat_wis`; the live findings
+table lists them the other way round. It is not provable from a character where
+both are equal. The editor follows `state.h` because `state.h` is the authority,
+but the labels for those two bytes should be treated as unsettled until a
+character with different values settles it.
+
+## 6. The maxed, fully kitted character
+
+`python3 tools/u2_edit.py maxout <save>` sets stats to 40, `hp` 9999, `food`
+999999, `gold` 9999, `exp` 9999, readies QUICK SWORD, wears POWER armour, gives
+50 torches, 20 keys, 20 tools, boots, every weapon and one of every item.
+
+Verified live: the loaded character displays `H.P.=9999 FOOD=9999 EXP=9999
+GOLD=9999`. The equipment and inventory side is written and round-trips, but see
+the verification caveat above.
+
+The stat value 40 is a conservative "strong", **not a proven cap**. The TEST
+character's `DS:4B` is `0x50`, which read as BCD is **50** - an earlier draft of
+this file called that 80, having read the byte as an integer. Stats are BCD.
+
+
+## 7. Safety
 
 * `original/` and `references/` are never modified. `u2_edit.py` refuses to edit
   a path under `references/`, and refuses in-place edits under `original/`.

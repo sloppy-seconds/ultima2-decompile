@@ -1,79 +1,94 @@
-# Handoff — 2026-10-21 evening (read this first after a compaction)
+# Handoff — 2026-10-21 (read this first after a compaction)
 
-Supersedes the morning version. Everything is committed, pushed, and CI is green
-on both workflows. Nothing is running.
+Supersedes the earlier same-day version, which was already stale by lunchtime.
+Everything below is committed and pushed; both CI workflows green; nothing
+running; ports free.
 
 ## Read in this order
 
-1. `AGENTS.md` — isolation, licensing, script rules. Hard law.
-2. `docs/phase4-state.md` — resume notes, **Backlog**, Gate log, Deferred
-   decisions. This is the live task state.
-3. `docs/phase4-overnight-cp4b.md` — the T1–T9 queue plus the morning report and
-   the **evening addendum**.
-4. `docs/spice86-live-findings.md` — §7–§11 are today's evidence: combat, loot,
-   provenance, the screen reader, and the editor offset tables.
-5. `docs/handoff-live-capture.md` (this file) — index and running state.
+1. `AGENTS.md` — isolation, licensing, script rules, evidence discipline. Hard law.
+2. `docs/phase4-state.md` — resume notes, Backlog, gate log. **Note: this has not
+   been updated for today's tooling yet.**
+3. `docs/passability-findings.md` — F1..F12. F8 is refuted, F10/F11/F12 are the
+   current truth. Read the refutations, not just the findings.
+4. `docs/save-format.md` — the `player` record, proven fields, teleporting.
+5. `docs/map-format.md` — sector map format, authoring probe maps, the traps.
+6. `docs/tooling-procedures.md` — driving the emulator, the vendored build and
+   its local patch, the screenshot path, the Wayland input finding.
+7. `docs/spice86-live-findings.md` — §7–§11 evidence: combat, loot, provenance,
+   screen reader, and the **offset tables in §11, which include the item and
+   equipment slots**.
+8. `docs/handoff-live-capture.md` (this file) — index and running state.
 
 ## Running state
 
-* **No emulator, no recorder, ports free.** Start one with
-  `tools/spice86_start.sh --name LABEL --player tmp/<run>/player` — a fresh run
-  dir has no character, so `--player` is required or you sit at the title.
-* **Working tree clean, 0 ahead of `origin/main`, HEAD `1b715b3`.** 26 commits
-  today.
-* **CI green**: `asm-checksum` and `engine-tests` are now separate workflows with
-  separate badges. `make test` = CP0..CP4 all PASS.
-* **Pushing needs `GH_TOKEN`.** `git push` fails with a confusing
-  `ksshaskpass died of signal 6` unless you source `.env` first:
-  `set -a; . ./.env; set +a; git push`. `.env` is gitignored; do not commit it.
-* `pgrep -f Spice86` matches its own shell and reports a phantom process. Check
-  the ports instead.
+* **HEAD `07e32fd` on `main`, synced with `origin/main`, clean tree.**
+* **No emulator running, ports 20180/20181/20190 free.**
+* **CI green**: `asm-checksum` (byte-exact proof) and `engine-tests` (CP0..CP4).
+* **Pushing needs `GH_TOKEN`.** `set -a; . ./.env; set +a; git push`. Without it
+  you get a confusing `ksshaskpass died of signal 6`.
+* **`tools/spice86/` is now a patched build, not stock upstream.** Upstream
+  `OpenRakis/Spice86` @ `6f27fcd` plus one local commit fixing the MCP screenshot
+  (raw PNG bytes where base64 was required). Provenance and the patch are recorded
+  in `docs/tooling-procedures.md`. The previous vendored copy had been copied out
+  of a sibling project, which the isolation rule forbids; this one is built from
+  `~/Projects/ai/spice86`.
 
-## Overnight queue — where T1–T9 actually landed
+## What today actually unlocked
 
-| task | state |
-| --- | --- |
-| **T1** passability + crossing | **open, two named unknowns.** Wrap, `0x00` block and 19-per-move are implemented and cited to observed bytes. Still needed: the **mountain tile id** (one named sample from the owner — `0x10` is *not* mountain, the player stood on it) and the **`DS:15`/`DS:18` travel-mode argument**, which is what decides boat-on-water |
-| **T2** time / food / auto-PASS | **closed.** Auto-PASS is a **poll count, not a clock** — no `INT 1Ah` exists in the corpus and the only `0x40:6C` read is the startup RNG seed. Threshold 256 is a documented placeholder, not proven |
-| **T3, T4, T6, T7, T8** | done |
-| **T5** creation tail | **closed.** Was a real fidelity bug: the original restarts the whole program (`call 0x0100`) after creation, which is why the owner saw the splash. `original` reproduces it; `enhanced` enters the world directly |
-| **T9** blog + retro | **unblocked.** Today is unusually good material — see "what to write about" below |
+Four things that were blocking work for sessions, all now working:
 
-**Next step, per the owner: work through the overnight task results.** That means
-closing T1's two unknowns, then T9.
+1. **We can see the screen.** `local-mcp_screenshot` works against the patched
+   build. Until today every claim about what a tile *is* had been inferred from a
+   decode without ever looking. That was the root error behind F8.
+2. **Headless + MCP input.** `tools/spice86_start.sh --headless` plus MCP
+   `send_keyboard_key`. No window, no desktop noise. **xdotool does not work on
+   this host** — it is KDE on Wayland, and XWayland refuses synthetic focus, so
+   every layer reports success while keys vanish.
+3. **Teleport anywhere, any sector.** Edit the save and reload:
+   `tools/u2_edit.py set <save> sector 71` and `setpos <save> X Y`. Sector is two
+   decimal digits at `DS:49/4A`, not an integer.
+4. **Synthetic probe sectors.** `tools/u2_mkprobe.py` writes a map with one probe
+   tile per byte value beside a grass corridor, so a whole table is one walk
+   instead of hunting rare bytes through real maps.
 
-## What to write about (T9 raw material)
+## Terrain: what is proven
 
-* A static reading that looked airtight and was disproven in ten seconds by a
-  live CFG diff — and the retraction that followed.
-* A cross-reference pass that found a real corpus bug (`2DC1`/`2DEE` transposed)
-  **and** one of mine (a hex miscount invented a false discrepancy) in the same
-  run.
-* A tool that confidently lied: `CfgBlocks` is discovered, not executed, so it
-  reported a Minax fight that never happened.
-* Combat text that provably never survives turn-boundary sampling — 151 turns,
-  zero readable frames, while memory proved a kill.
-* Two owner corrections that each caught a real agent error (green gem; "we never
-  fought Minax"). The argument for the owner as a verifier, not an audience.
+| byte | art (`>>2`) | terrain | walking | how |
+| --- | --- | --- | --- | --- |
+| `0x00` | 0 | water, magenta waves | **blocks** | blocked step + owner ID + probe |
+| `0x04` | 1 | faint dots | passes | probe |
+| `0x08` | 2 | grass, sparse cyan dots | passes | walked on, probe |
+| `0x0C` | 3 | forest, cyan double-dash | passes | walked on, probe |
+| `0x10` | 4 | mountain, white diamond lattice | **blocks** | walked into at `(11,20)`, probe |
+| `0x14`..`0x28` | 5..A | `%`, four-pane, tower, gate, lattice, cross | passes | probe |
 
-## Harvests and tools
+**`art = map_byte >> 2`**, settled three ways (see F12). The `view.h` contradiction
+is resolved; the `>>1` reading is wrong and should be fixed in the engine.
 
-`captures/spice86/vga-test/` is the richest (965 blocks, buffed fight).
-`play-test-live/` is the one most analysis ran against. `baseline-fight/` is a
-diff baseline. The **CFG set-difference** between two harvests is the technique
-that localised the whole combat path in seconds.
+**The passability rule is still unknown.** Six bytes of behaviour, not a rule. The
+ladder at runtime `0x25C0` is confirmed *not* the gate — it accepts `0x10`, which
+blocks. The decision is made upstream by whatever fills `DS:2CB`/`DS:2DE`, still
+unidentified.
 
-| tool | status |
-| --- | --- |
-| `tools/cfg_printed.py` | **fixed and validated** — messages a session printed, gated on `ExecutedInstructions` |
-| `tools/vga_screen.py` | works — renders the text-mode screen from a memory dump |
-| `tools/map_render.py` | works — 64×64 sector with player and monsters |
-| `tools/xref_provenance.py` | works — docs↔asm cross-reference |
-| `tools/poll_probe.py` | works — memory API does **250 req/s**, so the old 3 Hz rule is dead for reads |
-| `tools/turn_recorder.py` | works, two cosmetic flaws (see Backlog) |
-| `tools/vga_ring.py` | **UNTESTED** — never run against a live emulator |
+## Claims that were made and are now dead
 
-## Proven today, do not re-derive
+Keep these listed so nobody resurrects them.
+
+* **F8: mountain is `0x08`.** Refuted. `0x08` is grass. F8 had the right *art*
+  index (`0x04`) and the wrong *byte*, which is exactly what a `>>1`/`>>2` slip
+  produces.
+* **`0x1A` is a rare terrain byte.** No. It is the first byte of the 128-byte tail
+  on every sector map, and in the save file it is the DOS EOF marker. Not data.
+* **"Items are not located."** Said in an early draft of `save-format.md` today.
+  Wrong — they were proven in `spice86-live-findings.md` §11 and I had not looked.
+  See §5 of `save-format.md` for the correction.
+* **`DS:29` is the destination tile.** No, shared scratch with four writers.
+* **`DS:13` is terrain.** No, the player stamp (`0x78` on foot).
+* **Stats are plain bytes.** No, **BCD**. `DS:4B = 0x50` is strength 50, not 80.
+  **HP is BCD too** — a raw `255` renders as `??`.
+
+## Standing facts from earlier today, still valid, do not re-derive
 
 * Loot: every kill gives gold `(rand&0x17)|1` and exp `(rand&3)+1`, minimum 1
   each; the **item drop is gated on monster kind `0xFC`**.
@@ -83,39 +98,83 @@ that localised the whole combat path in seconds.
   paralysis is a movement rejection — which is why the owner saw `--INVALID
   MOVE!` while paralyzed.
 * Monster arrays are **stride 1**: `x=0x137+i`, `y=0x157+i`, `kind=0x197+i`,
-  `tile=0x1B7+i`. `docs/spice86-capture.md` said `0x20`; corrected today.
-* Items are `DS:D6+i` against the 16-entry table at file `0x501d`; weapons owned
-  are `DS:76+i`; readied weapon `DS:61`; worn armour `DS:62` (8 entries, which is
-  why the damage roll masks `&7`). Full table in findings §11.
+  `tile=0x1B7+i`.
 * RNG seed = BIOS tick low byte at `0x40:6C`, read once at startup into
   `DS:23F..242` — hence deterministic monsters in a fresh emulator.
 * `Z` pauses on the status screen; writes land instantly but the screen is frozen
   and no turns occur while paused.
+* Auto-PASS is a **poll count, not a clock** — no `INT 1Ah` exists in the corpus
+  and the only `0x40:6C` read is the startup RNG seed. Threshold 256 is a
+  documented placeholder, not proven.
 
-## Standing rules that cost time today
+## Traps that cost time today
 
-These are now codified in **`AGENTS.md § 5 Evidence Discipline`** — read that
-first; the list below is the short version of what happened.
-* **Compute indices in code; never split hex by eye.** A miscount invented a false
-  "green gem vs blue tassle" discrepancy.
-* **List the asm corpus before harvesting runtime data.** Paralysis, theft and
-  combat functions were already named on disk the whole time.
-* **Ask before capturing, and never block for minutes.** Long foreground captures
-  swallow the owner's queued messages. Run detached; check between turns.
-* **Rebuild after swapping a generated header.** A guard looked tested but was a
-  silent no-op because the binary still had the old header.
-* **Python block-buffers stdout through a pipe** — use `-u` or a recorder looks
-  dead while working.
-* **Prove or pass.** Every claim above cites an address. Where a number is not
-  proven, the code says so in the comment next to it.
+* **Memory reads pause the CPU.** `WhilePaused` pauses for every HTTP read and
+  resumes after, but keys sent into that window are silently lost. Settle ~0.5-1 s
+  after a read before injecting a key, and verify every step.
+* **Writing `DS:00/01` live does not teleport** — it breaks movement entirely.
+  Edit the save instead.
+* **The world wraps.** Viewport is toroidal; a scripted walk that assumes a flat
+  grid desynchronises near an edge. Start probe walks mid-map.
+* **`range` reads are read-only.** Writes need `PUT /api/memory/<addr>/byte` with
+  body `{"value": N}`, one byte at a time.
+* **`pgrep -f Spice86` matches its own shell.** Check ports.
+* **The MCP endpoint is `/mcp`** and the wire tool name is `screenshot`, not
+  `local-mcp_screenshot`.
+* **Screenshots land in `/tmp/spice86-mcp-screenshots/`**, which is tmpfs here, so
+  they cost RAM. Copy what you want into `tmp/screens/`.
 
-## Open engine debt (small, specific)
+## Tools
 
-1. Mountain tile id — blocked on one owner sample.
-2. `asm/2423` declares `2423..242C` for a routine running to ~`0x2680`; a CP3
-   re-decode is owed. The file now carries a WARNING so nobody repeats the error.
-3. `DS:4E` vs `DS:4F` (WIS vs CHA) is **not provable** from a character where both
-   are 10 — `state.h` labels them `cha`/`wis`; settle before shipping an editor
-   label.
-4. Monster advancement on the auto-PASS tick is unimplemented (no monsters in the
-   engine yet) — marked in code, not faked.
+| tool | status |
+| --- | --- |
+| `tools/u2_edit.py` | **new** — save editor: stats, hp/food/gold/exp (BCD), sector, position, weapon, armour, items; `maxout` builds a fully kitted character |
+| `tools/u2_mkprobe.py` | **new** — synthetic probe sector generator |
+| `tools/tile_atlas.py` | works — 64 tiles from the exe, hex-named `00..3F` |
+| `tools/patch_arrows.py` | works — two-byte gate bypass so arrow keys register |
+| `tools/spice86_keys.py` | **unusable on this host** — xdotool path, blocked by Wayland |
+| `tools/cfg_printed.py` | fixed and validated — gated on `ExecutedInstructions` |
+| `tools/vga_screen.py` | works — text-mode screen from a memory dump |
+| `tools/map_render.py` | works — 64×64 sector with player and monsters |
+| `tools/redecode.py` | fixed — string heuristic no longer eats code bytes |
+| `tools/poll_probe.py` | works — memory API sustains ~250 req/s |
+| `tools/vga_ring.py` | **UNTESTED** — never run against a live emulator |
+
+## Open work, in priority order
+
+1. **Verify the kitted character in-game.** The editor writes weapon/armour/items
+   and they round-trip through the file, but the in-game inventory display was
+   never opened — `I` is not the command and the right key is unrecorded. Find it,
+   confirm POWER armour and QUICK SWORD show, and confirm combat actually uses
+   them.
+2. **Fix `engine/src/core/view.h`** to `art = map_byte >> 2` and remove the
+   contradictory comment.
+3. **Find the passability rule.** The `DS:2CB`/`DS:2DE` writer is the only
+   surviving candidate. Breakpoint capture at runtime `0x2423` is the route.
+4. **Locate towns.** Which sector holds which town is unrecorded. `DS:4A`'s site
+   kind (1 village, 2 town, 4 tower) plus map bytes give a search. Then teleport
+   next to one, walk in, and watch the state transitions — that is the expedition
+   that makes the remaining tables fall out.
+5. **Settle WIS vs CHA** (`DS:4E`/`DS:4F`) with a character whose values differ.
+   `state.h` and the findings table disagree.
+6. **Blocked-step food cost.** One sample suggests a rejected move still drains
+   food. Needs a clean before/after before it becomes a finding.
+7. **`docs/phase4-state.md` is stale** — none of today's tooling is in it.
+8. **9 untracked `disasm/redecoded/range_*.txt`** still need a commit-or-ignore
+   verdict.
+9. **T9 blog/retro** — still unblocked and still good material.
+
+## What to write about (T9 raw material)
+
+* Hours of confident reasoning about what tiles *are*, when a screenshot tool had
+  been available the whole time. The fix was to look.
+* A hypothesis (F8) that survived two corrections and died only when measured —
+  and it died because it had the right art index and the wrong byte.
+* A vendored build whose provenance was unrecoverable because it had been copied
+  out of a sibling project. Now built from source at a named commit, with a local
+  patch recorded.
+* An upstream bug found by reading the error carefully: PNG bytes run through a
+  UTF-8 decode, so the image is destroyed rather than mis-encoded, and no
+  client-side trick recovers it.
+* Saying "items are not located" about a format that was already documented in
+  this repo. The corpus-listing rule exists for exactly this and I broke it.
