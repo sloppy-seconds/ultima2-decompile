@@ -787,6 +787,14 @@ kill's reward wrapped them mod 10000: `9999 + 15 -> 0014 = 14` (gold, reward
 `0x15` from `asm/2DB7`) and `9999 + 2 -> 0001 = 1` (exp, reward from `asm/2DE4`).
 All result nibbles are valid BCD, so it is a field-width overflow, not nibble
 corruption. See `docs/phase4-overnight-cp5-report.md § T4`.
+  **Generalised the same day, measured:** the unguarded-carry add is the house style,
+  not a gold-specific bug. `tools/bcd_census.py` enumerates every packed-decimal
+  site in `asm/` — of 30 add sites on known counters, 28 have no ceiling guard, so
+  every such field wraps at its digit capacity (1-byte stats/keys/item counts at 99,
+  2-byte HP/EXP/GOLD at 9999, 3-byte food at 999999). Subtractions differ: a
+  multi-byte field tests the borrow once on its top byte via `cmc; sbb; das; cmc`,
+  while the single-byte counters test nothing. See
+  `docs/phase4-state.md § BCD counter tickets`.
 * Which map byte the force-field tile is, and what drives its animated
   white/blue/purple render. **Narrowed 2026-10-22 (overnight T8), measured.** The
   trigger is **mode byte `0x2e`**, not a tile byte: the passability ladder

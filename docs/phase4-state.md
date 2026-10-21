@@ -538,11 +538,11 @@ Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers i
 
 | ID | Ticket | Status | Why |
 | --- | --- | --- | --- |
-| C1 | Three independent status counters as persistent state: legs `DS:26B`, arms `DS:26C`, sleep `DS:26D`, each set to `rand & 0xF` (0..15 turns) and stored in the player record | todo | `asm/0E70`, `asm/0EC2`, `asm/0F48`. Arms and legs are separate counters with separate items, so a character can be paralysed in one and free in the other; both were observed non-zero simultaneously (9 and 8) alongside sleep 8. |
+| C1 | Three independent status counters as persistent state: legs `DS:26B`, arms `DS:26C`, sleep `DS:26D`, each set to `rand & 0xF` (0..15 turns) and stored in the player record | todo | `asm/0E70`, `asm/0EC2`, `asm/0F48`. Arms and legs are separate counters with separate items, so a character can be paralysed in one and free in the other; both were observed non-zero simultaneously (9 and 8) alongside sleep 8. **Corrected 2026-10-22 (overnight T10): "stored in the player record" is not byte-proven and is probably wrong.** `DS:26B/26C/26D` are 619..621, outside the proven save record `DS:36..135` (54..309) per `docs/save-format.md`. The counters are proven to exist and to be independent; their persistence is not. `engine/tests/combat_check.c` asserts they live outside the record rather than asserting unsupported persistence. |
 | C2 | Resist is a **~75% roll on a live item-array slot**, not immunity: `[DS:D9]` BOOTS, `[DS:DA]` CLOAK, `[DS:E4]` GREEN IDOL; with the item the `L_005417` roll must be `>= 0x40`, without it the effect lands with **no roll at all** | todo | This is the single easiest thing to get wrong, and the pre-existing docs had it wrong as a boolean gate. Needs a distribution test, not a present/absent test. |
 | C3 | Paralysis is a **movement rejection**, not a combat overlay | todo | `--PARALIZED!` is at runtime `0x2527`, inside the passability routine, so a paralysed step takes the same reject path as walking into a mountain. Couples to the CP4 passability work and to the `--INVALID MOVE!` path. |
 | C4 | Magic missile: **no save path exists** | todo | `asm/0F12` has no inventory gate and no roll, unlike the other three. The accumulation into `DS:20/21/22` is proven (`+2, +2, +0x40` per cast) but its BCD weight against the HP subtract is **not** — model the no-save property, leave the scaling as a named unknown. |
-| C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But **the tile byte that triggers the field is unknown**, and so is what drives its animated render. Cannot be wired to a tile until a capture names the byte. |
+| C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But ~~the tile byte that triggers the field is unknown~~ **Corrected 2026-10-22 (overnight T8): the trigger is not a tile byte at all.** The passability ladder `asm/248B→2495→24B1` reads no tile and falls through to `asm/24B5` only when `[DS:29]&0x7f == 0x2e` — a **mode** byte, measured at the live force-field turn (fight turn 2909: HP −1000, `[DS:D6]=0`, `[DS:15]=[DS:18]=0x2e`). `0x2e` occurs 0× in `mapx00`, and the tile→mode mapping is the unresolved indirect store into `DS:2CB/DS:2DE`, so a map byte is still not statically derivable. Remains blocked; the four-question passability capture in the backlog is what settles it. Do not wire C5 to a tile byte. |
 | C6 | Theft **deletes** from the item array; killing the thief restores nothing | todo | `asm/0FCD`, thief is monster type `0x40`. Measured: 8 items stolen, 0 returned, kill paid a random drop like any other. Because the C2 gates read the item array live, a flagged-but-present item would wrongly keep the resist. |
 | C7 | Map byte -> vehicle code transform for BOARD | **resolved 2026-10-21** | `[DS:14] = map_byte >> 1`, measured on 53 of 54 walk samples across four terrain bytes. So vehicle tiles are `0x44` horse, `0x48` ship, `0x4C` plane, `0x50` rocket. Confirmed by the game: `B` on a `0x4C` tile set `[DS:13] = 0x26` and printed `' PLANE'`. An earlier note here claimed the plane was `0x34`; that was a `%02d`-against-hex-filenames render bug and `0x34` is art `0x0D`, a humanoid figure. ~~Still unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid.~~ **Resolved 2026-10-22 (overnight T7):** `asm/68C0` indexes the **dungeon** grid (`word[DS:472] + [DS:25]*256 + y*16 + x`, a 16-wide paged view of the DS:1800 buffer), not the overworld sector grid; reached only from the dungeon path. See `docs/spice86-live-findings.md § 12`. |
 
@@ -551,6 +551,69 @@ of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
 source of truth for item counts, and any resist check must read it rather than a
 cached boolean.
+
+## BCD counter tickets — wrap vs cap (scoped 2026-10-22, not started)
+
+T4 proved one instance; `tools/bcd_census.py` proves it is the house style. Every
+numeric field the original keeps in packed decimal behaves the same way, and the
+behaviour is a property of the **storage width**, not of any individual counter.
+
+Census (regenerate with `python3 tools/bcd_census.py --counters-only`; do not copy
+these numbers, they will drift):
+
+| op | known-counter sites | guards found |
+| --- | --- | --- |
+| `daa` add | 30 | 28 none, 1 branch-only, 1 clamp |
+| `das` sub | 31 | 13 borrow-test, 18 none (read per chain, see below) |
+
+The rule that falls out:
+
+* **Additions do not guard the ceiling.** `adc`/`daa` per BCD byte with the carry out
+  of the top byte discarded, so every counter wraps at its digit capacity.
+* **Multi-byte subtractions test the borrow once, on the top byte.** The idiom is
+  `cmc; sbb; das; cmc` — the second `cmc` deliberately re-exposes the borrow in CF so
+  a following `jb` can branch on it (`asm/2599` food, `asm/2495` HP, `asm/2052`
+  gold). A `cmp`/`test` search misses this entirely, which is why an earlier
+  heuristic under-counted the guards.
+* **Single-byte subtractions test nothing.** `torches` (`asm/37AE`), `keys`
+  (`asm/435E`), `tools` (`asm/277B`) and the item slots (`asm/0FCD` theft, `asm/6999`,
+  `asm/6DFD`) store the adjusted byte with no borrow test. Under BCD underflow that
+  byte becomes `0x99` — **99, not 0**.
+
+Ceilings, from the proven widths in `docs/save-format.md`:
+
+| field | DS | width | ceiling | at ceiling, +1 | at zero, −1 |
+| --- | --- | --- | --- | --- | --- |
+| `str agi sta cha wis int` | `4B..50` | 1 BCD | 99 | 00 | 99 (unguarded) |
+| torches / keys / tools | `64/65/66` | 1 BCD | 99 | 00 | 99 (unguarded) |
+| weapons / armour / item counts | `76+i` / `96+i` / `D6+i` | 1 BCD | 99 | 00 | 99 (unguarded) |
+| HP | `51..52` | 2 BCD | 9999 | 0000 | borrow-tested |
+| EXP / GOLD | `56..57` / `58..59` | 2 BCD | 9999 | 0000 | borrow-tested |
+| food | `53..55` | 3 BCD | 999999 | 000000 | borrow-tested |
+
+| ID | Ticket | Status |
+| --- | --- | --- |
+| B1 | **Original mode reproduces the wrap.** Replace the clamp in `u2_bcd16_encode()` (`engine/src/core/state.c:18`, `if (value > 9999) value = 9999`) with the discarded-carry behaviour. Pinned by a measured expectation, not a contrived one: `9999 + 15 -> 14` and `9999 + 2 -> 1` (T4, `asm/2DC1`, `asm/2DEE`). Name the helper so a reader does not "fix" it — the wrap is deliberate and must say so with the asm citation inline. | todo |
+| B2 | **Enhanced mode clamps at the ceiling and says so.** Catch the carry/borrow that original mode discards, clamp at the field's ceiling, and print a message (`NO ROOM` / `DENIED AT MAX`) in the existing message window. The same flag serves both modes, which is why honouring the BCD mechanics needs no policy layer. The message must be **enhanced-only**: the original prints nothing when gold wraps. | todo |
+| B3 | **Cap override is downward-only.** The ceiling is a property of the storage width, so a value above it is unrepresentable in the save format — the save record is `DS:36..135` copied verbatim (`engine/src/core/save.c:103,129`). An override above the ceiling must be refused, not silently truncated. Raising a cap would require an enhanced-mode save format change, which is a separate and much larger decision. Follow the `auto_pass_polls` precedent in `engine/src/core/ctx.h` for the enhanced-knob shape. | todo |
+| B4 | **Never normalise loaded BCD.** Invalid nibbles are reachable: BCD underflow manufactures them (`0x10-0x0B -> 0xFF`, `0x30-0x1F -> 0x0B`). The engine currently **repairs** them on a decode/encode round-trip — measured: `9A 99 -> 10099 -> 99 99`, and `1B 05 -> 21 05` with no clamp involved. The loader is verbatim today, so the rule is narrow: `u2_bcd16_encode()` is for arithmetic results, never for normalising bytes that came off disk. | todo |
+| B5 | **`state.h` has no names for these counters.** `engine/src/core/state.h:168` lumps `0x64..0x238` into `reserved_64[0x1D5]`, so torches, keys, tools, weapon/armour/item counts and the boots slot are all unnamed — while `docs/save-format.md` documents them as proven. Name the fields and add the `_Static_assert`s so the wrap tickets have something to attach to. | todo |
+
+Not yet proven, and deliberately not guessed:
+
+* **Reachability of the single-byte underflow.** The bytes show no borrow test; they do
+  not show that the game lets a counter reach zero and be decremented anyway. A
+  `keys == 0` guard upstream of `asm/435E` would make `0 -> 99` unreachable. Needs a
+  capture or a caller walk.
+* **The `das` results are inferred from documented 8086 semantics, not observed.** The
+  `daa` side I did validate against a real observation (T4). Nothing in `captures/`
+  shows a BCD underflow, so `0 - 1 -> 99` is a property of the format, not a
+  witnessed bug.
+* **26 non-counter `daa`/`das` sites are excluded** from the census tally as unresolved
+  targets or mis-decoded data (e.g. `asm/025E`, the "REVENGE" title printer, whose
+  `das` is followed by the nonsense `add %al,(%bp,%di)`). Do not cite them.
+
+---
 
 ## Invariants (checked at every checkpoint)
 
