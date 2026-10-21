@@ -839,6 +839,36 @@ around 314-542 against roughly 2970 on the overworld.
 bytes differ). Any "which sector is this" check that compares bytes rather than the
 sector digits will conflate them, and a content-addressed save would too.
 
+### The dungeon grid carries two layers in one byte array
+
+`mapx35` on disk uses exactly **7 distinct bytes**, all multiples of `0x10`: `0x00`
+(46%), `0x80` (42%), `0xC0` (6%), `0xE0` (2%), and `0x40`, `0x10`, `0x20` at 15-19
+cells each. Overworld maps use 30-50 distinct bytes. Seven aligned values is not an
+art index; it reads as a flag or small-enum encoding of geometry. Only 7 of the 16
+combinations a free 4-bit mask would allow occur, so it is not independent
+per-direction wall bits either.
+
+Objects are **written into that same grid at runtime as small integers**. Comparing
+the shipped file against the live grid mid-visit, 32 of 4096 cells differ, and every
+addition is a value `0x01..0x07` stamped into a cell that was `0x00` on disk:
+
+```
+0x1 x8   0x2 x8   0x3 x6   0x4 x2   0x5 x2   0x6 x4   0x7 x1
+```
+
+So the answer to "randomly generated or represented by tiles" is **both**: placement is
+generated when the sector loads, representation is a tile in the map grid. This is the
+same mechanism as overworld vehicles, where boarding stamps a cell and landing moves
+it. It also means the shipped map files understate what the grid can hold, and a
+reconstruction that treats the file as the whole truth will have no place to put
+monsters, boxes or traps.
+
+Not established: what the seven static bytes mean, and how the 64x64 grid maps to a
+first-person crawl. The rope is **not** the tile under the player - the climb-out cell
+(5,5) is `0x80`, the same byte as 32 of 48 dungeon positions - so it is either
+facing-relative or a property of the entry point. Leads are recorded as a backlog
+item in `docs/phase4-state.md` rather than guessed at here.
+
 ### Darkness and the torch
 
 | observation | value |

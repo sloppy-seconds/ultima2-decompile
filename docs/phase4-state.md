@@ -332,24 +332,52 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 - [ ] **Decode the dungeon map format and reproduce the wireframe renderer.** This is
       the largest unexplained surface in the game and it blocks any real dungeon crawl.
-      Unknowns, in the order they need attacking:
-      (1) what a dungeon tile byte *means*. Overworld bytes map to art via
-      `art = map_byte >> 2` and render top-down; dungeon maps are dominated by `0x80`
-      (68% of `mapx34`, 42% of `mapx35`) and the view is a first-person wireframe, so
-      the byte cannot be a floor tile. It must encode wall/door/opening geometry
-      relative to the viewer, but nothing has been read that shows the lookup.
-      (2) which code draws the corridor - the wireframe is CGA mode 4 line primitives,
-      so find the line-drawing routine and the table it indexes with the tile byte.
-      (3) how the 64x64 grid relates to the crawl: the dungeon viewport is not a
-      top-down window, so the mapping from (x, y) to what is in front of you is
-      unproven. (4) `mapx25`/`35`/`45` are byte-identical, so any decode must explain
-      or accept three sector numbers sharing one map.
-      Approach that worked elsewhere here: drive the owner into a known cell, dump the
-      grid plus the frame, and correlate rather than read the listing cold. The
-      `A`-`Z` letter tiles are the foothold - in sectors that spell words they are
-      legible ASCII, so the byte-to-glyph mapping is already known and may be the same
-      table the dungeon uses. Evidence base: `docs/spice86-live-findings.md` § 13 and
-      `captures/spice86/dungeon-entry/`.
+      Not solved here on purpose; these are leads measured on 2026-10-21 so the next
+      session starts from evidence rather than from a blank page.
+
+      **Already known, do not re-derive:**
+      * Dungeons are sectors. Entering moved `DS:49/4A` from `3,0` to `3,5` and loaded
+        `mapx35`. No video mode change; it stays CGA mode 4.
+      * `mapx35` uses only **7 distinct bytes**, all multiples of `0x10`: `0x00` 46%,
+        `0x80` 42%, `0xC0` 6%, `0xE0` 2%, and `0x40`/`0x10`/`0x20` at 15-19 cells each.
+        Overworld maps use 30-50 distinct bytes. Seven aligned values is a flag or
+        small-enum encoding of geometry, not an art index.
+      * Only 7 of the 16 combinations a free 4-bit mask would allow actually occur, so
+        it is not independent per-direction wall bits. Start from that constraint.
+      * **Objects are runtime-written into the grid as small integers.** Disk vs live
+        mid-visit: 32 cells differ, and every addition is a value `0x01..0x07` stamped
+        into a cell that was `0x00` on disk (`0x1` x8, `0x2` x8, `0x3` x6, `0x4` x2,
+        `0x5` x2, `0x6` x4, `0x7` x1). So placement is generated at load and
+        representation is a tile - the same mechanism as overworld vehicles, where
+        boarding stamps a cell and landing moves it. Answer to "random or tiles": both.
+      * `mapx25`, `mapx35` and `mapx45` are **byte-identical** (md5 `e274897a...`). Any
+        decode must explain or accept three sector numbers sharing one map, and any
+        "which sector am I in" check must use the digits, not the bytes.
+      * Light is a step counter at `DS:26`: zeroed on entry, ~150 on `I`, decremented
+        per move, zeroed again on re-entry. `vga_ink` is a reliable dark/lit signal
+        (exactly 0 when dark).
+      * Command dispatch is mode-aware: `A` ATTACK outside, ADVANCE inside; `I`
+        inventory outside, IGNITE TORCH inside; `K` is the rope exit; `G` looted a box.
+
+      **Open, in the order worth attacking:**
+      1. What the seven static bytes mean. The `A`-`Z` letter tiles are the foothold -
+         in sectors that spell words they are legible ASCII, so a byte-to-glyph mapping
+         is already known and may share the table.
+      2. Which routine draws the corridor. The wireframe is mode-4 line primitives; find
+         the line drawer and the table it indexes with the tile byte. `tools/vga_ring.py`
+         and `tools/vga_screen.py` are the existing frame-reading tools.
+      3. How the 64x64 grid maps to the crawl. The dungeon viewport is not a top-down
+         window, so the (x, y) to "what is in front of you" relation is unproven.
+      4. **The rope is not the tile under the player.** Climbed out at (5,5) and that
+         cell is `0x80`, the same byte as 32 of 48 dungeon positions. Either it is a
+         facing-relative property or a property of the entry point. Untested; do not
+         write it up as a tile until measured.
+
+      **Method that worked:** drive the owner into a known cell and dump grid plus frame,
+      correlating rather than reading the listing cold. `tools/dungeon_capture.py` does
+      this and re-reads the grid every sample on purpose - a cached grid produced stale
+      labels and one fabricated finding. Evidence: `docs/spice86-live-findings.md` § 13
+      and `captures/spice86/dungeon-entry/` (55 events, full DS + VGA each).
 
 - [ ] **Standardised capture tooling: one recorder for gameplay, memory and CFG.**
       Today three ad-hoc probes were written in one session (`tools/turn_recorder.py`
