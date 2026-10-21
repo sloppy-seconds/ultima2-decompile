@@ -23,7 +23,7 @@ Fields, all proven by live correlation or by cited asm in state.h:
     save  DS    field
     0x00  36    name (16 bytes, NUL padded)
     0x10  46    sex      'M' / 'F'
-    0x11  47    class    0 fighter, 1 mage, 2 paladin, 3 thief (after sub 0x31)
+    0x11  47    class    0 FIGHTER, 1 CLERIC, 2 WIZARD, 3 THIEF (after sub 0x31)
     0x12  48    race     0 human, 1 elf, 2 dwarf, 3 hobbit
     0x13  49    sector first digit
     0x14  4A    sector second digit (also site kind outside a sector read:
@@ -292,7 +292,14 @@ def main():
     chk = load(out)
     if a.cmd == 'set':
         got = get(chk, a.args[0])
-        if str(got) != str(int(a.args[1])) and a.args[0] not in ('name', 'sex'):
+        # name and sex are not integers. Running int() on them raised ValueError
+        # AFTER the write had already landed, so a successful edit printed a
+        # traceback and looked like a failure (seen 2026-10-21 with
+        # `set <file> name AIRTEST`). Compare those against the raw value.
+        if a.args[0] in ('name', 'sex'):
+            if str(got) != a.args[1]:
+                sys.exit('write did not land: read back %r' % got)
+        elif str(got) != str(int(a.args[1])):
             sys.exit('write did not land: read back %r' % got)
     print('wrote %s' % out)
 
