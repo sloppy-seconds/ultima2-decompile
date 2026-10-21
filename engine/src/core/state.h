@@ -164,9 +164,45 @@ typedef struct u2_state {
                                         * current sector. */
     /* 0x5B */ uint8_t entry_y;        /* spawn y: [0x5B]->[0x01] (file 0x0A2C),
                                         * creation sets 20 (file 0x5BE3) */
-    /* 0x5C */ uint8_t reserved_5C[7];
+    /* 0x5C */ uint8_t reserved_5C[5];
+    /* 0x61 */ uint8_t readied_weapon; /* weapon index 0..9, 0 = HANDS. Proven by
+                                        * live read/write-back, findings § 11;
+                                        * name table at file 0x4F53. */
+    /* 0x62 */ uint8_t worn_armour;    /* armour index 0..7, 0 = SKIN. Proven,
+                                        * findings § 11; name table at file 0x4F9E. */
     /* 0x63 */ uint8_t spell_pick;    /* readied spell slot */
-    /* 0x64 */ uint8_t reserved_64[0x1D5];
+    /* 0x64 */ uint8_t torches;        /* one packed-decimal byte, ceiling 99.
+                                        * asm/2D22 adds, asm/37AE subtracts. */
+    /* 0x65 */ uint8_t keys;           /* packed decimal, ceiling 99. asm/2CD8
+                                        * adds 2, asm/435E subtracts 1. */
+    /* 0x66 */ uint8_t tools;          /* packed decimal, ceiling 99. asm/2CF6
+                                        * adds 1, asm/277B subtracts 1. */
+    /* 0x67 */ uint8_t reserved_67[6];
+    /* 0x6D */ uint8_t boots_count;    /* non-zero gates the paralysis save at
+                                        * runtime 0x22FD. STALE COPY — after a thief
+                                        * stole the boots this still read 1 while the
+                                        * live gate DS:D9 (items_held[BOOTS]) went
+                                        * to 0. Resist checks read items_held, never
+                                        * this byte. */
+    /* 0x6E */ uint8_t reserved_6E[8];
+    /* 0x76 */ uint8_t weapons_owned[10]; /* one count per weapon, 10 entries.
+                                        * Proven, docs/save-format.md. asm/363B and
+                                        * asm/19D7 add; asm/3F5D steals. */
+    /* 0x80 */ uint8_t reserved_80[0x16];
+    /* 0x96 */ uint8_t reserved_96[0x40];
+    /*      */                     /* CANDIDATE, NOT PROVEN, deliberately unnamed:
+                                        * asm/363B, asm/19D7 and asm/3F5D each do a
+                                        * BCD add/sub on 0x96(%di) alongside
+                                        * 0x76(%di), which fits an owned-armour
+                                        * count table of 8 entries. No display site
+                                        * and no live read/write-back yet. Do not
+                                        * use until cited. */
+    /* 0xD6 */ uint8_t items_held[16]; /* the LIVE inventory array, one count per
+                                        * item, 16 slots. The C2 resist gates read
+                                        * slots inside it (0xD9 BOOTS, 0xDA CLOAK,
+                                        * 0xE4 GREEN IDOL) and asm/0FCD theft deletes
+                                        * from it. Name table at file 0x501D. */
+    /* 0xE6 */ uint8_t reserved_E6[0x153];
     /* 0x239 */ uint8_t story_flag;   /* "story/poem shown"; cleared at asm/0133_sub_0133.asm,
                                          set at asm/03AC_sub_03ac.asm, branched on in the
                                          same region */
@@ -226,6 +262,21 @@ _Static_assert(U2_OFF(food)       == 0x053, "food moved");
 _Static_assert(U2_OFF(exp_lo)     == 0x056, "exp_lo moved");
 _Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
 _Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
+_Static_assert(U2_OFF(readied_weapon) == 0x061, "readied_weapon moved");
+_Static_assert(U2_OFF(worn_armour)    == 0x062, "worn_armour moved");
+_Static_assert(U2_OFF(torches)        == 0x064, "torches moved");
+_Static_assert(U2_OFF(keys)           == 0x065, "keys moved");
+_Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
+_Static_assert(U2_OFF(boots_count)    == 0x06D, "boots_count moved");
+_Static_assert(U2_OFF(weapons_owned)  == 0x076, "weapons_owned moved");
+_Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
+_Static_assert(sizeof(((u2_state *)0)->weapons_owned) == 10,
+               "weapons_owned is 10 entries");
+_Static_assert(sizeof(((u2_state *)0)->items_held) == 16,
+               "items_held is 16 slots");
+/* The struct mirrors the whole DS working segment. Naming fields must never
+ * change its size; if this fires, a split lost or gained bytes. */
+_Static_assert(sizeof(u2_state) == 0x650, "u2_state size changed");
 _Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");
 _Static_assert(U2_OFF(text_attr)  == 0x23E, "text_attr moved");
 _Static_assert(U2_OFF(rng_state)  == 0x23F, "rng_state moved");
