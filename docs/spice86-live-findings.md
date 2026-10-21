@@ -478,6 +478,16 @@ Everything here was written and read back through the Spice86 MCP on a live
 session on 2026-10-21, so the DS column is byte-proven. The save column is
 partly inferred and marked as such.
 
+> **Layout authority: `engine/src/core/state.h`, not this table.** This section
+> is the live *evidence*; the struct is the *table*, because it is compiled and
+> every named field is pinned by a `_Static_assert`, so drift there is a build
+> failure rather than a stale document. Per `AGENTS.md § 3` there is one lookup
+> table per domain and derived views are generated, not hand-kept. Where the two
+> disagree, `state.h` wins and this section is the bug. Two entries below are
+> already known to be wrong and are corrected in the struct: `0x13` is the
+> player stamp, not a "player tile id", and `0x20` is scratch, not an
+> invalid-move counter.
+
 ### Live data segment
 
 `DS = 0x08BE` this session. The MCP takes **decimal** integers for segment and

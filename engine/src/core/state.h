@@ -26,6 +26,13 @@
  * Offsets below are proven by the asm that reads them; each is cited.
  * Offsets not yet lifted stay in `reserved` and are filled in as phases
  * progress — never guessed.
+ *
+ * THIS STRUCT IS THE ONE TABLE FOR DS OFFSETS. It is compiled, and every named
+ * field is pinned by a _Static_assert below, so a drift is a build failure
+ * rather than a stale document. docs/spice86-live-findings.md § 11 is the live
+ * evidence behind it and defers to it on layout; when a field is filled in
+ * here, § 11 should not grow a competing copy. When you prove a DS byte, name
+ * it here in the same commit and add its _Static_assert.
  */
 
 #include <stdint.h>
@@ -36,13 +43,57 @@ typedef struct u2_state {
     /* 0x00 */ uint8_t sector_x;      /* asm/5AE1 fill loop: window origin is (x-9, y-5);
                                         also the >= 0x40 sector-reload test (asm/242D). */
     /* 0x01 */ uint8_t sector_y;      /* asm/5AE1, asm/2434 */
-    /* 0x02 */ uint8_t reserved_02[0x21];
+    /* 0x02 */ uint8_t reserved_02[0x10];
+    /* --- movement and passability cluster. Filled 2026-10-21 from the full
+     * re-decode of asm/2423_passability.asm and the raw writer scan; narrative
+     * in docs/passability-findings.md. Before this these bytes sat inside
+     * `reserved_02`, which is why the walk loop had to be re-derived by hand. */
+    /* 0x12 */ uint8_t tile_offsector;  /* off-sector cells take their tile from
+                                         * here; reads back as 0xFF in-world, which
+                                         * is an out-of-range marker, not a tile. */
+    /* 0x13 */ uint8_t player_stamp;    /* the sprite stamped INTO the map cell.
+                                         * 0x78 = on foot. NOT the terrain under the
+                                         * player: observed 0x78 while standing on
+                                         * tile 0x0C (create-test-live), and constant
+                                         * 0x78 across every in-world capture. The
+                                         * old "player tile id" reading was wrong and
+                                         * the asm/2423 first ladder never fires on
+                                         * foot because of it. */
+    /* 0x14 */ uint8_t mode_a;          /* <- DS:2DF (asm/5B71_mode_table_copy) */
+    /* 0x15 */ uint8_t mode_walk;       /* the walk loop's passability argument on
+                                         * three of four arms: mov al,[0x15] at
+                                         * runtime 0x0962. Origin is DS:2CB via
+                                         * asm/5B71_mode_table_copy.asm. */
+    /* 0x16 */ uint8_t mode_b;          /* <- DS:2F3 (asm/5B71_mode_table_copy) */
+    /* 0x17 */ uint8_t mode_c;          /* <- DS:2E0 (asm/5B71_mode_table_copy) */
+    /* 0x18 */ uint8_t mode_walk_alt;   /* the fourth arm's argument: mov al,[0x18]
+                                         * at runtime 0x09AF. Origin is DS:2DE. */
+    /* 0x19 */ uint8_t reserved_19[7];
+    /* 0x20 */ uint8_t move_scratch;    /* DISPUTED: docs called this an
+                                         * invalid-move counter, but the harvest
+                                         * shows it decremented in the walk loop and
+                                         * overwritten at runtime 0x2BC7. Treat as
+                                         * scratch; do not use as a reject signal. */
+    /* 0x21 */ uint8_t reserved_21[2];
     /* 0x23 */ uint8_t player_x;      /* asm/50B3_map_tile_ptr.asm: x + (y<<6) + map base.
                                         The relationship between this pair and the
                                         DS:00/01 pair above is not yet established by
                                         the asm, so both are kept rather than merged. */
     /* 0x24 */ uint8_t player_y;      /* asm/50B3_map_tile_ptr.asm */
-    /* 0x25 */ uint8_t reserved_25[0x09];
+    /* 0x25 */ uint8_t reserved_25;
+    /* 0x26 */ uint8_t moved_flag;    /* the accept tail of the walk loop xors it
+                                         * with 0xFF (runtime 0x09E9) and it is
+                                         * zeroed at 0x09F7; a rejected step never
+                                         * reaches the xor. */
+    /* 0x27 */ uint8_t reserved_27[2];
+    /* 0x29 */ uint8_t mode_arg;      /* asm/2423_passability.asm stores its AL
+                                         * argument here on entry and the mode
+                                         * ladder reads it back masked & 0x7F.
+                                         * NB it has FOUR writers (runtime 0x20B7,
+                                         * 0x2423, 0x54E8, 0x5A7A), so it is shared
+                                         * scratch: a snapshot of it does not tell
+                                         * you the last passability argument. */
+    /* 0x2A */ uint8_t reserved_2A[4];
     /* 0x2E */ uint8_t cursor_col;    /* asm/51FD_str_out_core.asm: DL for INT 10h AH=02h */
     /* 0x2F */ uint8_t cursor_row;    /* asm/51FD_str_out_core.asm: DH for INT 10h AH=02h */
     /* 0x30 */ uint8_t reserved_30;
@@ -145,6 +196,16 @@ typedef struct u2_state {
 /* Compile-time proof that the struct still matches the asm offsets. */
 _Static_assert(U2_OFF(player_x)   == 0x023, "player_x moved");
 _Static_assert(U2_OFF(player_y)   == 0x024, "player_y moved");
+_Static_assert(U2_OFF(tile_offsector) == 0x012, "tile_offsector moved");
+_Static_assert(U2_OFF(player_stamp)   == 0x013, "player_stamp moved");
+_Static_assert(U2_OFF(mode_a)         == 0x014, "mode_a moved");
+_Static_assert(U2_OFF(mode_walk)      == 0x015, "mode_walk moved");
+_Static_assert(U2_OFF(mode_b)         == 0x016, "mode_b moved");
+_Static_assert(U2_OFF(mode_c)         == 0x017, "mode_c moved");
+_Static_assert(U2_OFF(mode_walk_alt)  == 0x018, "mode_walk_alt moved");
+_Static_assert(U2_OFF(move_scratch)   == 0x020, "move_scratch moved");
+_Static_assert(U2_OFF(moved_flag)     == 0x026, "moved_flag moved");
+_Static_assert(U2_OFF(mode_arg)       == 0x029, "mode_arg moved");
 _Static_assert(U2_OFF(cursor_col) == 0x02E, "cursor_col moved");
 _Static_assert(U2_OFF(cursor_row) == 0x02F, "cursor_row moved");
 _Static_assert(U2_OFF(right_margin)== 0x031, "right_margin moved");
