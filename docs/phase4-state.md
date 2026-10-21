@@ -13,7 +13,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
 | CP4 | Overworld + movement | **in-progress (CP4b overnight: T1,T3,T4,T6,T7,T8 done/passed; T2 half; T5 held)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: arrows via a scancode table at `CS:0x4F09`, direction codes as data at `DS:26E..271`, a rejected step is undone before `--INVALID MOVE!`, and crossing x/y >= 64 reloads the sector (`asm/242D`/`2434`/`243E`) rather than straddling. **Viewport now measured from owner screenshots**: tile = 16x16 px = 2x2 text cells, window 20x10 tiles at rows 0-19 full width, player at window tile (9,5), row 24 blank. Dungeons are first-person 3D, so the tile renderer does not cover them (CP7). **CP4b overnight (2026-10-21):** the passability premise was disproven — `asm/2423` never reads a tile, so on-foot walking is never rejected on the overworld (T1 PASSED, write-up in implementation log § CP4b); tile IDs decoded (0=water,4=land,8=plane,0x78=player); sector crossing is the `DS:6E` arrival system, not a foot step. T3/T4/T6 fixed one root-cause class (loops testing `exit_code` but not `input_exhausted`): window-close, SIGTERM, and dummy-driver `--dump-screen` all now stop cleanly. T2 shipped the proven half (PASS spends 10 food, underflow zeroes DS:51..59 = instant death; no gradual HP drain, no per-step tick — the walk loop calls no drain). T7 screenshot differential harness landed (status-block only, poison-checked). T5 held for owner: it moves the CP2 baseline and its pre-approval flag is unresolved. Full detail: `docs/phase4-overnight-cp4b.md § Morning report` | 2026-10-21 |
-| CP5 | Combat | todo | | |
+| CP5 | Combat | **scoped, not started** | Tickets C1..C7 in § CP5 below. Evidence base is the 2026-10-21 sector-00 caster session: commits `b11bfc6`, `1d7bae3`, `341952d`, `49d8365` and `docs/spice86-live-findings.md` § 12. Nothing may be written before C1/C2, and C5 and C7 are **blocked on a capture** because a required input is still unproven. | 2026-10-21 |
 | CP6 | Towns + full command set | todo | | |
 | CP7 | Time travel + space + dungeons | todo | | |
 | CP8 | Endgame + full playthrough 🔒 | todo | | |
@@ -411,10 +411,16 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 The CFG-plus-`ExecutedInstructions` technique settled several things without any
 new capture. Executed: `ATTACK--`, `--MISS`, `--HIT!!!`, `--EXP.+`,
 `KILLED--GOLD+`, `--INVALID MOVE!`, `LEGS PARALIZED!`, `--PARALIZED!`, and
-`A THIEF STOLE SOMETHING!`. Not executed: `MINAX IS DEAD!!`,
-`RING PROTECTS FROM FIELD!`, `FIELD CAUSES 1000 DAMAGE!`, `ARMS PARALIZED!`,
-`SAVED BY MAGICAL BOOTS!`. `create-test-live`, taken before any fighting, shows
-none of the combat strings — a clean negative control.
+`A THIEF STOLE SOMETHING!`.
+
+**Update, 2026-10-21: the "not executed" list from that earlier pass is stale and
+was removed rather than left to rot.** `RING PROTECTS FROM FIELD!`,
+`FIELD CAUSES 1000 DAMAGE!`, `ARMS PARALIZED!` and `SAVED BY MAGICAL BOOTS!` have
+since all been observed executing in `captures/spice86/castle-03-live`, together
+with `SAVED BY MAGICAL CLOAK`, `SAVED BY IDOL!`, `MAGIC MISSILE!`, `SLEEP SPELL!`,
+`-CASTLE` and a level-up. Only `MINAX IS DEAD!!` and `MINAX CRIES: DIE FOOL!` are
+still unexecuted, and the sector-00 compound is now known to be a caster gauntlet
+rather than the Minax fight. The `create-test-live` negative control still stands.
 
 Two consequences worth keeping. `A THIEF STOLE SOMETHING!` is printed from the
 same block that decrements `DS:D6+i`, so the theft of the staff is proven rather
@@ -423,6 +429,32 @@ passability routine — so paralysis is enforced in the movement check itself an
 paralyzed step takes the same reject path as walking into a mountain. That is why
 `--INVALID MOVE!` is what the owner saw while paralyzed, and it means the engine
 must model paralysis as a movement rejection, not a combat overlay.
+
+## CP5 — combat tickets (scoped 2026-10-21, not started)
+
+Scope rule for this checkpoint: **no stubs.** A stub for "resist paralysis" encodes
+boolean immunity, passes the tests that do not exist yet, and looks finished. Every
+ticket below is either a proven behaviour with a byte citation, or an explicitly
+named unknown. Where the input is unproven the ticket is `blocked`, not guessed.
+
+Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers in
+`asm/` for `0AAA`, `0AD3`, `0E70`, `0EC2`, `0F12`, `0F48`, `0FCD`, `24B5`, `2FAD`.
+
+| ID | Ticket | Status | Why |
+| --- | --- | --- | --- |
+| C1 | Three independent status counters as persistent state: legs `DS:26B`, arms `DS:26C`, sleep `DS:26D`, each set to `rand & 0xF` (0..15 turns) and stored in the player record | todo | `asm/0E70`, `asm/0EC2`, `asm/0F48`. Arms and legs are separate counters with separate items, so a character can be paralysed in one and free in the other; both were observed non-zero simultaneously (9 and 8) alongside sleep 8. |
+| C2 | Resist is a **~75% roll on a live item-array slot**, not immunity: `[DS:D9]` BOOTS, `[DS:DA]` CLOAK, `[DS:E4]` GREEN IDOL; with the item the `L_005417` roll must be `>= 0x40`, without it the effect lands with **no roll at all** | todo | This is the single easiest thing to get wrong, and the pre-existing docs had it wrong as a boolean gate. Needs a distribution test, not a present/absent test. |
+| C3 | Paralysis is a **movement rejection**, not a combat overlay | todo | `--PARALIZED!` is at runtime `0x2527`, inside the passability routine, so a paralysed step takes the same reject path as walking into a mountain. Couples to the CP4 passability work and to the `--INVALID MOVE!` path. |
+| C4 | Magic missile: **no save path exists** | todo | `asm/0F12` has no inventory gate and no roll, unlike the other three. The accumulation into `DS:20/21/22` is proven (`+2, +2, +0x40` per cast) but its BCD weight against the HP subtract is **not** — model the no-save property, leave the scaling as a named unknown. |
+| C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But **the tile byte that triggers the field is unknown**, and so is what drives its animated render. Cannot be wired to a tile until a capture names the byte. |
+| C6 | Theft **deletes** from the item array; killing the thief restores nothing | todo | `asm/0FCD`, thief is monster type `0x40`. Measured: 8 items stolen, 0 returned, kill paid a random drop like any other. Because the C2 gates read the item array live, a flagged-but-present item would wrongly keep the resist. |
+| C7 | Map byte -> vehicle code transform for BOARD | **blocked** | `asm/2FAD` dispatches on `[DS:14]` against `0x22/0x24/0x26/0x28`, but every map byte is a multiple of 4 and `0x22`/`0x26` occur zero times across all 33 sectors. The plane tile is `0x34` and the plane code is `0x26`, so a transform exists and is unproven. Also unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid. |
+
+One design constraint that outlives the checkpoint: the original keeps **two** copies
+of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole the
+boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
+source of truth for item counts, and any resist check must read it rather than a
+cached boolean.
 
 ## Invariants (checked at every checkpoint)
 
