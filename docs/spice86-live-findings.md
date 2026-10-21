@@ -788,7 +788,18 @@ kill's reward wrapped them mod 10000: `9999 + 15 -> 0014 = 14` (gold, reward
 All result nibbles are valid BCD, so it is a field-width overflow, not nibble
 corruption. See `docs/phase4-overnight-cp5-report.md § T4`.
 * Which map byte the force-field tile is, and what drives its animated
-  white/blue/purple render.
+  white/blue/purple render. **Narrowed 2026-10-22 (overnight T8), measured.** The
+  trigger is **mode byte `0x2e`**, not a tile byte: the passability ladder
+  (`asm/248B`→`asm/2495`→`asm/24B1`) reads no tile and falls through to
+  `asm/24B5` only when `[DS:29] & 0x7f == 0x2e`, where `[DS:29]` is the travel-mode
+  byte `[DS:15]`/`[DS:18]`. Confirmed at the live force-field turn
+  (`fight-20261021-castle03` turn 2909: HP −1000, `[DS:D6]=0`, `[DS:15]=[DS:18]=0x2e`).
+  `0x2e` occurs 0 times in `mapx00`, so it is a derived mode, and the tile→mode
+  mapping is the unattributed indirect store into `DS:2CB`/`DS:2DE` (F3), so the
+  map byte is **not statically resolvable** and is left unguessed. The animated
+  render is not in `asm/24B5` (it only flashes/sounds). Settled by the backlog
+  four-question passability capture (dump `DS:2CB`/`DS:2DE` + destination tile at
+  the `0x2e` instant). See `docs/phase4-overnight-cp5-report.md § T8`.
 * The 30 live-grid cells that differ from `mapx03`.
 
 ~~The `map byte -> vehicle code` transform behind `[DS:14]`~~ - resolved in section

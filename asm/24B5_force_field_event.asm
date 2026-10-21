@@ -15,8 +15,24 @@
 #           high byte of the 4-digit BCD HP at DS:51/52 — that is a clean -1000.
 #           If the subtract borrows (HP < 1000) the branch at file 0x271B jumps to
 #           the death handler, so this tile kills a weak character outright.
-#           The tile byte that triggers it is NOT proven; the field renders as an
-#           animated white/blue/purple band and no map byte has been matched to it.
+#           The tile byte that triggers it is NOT statically resolvable. The ladder
+#           that reaches this routine (asm/248B -> asm/2495 -> asm/24B1 -> here, all
+#           inside the passability routine asm/2423) reads NO map tile: it decides on
+#           [DS:29] & 0x7f, and asm/24B1 falls through to force_field_event only when
+#           ([DS:29] & 0x7f) == 0x2e. [DS:29] is set at the asm/2423 entry from AL,
+#           the travel-mode byte [DS:15]/[DS:18] (mode_table_copy asm/5B71 asm/5C49:
+#           [DS:15]=[DS:2CB], [DS:18]=[DS:2DE]). MEASURED at the live force-field turn
+#           (fight-20261021-castle03 turn 2909: HP_hi 0x88->0x78 = -1000, [DS:D6]=0,
+#           [DS:15]=[DS:18]=0x2e). So the trigger is MODE BYTE 0x2e, not a tile byte:
+#           0x2e occurs 0 times in mapx00, so it is not a raw grid byte. The tile ->
+#           mode 0x2e mapping is produced by the indirect store that fills DS:2CB/DS:2DE
+#           (docs/passability-findings.md F3: no direct writer anywhere in the exe), so
+#           the map byte cannot be named offline. The animated white/blue/purple render
+#           is likewise not in this routine (it only flashes/sounds via L_00543e/L_0060f2).
+#           NAMED CAPTURE THAT WOULD SETTLE IT: the backlog four-question passability
+#           capture - read DS:2CB/DS:2DE plus the destination tile byte at the instant
+#           the mode is 0x2e (or break the indirect store that writes DS:2CB/DS:2DE),
+#           which inverts tile -> mode 0x2e. Do NOT guess a byte.
 # confidence: high (gate, damage, death branch and both paths proven by bytes,
 #           execution and live memory)
 force_field_event:

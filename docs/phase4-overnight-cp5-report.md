@@ -16,7 +16,7 @@ logical commit.
 | T5 | DONE |
 | T6 | DONE |
 | T7 | DONE |
-| T8 | todo |
+| T8 | PASSED — trigger is mode byte 0x2e, not a tile byte; map byte needs a capture |
 | T9 | todo |
 | T10 | todo |
 
@@ -566,3 +566,87 @@ the existing backlog item and was **not** attempted here (out of scope).
 (CP0..CP4).
 
 **Commit: `b71c6a1`.**
+
+---
+
+## T8 — the force-field tile byte
+
+**Status: PASSED — the trigger is a mode byte, not a map byte; the map byte needs
+a capture.** The task said "do not guess a byte" and "this may be unreachable
+without a capture; if so, pass it and say what capture would settle it." That is
+exactly the outcome, but the trigger was narrowed from "unknown" to a specific,
+measured mode byte. Grades are named per claim.
+
+### What the caller walk found (measured)
+
+`asm/24B5 force_field_event` has no `call`/`jmp` to it from a tile check. It is
+reached by **fall-through** inside the passability routine `asm/2423`, through a
+comparison ladder that reads **no map tile at all**:
+
+```
+asm/2423 entry:  mov [DS:29],%al        ; [DS:29] = the travel-mode byte (AL)
+                 mov [DS:4A],%al; cmp $0; je 0x268b   ; ladder runs when [DS:4A]==0
+asm/248b:        mov [DS:29],%al; and $0x7f,%al; cmp $0x2,%al; jne 0x26b1
+asm/24b1:        cmp $0x2e,%al; jne 0x2720
+                 ; falls through to force_field_event ONLY when ([DS:29] & 0x7f)==0x2e
+```
+
+So the trigger is **mode byte `0x2e`** in `[DS:29]`, which `asm/2423` loads from
+the travel-mode byte `[DS:15]`/`[DS:18]`. `mode_table_copy` (`asm/5B71`/`asm/5C49`)
+fills those from `[DS:2CB]`/`[DS:2DE]`.
+
+### Measured at the live force-field turn
+
+Scanning all 3000 recorded turns of `fight-20261021-castle03` for the BCD −1000 HP
+signature (`[DS:51]` drops `0x10`, `[DS:52]` unchanged) found exactly **one**
+event, turn 2909:
+
+```
+turn 2909: HP_hi 0x88->0x78 (=8842->7842, the -1000)  [DS:D6]=0x00 (no ring)
+           [DS:15]=0x2e  [DS:18]=0x2e
+```
+
+The mode bytes are `0x2e` on the damage turn and the ring slot is 0 — the damage
+branch. This is the trigger, measured, not inferred.
+
+### Why the map byte is NOT statically resolvable (measured)
+
+* `0x2e` is **not a grid byte**: it occurs **0 times** in `mapx00` (histogram
+  measured). It is a derived travel-mode, in the same value-space as the vehicle
+  board codes (`0x22` horse … `0x2e`), not a raw tile.
+* The tile → mode mapping is the **indirect store that fills `DS:2CB`/`DS:2DE`**,
+  which `docs/passability-findings.md` F3 already proved has **no direct writer
+  anywhere in the exe** (re-confirmed: grep finds none). Static analysis cannot
+  invert it, so the map byte that yields mode `0x2e` cannot be named offline.
+* The live capture does not disambiguate it either: the player's own cell is
+  stamped `0x78` (the player stamp), masking the terrain under it, and the damage
+  fired while the player was **stationary** at (29,50) (disk byte `0x10`, a common
+  byte with 122 copies in `mapx00`), so it is not a clean "step onto tile X" event
+  whose byte could be read off. Guessing `0x10` or `0x2e` would be exactly the
+  error the task forbids.
+
+### The animated render
+
+`asm/24B5` does not drive the white/blue/purple animation; it only flashes and
+sounds via `L_00543e`/`L_0060f2`. The animation is a separate render path not
+attributed here.
+
+### The capture that would settle it
+
+The backlog **four-question passability capture** already specifies the needed
+reads: at the instant the mode is `0x2e`, dump `DS:2CB`/`DS:2DE` **and** the
+destination tile byte (or breakpoint the indirect store that writes
+`DS:2CB`/`DS:2DE`). That inverts tile → mode `0x2e` and names the force-field map
+byte. No new capture type is needed — it is the same capture that resolves F3 and
+the mountain-tile question.
+
+### Files
+
+* `asm/24B5_force_field_event.asm` (header notes updated with the measured trigger; body byte-identical)
+* `docs/spice86-live-findings.md` § 12 (force-field open item narrowed)
+* `docs/phase4-overnight-cp5-report.md` (this section)
+
+`check_func.py 24B5` PASS; `bash tools/assemble_clean.sh` prints
+`CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`; `make -C engine test` green.
+
+**Commit: `<pending>`.**
