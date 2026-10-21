@@ -726,4 +726,4 @@ The PNG is game content and is written under `tmp/` (gitignored, verified with
 `git check-ignore`); only the tool and this report are committed. `asm/` untouched;
 `make -C engine test` green.
 
-**Commit: `<pending>`.**
+**Commit: `79f46ab`.**
