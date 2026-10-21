@@ -75,8 +75,16 @@ def load_functions() -> list[dict]:
 
 
 def resolve(funcs: list[dict], addr: int):
+    # Function ranges are INCLUSIVE of the end byte. This is the project-wide
+    # convention, proven by check_func.py (length = end - start + 1) and by every
+    # `# func START..END len NNNN` header and function-map.tsv row, where
+    # end - start + 1 == len for all 1298 functions. An earlier exclusive test
+    # (`addr < end`) made the last byte of every function dangle, which is what
+    # reported asm/0964 (last byte of sub_0962, 0962..0964) and asm/5002 (last
+    # byte of sub_5000, 5000..5002) as resolving to no range. Ranges do not
+    # overlap under the inclusive reading, so at most one function matches.
     for f in funcs:
-        if f["start"] <= addr < f["end"]:
+        if f["start"] <= addr <= f["end"]:
             return f
     return None
 
