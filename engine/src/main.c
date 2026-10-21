@@ -54,6 +54,11 @@ static void usage(const char *argv0)
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
         "  --rng-sequence N  print N rand_byte values and exit (test vector)\n"
+        "  --cleanroom       use the engine's own independently created assets in\n"
+        "                    place of the game's: substitute tiles now, and other\n"
+        "                    media (sound, music) as they are added. Opt-in, and\n"
+        "                    always announced — a screen drawn with substitute\n"
+        "                    assets is never presented as the real thing.\n"
         "  --save-dir DIR    player-record directory, the modern default drive\n"
         "                    (default: ./saves; holds the byte-compatible PLAYER file)\n"
         "  --data-dir DIR    world content directory: mapxNN / monxNN / tlkxNN.\n"
@@ -141,6 +146,8 @@ int main(int argc, char **argv)
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {
             ctx.save_dir = argv[++i];
+        } else if (strcmp(a, "--cleanroom") == 0) {
+            ctx.cleanroom = 1;
         } else if (strcmp(a, "--data-dir") == 0 && i + 1 < argc) {
             ctx.data_dir = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {

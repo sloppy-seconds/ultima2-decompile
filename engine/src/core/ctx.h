@@ -92,6 +92,17 @@ typedef struct u2_ctx {
     int save_seeded;         /* set when the blank PLAYER file was created here */
     int use_sdl;             /* --sdl: bitmap backends (make sdl build only) */
     int play_map;            /* --play-map: enter the CP4 overworld directly */
+    int cleanroom;           /* --cleanroom: use the engine's own independently
+                              * created assets instead of the game's — tiles now,
+                              * sound and other media as they land. One axis, so a
+                              * future asset class is a new consumer of this flag
+                              * rather than a new flag.
+                              * Opt-in by design: silently drawing substitute art
+                              * where the player's own was expected would make the
+                              * screen look finished while hiding what is absent —
+                              * the failure mode this codebase refuses elsewhere
+                              * (see the underlay note in game/overworld.c). Every
+                              * consumer must announce the substitution. */
     int exit_code;          /* set by game code / backends to force termination */
 
     /* Per-backend private state, one slot each so backends stay independent

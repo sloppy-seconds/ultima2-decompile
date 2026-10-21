@@ -16,6 +16,7 @@
 #include "core/save.h"
 #include "core/seam.h"
 #include "core/tiles.h"
+#include "core/tiles_builtin.h"
 #include "core/view.h"
 #include "core/world.h"
 #include "gen_content.h"
@@ -262,7 +263,19 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 {
     /* Tiles first: without art there is nothing to draw, and the reason the
      * player needs to hear is specific (no --data-dir vs a corrupt cache). */
-    u2_tiles_result tr = u2_tiles_open(ctx, &ow->tiles, NULL, 0, NULL, 0);
+    u2_tiles_result tr;
+    if (ctx->cleanroom) {
+        /* Opt-in substitute art, and announced: the source string names it and
+         * the notice goes to stderr, so a screen drawn with substitute tiles can
+         * never be mistaken for one drawn with the player's own. */
+        tr = u2_tiles_builtin(&ow->tiles);
+        if (tr == U2_TILES_OK) {
+            fprintf(stderr, "u2: cleanroom assets: tiles from %s\n",
+                    ow->tiles.source);
+        }
+    } else {
+        tr = u2_tiles_open(ctx, &ow->tiles, NULL, 0, NULL, 0);
+    }
     if (tr != U2_TILES_OK) {
         snprintf(ow->note, sizeof ow->note, "tiles: %s", u2_tiles_result_text(tr));
         return -1;
@@ -296,8 +309,11 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
              "sector %d%d via %s, %s%s",
              ow->sector_hi, ow->sector_lo,
              ow->world.found_prefix ? ow->world.found_prefix : "?",
-             ow->tiles.from_cache ? "tiles from cache" : "tiles extracted",
-             ow->tiles.unverified ? " (unverified)" : "");
+             strncmp(ow->tiles.source, "builtin:", 8) == 0
+                 ? "cleanroom tiles"          /* substitute art, named as such */
+                 : (ow->tiles.from_cache ? "tiles from cache" : "tiles extracted"),
+             ow->tiles.unverified && strncmp(ow->tiles.source, "builtin:", 8) != 0
+                 ? " (unverified)" : "");
     return 0;
 }
 

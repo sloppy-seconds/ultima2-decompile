@@ -160,7 +160,7 @@ fi
 # P lands where the player stood. Plus the outdoors guard and the CP11
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/save_q_check" \
-   tests/save_q_check.c src/game/overworld.c src/game/status.c src/core/world.c \
+   tests/save_q_check.c src/game/overworld.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
    src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -180,7 +180,7 @@ fi
 # file 0x0B0D spends 10 food per PASS and file 0x0B2E sends a borrow to the
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/food_check" \
-   tests/food_check.c src/game/overworld.c src/game/status.c src/core/world.c \
+   tests/food_check.c src/game/overworld.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
    src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
