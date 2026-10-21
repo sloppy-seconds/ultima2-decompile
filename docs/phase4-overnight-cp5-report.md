@@ -17,7 +17,7 @@ logical commit.
 | T6 | DONE |
 | T7 | DONE |
 | T8 | PASSED — trigger is mode byte 0x2e, not a tile byte; map byte needs a capture |
-| T9 | todo |
+| T9 | DONE |
 | T10 | todo |
 
 ---
@@ -648,5 +648,82 @@ the mountain-tile question.
 
 `check_func.py 24B5` PASS; `bash tools/assemble_clean.sh` prints
 `CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`; `make -C engine test` green.
+
+**Commit: `c9f9a31`.**
+
+---
+
+## T9 — decode `monsters` and render the shapes
+
+**Status: DONE.** Deliverable shipped: `tools/monster_shapes.py` renders the
+overworld sprite for each of the 11 monster types observed on 2026-10-21 and
+writes a contact sheet, plus reports the `monsters` file layout. The task's
+framing ("the `monsters` file holds the shapes") turned out to be only half right,
+and the correction matters, so it is recorded rather than papered over.
+
+### The `monsters` file layout (measured)
+
+`original/monsters` is 2176 bytes = **64 records × 34 bytes** (remainder 0),
+loaded at **DS:2900** (measured: the file's bytes appear at DS:2900 in every live
+DS dump; record `i` at `DS:2900 + i*34`). Each record is 17 `(byte0, byte1)`
+**coordinate pairs**, not names and not a bitmap — confirming the task's "records
+look like coordinate pairs, not names." 11 of the 64 records are all-zero
+(`12,13,14,20,21,27,28,29,36,43,44`); the pairs span byte0 19..45, byte1 11..173.
+
+**The `monsters` file's rendering semantics are NOT proven.** As a point cloud the
+pairs do not resolve to a recognisable 16×16 sprite (checked by rendering several
+records). The dungeon is a wireframe renderer, so these pairs are the likely home
+of the **dungeon** monster outlines — but that is **inferred**, not proven, and no
+shape is claimed from this file. Reporting the layout without inventing a
+semantics is the "prove or pass" outcome here.
+
+### The overworld monster sprite is the tile art at `type >> 2` (measured + corroborated)
+
+The shapes that actually put faces to the caster types are the **64-record tile-art
+table** in the executable (the table `tools/extract_tiles.py` already proves and
+renders: 16×16, 2bpp, CGA palette). The art index is **`monster_type >> 2`**.
+Three independent supports, none of them a guess:
+
+1. **The findings already say it.** `docs/spice86-live-findings.md § 12` records
+   "`0x34` is art `0x0D`, a humanoid figure with arms raised out to the sides."
+   `0x34 >> 2 == 0x0D`. The tool's render of art 13 (type 52 = 0x34) shows exactly
+   that — a humanoid with marks out to both sides at rows 5–7 — so the mapping and
+   the independent description agree.
+2. **Range argument.** The tile table has 64 entries (art 0..63). The observed
+   types are `0x30..0xFC`. Only `>>2` keeps every observed type inside the table
+   (`0xFC>>2 = 63`); `>>1` sends `0xF8` to art 124, off the end.
+3. **Visual.** Every one of the 11 rendered sprites is a recognisable
+   humanoid/creature silhouette (see the tool's ASCII output), not noise.
+
+This is a **different** transform from the walk-path `[DS:14] = map_byte >> 1`
+(that is the tile under the *player*, for BOARD); the monster sprite path uses
+`>>2`, and the two do not conflict.
+
+### What this puts a name to
+
+The tool labels each observed type with the special-attack asm that identifies it
+(findings § 12), so the caster types now have faces:
+
+| type (dec / hex) | art | behaviour | rendered as |
+| --- | --- | --- | --- |
+| 52 / 0x34 | 13 | LEGS caster `asm/0E70` | humanoid, arms raised to sides |
+| 56 / 0x38 | 14 | ARMS caster `asm/0EC2` | humanoid with a raised right-hand object |
+| 60 / 0x3C | 15 | SLEEP caster `asm/0F48` | broad multi-limbed figure |
+| 64 / 0x40 | 16 | THIEF `asm/0FCD` | broad hooded figure |
+| 248 / 0xF8 | 62 | MAGIC MISSILE caster `asm/0F12` | humanoid with a vertical bolt to the right |
+
+(The remaining observed types 48, 96, 104, 240, 244, 252 render as humanoids too
+but carry no behaviour-based name yet — they were seen but did not cast a named
+special.)
+
+### Files
+
+* `tools/monster_shapes.py` (new tool: renders the 11 observed sprites as ASCII +
+  a `tmp/` contact-sheet PNG; `--monsters-layout` prints the file-layout evidence)
+* `docs/phase4-overnight-cp5-report.md` (this section)
+
+The PNG is game content and is written under `tmp/` (gitignored, verified with
+`git check-ignore`); only the tool and this report are committed. `asm/` untouched;
+`make -C engine test` green.
 
 **Commit: `<pending>`.**
