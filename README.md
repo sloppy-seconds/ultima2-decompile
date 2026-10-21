@@ -1,6 +1,7 @@
 # Ultima II — Byte-Exact Assembly Reconstruction
 
-[![build-and-checksum](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/build.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/build.yml)
+[![asm-checksum](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml)
+[![engine-tests](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml)
 
 A research reverse-engineering of **Ultima II** (Richard Garriott / Origin
 Systems, 1982/83): a readable, named, structured x86 real-mode assembly

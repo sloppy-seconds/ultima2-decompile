@@ -1,0 +1,34 @@
+name: asm-checksum
+
+# THE PROOF. Rebuilds the entire binary from the cleaned asm/ tree and verifies
+# it against the known md5 of the original image. This workflow is deliberately
+# separate from the engine tests: a byte-exact reconstruction must never appear
+# to regress because unrelated work-in-progress is failing, and a red badge here
+# always means the reconstruction itself broke.
+#
+# The copyrighted original is deliberately NOT part of this repo or this
+# workflow: the build must be byte-identical, so its checksum IS the
+# verification.
+#
+# NOTE: the built binary is never uploaded as an artifact — that would
+# redistribute the copyrighted game. The workflow only reports PASS/FAIL.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain (binutils + python3 are preinstalled)
+        run: python3 --version && as --version | head -1
+      - name: Rebuild from cleaned tree and verify checksum
+        run: bash tools/assemble_clean.sh /tmp/u2-clean-rebuild.bin
+      - name: Per-function spot check (sample)
+        run: |
+          for seg in 0100 2B8F 4FDF 363B 8DCD; do
+            python3 tools/check_func.py "$seg" --no-compare
+          done

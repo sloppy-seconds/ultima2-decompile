@@ -122,6 +122,22 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Gate log
 
+- **2026-10-21 (owner-approved): CP2 baseline regenerated, and CI split.**
+  `engine/evidence/cp2-playthrough.json` was re-recorded. The recorded step count
+  is unchanged at **40** — the apparent 40→41 drift was not a behaviour change at
+  all but a **stale `--save-dir`**: the baseline had been recorded against the
+  default `saves/` directory holding state from earlier runs, while
+  `tools/playlog.py verify` always replays into a fresh temp save dir. Recording
+  under a fresh save dir reproduces exactly. Root cause of the CI red was this
+  same coupling, not the overworld changes, which turned out not to move the
+  trajectory. Regenerate command, now the documented one:
+  `./u2 --headless --save-dir <fresh> --script tests/play_to/reach_everything_today.keys --seed 0 --replay-report evidence/cp2-playthrough.json`.
+  Verified to reproduce under both the exe header and the asm-fallback header.
+  Separately, `build-and-checksum` was split into **`asm-checksum`** (the
+  byte-exact proof) and **`engine-tests`** (Phase 4 WIP) with independent badges,
+  because a failing engine test was making the reconstruction's badge read as
+  though the proof had regressed — which is exactly the wrong signal to send.
+
 - **2026-10-27 (owner): fidelity policy.** The engine reproduces the original's
   rules and state exactly, but may improve **interaction** where the original was
   frustrating — "spirit of the game", and these improvements live in `original`

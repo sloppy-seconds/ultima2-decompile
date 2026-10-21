@@ -1,0 +1,27 @@
+name: engine-tests
+
+# Phase 4: the portable C engine must build with nothing but a C11 compiler, and
+# its acceptance tests must pass. Separate from asm-checksum on purpose — engine
+# work is in progress and must not be read as a problem with the byte-exact
+# reconstruction, which has its own always-green-or-broken badge.
+#
+# No game content is involved. CI has no `original/ultimaii.exe`, so the string
+# extractor runs in asm-fallback mode and recovers 37 of 64 strings; that is a
+# supported configuration and CP1 asserts it explicitly. Anything that must be
+# byte-identical to the shipped binary cannot be verified here, which is why the
+# committed CP2 replay evidence is checked against the fallback build too.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine (cc only, no dependencies)
+        run: make -C engine
+      - name: Acceptance tests (CP0..CP4)
+        run: make -C engine test
