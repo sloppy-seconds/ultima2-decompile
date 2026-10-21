@@ -190,6 +190,17 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-22** — A cross-binary overlap probe can be built and fully calibrated
+  without the second target in hand. A target pack's own unrelated executables give
+  positive, patched-sibling and true-negative controls, and one of them is typically
+  an MZ-headed non-DOS image — a free test of *refuse rather than guess*. Only the
+  comparison waits for the second binary. → § 8 probe 1; split "build the tool" from
+  "run the comparison" whenever a probe is blocked on external input.
+* **2026-10-22** — A generic tool must be specified by what it may *not* depend on.
+  Stating "no dependency on this target's function map, filename or address bias"
+  is what stops a reusable tool quietly becoming a one-off. → § 4; add a
+  *non-dependencies* clause to every harness component brief.
+
 * **2026-10-22** — A gate must be demonstrated failing before it is trusted passing.
   A CI script exited 0 unconditionally on the only branch ever taken, so it printed
   `FAIL` and reported `PASS` for a full checkpoint cycle. Found only by inverting an
@@ -235,6 +246,15 @@ Newest first. One line per learning; the detail stays in the owning document.
    intersection means shared lineage and changes the whole plan; a near-empty one
    means the transfer is method-only. Cheap, offline, and it settles the question
    before any budget is spent on the reuse assumption.
+   **Status 2026-10-22: tool queued, comparison blocked.** The probe needs a second
+   game, which is owner-supplied input. The *tool* does not — a target pack normally
+   ships several unrelated executables, and those supply a full calibration set:
+   self-comparison, a patched sibling of the same program (which tests normalisation
+   rather than length), an unrelated binary as a true negative, and — usefully — at
+   least one file that carries an MZ header but is not a DOS image at all, which
+   tests whether the tool refuses instead of printing a confident number. Design
+   lesson: **build and calibrate the generic tool against the current pack; only the
+   comparison waits for the second target.**
 2. **Extract the profile from this project without changing behaviour.** The
    refactor is done when every existing tool and gate still passes against
    `profiles/<this game>.json`. That is a mechanical, verifiable first step and it

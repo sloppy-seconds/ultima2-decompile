@@ -336,6 +336,17 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Backlog
 
+- [ ] **Queued for the next unattended batch — see `docs/overnight-harness.md`.**
+      Build the generic binary-overlap probe (`H1`), inventory the game constants
+      blocking the profile refactor (`H2`), and feed the result back into
+      `docs/harness-portability.md` (`H3`). The Ultima III comparison itself (`H4`)
+      is **BLOCKED on owner input**: a Ultima III DOS executable placed inside this
+      project at a path the owner names. Nothing in this repo matches `*u3*`,
+      `*ultima*iii*` or `*exodus*`, and `AGENTS.md` § 0 forbids going to look for
+      one. The tool is calibratable offline against binaries already in `original/`,
+      so only the comparison waits. Added 2026-10-22; context in
+      `docs/harness-portability.md` § 8.
+
 - [ ] **Decode the dungeon map format and reproduce the wireframe renderer.** This is
       the largest unexplained surface in the game and it blocks any real dungeon crawl.
       Not solved here on purpose; these are leads measured on 2026-10-21 so the next
