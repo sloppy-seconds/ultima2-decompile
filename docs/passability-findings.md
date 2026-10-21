@@ -198,6 +198,60 @@ impassable, i.e. water. That matches the owner being blocked walking east into i
 
 ---
 
+## F9 — CONTESTED: the engine measures tile 0x08 as passable
+
+F8 assigns the mountain to tile `0x08`, because the ladder rejects `0x08` and
+`0x08 >> 1` is art `0x04`, the diamond lattice the owner identified as mountain.
+`engine/src/game/overworld.c` `u2_tile_passable()` says the opposite:
+
+```c
+if (t == 0x00) return 0;                 /* water: measured blocked */
+if (t == 0x08 || t == 0x0C) return 1;    /* measured passable */
+```
+
+with the header comment "Live 2026-10-21: tile 0x00 rejected 22 times on foot;
+0x08 and 0x0C stood on repeatedly" and "open: which tile id is mountain. It is
+NOT 0x10".
+
+Both cannot hold. Assessment:
+
+* The engine's "stood on 0x08 repeatedly" traces to the `vga-test` fight turns,
+  and F7 established that recording's `DS:00`/`DS:01` were NOT the overworld
+  position (`x` spanned only 4..9, `y` constant at 11). Deriving a tile under the
+  player from those bytes was invalid, and the engine inherited the conclusion.
+* F8's `0x08` = mountain is an inference from the ladder plus the art transform,
+  not an observation.
+* So the conflict is between a bad dataset and an unproven inference. It is NOT a
+  case of bytes contradicting a hypothesis, and it is NOT resolved by deferring
+  to the existing code.
+
+Independent evidence that F8 is at least incomplete: applying the ladder across
+every `mapx*` file gives sensible aggregate behaviour for the five common tiles
+(`0x00` reject over 17,403 cells, `0x08` reject over 11,748, `0x0C`/`0x10` accept)
+but produces impossible geography in 12 sectors — `mapx24`, `mapx25`, `mapx34`,
+`mapx35`, `mapx44`, `mapx45` come out 0.3-0.7% walkable with longest walkable run
+of 1, and `mapx15`, `mapx23`, `mapx33`, `mapx70`, `mapx93` are 1.7-5.4% walkable.
+Some are the known `*x4`/`*x5` different-renderer family; `mapx15`, `mapx23`,
+`mapx33`, `mapx70`, `mapx93` are not. A rule that makes a real overworld sector
+98% impassable is wrong or missing a case.
+
+**Status: F8 is a hypothesis under active contradiction. Do not implement
+impassable terrain from it beyond water, which is independently proven.**
+
+---
+
+## What is and is not safe to implement for passability
+
+| needed | status |
+| --- | --- |
+| bounce mechanism | proven — move, test, inverse undo, echo; already implemented |
+| water blocks on foot | proven — tile `0x00`, 22 live rejects, uncontested |
+| mountain blocks on foot | CONTESTED — F8 says `0x08`, the engine says `0x08` is walkable |
+| the full blocked set | unknown — `0x18/0x1C/0x20` rejects are unverified inferences |
+| the rule's input | inferred, not proven — see F8 |
+
+---
+
 ## Open: one Spice86 session answers three questions
 
 Scoped 2026-10-21, all three cheap and all three from a single session in sector
@@ -218,6 +272,12 @@ Scoped 2026-10-21, all three cheap and all three from a single session in sector
    on-foot path enters `0x2775` which `sub_2626` also calls, so that region's
    boundary is still imperfectly linearised. Read `DS:53..55` before and after one
    deliberately blocked step.
+4. **Settle F9 — walk into a mountain and read the tile byte at that cell.** This
+   is the single datum that decides whether the mountain is `0x08` (F8) or
+   something else (the engine's current code). It also gives the first honest
+   measurement of a blocked tile other than water, which the whole model has been
+   missing. Ask the owner to stand next to a visible mountain, note the screen,
+   then read `DS:00`, `DS:01`, the destination cell and `AL` at the break.
 
 ---
 

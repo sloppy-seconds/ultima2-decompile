@@ -31,7 +31,13 @@
 #           with mapx20's spatial structure. Two things stop it being a finding:
 #           the DS:2CB indirect writer is still unknown, and engine/src/core/
 #           view.h contradicts itself on whether art = map_byte>>1 or >>2.
-#           See docs/passability-findings.md F8 and the three-question capture.
+#           AND: u2_tile_passable() in the engine returns PASSABLE for 0x08,
+#           the very tile this hypothesis calls the mountain. That claim came
+#           from the vga-test fight turns, whose DS:00/DS:01 were later shown
+#           not to be the overworld position, so it is not a sound refutation -
+#           but neither is the hypothesis proven. Do not implement terrain from
+#           this beyond water (0x00), independently proven by 22 live rejects.
+#           See docs/passability-findings.md F8, F9 and the four-question capture.
 # provenance: live:create-test-live, live:play-test-live, re-decoded
 # func 2423..242C  len 000A B  evidence: seed+call+reko
 # provenance: live:play-test-live, live:create-test-live
