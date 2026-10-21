@@ -26,6 +26,33 @@ locally. Note that the sibling project addresses its segments differently
 (`199F:4F4D`, `0B2A:4542`) from this one (`DS = 0x08BE`), so their numbers are not
 transcribable at all — a concrete demonstration of why the isolation rule exists.
 
+## The vendored build now carries our fix for this (2026-10-21)
+
+Everything in the next section stays true of **stock upstream**, and is kept because it
+explains a failure mode worth knowing. But the build in `tools/spice86/` is now built
+from source and patched, so `local-mcp_screenshot` **works** here.
+
+| Field | Value |
+| --- | --- |
+| Upstream | `https://github.com/OpenRakis/Spice86` (not `pcj/Spice86`; older notes here named the wrong org) |
+| Base commit | `6f27fcde79a1d095ab62a8ca0dffce533613bdcd` |
+| Local patch | `0b3ae43` - screenshot returns base64 via `ImageContentBlock.FromBytes` |
+| Binary MD5 | `130a5afc4631f6a03da5b07289a85d92` |
+| Built from | `~/Projects/ai/spice86`, `dotnet publish -c Release -r linux-x64 --self-contained true` |
+| Superseded | MD5 `7cd72fff632e63f9ba5f40e1f41d5a51`, kept at `tools/spice86.pre-b64fix-20261021` |
+
+The previous vendored build had been copied out of a sibling project, which is what the
+isolation rule forbids; this one is built from a clone this workflow owns. Full patch
+detail is in `tools/spice86/LOCAL_PATCHES.md` (untracked, it lives in the build dir) and
+the summary above is the tracked record.
+
+**The bug, in one line:** `Data = pngBytes` assigned raw bytes to a property the SDK
+documents as base64, so the PNG went through a UTF-8 text decode and every byte >= 0x80
+became U+FFFD - including the `0x89` that opens every PNG. Lossy, so unrecoverable.
+
+`tools/spice86_common.sh` now honours `U2V2_SPICE86_DLL` to point at a different build
+without editing, which is how the A/B test above was run.
+
 ## `local-mcp_screenshot` is broken upstream, and the frame is unrecoverable
 
 **Measured 2026-07-21 by calling the emulator's MCP endpoint directly at

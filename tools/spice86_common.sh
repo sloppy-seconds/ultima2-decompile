@@ -28,7 +28,10 @@ s86_root() {
 
 s86_tmp_root()   { printf '%s/tmp' "$(s86_root)"; }
 s86_refs()       { printf '%s/references/ultima2' "$(s86_root)"; }
-s86_dll()        { printf '%s/tools/spice86/Spice86.dll' "$(s86_root)"; }
+# U2V2_SPICE86_DLL overrides which emulator build is launched. Set it to a
+# freshly built upstream Spice86.dll to A/B-test a patched build against the
+# vendored one without editing anything.
+s86_dll()        { printf '%s' "${U2V2_SPICE86_DLL:-$(s86_root)/tools/spice86/Spice86.dll}"; }
 s86_capture_dir(){ printf '%s/captures/spice86' "$(s86_root)"; }
 
 # State file for the live session. One at a time on purpose: two emulators
