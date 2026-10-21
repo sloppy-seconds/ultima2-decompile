@@ -463,3 +463,42 @@ DS:2CB, DS:2DE` and the target cell tile, on one accepted and one rejected step.
 If `DS:2CB`/`DS:2DE` differ between the two, the table is terrain-indexed and F3
 completes. If they do not, the reject comes from the `call 0x2575` return value
 and the search moves into the `DS:580` dispatch.
+
+## F13 - the 64 art entries are not 64 terrains; A-Z are shop and sign tiles
+
+**Grade: recalled (owner-reported), 2026-10-21.** Recorded as data, per the rule
+that an owner observation outranks an agent inference.
+
+The letters `A`-`Z` (art `0x20`-`0x39`, map bytes `0x80`-`0xE4`) are used **in
+towns for signs and shops**. They are **impassable**, but `T` (talk) still works
+with a shopkeeper standing on the other side of one. So an `A`-`Z` tile is a
+solid fixture you transact through, not a wall you walk into and not a creature
+you walk onto.
+
+This reframes the whole table. The 64 entries split into ground, structures,
+creatures, borders and the letter fixtures; only a handful are ground at all.
+Measured occurrence across the 33 sector maps supports it: only `0x00`, `0x08`
+and `0x0C` appear in 25 or more sectors, while 32 of the 64 values appear 50 or
+fewer times in total. See `disasm/tile-art.tsv`.
+
+**It also invalidates the first passability sweep.** All 15 tiles that run
+measured were bytes `0x84`-`0xBC` - letters `B` through `P`. The run reported
+`B`, `D`, `H`, `N` and `O` as passable, which F13 says is wrong. The mechanism is
+a known harness defect rather than a mystery: a probe step is `Right`, `Up`,
+`Down`, and if both the `Up` and the following `Down` are lost to the read-pause
+race the player never leaves the corridor and the tile is recorded as passable.
+Two dropped keys in a row therefore produce a false `pass`, which is exactly the
+error direction observed. The sweep needs a per-step retry and re-verification
+before any letter result is trusted.
+
+**Open tension worth keeping, not smoothing over.** `0x80` (`A`) occurs 15651
+times across 23 sectors, about 11.6% of all map tiles, and `0xE0` (`Y`) occurs
+1050 times. Rare letters like `J`, `X` and `Z` at 4, 6 and 10 are what individual
+signs would look like; `A` at that volume is not. Either town sectors are dense
+with letter fixtures, or `A` and `Y` carry a second use beyond signs. This is a
+question about the data, not a reason to discount the report.
+
+**Consequence for the engine.** Passability cannot be one boolean per tile byte.
+`T`-through-solid is a separate interaction predicate from walkability, and at
+least the letter range needs both: not walkable, talkable-through. Any engine
+model that stores only `passable(tile)` will be unable to reproduce a shop.

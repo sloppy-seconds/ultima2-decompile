@@ -1,4 +1,10 @@
 # tile-art.tsv — what each of the 64 art entries in the exe looks like
+#
+# NOT 64 terrain types. The table mixes ground, structures, creatures, borders and
+# the A-Z letter fixtures (art 20-39, bytes 80-E4), which owner report confirms are
+# town signs and shops: impassable, but T (talk) works through them. Only 0x00,
+# 0x08 and 0x0C occur in 25+ of the 33 sectors, so most entries are not ground at
+# all. See docs/passability-findings.md F13 and docs/map-format.md.
 
 # Source: `tools/tile_atlas.py` rendered every entry from `original/ultimaii.exe`
 # (index table file `0x7BC0`, pixels `0x7C42 + 66*n`, 16x16 at 2bpp, CGA mode-4
