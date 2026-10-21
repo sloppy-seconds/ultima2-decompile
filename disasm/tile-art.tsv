@@ -46,7 +46,7 @@
 	10	10	creature	white humanoid in a wide cape or robe	(	
 	11	11	creature	quadruped, head at left, four legs and a tail	)	horse candidate
 	12	12	object	boat hull with mast and yard	<	frigate candidate
-	13	13	object	crossbar over a vertical post on a base	>	signpost or well
+	13	13	object	crossbar over a vertical post on a base	>	PLANE, map byte 0x34. Identified 2026-10-21: the location-description table in asm/4C50 lists NEAR A HORSE / NEAR A FRIGATE / NEAR A PLANE / NEAR A ROCKET at entries 11/12/13/14, and entries 11, 12 and 14 match the horse, frigate and rocket art independently. Only 8 tiles exist across all 33 sectors: mapx00 x3, mapx03 x3, mapx32 x1, mapx93 x1.
 	14	14	object	white spire, pointed top, flared base	=	rocket candidate, NOT 0x08
 	15	15	object	white square frame enclosing an S curve	?	dungeon mouth candidate
 	16	16	object	diagonal stroke with a small cross at the foot	'	
