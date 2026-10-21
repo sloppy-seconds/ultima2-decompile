@@ -69,9 +69,13 @@ podman run --rm -v "$PWD/build:/out:Z,U" u2-rebuild   # writes build/u2-clean-re
 ## How to play
 
 We publish source and proofs, never the game — you supply your own legally
-obtained copy. The classic workflow: download the original pack, build our
-reconstruction, and **copy our binary over the original executable** — they
-are byte-identical, and that substitution is the point.
+obtained copy. There are two ways to run it, and they are not the same thing:
+
+* **the reconstruction**, dropped over the original executable in DOSBox — proof
+  that the asm is byte-exact, and otherwise the same game;
+* **the C engine**, a native build that plays without DOS emulation.
+
+### Path 1 — run the reconstruction under DOSBox
 
 ```bash
 # 1. Get your own copy of Ultima II from the Internet Archive (see the item
@@ -106,23 +110,46 @@ the whole pack rather than fetching one binary, and why our rebuild is dropped
 If you run the reconstructed binary and it cannot find its data, it is not broken
 — you are in a directory without the sidecar files.
 
-### Optional: the portable C engine (no DOSBox)
+### The portable C engine — the thing you actually play
 
-`engine/` is a native Linux reimplementation in C11 that runs the same content
-without DOS emulation. It is behavioural work in progress, **not** byte-proven —
-the asm tree remains the only proven artefact.
+`engine/` is a native Linux reimplementation in C11 that runs the game without
+DOS emulation. It is the deliverable of Phase 4 and is **in progress**: CP0..CP4
+are green (title flow, character creation, status rendering, saves, and the
+overworld with tile passability, the sector wrap and the food/time model).
+
+Worth being blunt about what the two artefacts are for. The asm rebuild proves the
+reconstruction is faithful — but a byte-identical binary is, in the end, the same
+game you already had. The C engine is where the work becomes something usable:
+no DOS emulator, native build, testable, and open to improvements the original
+could not make.
+
+**Requirements:** a C11 compiler and `python3`. No third-party libraries for the
+terminal build. `make sdl` additionally needs SDL2 (on Fedora/Bazzite the
+`sdl2-compat` package provides `sdl2-config`).
+
+**The engine reads the game's own content files**, so point it at the extracted
+pack with `--data-dir`:
 
 ```bash
 cd engine
 make                      # cc only, C11, no third-party dependencies
 make test                 # CP0..CP4 acceptance checks
-./u2                      # interactive terminal play
-make sdl && ./u2-sdl      # SDL2 bitmap front end (needs sdl2-compat)
+./u2 --data-dir ~/u2      # interactive terminal play
+
+make sdl && ./u2-sdl --data-dir ~/u2 --play-map    # SDL2 bitmap front end
 ```
 
-Point it at the extracted pack with `--data-dir ~/u2` so it can find `mapxNN`,
-`monxNN`, `tlkxNN` and `player`. See `engine/README.md` for the full flag
-contract, including the headless and scripted modes used by the tests.
+Two build-time notes that save confusion:
+
+* If you place your original as `../original/ultimaii.exe`, the build extracts
+  all 64 game strings from the binary itself. Without it the build still
+  succeeds but falls back to the asm listing and recovers 37 of 64, so some
+  messages will be missing. The fallback is deliberate and CI-tested.
+* `build/`, `u2` and every generated header are gitignored.
+
+The headless and scripted modes (`--headless`, `--script`, `--dump-state`,
+`--dump-each`, `--trace`, `--seed`, `--replay-report`) are the agent-facing
+contract used by the tests; see `engine/README.md`.
 
 ## Repository layout
 
