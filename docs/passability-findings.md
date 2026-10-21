@@ -198,6 +198,73 @@ impassable, i.e. water. That matches the owner being blocked walking east into i
 
 ---
 
+## F11 — FOUR TILE BYTES PROVEN BY WALK, WITH NAMES. 2026-10-21.
+
+This is the first passability knowledge in the project derived from ground truth
+rather than inferred from a decode. Two independent lines met in the middle.
+
+**Owner ground truth from the live frame.** A working screenshot (needs the
+patched build, see `tooling-procedures.md`) was taken with the character at
+`(20,20)` in sector 20, and the owner named the terrain in four directions:
+water to the right, grass above, forest below, mountain far left. Those
+directions map onto `mapx20` bytes directly, because the earlier walk had
+already established that up = `y-1`:
+
+| direction | byte | owner's name |
+| --- | --- | --- |
+| player `(20,20)` | `0x0C` | forest |
+| up `(20,19)` | `0x08` | grass |
+| down `(20,21)` | `0x0C` | forest |
+| right `(21,20)` | `0x00` | water |
+
+**Byte-to-colour correlation, computed not eyeballed.** Classifying each of the
+200 viewport cells by dominant colour and searching for the viewport origin that
+maximises agreement gives **199/200 purity**, which is not coincidence:
+
+| byte | colour | terrain |
+| --- | --- | --- |
+| `0x00` | magenta | water (wavy purple) |
+| `0x08` | cyan | grass (small dots) |
+| `0x0C` | cyan | forest (bigger dots) |
+| `0x10` | white | mountain (diamond lattice) |
+
+That fit also places the player at screen cell `(9,5)`, confirming the existing
+`(9,5)` viewport claim. An earlier eyeball reading of "column 6-7, not centred"
+was wrong and is retracted.
+
+**The mountain, proven by walking.** Row `y=20` runs forest `x=15..20`, grass
+`x=12..14`, mountain `x=11`. Walking west nine steps from `(20,20)`, same
+session, same character, same key, same direction:
+
+```
+1..5   forest  0x0C  MOVED
+6..8   grass   0x08  MOVED
+9      MOUNTAIN 0x10  *** BLOCKED ***   destination (11,20)
+```
+
+Eight successes immediately before one failure, with the only change being the
+destination byte, is a controlled comparison. So:
+
+| byte | terrain | passability | how |
+| --- | --- | --- | --- |
+| `0x00` | water | **blocks** | blocked step at `(20,17)`; also the tile named water to the right |
+| `0x08` | grass | passes | walked onto and across |
+| `0x0C` | forest | passes | five consecutive steps |
+| `0x10` | mountain | **blocks** | blocked at `(11,20)` above |
+
+`engine/src/game/overworld.c` `u2_tile_passable()` previously accepted `0x10`
+through its default-passable fallback. Now rejects it, with measurement behind
+it rather than a guess.
+
+**Two cautions.** Grass and forest are both cyan-dominant and differ only by
+pattern, so any tool that reads terrain off a screenshot by colour alone will
+conflate them; the byte is the only clean discriminator. And this is four bytes
+out of 256 - the *rule* is still not known, only four of its instances. The
+ladder at runtime `0x25C0` accepts `0x10`, which is further proof it is not the
+passability gate.
+
+---
+
 ## F10 — F8 IS REFUTED. Live measurement 2026-10-21, patched run, sector 20.
 
 A live session settled this. Character `TEST` loaded at `(20,20)` in sector 20,

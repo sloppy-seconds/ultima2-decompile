@@ -242,7 +242,8 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
     const uint8_t t = u2_world_tile_at(w, x, y);
 
     if (t == 0x00) return 0;                 /* water: measured blocked */
-    if (t == 0x08 || t == 0x0C) return 1;    /* measured passable */
+    if (t == 0x10) return 0;                 /* mountain: measured blocked */
+    if (t == 0x08 || t == 0x0C) return 1;    /* grass, forest: measured passable */
 
     if (t < 64)
         g_unmeasured_tiles |= (uint64_t)1 << t;
