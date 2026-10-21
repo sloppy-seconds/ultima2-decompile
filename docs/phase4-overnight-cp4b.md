@@ -381,3 +381,32 @@ T1/T2/T3/T4/T6/T7 with every citation; `docs/phase4-state.md` CP4 row updated.
 **Not attempted:** T9 (blog/retro) — the queue did not fully clear, and T9 is
 explicitly gated on T1–T8 being done or passed.
 
+
+## Evening addendum (same day, after live-capture work)
+
+* **T2 — now CLOSED.** The idle auto-PASS is implemented as a **poll count, not a
+  clock**. Mechanism proven at runtime `0x08CE`/`0x08D1`/`0x08D6`/`0x08F9`: the
+  wait loop polls `key_poll`, tests `cmp $0xff,%ah` for no-key, and advances byte
+  counters with `incb DS:21; jne <loop>`, the iterate-until-wrap idiom. No
+  `INT 1Ah` exists anywhere in the corpus and the only read of the BIOS tick at
+  `0x40:6C` is the startup RNG seed in `asm/0100`, which rules out a hardware
+  timer. The measured ~7.6 s at `--Cycles 3000` is an emulator artifact and is
+  **not** encoded; `256` is used as a placeholder because it is the width of the
+  counter the original uses, and the code says so plainly. Owner decision
+  recorded: **hardcode for `original`, adjustable and disable-able for
+  `enhanced`** — `ctx.auto_pass_polls` is the knob, but `u2_mode` is a renderer
+  axis, so the fidelity axis it should hang off does not exist yet.
+* **T1 — closer than it was, still open.** Passability, the `&0x3F` wrap and the
+  19-per-move drain are implemented and cited to observed bytes. Blocked on the
+  **mountain tile id** (needs one named sample from the owner) and the
+  `DS:15`/`DS:18` travel-mode argument, which decides whether boat-on-water is
+  passable.
+* **New evidence, not from this plan:** combat and theft messages were recovered
+  from the harvest via `tools/cfg_printed.py` gated on `ExecutedInstructions`.
+  `LEGS PARALIZED!`, `--PARALIZED!`, `A THIEF STOLE SOMETHING!`, `--HIT!!!`,
+  `--MISS`, `KILLED--GOLD+` and `--INVALID MOVE!` are all proven to have printed;
+  Minax, the ring and the force field are proven not to have. See
+  `docs/spice86-live-findings.md` § 7–§ 11.
+* **T9 is now unblocked in principle** — T1–T8 are done or open-but-scoped, and
+  today produced a great deal of publishable material, including two errors of
+  mine that a cross-reference pass caught in the same run.
