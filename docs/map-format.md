@@ -102,15 +102,41 @@ see the recipe in this file's history, or `tools/map_render.py`.
 
 ## 6. Placing the player: edit the save, do not poke memory
 
-**Writing `DS:00/01` in the live emulator does not teleport.** The write lands
-and reads back correctly, but movement then stops working entirely - `DS:00/01`
-is a mirror the game updates, not the value it drives movement from. This cost
-real time to discover.
+**The save record is `DS:0x36..0x135` - 256 bytes, verbatim.** Proven 2026-10-21
+by loading a character and comparing all 256 live DS bytes against the file:
+254/256 identical, the only exceptions being `DS:74/75`, live scratch that is not
+persisted. So:
 
-The reliable method is to patch the save and let the game load it:
+    save_offset = DS_offset - 0x36
 
-    python3 tools/u2_edit.py show  <save>
-    python3 tools/u2_edit.py setpos <save> 19 39
+Use `tools/u2_edit.py`, which encodes this mapping:
+
+    python3 tools/u2_edit.py show   <save>
+    python3 tools/u2_edit.py set    <save> sector 71
+    python3 tools/u2_edit.py setpos <save> 20 20
+    python3 tools/u2_edit.py maxout <save>
+
+**Sector is two decimal digits, not an integer.** `DS:49/4A` are patched into the
+filename `MAPXFF`, so sector 20 is the pair `2,0`. A numeric read of that pair
+yields 512, which is a trap. Verified: writing digits `1,0` boots the character
+into sector 10, confirmed by both `DS:49/4A` and a screenshot of different terrain.
+
+**Several counters are BCD, including HP.** `0x51/52` is a 4-digit BCD pair, so
+`hp=4, 0x52=0` displays as `H.P.=0400`. Writing a raw `255` puts `0xFF` in the
+high byte, whose nibbles are not decimal digits, and the game prints `??`.
+Max valid HP is `9999`. Same story for food (`0x53..55`, 6 digits, top 4
+displayed), exp (`0x56/57`) and gold (`0x58/59`).
+
+**Inventory and equipment slots are NOT located.** They live somewhere in
+`DS:64..135`, which reads as all zeros for a character carrying nothing, so the
+slots cannot be identified from an empty save. `u2_edit.py` refuses `items`
+rather than guessing. Finding them needs a save that actually holds gear - buy or
+find items in-game, save, then diff live DS against the file.
+
+**Writing `DS:00/01` in the live emulator does not teleport.** The write lands and
+reads back correctly, but movement then stops working entirely - `DS:00/01` is a
+mirror the game updates, not the value it drives movement from. This cost real
+time to discover.
 
 Save file `player` is 384 bytes:
 
