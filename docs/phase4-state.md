@@ -330,6 +330,20 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Backlog
 
+- [ ] **Three-question Spice86 capture — passability, the art transform, and food
+      on a rejected step.** Owner must walk; reads are passive. Full spec in
+      `docs/passability-findings.md § Open`. In one session in sector 20: (1) dump
+      the staging buffer at `DS:272` against the sector map to settle whether
+      `art = map_byte >> 1` or `>> 2` — `engine/src/core/view.h` currently claims
+      both and they are mutually exclusive; (2) break at runtime `0x2423` and dump
+      `AL, DS:13, DS:15, DS:18, DS:29, DS:2CB, DS:2DE` plus the destination tile
+      on one accepted and one rejected step, which proves or kills the F8 claim
+      that the ladder's input is the tile byte; (3) read `DS:53..55` before and
+      after a deliberately blocked step to find out whether a rejected move costs
+      19 food, which the block ordering implies but does not prove. Item (1) and
+      (2) together either promote F8 to a finding or send the mountain
+      assignment back for re-derivation.
+
 - [ ] **`tools/u2_edit.py` — save-file and live-memory editor.** Owner request,
       2026-10-21. Must do two jobs with one set of tables: edit a `player` save
       file on disk, and patch a live session through the Spice86 MCP

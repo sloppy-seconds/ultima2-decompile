@@ -22,6 +22,16 @@
 #           0x28/0x26/0x24/0x22, but DS:13 is the player stamp (0x78 on foot in
 #           every in-world capture), so none of those arms are taken on foot.
 #           Full write-up: docs/passability-findings.md
+# HYPOTHESIS (2026-10-21, owner-supported, NOT yet proven): the ladder's input is
+#           the destination TILE BYTE, not a travel mode. Read as tiles, the
+#           accept/reject sets give water 0x00 REJECT, mountain 0x08 REJECT (art
+#           0x04 diamond lattice, owner-confirmed), land 0x0C accept, gate 0x10
+#           accept, standing figures 0x18/0x1C/0x20 REJECT, boat 0x24 and spire
+#           0x28 accept. Consistent with the only ground-truth walk we have and
+#           with mapx20's spatial structure. Two things stop it being a finding:
+#           the DS:2CB indirect writer is still unknown, and engine/src/core/
+#           view.h contradicts itself on whether art = map_byte>>1 or >>2.
+#           See docs/passability-findings.md F8 and the three-question capture.
 # provenance: live:create-test-live, live:play-test-live, re-decoded
 # func 2423..242C  len 000A B  evidence: seed+call+reko
 # provenance: live:play-test-live, live:create-test-live

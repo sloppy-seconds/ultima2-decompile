@@ -138,6 +138,89 @@ Tile under player across the whole recording is only `{0x08, 0x0C}`.
 
 ---
 
+## F8 — the ladder is a TILE table, not a mode table (owner-confirmed, one contradiction open)
+
+The label "travel mode" for `DS:29` was an early static guess and it is what hid
+this. The ladder's accept set — `0x22,0x24,0x26,0x28,0x2A,0x2C,0x2E,0x38` plus
+everything below `0x16`, with explicit rejects for `0x00` and `0x08` — is not a
+plausible set of vehicle codes. It is a plausible set of tile IDs.
+
+Read as tile bytes against `mapx20`, and combined with the owner's confirmation
+that the diamond-lattice art (`0x04`) is the mountain:
+
+| tile byte | art | meaning | ladder | cells in mapx20 |
+| --- | --- | --- | --- | --- |
+| `0x00` | `0x00` magenta dashes | water | REJECT | 2770 |
+| `0x08` | `0x04` diamond lattice | **mountain** | **REJECT** | 582 |
+| `0x0C` | `0x06` | land | accept | 461 |
+| `0x10` | `0x08` arch | gate/pass | accept | 250 |
+| `0x04` | `0x02` sparse dots | scrub | accept | 27 |
+| `0x18/0x1C/0x20` | `0x0C/0x0E/0x10` figures | standing figures | REJECT | 1 each |
+| `0x24/0x28` | `0x12/0x14` boat, spire | boardable / enterable | accept | 1 each |
+
+Evidence for the model, by grade:
+
+* **observed** — diamond lattice is mountain (owner, 2026-10-21). East step from
+  `(20,20)` onto tile `0x00` blocked; five south steps onto `0x0C` accepted,
+  final position `(20,25)` (`create-test-live`).
+* **measured** — the ladder's accept and reject sets (F2). Tile counts and
+  spatial coherence: mean same-tile orthogonal neighbours is 3.62 for `0x00`,
+  2.81 for `0x08`, 2.75 for `0x0C`, 1.94 for `0x10` — water and mountains form
+  contiguous regions, not noise. Rendering `mapx20` under the model gives an
+  archipelago with mountain ridges, and the row at `y=20` reads
+  `^.....[~~~~~~~~~`, i.e. player on land with water immediately east.
+* **corroborated independently** — `docs/phase4-implementation.md` recorded
+  mapx30's tile ids as `{0, 4, 6, 8, 10, 16}`. Those are ART indices, and
+  `map_byte >> 1` reproduces exactly that set from mapx30's raw bytes. Derived
+  by a different route, on a different sector.
+* **inferred** — that `DS:29` carries the destination tile byte rather than a
+  mode, and therefore that the tile read happens upstream in whatever fills
+  `DS:2CB`/`DS:2DE` (F3). This is the load-bearing step and it is NOT proven.
+
+**One contradiction that must be resolved before this is called settled.**
+`engine/src/core/view.h` makes two claims that cannot both hold:
+
+1. "the fill loop computes it as `(map_byte >> 1) & 0xFE`" — implies `art = map_byte >> 2`
+2. "its staging byte is `0x78` (120), which halves to art 60, a humanoid figure"
+   — implies `art = map_byte >> 1`
+
+If (1) were true the player cell's staging byte would be `0x3C`, not `0x78`.
+Claim (2) is the one the owner's screenshot confirmed, and it is the one this
+model needs, because the stamp `0x78` halving to art `0x3C` (a humanoid) is
+exactly what the atlas shows. But (1) is recorded as a fill-loop decode and has
+not been re-checked.
+
+The model also resolves a long-standing ambiguity in favour of the table: the
+kickoff called art `0x00` "water (magenta dashes)" while renders made the magenta
+field look like walkable land, and T1 noted "the passability table is the
+arbiter, not the label". Under this model `0x00` is rejected, so magenta is
+impassable, i.e. water. That matches the owner being blocked walking east into it.
+
+---
+
+## Open: one Spice86 session answers three questions
+
+Scoped 2026-10-21, all three cheap and all three from a single session in sector
+20 with a fresh character. Owner must do the walking; the reads are passive.
+
+1. **Settle the `view.h` contradiction.** Dump the staging buffer at `DS:272`
+   (256 B) alongside the sector map, and compare. If `staging == map_byte` then
+   claim (2) holds and `art = map_byte >> 1`. If `staging == (map_byte>>1)&0xFE`
+   then claim (1) holds, `art = map_byte >> 2`, and F8's mountain assignment is
+   wrong and must be re-derived.
+2. **Prove or kill the F8 inference.** Break at runtime `0x2423`; dump `AL`,
+   `DS:13, DS:15, DS:18, DS:29, DS:2CB, DS:2DE` and the destination cell's tile
+   byte, on one accepted and one rejected step. If `AL == destination tile`, the
+   rule is proven and `DS:2CB`'s indirect writer becomes the only remaining link.
+3. **Does a rejected step cost food?** Both inline `-19` drains sit BEFORE the
+   reject test (file `0x2799` and `0x2826`), which implies walking into a mountain
+   burns 19 food like a real step. Inferred from block ordering only, and the
+   on-foot path enters `0x2775` which `sub_2626` also calls, so that region's
+   boundary is still imperfectly linearised. Read `DS:53..55` before and after one
+   deliberately blocked step.
+
+---
+
 ## Next step
 
 The static route is exhausted for the tile question. One breakpoint capture
