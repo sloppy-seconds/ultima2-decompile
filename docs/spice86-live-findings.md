@@ -925,8 +925,22 @@ inference rather than a measurement.
 
 ### Still unexplained after this section
 
-* How a `0x50` rocket tile came to exist at `mapx30` (0,0), surrounded by water, when
-  `mapx30` on disk has none - and a boat-art `0x30` at (27,11) where the disk has
-  grass. Two cells, no attributed cause.
+* ~~How a `0x50` rocket tile came to exist at `mapx30` (0,0), surrounded by water,
+  when `mapx30` on disk has none - and a boat-art `0x30` at (27,11) where the disk
+  has grass. Two cells, no attributed cause.~~ **Resolved / corrected 2026-10-22
+  (overnight T5/T6), measured.** The overworld grid is the live object store, the
+  same mechanism as this section's dungeon finding: a monster's grid cell holds its
+  type byte (`DS:197+i`) and the shipped `mapx` file bakes monsters in at their
+  spawn cells (`mapx03` has 43 monster-type cells on disk). Moved monsters
+  therefore differ from the file in pairs (vacate spawn `sprite->70`, stamp new
+  `70->sprite`); this accounts for all 46/12/50 diffs in the sector-03/32 captures
+  with 0 unexplained. The `0x30` at (27,11) is decimal 48, a **monster type**, not
+  boat art, and does not reproduce in the only sector-30 capture (there (27,11) is
+  `0x08` in disk and live). The `0x50` rocket at (0,0) is real but appears in 1 of 8
+  captures, is not a monster or the player's vehicle, and has no attributed writer
+  — left unexplained rather than guessed. See
+  `docs/phase4-overnight-cp5-report.md § T5/T6`.
+* ~~The 30 live-grid cells that differ from `mapx03`~~ - resolved above: moved
+  monsters, the grid-is-the-object-store mechanism.
 * Whether the dungeon light timer reaching 0 darkens the screen (inference above).
 * What the dungeon's `0x80`-heavy bytes actually encode for the wireframe renderer.

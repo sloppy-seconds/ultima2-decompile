@@ -13,8 +13,8 @@ logical commit.
 | T2 | DONE |
 | T3 | DONE |
 | T4 | DONE |
-| T5 | todo |
-| T6 | todo |
+| T5 | DONE |
+| T6 | DONE |
 | T7 | todo |
 | T8 | todo |
 | T9 | todo |
@@ -366,6 +366,115 @@ or that stores gold in a wider/binary field, will not reproduce this. Recorded i
 * `docs/phase4-overnight-cp5-report.md` (this section)
 * `docs/spice86-live-findings.md` § 12 (open item resolved, retraction-style: the
   original "cause not identified; not guessing" line stays visible)
+
+`asm/` untouched; no engine code changed. `make -C engine test` green.
+
+**Commit: `7856653`.**
+
+---
+
+## T5 & T6 — the live grid vs the shipped `mapx` file
+
+**Status: DONE.** T5 and T6 are **the same mechanism**, decided explicitly below.
+That mechanism is the overworld half of what findings § 13 proved for dungeons:
+**the sector grid is the live object store.** Runtime objects are stamped into the
+64x64 grid at their current cell and the shipped `mapxNN` file is the *spawn*
+layout, so a mid-play grid legitimately differs from the file wherever an object
+has moved. Grade: **measured**, from the committed `live-ds.bin` DS dumps diffed
+byte-for-byte against `original/mapxNN`.
+
+### Method
+
+The 64x64 grid is at `DS:0x1800` in the live DS segment (confirmed: the fight
+capture's cell (31,32) is `DS:201F` = `0x1800 + 32*64 + 31`). Sector digits at
+`DS:49/4A` are decimal pairs, so sector 30 is `(3,0)`. For every capture that has
+a `live-ds.bin` I diffed `live[0x1800:0x2000]` against `original/mapxNN[:4096]`
+and classified each differing cell (scripts `/var/tmp/t56_grid.py`,
+`/var/tmp/t56_classify.py`).
+
+### The mechanism: monsters live in the grid, stamped by type byte
+
+A live monster's grid cell holds its **type byte** (`DS:197+i`); `DS:1B7+i` holds
+the terrain it stands on. The shipped `mapx` file bakes monsters in at their
+spawn cells as those same type bytes — `mapx03` on disk contains **43 cells whose
+byte is a monster type** (`0x34/38/3C/40/60/68/F0/F4/F8/FC`). When a monster moves
+it vacates its spawn cell (reverting to terrain `0x70`) and stamps its type at the
+new cell. So each moved monster produces exactly two grid diffs: one `sprite->70`
+(vacated spawn) and one `70->sprite` (new cell).
+
+Measured, every capture that was mid-play in an overworld sector:
+
+| capture | sector | diffs | monster-stamp | vacated-spawn | vehicle | unexplained |
+| --- | --- | --- | --- | --- | --- | --- |
+| castle-03-live | mapx03 | 46 | 23 | 23 | 0 | **0** |
+| airport-castle | mapx03 | 12 | 6 | 6 | 0 | **0** |
+| flight-32-live | mapx32 | 50 | 24 | 25 | 1 | **0** |
+| play-test-live | mapx20 | 5 | 4 | 0 | 0 | 1 (see below) |
+| create-test-live | mapx20 | 1 | 1 | 0 | 0 | 0 |
+| baseline-fight | mapx20 | 4 | 4 | 0 | 0 | 0 |
+
+The single `vehicle` cell in flight-32 is `cell (4,10) disk 4C -> live 08` — the
+plane tile the owner boarded (findings § 13: boarding rewrites the tile to ground,
+`DS:13` stamp = `0x26`). That is the documented vehicle-relocation mechanism, not a
+new anomaly.
+
+**T6 (the 30 cells that differed from `mapx03`) is fully accounted for**: they are
+moved monsters, the same grid-is-the-object-store mechanism as § 13's dungeon
+objects (`0x01..0x07` stamped into `0x00` cells). dungeon-35-live reproduces
+exactly that dungeon signature here (27 cells `0x00 -> 0x01..0x06`), confirming the
+overworld and dungeon grids use one mechanism with different value ranges.
+
+### T5: the two `mapx30` cells resolve to one mislabel and one unreproduced byte
+
+The only sector-30 capture (`flight-launched-live`, plane stamp `0x26`) differs
+from `mapx30` in **exactly one cell**, not two:
+
+* **`(27,11) = 0x30` "boat art" — does not reproduce, and was a mislabel.** In
+  this capture (27,11) is `0x08` in **both** disk and live. `0x30` is decimal 48,
+  which is in the observed **monster-type** list (findings § 12 / T9), not a boat.
+  So the § 13 note's "boat art `0x30`" is the same class of error as the § 12 plane
+  tile: a small integer read as art when it is a runtime stamp. Grade: the
+  non-reproduction is **measured**; "it was a monster stamp" is **inferred** (the
+  capture does not contain the instant § 13 observed it).
+* **`(0,0) = 0x50` rocket — real, but a single unreproduced byte, not a mechanism.**
+  It is genuinely present in the live grid and absent from `mapx30` on disk. But it
+  is **not** a monster (no monster at (0,0); the only monster record is a null
+  slot), **not** the player's vehicle (the player rides a plane, board byte `0x4C`,
+  not `0x50`), and it appears in **1 of 8** captures. No capture shows the write or
+  a second occurrence, so I cannot attribute it to a proven mechanism and do not
+  invent one. **This specific byte is PASSED-unexplained**: what is missing is
+  either a second sector-30 capture reproducing it, or a turn-resolved capture of
+  sector-30 entry showing what writes a `0x50` at (0,0).
+
+### Explicit decision on "one anomaly or a mechanism"
+
+The grid-vs-disk differences are a **mechanism** (grid = live object store;
+monsters stamped by type byte, disk file = spawn layout) — proven across six
+overworld captures with 0 unexplained cells except the two residuals below. The
+sector-30 `(0,0)=0x50` rocket is a **single anomaly**, not that mechanism and not a
+proven vehicle-placement path; it is left unexplained with the missing evidence
+named rather than guessed.
+
+### Residuals (recorded, not guessed)
+
+* `mapx30 (0,0) = 0x50` rocket: 1-of-8 capture, no attributed writer. PASSED.
+* `play-test-live (19,52) disk 0C -> live C0`: one cell, not a monster/vehicle
+  stamp; single occurrence, no mechanism claimed.
+
+### Mechanic finding for the engine
+
+The overworld grid is a **mutable object store**: the shipped `mapxNN` file is the
+monster *spawn* layout (monster type bytes baked into grid cells), and at runtime
+monsters relocate within the grid, vacating their spawn cell to terrain and
+stamping their type byte at their current cell. A reconstruction that loads the
+file once and treats the grid as immutable static art will not reproduce monster
+movement, and will misread every moved-monster cell as a discrepancy. This is the
+same store § 13 found for dungeons and vehicles.
+
+### Files
+
+* `docs/phase4-overnight-cp5-report.md` (this section)
+* `docs/spice86-live-findings.md` § 13 (open items resolved / corrected)
 
 `asm/` untouched; no engine code changed. `make -C engine test` green.
 
