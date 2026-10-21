@@ -198,6 +198,70 @@ impassable, i.e. water. That matches the owner being blocked walking east into i
 
 ---
 
+## F12 — ART INDEX IS `map_byte >> 2`. THE WORLD WRAPS. 2026-10-21.
+
+Settles the `view.h` contradiction that blocked this for two sessions, and adds
+a coordinate-model fact that broke an automated walk.
+
+### The transform
+
+Every byte that ever appears in a sector map grid is a multiple of 4, spanning
+`0x00..0xFC` - exactly 64 values - and the tile atlas has exactly 64 entries.
+Therefore:
+
+    art_index = map_byte >> 2
+
+Not `>> 1`. `engine/src/core/view.h` contains both claims and the `>>1` reading
+is the wrong one. The proof is threefold and independent:
+
+1. **Inventory.** 64 distinct grid bytes, all `≡ 0 mod 4`, matching 64 art
+   entries one-for-one. `>>1` would need 128 entries.
+2. **Rendered letters.** Drawing the probe map with `art = byte >> 2` puts the
+   atlas A-Z glyphs (art `0x20..0x39`) exactly where map bytes `0x80..0xE4` sit.
+   With `>>1` they would not line up.
+3. **Named terrain.** `0x00>>2=0` water, `0x08>>2=2` grass, `0x0C>>2=3` forest,
+   `0x10>>2=4` mountain - and art `0x04` is the white diamond lattice the owner
+   identifies as the mountain. Consistent with F11.
+
+This also explains the shape of the F8 error: F8 claimed the mountain was byte
+`0x08` while naming art `0x04`. The art was right and the byte was wrong, which
+is exactly what a `>>1` vs `>>2` slip produces. F8 is dead, F11 supersedes it.
+
+### The `0x1A` oddity is not terrain
+
+Earlier sweeps noticed byte `0x1A` appearing exactly once in 33 of 33 sector
+maps and it was briefly treated as a rare tile. It is not in the grid at all.
+Sector map files are 4224 bytes: a 4096-byte `64x64` grid plus a 128-byte tail,
+and `0x1A` is the first byte of that tail in every file. It is a header marker.
+
+### The world is toroidal
+
+With the player parked at `x=0`, the left edge of the viewport displays map
+`x=55..63` - the high bytes `0xDC..0xFC`, which render as the atlas `X Y Z`
+glyphs. The viewport wraps rather than clamping at the sector edge.
+
+Consequence for automation: any scripted walk that assumes a flat grid and
+starts near `x=0` or `y=0` will desynchronise silently. Start probe walks near
+the middle of the map, away from a wrap boundary.
+
+### Lead, not a result: blocked steps may still cost food
+
+During a monitored walk, one rejected step (into `0x00` water, position
+unchanged) was accompanied by `DS:53..55` changing `04 00 00 -> 03 99 81`. If
+`0x53..55` is the food field, a blocked move still drains food, which answers
+open question 3 of the capture spec. **Unconfirmed:** single sample, and the
+field identity was assumed from `state.h` rather than re-derived in that run.
+Needs a clean before/after on a known field before it becomes a finding.
+
+### Also observed in the same trace
+
+`DS:26` flips `00 <-> FF` on accepted movement - consistent with its `moved`
+label in `state.h`. `DS:15` flips `00 <-> 84` between two grass tiles, so it is
+not a terrain type and the `mode_walk` label should be treated as unproven.
+No monster or encounter appeared in the sampled window.
+
+---
+
 ## F11 — FOUR TILE BYTES PROVEN BY WALK, WITH NAMES. 2026-10-21.
 
 This is the first passability knowledge in the project derived from ground truth
