@@ -25,7 +25,7 @@ SRCS     := src/main.c \
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl help
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl sdl-run play help
 
 all: $(BIN)
 
@@ -103,10 +103,26 @@ $(SDLOBJ)/%.o: %.c $(GEN)
 sdl-run: $(SDL_BIN)
 	./$(SDL_BIN) --sdl --play-map --data-dir ../original --save-dir saves
 
+# play: put the game on the operator's screen.
+#
+# Unlike sdl-run this synthesises the display environment from the socket files,
+# because the agent shell is not a graphical login session and a bare ./u2-sdl
+# there silently falls back to the terminal renderer. It also builds the SDL
+# binary when missing, and refuses rather than launching into nothing.
+#
+#   make play                 player's own extracted art
+#   make play CLEANROOM=1     compiled-in substitute art
+play: $(SDL_BIN)
+	@if [ -n "$(CLEANROOM)" ]; then \
+	    tools/play.sh --cleanroom; \
+	else \
+	    tools/play.sh; \
+	fi
+
 clean:
 	rm -rf $(BUILD) $(SDLOBJ) $(BIN) $(SDL_BIN)
 
 help:
-	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 sdl sdl-run clean content content-check help"
+	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 sdl sdl-run play clean content content-check help"
 
 -include $(DEPS)
