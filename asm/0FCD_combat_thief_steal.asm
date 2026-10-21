@@ -3,12 +3,22 @@
 # func 0FCD..1012  len 0046 B  evidence: call+reko
 # strings: "A THIEF STOLE SOMETHING!"
 # calls: L_0051df (str_out), L_005417
-# provenance: owner — owner fought what they believe was a thief on 2026-10-21
-#           and suspects items were taken. The matching decrement path is
-#           runtime 0x0FE7 (sbb 1, das into DS:D6+i), the inverse of the drop at
-#           0x2D07 on the same item-count array. Not yet traced from this
-#           function to that decrement.
-# confidence: low (bytes proven by check_func.py)
+# provenance: live:castle-03-live — 'A THIEF STOLE SOMETHING!' is in the executed
+#           print set, and the steal loop in this function walks the monster
+#           records at [DI+0x197] and tests the type against 0x40 at file 0x1244,
+#           so the thief is monster type 0x40 (64). Type 0x40 was present in the
+#           recording (19 slot-turns), which joins this function to the decrement
+#           at runtime 0x0FE7 that the old note called untraced.
+# notes: theft is PERMANENT. Measured over 3000 recorded turns in the sector-00
+#           fight: eight items went 1 -> 0 (RING, GEM, ANKH, TRI-LITHIUM,
+#           BLUE TASSLE, BOOTS, GREEN GEM, SKULL KEY) and none ever returned. The
+#           kill that ended the fight paid HELM 1 -> 2 and gold +15, i.e. the same
+#           random drop as any other kill (compare the STAFF 1 -> 2 / gold +17 kill
+#           earlier in the same run). There is no restore-stolen-goods path.
+#           Consequence for the engine: a stolen item must be removed from the
+#           item array, not flagged, because the resist gates read that array live
+#           (see asm/0E70, asm/0EC2, asm/0F48 and asm/24B5).
+# confidence: high (thief type, decrement target and permanence all proven)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_thief_steal:
 L_0011cd:
