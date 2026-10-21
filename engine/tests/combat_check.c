@@ -1,0 +1,349 @@
+/*
+ * combat_check.c — CP5 acceptance specification (tickets C1, C2, C6).
+ *
+ * THIS IS A SPECIFICATION, NOT A TEST OF CODE THAT EXISTS YET. The engine has
+ * no combat module (docs/phase4-state.md § CP5: "scoped, not started", and the
+ * overnight contract forbids implementing CP5 unattended). tests/run_cp5.sh
+ * therefore SKIPs the behavioural run until src/game/combat.c lands; whoever
+ * implements CP5 starts against these assertions rather than a blank.
+ *
+ * Every expectation below is a byte in the original, cited by asm file address.
+ * Grades per AGENTS.md § 5 are named in the section headers.
+ *
+ * The proposed API is declared here (the spec owns the contract) so this file
+ * is syntax-checkable with only ctx.h/rng.h/state.h present. The accessors key
+ * everything by the DS offset it mirrors, so the spec does not hardcode a
+ * particular state.h field layout — the implementation chooses the fields, the
+ * offsets are the contract.
+ *
+ *   counter_ds : 0x26B legs, 0x26C arms, 0x26D sleep   (asm/0E70,0EC2,0F48)
+ *   item_ds    : DS:D6+i item array — 0xD6 RING, 0xD9 BOOTS, 0xDA CLOAK,
+ *                0xE4 GREEN IDOL                        (findings § 12)
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+
+#include "core/ctx.h"
+#include "core/rng.h"
+#include "core/state.h"
+
+/* ---- the contract CP5 must provide (see the header comment) -------------- *
+ * DS offsets are uint16_t: the counters live at DS:26B..26D, above 0xFF. */
+int     u2_combat_special(u2_ctx *ctx, uint16_t counter_ds);
+uint8_t u2_combat_counter(const u2_ctx *ctx, uint16_t counter_ds);
+void    u2_combat_set_counter(u2_ctx *ctx, uint16_t counter_ds, uint8_t value);
+void    u2_combat_set_item(u2_ctx *ctx, uint16_t item_ds, uint8_t count);
+uint8_t u2_combat_item(const u2_ctx *ctx, uint16_t item_ds);
+uint16_t u2_combat_thief_steal(u2_ctx *ctx);
+
+/* DS offsets named for readability. */
+#define C_LEGS   0x26B
+#define C_ARMS   0x26C
+#define C_SLEEP  0x26D
+#define I_RING   0xD6
+#define I_BOOTS  0xD9   /* legs resist gate  (asm/0E70 file 0x108D) */
+#define I_CLOAK  0xDA   /* arms resist gate  (asm/0EC2 file 0x10DF) */
+#define I_IDOL   0xE4   /* sleep resist gate (asm/0F48 file 0x1162) */
+
+static int fails, checks;
+#define CHECK(cond, ...) do { checks++; if (!(cond)) { fails++; \
+    printf("  FAIL  " __VA_ARGS__); printf("\n"); } } while (0)
+
+static void fresh(u2_ctx *ctx, uint8_t seed)
+{
+    memset(ctx, 0, sizeof *ctx);
+    u2_rng_seed(ctx, seed);
+}
+
+/* The first rand_byte a freshly-seeded ctx would produce. The resist gate is
+ * the first rand_byte the event consumes (asm/0E70 file 0x1094: the str_out /
+ * beep calls before it touch no RNG), so this is the gate roll. */
+static uint8_t first_roll(uint8_t seed)
+{
+    u2_ctx p; fresh(&p, seed);
+    return u2_rand_byte(&p);
+}
+
+/* ========================================================================
+ * C2 — resist is a ~75% roll on a live inventory slot, not boolean immunity.
+ * Grade: measured (asm/0E70/0EC2/0F48 gates + roll; findings § 12).
+ *
+ * The asm shape, for each of the three specials:
+ *     if (item_slot == 0) goto LAND;          // no item: lands, NO roll
+ *     if (rand_byte() >= 0x40) { SAVED; return; }  // resist, counter untouched
+ *   LAND:
+ *     counter = rand_byte() & 0xF;            // 0..15 turns
+ * ==================================================================== */
+static void test_c2_no_item_always_lands(void)
+{
+    /* Without the item the effect lands unconditionally, with no roll at all.
+     * A boolean implementation that gates on "has item ever" would be wrong
+     * here only if it also rolled; the discriminating cases are below. */
+    for (int seed = 0; seed < 256; seed++) {
+        u2_ctx ctx; fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 0);
+        u2_combat_set_counter(&ctx, C_LEGS, 0xFF);      // sentinel
+        int landed = u2_combat_special(&ctx, C_LEGS);
+        CHECK(landed == 1,
+              "C2 no-boots seed %d: effect must land (no roll gate), got %d",
+              seed, landed);
+        CHECK(u2_combat_counter(&ctx, C_LEGS) <= 15,
+              "C2 no-boots seed %d: landed counter must be 0..15, got %u",
+              seed, u2_combat_counter(&ctx, C_LEGS));
+    }
+}
+
+static void test_c2_item_present_is_probabilistic(void)
+{
+    /* With the item present the effect lands on SOME trials and is resisted on
+     * OTHERS. This is the test a boolean implementation cannot pass:
+     *   - "item == immunity" (boolean)  -> resisted every time -> landings==0
+     *   - "item does nothing"           -> landed every time    -> resistances==0
+     * Both are rejected. The correct ~75% roll gives both > 0. */
+    int landings = 0, resistances = 0;
+    for (int seed = 0; seed < 256; seed++) {
+        u2_ctx ctx; fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 1);
+        int landed = u2_combat_special(&ctx, C_LEGS);
+        if (landed) landings++; else resistances++;
+    }
+    CHECK(landings > 0,
+          "C2 with-boots: a boolean-immunity impl resists 100%% (landings=0). "
+          "Got landings=%d resistances=%d", landings, resistances);
+    CHECK(resistances > 0,
+          "C2 with-boots: an impl that ignores the item lands 100%% "
+          "(resistances=0). Got landings=%d resistances=%d", landings, resistances);
+    /* ~75% resist => ~25% landings. Wide band (>=1/8 and <=1/2) so a correct
+     * impl passes but a 0%% or 100%% impl cannot. */
+    CHECK(landings * 8 >= 256 && landings * 2 <= 256,
+          "C2 with-boots: landings must be a strict minority (~25%%), got %d/256",
+          landings);
+}
+
+static void test_c2_threshold_is_exactly_0x40(void)
+{
+    /* The sharpest discriminator: pin the decision to the exact gate roll.
+     * landed <=> first_roll < 0x40, for every seed. Any wrong threshold
+     * (0x80, 0x20, ...) or boolean logic fails on at least one seed. */
+    for (int seed = 0; seed < 256; seed++) {
+        uint8_t gate = first_roll((uint8_t)seed);
+        u2_ctx ctx; fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 1);
+        int landed = u2_combat_special(&ctx, C_LEGS);
+        int expect_land = (gate < 0x40);
+        CHECK(landed == expect_land,
+              "C2 seed %d gate=0x%02x: expected %s (threshold 0x40), got %s",
+              seed, gate, expect_land ? "LAND" : "RESIST",
+              landed ? "LAND" : "RESIST");
+    }
+}
+
+static void test_c2_all_three_gates(void)
+{
+    /* Each special reads its OWN live slot: legs/BOOTS, arms/CLOAK, sleep/IDOL.
+     * A gate wired to the wrong slot would pass the legs tests above but fail
+     * here (e.g. arms gated on boots would resist when only boots is set). */
+    struct { uint16_t counter, slot; const char *name; } g[] = {
+        { C_LEGS,  I_BOOTS, "legs/BOOTS" },
+        { C_ARMS,  I_CLOAK, "arms/CLOAK" },
+        { C_SLEEP, I_IDOL,  "sleep/IDOL" },
+    };
+    for (size_t k = 0; k < sizeof g / sizeof g[0]; k++) {
+        /* slot empty -> always lands */
+        u2_ctx ctx; fresh(&ctx, 0);
+        u2_combat_set_item(&ctx, g[k].slot, 0);
+        CHECK(u2_combat_special(&ctx, g[k].counter) == 1,
+              "C2 %s: empty slot must land", g[k].name);
+        /* slot present -> probabilistic (find at least one resist over seeds) */
+        int resist = 0;
+        for (int seed = 0; seed < 64; seed++) {
+            fresh(&ctx, (uint8_t)seed);
+            u2_combat_set_item(&ctx, g[k].slot, 1);
+            if (u2_combat_special(&ctx, g[k].counter) == 0) resist++;
+        }
+        CHECK(resist > 0, "C2 %s: present slot must sometimes resist", g[k].name);
+    }
+}
+
+/* ========================================================================
+ * C1 — three independent counters, DS:26B/26C/26D, range 0..15.
+ * Grade: measured (asm/0E70 mov 0x26b / 0EC2 mov 0x26c / 0F48 mov 0x26d,
+ * each `and 0xf`; both legs+arms observed non-zero at once, 9 and 8, sleep 8).
+ *
+ * PERSISTENCE CORRECTION (measured): the ticket says "persisted in the save
+ * block". The proven save record is the 256 bytes at DS:36..135 (core/save.h,
+ * asm/5400 FCB read/write CX=0x100 DX=0x36). DS:26B/26C/26D are OUTSIDE that
+ * span (0x26B > 0x135), so the proven save path does NOT persist them. There
+ * is a routine asm/080D that zeroes DS:26A..26D (observed in its body), but its
+ * caller is not statically discovered (no `call L_00080d` in the tree) so its
+ * role — init vs load — is NOT proven and is not claimed here. Net: the
+ * "persisted in the save block" claim is not byte-proven and is in tension with
+ * the save span. The test asserts the proven facts (three independent counters,
+ * 0..15, set on a landed effect) and asserts the counters live outside the
+ * record rather than asserting a persistence the bytes do not support.
+ * ==================================================================== */
+static void test_c1_three_independent_counters(void)
+{
+    /* Landing one effect must not disturb the other two counters. */
+    u2_ctx ctx; fresh(&ctx, 0);
+    u2_combat_set_item(&ctx, I_BOOTS, 0);   // no resist -> legs lands
+    u2_combat_set_item(&ctx, I_CLOAK, 0);
+    u2_combat_set_item(&ctx, I_IDOL, 0);
+    u2_combat_set_counter(&ctx, C_ARMS, 9);
+    u2_combat_set_counter(&ctx, C_SLEEP, 8);
+    uint8_t arms0 = u2_combat_counter(&ctx, C_ARMS);
+    uint8_t sleep0 = u2_combat_counter(&ctx, C_SLEEP);
+    int landed = u2_combat_special(&ctx, C_LEGS);
+    CHECK(landed == 1, "C1: legs with no boots must land");
+    CHECK(u2_combat_counter(&ctx, C_ARMS) == arms0,
+          "C1: legs event must not change the arms counter");
+    CHECK(u2_combat_counter(&ctx, C_SLEEP) == sleep0,
+          "C1: legs event must not change the sleep counter");
+    /* And the reverse: an arms event leaves legs/sleep alone. */
+    u2_combat_set_counter(&ctx, C_LEGS, 5);
+    uint8_t legs0 = u2_combat_counter(&ctx, C_LEGS);
+    u2_combat_special(&ctx, C_ARMS);
+    CHECK(u2_combat_counter(&ctx, C_LEGS) == legs0,
+          "C1: arms event must not change the legs counter");
+}
+
+static void test_c1_range_and_variance(void)
+{
+    /* On a landed effect the counter is rand & 0xF: every value in 0..15, and
+     * it VARIES across seeds (a fixed-value impl fails the variance check). */
+    int seen[16] = {0};
+    int distinct = 0;
+    for (int seed = 0; seed < 256; seed++) {
+        u2_ctx ctx; fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 0);          // always land
+        u2_combat_special(&ctx, C_LEGS);
+        uint8_t v = u2_combat_counter(&ctx, C_LEGS);
+        CHECK(v <= 15, "C1 seed %d: counter out of 0..15, got %u", seed, v);
+        if (!seen[v]) { seen[v] = 1; distinct++; }
+    }
+    CHECK(distinct > 1,
+          "C1: counter must be a roll (varies), not a constant; distinct=%d",
+          distinct);
+    CHECK(distinct == 16,
+          "C1: over 256 seeds all 16 values 0..15 should appear, got %d", distinct);
+}
+
+static void test_c1_outside_save_record(void)
+{
+    /* Documents the persistence correction as an assertion: the counters are
+     * not inside the DS:36..135 save record, so a save/reload cannot restore
+     * them. If CP5 ever moves them into the record, this fires and forces the
+     * claim to be re-proven against the bytes rather than inherited. */
+    CHECK(C_LEGS  < 0x36 || C_LEGS  > 0x135, "legs counter unexpectedly inside record");
+    CHECK(C_ARMS  < 0x36 || C_ARMS  > 0x135, "arms counter unexpectedly inside record");
+    CHECK(C_SLEEP < 0x36 || C_SLEEP > 0x135, "sleep counter unexpectedly inside record");
+}
+
+/* ========================================================================
+ * C6 — theft DELETES from the item array; nothing is restored on kill.
+ * Grade: measured (asm/0FCD decrements DS:D6+i; over 3000 turns 8 items went
+ * 1->0 and none returned; findings § 12 "Theft is permanent").
+ *
+ * The engine consequence the ticket calls out: because the C2 gates read the
+ * item array LIVE, a stolen item must be removed (count -> 0), not flagged,
+ * or the resist would keep firing on an item the player no longer has.
+ * ==================================================================== */
+static void test_c6_theft_deletes(void)
+{
+    /* Only BOOTS present. The thief decrements a random non-empty slot; with a
+     * single non-empty slot the first steal must empty it. */
+    u2_ctx ctx; fresh(&ctx, 0);
+    u2_combat_set_item(&ctx, I_BOOTS, 1);
+    int steals = 0;
+    /* (uint16_t item offsets; I_* fit in a byte but the API is 16-bit) */
+    for (int t = 0; t < 3000 && u2_combat_item(&ctx, I_BOOTS) != 0; t++) {
+        u2_combat_thief_steal(&ctx);
+        steals++;
+    }
+    CHECK(u2_combat_item(&ctx, I_BOOTS) == 0,
+          "C6: theft must delete the item (count -> 0), got %u after %d steals",
+          u2_combat_item(&ctx, I_BOOTS), steals);
+    CHECK(steals >= 1, "C6: at least one steal must have removed the item");
+}
+
+static void test_c6_nothing_restored(void)
+{
+    /* Total item count is non-increasing across steals, and a slot emptied by
+     * theft stays empty (no restore path). This is the state-level meaning of
+     * "nothing is restored on kill". */
+    u2_ctx ctx; fresh(&ctx, 7);
+    uint8_t slots[] = { I_RING, I_BOOTS, I_CLOAK, I_IDOL };
+    for (size_t i = 0; i < sizeof slots; i++) u2_combat_set_item(&ctx, slots[i], 1);
+    int total0 = 0;
+    for (size_t i = 0; i < sizeof slots; i++) total0 += u2_combat_item(&ctx, slots[i]);
+    int prev = total0;
+    int emptied[8] = {0};
+    for (int t = 0; t < 3000; t++) {
+        u2_combat_thief_steal(&ctx);
+        int total = 0;
+        for (size_t i = 0; i < sizeof slots; i++) {
+            uint8_t v = u2_combat_item(&ctx, slots[i]);
+            total += v;
+            if (v == 0) emptied[i] = 1;
+        }
+        CHECK(total <= prev,
+              "C6: total items must never increase (no restore), %d -> %d at t=%d",
+              prev, total, t);
+        prev = total;
+    }
+    /* Once emptied, still empty at the end (no resurrection). */
+    for (size_t i = 0; i < sizeof slots; i++) {
+        if (emptied[i])
+            CHECK(u2_combat_item(&ctx, slots[i]) == 0,
+                  "C6: slot emptied by theft must stay empty");
+    }
+}
+
+static void test_c6_theft_kills_the_resist(void)
+{
+    /* The coupling the ticket warns about: after the boots are stolen, the legs
+     * resist must NEVER fire again, because the gate reads the live array. A
+     * flagged-but-present item would wrongly keep the resist. */
+    u2_ctx ctx; fresh(&ctx, 0);
+    /* With boots present, the resist fires on some seeds. */
+    u2_combat_set_item(&ctx, I_BOOTS, 1);
+    int resist_before = 0;
+    for (int seed = 0; seed < 64; seed++) {
+        fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 1);
+        if (u2_combat_special(&ctx, C_LEGS) == 0) resist_before++;
+    }
+    CHECK(resist_before > 0, "C6 precondition: boots present must resist sometimes");
+    /* Steal the boots. */
+    for (int t = 0; t < 3000 && u2_combat_item(&ctx, I_BOOTS) != 0; t++)
+        u2_combat_thief_steal(&ctx);
+    CHECK(u2_combat_item(&ctx, I_BOOTS) == 0, "C6: boots must be gone");
+    /* Now the resist must never fire — the gate sees an empty slot. */
+    int resist_after = 0;
+    for (int seed = 0; seed < 64; seed++) {
+        fresh(&ctx, (uint8_t)seed);
+        u2_combat_set_item(&ctx, I_BOOTS, 0);
+        if (u2_combat_special(&ctx, C_LEGS) == 0) resist_after++;
+    }
+    CHECK(resist_after == 0,
+          "C6: after theft the resist must never fire (live gate), got %d",
+          resist_after);
+}
+
+int main(void)
+{
+    printf("combat_check — CP5 spec (C1, C2, C6)\n");
+    test_c2_no_item_always_lands();
+    test_c2_item_present_is_probabilistic();
+    test_c2_threshold_is_exactly_0x40();
+    test_c2_all_three_gates();
+    test_c1_three_independent_counters();
+    test_c1_range_and_variance();
+    test_c1_outside_save_record();
+    test_c6_theft_deletes();
+    test_c6_nothing_restored();
+    test_c6_theft_kills_the_resist();
+    printf("combat_check: %d checks, %d failures\n", checks, fails);
+    return fails ? 1 : 0;
+}

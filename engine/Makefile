@@ -25,7 +25,7 @@ SRCS     := src/main.c \
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 clean content content-check sdl sdl-run play help
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 clean content content-check sdl sdl-run play help
 
 all: $(BIN)
 
@@ -61,7 +61,7 @@ run: $(BIN)
 headless: $(BIN)
 	./$(BIN) --headless --script tests/title.keys --dump-state
 
-test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4
+test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5
 
 test-cp0: $(BIN)
 	bash tests/run_cp0.sh
@@ -77,6 +77,12 @@ test-cp3: $(BIN)
 
 test-cp4: $(BIN)
 	bash tests/run_cp4.sh
+
+# CP5 is a specification, not an implementation: the combat acceptance tests land
+# as SKIP until src/game/combat.c exists (the checkpoint is owner-gated). See
+# tests/run_cp5.sh and docs/phase4-state.md § CP5.
+test-cp5:
+	bash tests/run_cp5.sh
 
 # CP9 placeholder. SDL2 must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.

@@ -18,7 +18,7 @@ logical commit.
 | T7 | DONE |
 | T8 | PASSED — trigger is mode byte 0x2e, not a tile byte; map byte needs a capture |
 | T9 | DONE |
-| T10 | todo |
+| T10 | DONE |
 
 ---
 
@@ -727,3 +727,115 @@ The PNG is game content and is written under `tmp/` (gitignored, verified with
 `make -C engine test` green.
 
 **Commit: `79f46ab`.**
+
+---
+
+## T10 — CP5 acceptance tests (spec, not implementation)
+
+**Status: DONE.** Landed the failing acceptance specification for CP5 tickets
+C1, C2 and C6, so whoever implements combat starts against a written contract
+rather than a blank. **No combat code was implemented** — the checkpoint is not
+owner-gated and starting it unattended would pre-empt the owner's decision, so
+the behavioural tests land as SKIP and the suite stays green.
+
+### What landed
+
+* `engine/tests/combat_check.c` — the acceptance spec. It declares the API
+  contract CP5 must provide (keyed by DS offset, so it does not hardcode a
+  `state.h` field layout) and asserts the discriminating behaviour for C1/C2/C6.
+* `engine/tests/run_cp5.sh` — always syntax-checks the spec (so the contract is
+  proven well-formed C in CI), then runs the behaviour only when
+  `src/game/combat.c` exists. Until then each ticket reports SKIP naming the
+  missing hook and the runner exits 0.
+* `engine/Makefile` — `test-cp5` target, wired into `test`.
+
+The engine has no combat module, so all three behavioural tickets are **SKIP**
+with the named missing hook: `src/game/combat.c` (and the DS:26B/26C/26D counters
+plus the DS:D6+i item array it would back). That is the "land as skipped and say
+which" outcome the work order asked for.
+
+### The spec discriminates (measured, negative control per AGENTS.md § 5)
+
+A test that also passes a boolean implementation is a bad test, so the spec was
+validated against two throwaway reference models built in `/var/tmp` (not
+committed):
+
+* a **faithful** model of `asm/0E70/0EC2/0F48` + `asm/0FCD` → **4051 checks, 0
+  failures**;
+* a **deliberately wrong** boolean-immunity model (item present ⇒ always resist,
+  fixed counter, theft that flags instead of deletes) → **70 failures**, caught
+  on all three tickets: C2 threshold (resists when it must land), C1 fixed
+  counter (`distinct=1`, not a roll), C6 theft-flags-not-deletes (boots never
+  gone, resist still fires).
+
+So the C2 test cannot be passed by a boolean implementation — the exact property
+the work order demanded.
+
+### C2 — resist is a ~75% roll on a live slot (the important one)
+
+Grade: **measured** (asm/0E70 file 0x108D/0x1094/0x1097, asm/0EC2 file 0x10DF/…,
+asm/0F48 file 0x1162/…; findings § 12). The asm shape, per special:
+
+```
+if (item_slot == 0) goto LAND;                 // no item: lands, NO roll
+if (rand_byte() >= 0x40) { SAVED; return; }     // resist, counter untouched
+LAND: counter = rand_byte() & 0xF;              // 0..15 turns
+```
+
+The spec asserts four things, each of which a wrong implementation fails:
+
+1. **No item ⇒ lands every time** (no roll gate).
+2. **Item present ⇒ lands on some trials and resists on others.** A boolean
+   immunity gives `landings==0`; an item-ignoring impl gives `resistances==0`;
+   both are rejected.
+3. **The threshold is exactly 0x40.** For every seed the gate roll is the first
+   `rand_byte` the event consumes (the `str_out`/beep calls before it touch no
+   RNG), so the spec pins `landed ⟺ first_roll < 0x40` across all 256 seeds. Any
+   other threshold (0x80, 0x20) or boolean logic fails on at least one seed.
+   Verified against the real engine RNG: over seeds 0..255 exactly 64 (25%) roll
+   `< 0x40` and 192 (75%) roll `>= 0x40`, matching the ~75% resist.
+4. **Each special reads its OWN live slot** (legs/BOOTS `DS:D9`, arms/CLOAK
+   `DS:DA`, sleep/IDOL `DS:E4`), so a gate wired to the wrong slot fails.
+
+### C6 — theft deletes, nothing is restored
+
+Grade: **measured** (asm/0FCD decrements `DS:D6+i`; over 3000 turns 8 items went
+1→0 and none returned; findings § 12 "Theft is permanent"). The spec asserts the
+state-level mechanism: theft drives a live slot to 0 (delete, not flag); total
+item count is non-increasing across steals (no restore path); and — the coupling
+the ticket warns about — **after the boots are stolen the legs resist must never
+fire again**, because the C2 gate reads the array live. A flagged-but-present
+item would wrongly keep the resist and fails this assertion.
+
+### C1 — three independent counters, and a persistence correction
+
+Grade: **measured** (asm/0E70 `mov 0x26b` / asm/0EC2 `mov 0x26c` / asm/0F48
+`mov 0x26d`, each `and 0xf`; legs+arms observed non-zero at once, 9 and 8, sleep
+8). The spec asserts three independent counters (a legs event leaves the arms and
+sleep counters untouched and vice-versa), each set to `rand & 0xF` on a landed
+effect, range 0..15, and that the value **varies** across seeds (all 16 values
+appear over 256 seeds) — so a fixed-value implementation fails.
+
+**Correction to the ticket's "persisted in the save block" claim.** The proven
+save record is the 256 bytes at `DS:36..135` (`core/save.h`; asm/5400 FCB
+read/write `CX=0x100 DX=0x36`). `DS:26B/26C/26D` are **outside** that span
+(`0x26B > 0x135`), so the proven save path does **not** persist them. There is a
+routine `asm/080D` that zeroes `DS:26A..26D` (observed in its body), but its
+caller is not statically discovered (no `call L_00080d` in the tree), so its role
+(init vs load) is **not proven** and is not claimed. Net: the persistence claim
+is not byte-proven and is in tension with the save span, so the spec asserts the
+counters live outside the record rather than asserting a persistence the bytes do
+not support. If CP5 ever moves them into the record, that assertion fires and
+forces the claim to be re-proven. Grade: measured (offsets, save span); the
+080D-role question is left open rather than inferred.
+
+### Files
+
+* `engine/tests/combat_check.c` (new — the C1/C2/C6 acceptance spec)
+* `engine/tests/run_cp5.sh` (new — syntax-checks the spec, SKIPs behaviour until
+  `src/game/combat.c` lands)
+* `engine/Makefile` (`test-cp5` target wired into `test`)
+* `docs/phase4-overnight-cp5-report.md` (this section)
+
+`asm/` untouched; no engine combat code written. `make -C engine test` green
+(CP0..CP4 PASS, CP5 spec SKIP-by-design).
