@@ -10,9 +10,19 @@ which gives two things a wall-clock logger cannot:
 
   * a change trigger, so snapshots land on turn boundaries rather than
     somewhere between them; and
-  * a missed-turn check, because a food delta that cannot be decomposed into
-    19a + 10b consistent with the observed movement means we lost something and
-    say so instead of quietly recording a wrong history.
+  * a model check, because a food delta that is negative or cannot be written as
+    19a + 10b means the model is wrong or a read was torn, and we say so instead
+    of quietly recording a wrong history.
+
+The odometer verdict is the FOOD MODEL only. It deliberately does NOT require the
+per-sample move flag to agree with the decomposed move count: the game writes
+player position and food non-atomically, so one accepted move can be sampled as
+(delta=0, moved=True) on one poll and (delta=19, moved=False) on the next. That
+split is a sampling artifact, not a lost turn or a model violation. Measured on
+the 2026-10-21 castle-03 fight (3000 turns): every one of the 87 positive food
+deltas was exactly 10 or 19 (0 non-decomposable, 0 negative), so the 19/move and
+10/pass model holds; all 76 prior "anomalies" were such split pairs or zero-cost
+rejects, i.e. the old check was over-coupling food to a non-atomic position read.
 
 Polling is fast on purpose: the memory API sustains 250 req/s at 0.3 ms with no
 errors (measured 2026-10-21). The old 3 Hz limit belonged to the windowed CFG
@@ -37,6 +47,9 @@ DS = 0x08BE
 DS_LEN = 0x2800          # state block plus the 4 KB sector buffer
 VGA_BASE = 0xB8000
 VGA_LEN = 0x1900         # the span the game's own screen-invert routine touches
+# BIOS video mode lives at 0040:0049. Physical = seg*16 + off = 0x400 + 0x49 =
+# 0x449. Multiplying the whole address by 16 reads 0x4490 instead, unrelated RAM.
+BDA_MODE_PHYS = 0x40 * 16 + 0x49
 
 FOOD_PER_MOVE = 19
 FOOD_PER_PASS = 10
@@ -54,24 +67,16 @@ def bcd3(b):
 
 
 def decompose(delta):
-    """Can this food delta be made from a moves and b passes? Return one."""
+    """Can this food delta be made from a moves and b passes? Return one.
+
+    delta == 0 returns (0, 0): a turn that spent no food (a rejected step) is
+    model-consistent, not an anomaly.
+    """
     for a in range(0, delta // FOOD_PER_MOVE + 1):
         rem = delta - a * FOOD_PER_MOVE
         if rem >= 0 and rem % FOOD_PER_PASS == 0:
             return a, rem // FOOD_PER_PASS
     return None
-
-
-def screen_text(vga, cols=80, rows=25):
-    out = []
-    for r in range(rows):
-        line = ""
-        for c in range(cols):
-            i = (r * cols + c) * 2
-            ch = vga[i] if i < len(vga) else 0
-            line += chr(ch) if 32 <= ch < 127 else " "
-        out.append(line.rstrip())
-    return out
 
 
 def main():
@@ -108,20 +113,22 @@ def main():
             elif sig != prev:
                 ds = rd(args.port, ds_phys, DS_LEN)
                 vga = rd(args.port, VGA_BASE, VGA_LEN)
+                mode = rd(args.port, BDA_MODE_PHYS, 1)[0]
                 px, py = head[0], head[1]
                 food = bcd3(head[0x53:0x56])
                 delta = bcd3(bytes(prev[2:5])) - food
-                dec = decompose(delta) if delta > 0 else None
-                moved = (px, py) != (prev[0], prev[1])
-                rejected = head[0x20] != prev[5]
-                # A real turn is food falling in a way that decomposes into moves
-                # and passes, with the move count agreeing with whether we moved.
-                # A rejected step costs no food, so delta 0 with the invalid
-                # counter up is legitimate rather than an anomaly.
-                ok = ((dec is not None and (dec[0] > 0) == moved)
-                      or (delta == 0 and rejected and not moved))
+                # Odometer verdict = the food model only: the delta must be a
+                # non-negative combination of 19 (move) and 10 (pass). It is
+                # NOT tied to the per-sample move flag, because position and
+                # food update non-atomically and one move can split across two
+                # polls (see module docstring). A negative or non-decomposable
+                # delta is the real failure the odometer exists to catch.
+                dec = decompose(delta) if delta >= 0 else None
+                ok = dec is not None
                 if not ok:
                     anomalies += 1
+                moved = (px, py) != (prev[0], prev[1])
+                rejected = head[0x20] != prev[5]
                 rec = {
                     "n": n, "t": round(time.time(), 3),
                     "pos": [px, py], "food": food, "delta": delta,
@@ -139,7 +146,13 @@ def main():
                 }
                 (out / "turns" / f"{n:05d}.ds").write_bytes(ds)
                 (out / "turns" / f"{n:05d}.vga").write_bytes(vga)
-                rec["screen"] = [l for l in screen_text(vga) if l.strip()][:12]
+                # The game runs in CGA graphics mode (mode 4), so 0xB800 holds
+                # pixels, not a text page -- an ASCII read of it is garbage. The
+                # honest frame signal is the ink metric (non-zero pixel bytes)
+                # that proved a blank frame was real darkness in dungeon_capture,
+                # plus the BIOS video mode that shows why text would be junk.
+                rec["video_mode"] = mode
+                rec["vga_ink"] = sum(1 for b in vga if b)
                 idx.write(json.dumps(rec) + "\n")
                 flag = "" if ok else "  <-- ODOMETER ANOMALY"
                 kind = ("reject" if (delta == 0 and rejected)
