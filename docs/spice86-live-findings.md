@@ -577,3 +577,154 @@ any editor ships a label for those two bytes.
    only repaints on the game's own status draw. A frozen `Z` screen will keep
    showing pre-write values, and while paused the game generates no turns, so a
    turn-triggered recorder records nothing.
+
+## 12. Caster gauntlet, theft, force field and the plane tile (2026-10-21)
+
+Harvests `captures/spice86/airport-castle` and `captures/spice86/castle-03-live`.
+Turn evidence is 3000 per-turn DS+VGA snapshots from `tools/turn_recorder.py`,
+kept in `captures/spice86/fight-20261021-castle03/` (`index.jsonl` plus `turns/`,
+64 MB, gitignored as derived dumps of the copyrighted binary).
+
+The session started by seeding a maxed character (`tools/u2_edit.py maxout`) into
+sector 00 at (30,32), which turned out to be a walled compound holding 31
+simultaneous monsters. Four of the seven monster types present cast, and the
+owner's guess of "final boss" was wrong: `MINAX CRIES: DIE FOOL!` never executed,
+and it is reached from a different site (file `0x126A`). Grade for everything in
+this section: **measured**, from `ExecutedInstructions` plus live DS, not from
+discovered blocks.
+
+### The four monster specials, and what actually resists them
+
+`asm/0AD3` dispatches on the monster type byte at `[DI+0x197]`:
+
+| monster type | attack | function | resist item, live gate |
+| --- | --- | --- | --- |
+| `0x34` | `LEGS PARALIZED!` | `asm/0E70` | BOOTS, `[DS:D9]` |
+| `0x38` | `ARMS PARALIZED!` | `asm/0EC2` | CLOAK, `[DS:DA]` |
+| `0xF8` | `MAGIC MISSILE!` | `asm/0F12` | **none** |
+| `0x3C` | `SLEEP SPELL!` | `asm/0F48` | GREEN IDOL, `[DS:E4]` |
+
+The three gates are the item array slots themselves: `DS:D6+i` with BOOTS at `i=3`,
+CLOAK at `i=4`, GREEN IDOL at `i=14`, which is the same order as the name table at
+file `0x501D`. Arms and legs are independent counters (`DS:26B`, `DS:26C`) with
+independent items, so a character can be paralysed in one and free in the other,
+and both were observed non-zero at once (9 and 8) alongside sleep at `DS:26D`.
+
+Two things that are easy to get wrong and are now settled:
+
+1. **Owning the item is not immunity.** With the item present the roll from
+   `L_005417` must be `>= 0x40`, so each is a roughly 75% resist. Without the item
+   the effect lands unconditionally, with no roll at all.
+2. **The magnitude is random, not fixed.** On a failed resist the counter is set to
+   `rand & 0xF`, i.e. 0..15 turns.
+
+`asm/0AAA` is the gate in front of the whole dispatch: `[DS:19] < 3`,
+`[DS:1A] < 3`, and `rand < 0x20`, so a special is attempted on about 12.5% of
+monster turns. `[DS:19]` and `[DS:1A]` are zeroed by the force field (below), which
+is the only link found between the two systems; what the counters mean is not
+proven.
+
+### Correction: the boots gate is `DS:D9`, not `DS:6D`
+
+Section 8 recorded a `[DS:6D]` test at runtime `0x22FD` as consistent with the legs
+resist but untraced. It is the wrong byte. During this session a thief took the
+boots, and `[DS:D9]` fell to 0 while `[DS:6D]` stayed 1 and the resist stopped
+firing. `DS:6D` is the save-record slot and does not track theft; the live gate is
+`[DS:D9]`, tested inside `asm/0E70` at file `0x108D`. Anyone writing a save editor
+should treat the two as separate fields, not as one field with two spellings.
+
+### Theft is permanent
+
+`asm/0FCD` is the steal routine and it identifies the thief by type: the loop tests
+the type byte against `0x40` at file `0x1244`, so **the thief is monster type
+`0x40`**. Type `0x40` was present in the recording, which supplies the traced edge
+section 8 said was missing.
+
+Measured over the whole fight: eight items went `1 -> 0` (RING, GEM, ANKH,
+TRI-LITHIUM, BLUE TASSLE, BOOTS, GREEN GEM, SKULL KEY) and **none ever came back**.
+The kill that ended the fight paid `HELM 1 -> 2` and gold +15, indistinguishable
+from any other kill's drop (compare `STAFF 1 -> 2` with gold +17 earlier in the
+same run). There is no restore-stolen-goods path in the binary. The engine must
+therefore delete a stolen item from the array rather than flag it, because the
+resist gates read that array live.
+
+### The force field, and why the theft mattered
+
+`asm/24B5` gates on `[DS:D6]`, the RING slot, at file `0x26B8`. Non-zero prints
+`RING PROTECTS FROM FIELD!` and does nothing. Zero takes the damage path: it clears
+`[DS:19]` and `[DS:1A]`, then subtracts with `stc; sbb al,0x10; das` on `[DS:51]`, the
+high byte of the 4-digit BCD HP, which is exactly **-1000**. The owner's HP went
+`8842 -> 7842` on the tile, and after `[DS:D6]` was set to 1 the protect branch
+fired with no damage. Both branches are now in the executed set, where previously
+they had only ever been discovered.
+
+If the subtract borrows, the branch at file `0x271B` goes to the death handler, so
+this tile kills any character under 1000 HP outright. That makes it a difficulty
+gate rather than a tax.
+
+The causal chain is worth keeping as an example of why these systems are not
+independent: the thief took the ring, so the field cost 1000 HP.
+
+### The plane tile, and an open transform
+
+The plane is map byte **`0x34`**, art index 13, which decodes to an unmistakable
+side-view aeroplane. The mapping from art index to the location-description table
+in `asm/4C50` (`... NEAR A HORSE. NEAR A FRIGATE. NEAR A PLANE. NEAR A ROCKET.` at
+entries 11, 12, 13, 14) is corroborated independently by the horse, frigate and
+rocket art, so the identification does not rest on the drawing alone. Only eight
+plane tiles exist across all 33 sectors: `mapx00` x3, `mapx03` x3, `mapx32` x1,
+`mapx93` x1. Sector 03 is the town one, with a vehicle yard: frigates at y=14,
+planes at (43,16) and (45,16), rockets at y=18.
+
+`asm/2FAD` dispatches BOARD on `[DS:14]` against `0x22` horse, `0x24` ship,
+`0x26` plane, `0x28` rocket, and the callees write the mounted vehicle into
+`[DS:13]`. `asm/38B0` (LAUNCH) reads `[DS:13]`, and landing a plane is accepted only
+on tile `0x08` (grass).
+
+**Open, and deliberately not smoothed over:** `[DS:14]` cannot be the raw map byte.
+Every byte in every `mapx` file is a multiple of 4, and `0x22` and `0x26` occur zero
+times across all 33 sectors, yet those are the horse and plane codes. The plane tile
+is `0x34` and the plane code is `0x26`, so a transform exists and it is unproven.
+`[DS:14]` is written at file `0x6238` from a call to `0x6AC0`, whose index arithmetic
+came out as `y*16 + x` against a 64-wide grid, which is itself unexplained.
+
+### The castle is not a separate map
+
+Entering the castle printed `-CASTLE` (`017D:34B5`) but did not load a new file: the
+live grid at `DS:1800` matched `mapx03` on 4066 of 4096 cells and `DS:49/4A` read
+`0`/`3`. The 30 differing cells were not accounted for. The interior is the sector
+map, and the `A`-`Z` letter tiles spell its room names in situ, which is the
+strongest support yet for F13:
+
+```
+y=0   SHADOW  GUARD      CHAMBER ONE
+y=29  TIMEZ  ONE         MUSEUM
+y=34  TORTURE  CHAMBER
+y=36  APOTHECARY
+y=46  THIEVES            MORGUE
+y=48  GUILD
+y=62  DEVIL              WORKSHIP?
+```
+
+### Corrections and defects this session produced
+
+* `tools/u2_edit.py` documented class as `0 fighter, 1 mage, 2 paladin, 3 thief`.
+  The game's own table at file `0x50E8` is `FIGHTER, CLERIC, WIZARD, THIEF`. There
+  is no paladin.
+* `tools/u2_edit.py set` crashes on its own verification step for text and char
+  fields (`int('AIRTEST')`), after the write has already landed. The write is fine;
+  the check is wrong. Cosmetic, but it makes a successful edit look like a failure.
+* `tools/turn_recorder.py`'s `screen` field is useless here: the game runs in CGA
+  graphics mode, so `0xB800` holds pixels, not a text page. Every message claim in
+  this section comes from `ExecutedInstructions` instead. The recorder logged 76
+  odometer anomalies across 3000 turns, so single-turn boundaries in dense combat
+  are not fully trustworthy and should be re-checked against the raw `.ds` files.
+
+### Still unexplained
+
+* Gold went `9999 -> 14` in one turn at turn 209. Cause not identified; not
+guessing at it.
+* Which map byte the force-field tile is, and what drives its animated
+  white/blue/purple render.
+* The `map byte -> vehicle code` transform behind `[DS:14]`.
+* The 30 live-grid cells that differ from `mapx03`.

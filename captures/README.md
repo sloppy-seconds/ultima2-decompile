@@ -102,3 +102,31 @@ capture therefore describes this binary, and every block address has been re-ver
 
 They were produced outside this directory. Treat the artefacts as valid input, and re-capture
 from `original/` whenever a session needs current data or coverage of paths this one missed.
+
+## Per-run layout under `spice86/`
+
+The whole `captures/spice86/` tree is gitignored (`.gitignore`), so anything here is
+on-disk working evidence, not a committed artefact. Curated conclusions belong in
+`disasm/` and `docs/`; this directory holds the raw material they were derived from.
+
+Two shapes live here:
+
+* `spice86/<label>/` and `spice86/<label>-live/` — one Spice86 harvest, written by
+  `tools/spice86_stop.sh` (clean exit) or `tools/spice86_start.sh --harvest` (mid-play,
+  via `monitor dumpall` on the GDB port). Contains `spice86dumpCfgBlocks.json`,
+  `spice86dumpCfgPartitions.json`, `spice86dumpExecutionFlow.json`,
+  `spice86dumpMemoryDump.bin` and, for a live harvest, `live-ds.bin`. Remember that
+  CFG *blocks* are discovered, not executed; only `ExecutedInstructions` inside
+  `spice86dumpExecutionFlow.json` proves something ran. `tools/cfg_printed.py` gets
+  this right.
+* `spice86/fight-<date>-<place>/` — a `tools/turn_recorder.py` recording. Change-
+  triggered on the food odometer, so snapshots land on turn boundaries rather than
+  between them. `index.jsonl` has one line per turn (position, food delta, HP, gold,
+  EXP, the parsed monster list, and an odometer sanity flag); `turns/NNNNN.ds` is the
+  full `DS` block and `turns/NNNNN.vga` the video span for that turn, so any later
+  tool can re-render history instead of re-running the game. `recorder.log` is the
+  console transcript, and its final line reports the anomaly count.
+
+Caveat carried forward: the recorder's `screen` field is junk while the game is in CGA
+graphics mode, because `0xB800` holds pixels there and not a text page. Read messages
+from `ExecutedInstructions`, and read state from the `.ds` files.
