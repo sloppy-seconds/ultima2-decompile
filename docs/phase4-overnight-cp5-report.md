@@ -11,7 +11,7 @@ logical commit.
 | --- | --- |
 | T1 | DONE |
 | T2 | DONE |
-| T3 | todo |
+| T3 | DONE |
 | T4 | todo |
 | T5 | todo |
 | T6 | todo |
@@ -188,3 +188,79 @@ explicitly-excluded provenance backlog. Flagged rather than silently re-scoped.
 * `docs/phase4-overnight-cp5-report.md` (this file)
 
 **Commit: `521e4ab`.**
+
+---
+
+## T3 — `tools/turn_recorder.py` defects
+
+**Status: DONE.** Both defects fixed. The odometer anomalies are a **tool/trigger
+artifact, not a mechanic finding** — the food model is confirmed correct by the
+recorded bytes.
+
+### Defect 1 — the 76 odometer anomalies: model is right, trigger was wrong
+
+The task asked me to decide between two explanations and say which, with evidence
+from the recorded turns (`captures/spice86/fight-20261021-castle03/`, 3000 turns).
+
+**Verdict (measured): the food model is correct; the trigger over-coupled it to a
+non-atomic position read.** Evidence, computed over the committed `index.jsonl`:
+
+* Across all 3000 records there are 87 positive food deltas. **Every one is
+  exactly 10 or 19** — 0 non-decomposable, 0 negative. So `-19` per move and
+  `-10` per pass is never contradicted by a byte. This matches the model already
+  recorded in `docs/spice86-live-findings.md` § 11 (`0x53..0x55` = "-19 per move,
+  -10 per pass"). It is therefore **not** a mechanic finding and nothing new is
+  added to the findings doc on that count.
+* The old `ok` test required the decomposed move count to agree with the
+  per-sample `moved` flag: `(dec[0] > 0) == moved`. But the game writes player
+  position and food **non-atomically**, so a single accepted move is caught
+  across two 50 Hz polls as `(delta=0, moved=True)` then `(delta=19,
+  moved=False)`. Categorising the 76 anomalies: 45 were `delta=0, moved=True`
+  and 31 were `delta=19, moved=False` — the two halves of the same split, plus
+  zero-cost rejects. None was a non-decomposable delta.
+* This is exactly the mechanism the existing backlog predicted ("position and food
+  update non-atomically, so one move can split across two samples and show as a
+  false odometer anomaly", `docs/phase4-state.md` backlog). The data confirms it.
+
+**Fix.** The odometer verdict is now the **food model alone**: a delta is an
+anomaly only if it is negative or cannot be written as `19a + 10b`. It no longer
+depends on the per-sample `moved`/`rejected` flags (those are still recorded as
+advisory data). Validation against the recorded deltas: the new verdict reports
+**0 anomalies** on the 3000-turn capture, while a synthetic torn read (`delta=7`)
+or a food increase (`delta=-5`) still fails — so the check still catches a real
+model violation or a torn read, which is its actual purpose. Because `ok` no
+longer reads the reject flag, the verdict is also immune to the separate
+`DS:20`-is-scratch backlog item (that item — removing `DS:20` from the change
+signature — is out of T3 scope and left untouched).
+
+### Defect 2 — the junk `screen` field
+
+The game runs in **CGA graphics mode 4**, so `0xB800` holds pixels, not a text
+page; `screen_text()` was decoding pixel bytes as ASCII (the committed capture's
+`screen` values are the tell-tale scattered `" "` noise, not text). Per the task
+I replaced it with an honest signal rather than deleting outright:
+
+* `vga_ink = sum(1 for b in vga if b)` — non-zero pixel bytes in the video span,
+  the same metric that proved a blank frame was real darkness in
+  `tools/dungeon_capture.py`.
+* `video_mode` — the BIOS mode read at physical `0x449` (`0x40*16 + 0x49`), the
+  value that *shows* why a text read would be junk. The `0x449`-not-`0x449*16`
+  trap is called out in a comment, matching `dungeon_capture.py`.
+
+`screen_text()` is deleted; no `screen` field is emitted any more.
+
+### Verification
+
+* `python3 -m py_compile tools/turn_recorder.py` clean; `--help` runs (argparse
+  path exercised without the emulator — the recorder itself is live-only and was
+  **not** launched, per the no-emulator rule).
+* New odometer verdict re-run over the committed 3000-turn `index.jsonl`: 0
+  anomalies; `decompose` spot-checked for 0/10/19/29/38 (ok) and 7/-5 (fail).
+* `asm/` untouched; `make -C engine test` green (CP0..CP4).
+
+### Files
+
+* `tools/turn_recorder.py` (odometer verdict + honest VGA frame; `screen_text` removed)
+* `docs/phase4-overnight-cp5-report.md` (this file)
+
+**Commit: `efef0bb`.**
