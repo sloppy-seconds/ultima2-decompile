@@ -50,6 +50,15 @@ typedef struct u2_ctx {
     int keys_consumed;      /* script tokens consumed so far (input_script sets it) */
     void *replay;           /* u2_replay* when --replay-report is active */
     int rng_probe;          /* --rng-sequence N: print N rolls and exit */
+    /* Idle auto-PASS threshold, in polls of the overworld input loop.
+     *   0  = not configured, use U2_AUTO_PASS_POLLS (the faithful default)
+     *  -1  = disabled, for pure turn-based play
+     *  >0  = explicit poll count
+     * Reserved for the enhanced-mode knob: the original has one fixed value and
+     * offers no way to change it, so `original` mode always uses the default and
+     * only `enhanced` should ever set this. There is no fidelity-mode axis in the
+     * engine yet (u2_mode is a renderer axis), so nothing sets it today. */
+    int auto_pass_polls;
     int input_exhausted;    /* set by the script backend when the keys run out;
                                the flow treats it as "the player left" */
     const char *content_source; /* set by the game layer from the generated header */

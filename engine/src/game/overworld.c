@@ -182,6 +182,31 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
  */
 #define U2_SECTOR_MASK (U2_SECTOR_EDGE - 1)
 
+/* How many idle input polls the original waits before it auto-PASSes.
+ *
+ * Mechanism proven, threshold not. The overworld wait loop polls the keyboard
+ * with `call key_poll` (runtime 0x08CE), tests `cmp $0xff,%ah` for "no key"
+ * (0x08D1), and advances a byte counter with `incb DS:21; jne <loop>` (0x08D6)
+ * and a second one at 0x08F9. `incb` then `jne` is the iterate-until-wrap idiom,
+ * so the timeout is a poll count, not a clock. There is no `INT 1Ah` anywhere in
+ * the corpus and the only read of the BIOS tick at 0x40:6C is the startup RNG
+ * seed in asm/0100, which rules out a hardware timer as the driver.
+ *
+ * The measured wall-clock figure was ~7.6 s at `--Cycles 3000`, which is an
+ * artifact of that emulator setting and deliberately NOT encoded here.
+ *
+ * 256 is the width of the counter the original actually uses, chosen because it
+ * is the one number the bytes support. It is a placeholder to be tuned against
+ * feel once the engine is playable, not a recovered constant. Do not cite it as
+ * proven. `DS:21` and `DS:22` also serve as damage-amount and direction-delta
+ * scratch elsewhere, so the loop nesting at 0x0AC8..0x0B40 needs a proper
+ * re-decode before a real threshold can be claimed.
+ *
+ * evidence: runtime 0x08CE, 0x08D1, 0x08D6, 0x08F9; PASS print 0x08FF/0x0940;
+ *           -10 food at 0x090D — confidence: mechanism proven, threshold not
+ */
+#define U2_AUTO_PASS_POLLS 256
+
 /* Which tile ids this file has actually measured, as a bitmask over 0..63.
  * Anything outside it is unmeasured: the engine still lets you step on it, but
  * it records the id here so a test or a capture run can see that the engine
@@ -343,6 +368,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 {
     ctx->frame = &ow->frame;
 
+    int idle_polls = 0;     /* polls since the last key, for the auto-PASS */
+
     for (;;) {
         u2_overworld_draw(ctx, ow);
         if (seam_present_frame(ctx)) break;      /* window closed */
@@ -358,8 +385,32 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
              * (title.c); without this the loop spun forever after the player
              * closed the window mid-game. */
             if (ctx->exit_code || ctx->input_exhausted) break;
+
+            /* Idle auto-PASS. The original advances time while the player
+             * thinks: after enough polls with no input it performs a PASS,
+             * costing food and letting monsters step. Headless runs are exempt
+             * on purpose — scripted input must stay byte-exact against the CP2
+             * baseline, and a poll-count timeout would make test outcomes depend
+             * on how fast the harness spins the loop. */
+            if (ctx->mode != U2_MODE_HEADLESS) {
+                const int limit = ctx->auto_pass_polls == 0
+                                ? (int)U2_AUTO_PASS_POLLS
+                                : ctx->auto_pass_polls;
+                if (limit > 0 && ++idle_polls >= limit) {
+                    idle_polls = 0;
+                    echo_cmd(ctx, U2_S_PASS);
+                    if (food_spend(ctx, U2_FOOD_PER_PASS))
+                        u2_status_draw(ctx);
+                    /* Not modelled: the original also steps every monster on
+                     * this tick, observed live as one cell per auto-PASS while
+                     * the player stood still. Monsters do not exist in the
+                     * engine yet, so there is nothing to advance. */
+                    continue;
+                }
+            }
             seam_wait_ms(ctx, 16); continue;               /* ~60 fps cadence */
         }
+        idle_polls = 0;                                    /* any key resets it */
         if (k.ch == 0x1B) break;                           /* ESC leaves */
 
         int dx = 0, dy = 0;
@@ -375,10 +426,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case ' ':
             /* Space is PASS: the walk loop's own first arm (cmp $0x20 at file
              * 0x0B3C). It prints PASS, then spends 10 food (file
-             * 0x0B0D..0x0B33). Underflow is death (asm/0C62).
-             * Not modelled here: the original also auto-PASSes on an idle
-             * timer (~7.6 s at --Cycles 3000) and that same tick advances
-             * monsters. Stubbed, not guessed — see u2_tile_passable's notes. */
+             * 0x0B0D..0x0B33). Underflow is death (asm/0C62). The idle auto-PASS
+             * above reaches the same cost through the same print site. */
             echo_cmd(ctx, U2_S_PASS);
             if (food_spend(ctx, U2_FOOD_PER_PASS))
                 u2_status_draw(ctx);
