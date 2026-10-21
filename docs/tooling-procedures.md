@@ -26,7 +26,42 @@ locally. Note that the sibling project addresses its segments differently
 (`199F:4F4D`, `0B2A:4542`) from this one (`DS = 0x08BE`), so their numbers are not
 transcribable at all — a concrete demonstration of why the isolation rule exists.
 
+## Which input path actually works on this host
+
+**Measured 2026-10-21, and it overrides everything below this section.**
+
+`xdotool` does **not** deliver keys to Spice86 on this machine. The chain that
+fools you: `xdotool search --class Spice86` finds the window, `windowfocus
+--sync` sets X input focus and reports success, and `xdotool key` exits 0. None
+of it works. `xdotool getactivewindow` returns nothing, which means **no window
+manager is running**, so `windowactivate` cannot do its job and SDL never receives
+a focus event. Keys vanish silently. Every layer reports success.
+
+The working path is the emulator's own MCP: `local-mcp_send_keyboard_key` with
+`{key, isPressed}`, called twice for down then up. It needs no window manager,
+no focus, and no display at all. That is almost certainly why the sibling project
+mentions `MCP send_keyboard_key` alongside xdotool.
+
+Two more live findings about driving the emulator:
+
+* **HTTP memory reads pause the CPU.** The log shows `Pause requested by thread
+  '.NET TP Worker': GET /api/memory/...`. Reads still return correct data and
+  the emulator reports `isPaused: false` shortly after, but a read is not a free
+  peek — sequence accordingly when timing matters.
+* **`/api/status` is the state endpoint** (`isPaused`, `cycles`, `cs`, `ip`).
+  Sampling `cs:ip` twice is the quickest proof the guest is alive: the game was
+  caught at `017D:4FD3`, which is the no-translation exit of the key handler.
+
+`tools/spice86_keys.py` is therefore **not usable on this host as written**. It
+correctly reports `window: NOT FOUND` / focus failures rather than pretending,
+but the underlying approach needs a window manager. Either run under a WM, or
+add an MCP transport. Do not assume the xdotool path works just because the tool
+exits 0.
+
 ## Sending keys to the game window
+
+The rules below are generic X11/SDL behaviour and remain true wherever a WM
+exists; they were confirmed here only in the negative.
 
 All of this is generic X11/SDL behaviour. `local:measured` on this host.
 

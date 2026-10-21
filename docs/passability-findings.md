@@ -198,6 +198,49 @@ impassable, i.e. water. That matches the owner being blocked walking east into i
 
 ---
 
+## F10 — F8 IS REFUTED. Live measurement 2026-10-21, patched run, sector 20.
+
+A live session settled this. Character `TEST` loaded at `(20,20)` in sector 20,
+`DS:13 = 0x78` throughout, and three deliberate steps were taken, each confirmed
+by reading `DS:00/DS:01` afterwards:
+
+| step | destination tile | outcome |
+| --- | --- | --- |
+| (20,20) -> (20,19) | `0x08` | **moved** |
+| (20,19) -> (20,18) | `0x08` | **moved** |
+| (20,18) -> (20,17) | `0x00` | **blocked**, position unchanged |
+
+Consequences, in order of importance:
+
+1. **Tile `0x08` is passable.** The engine's original measurement was right and
+   F8 was wrong. `0x08` is therefore not the mountain.
+2. **`DS:29` is not the destination tile byte.** If it were, the ladder at
+   runtime `0x25C0` would have rejected `0x08` twice. It did not. After the
+   sequence `DS:29` read `0x1C`, a value the ladder rejects, while the character
+   had just moved freely — which independently confirms F3's note that `DS:29` is
+   shared scratch, not a passability input.
+3. **The ladder at runtime `0x25C0..0x25F6` is not the tile passability gate.**
+   It is real code and was transcribed correctly, but it decides something else.
+   F2 stands as a description and dies as an explanation.
+4. **Water `0x00` blocks, confirmed a third time, live, in a controlled
+   comparison.** The mechanism (move, test, undo, echo) is re-confirmed working.
+5. **The rule is still unknown.** Since the routine demonstrably does not read the
+   tile (F1) and the tile demonstrably decides the outcome (this), the decision
+   must be made by whatever fills `DS:2CB`/`DS:2DE` upstream — exactly where F3
+   left it. That is now the only surviving candidate, and it is where to look.
+
+Not settled by this run: whether a blocked step costs food. Food bytes changed
+across the sequence but were not sampled immediately before and after the single
+blocked step, so the change cannot be attributed. Question 3 of the capture
+remains open.
+
+Also newly established, and it changes how any future capture must be driven:
+see `docs/tooling-procedures.md` — xdotool cannot deliver keys on this host
+because no window manager is running, and the working input path is the
+emulator's own MCP `send_keyboard_key`.
+
+---
+
 ## F9 — CONTESTED: the engine measures tile 0x08 as passable
 
 F8 assigns the mountain to tile `0x08`, because the ladder rejects `0x08` and

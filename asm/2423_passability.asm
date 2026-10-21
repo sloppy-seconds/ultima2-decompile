@@ -22,22 +22,20 @@
 #           0x28/0x26/0x24/0x22, but DS:13 is the player stamp (0x78 on foot in
 #           every in-world capture), so none of those arms are taken on foot.
 #           Full write-up: docs/passability-findings.md
-# HYPOTHESIS (2026-10-21, owner-supported, NOT yet proven): the ladder's input is
-#           the destination TILE BYTE, not a travel mode. Read as tiles, the
-#           accept/reject sets give water 0x00 REJECT, mountain 0x08 REJECT (art
-#           0x04 diamond lattice, owner-confirmed), land 0x0C accept, gate 0x10
-#           accept, standing figures 0x18/0x1C/0x20 REJECT, boat 0x24 and spire
-#           0x28 accept. Consistent with the only ground-truth walk we have and
-#           with mapx20's spatial structure. Two things stop it being a finding:
-#           the DS:2CB indirect writer is still unknown, and engine/src/core/
-#           view.h contradicts itself on whether art = map_byte>>1 or >>2.
-#           AND: u2_tile_passable() in the engine returns PASSABLE for 0x08,
-#           the very tile this hypothesis calls the mountain. That claim came
-#           from the vga-test fight turns, whose DS:00/DS:01 were later shown
-#           not to be the overworld position, so it is not a sound refutation -
-#           but neither is the hypothesis proven. Do not implement terrain from
-#           this beyond water (0x00), independently proven by 22 live rejects.
-#           See docs/passability-findings.md F8, F9 and the four-question capture.
+# REFUTED 2026-10-21 by live measurement (docs/passability-findings.md F10):
+#           the destination TILE BYTE. A patched live run loaded TEST at (20,20)
+#           in sector 20 and walked: (20,20)->(20,19) onto tile 0x08 MOVED,
+#           (20,19)->(20,18) onto 0x08 MOVED, (20,18)->(20,17) onto 0x00 BLOCKED.
+#           So 0x08 is PASSABLE - the engine's u2_tile_passable() was right and
+#           the mountain is NOT 0x08. If DS:29 were the tile byte the ladder
+#           would have rejected 0x08 twice; it did not. DS:29 afterwards read
+#           0x1C, a value this ladder rejects, while the character had just
+#           moved freely - confirming DS:29 is shared scratch, not an input.
+#           Therefore this ladder is NOT the tile passability gate. It is real
+#           code, transcribed correctly, deciding something else.
+#           What survives: water 0x00 blocks (now proven live three times), and
+#           the tile decision must be made upstream by whatever fills
+#           DS:2CB/DS:2DE - the only surviving candidate from F3.
 # provenance: live:create-test-live, live:play-test-live, re-decoded
 # func 2423..242C  len 000A B  evidence: seed+call+reko
 # provenance: live:play-test-live, live:create-test-live
