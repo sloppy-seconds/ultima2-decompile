@@ -15,7 +15,8 @@
  *   - fields are uint8_t/uint16_t, never int; arithmetic that the original
  *     relies on wrapping is masked at the assignment site;
  *   - counters the original keeps in packed decimal (gold, food, exp) stay
- *     BCD pairs, hundreds byte first — see u2_bcd16()/u2_bcd16_encode().
+ *     BCD pairs, hundreds byte first — see u2_bcd16(), and the note in
+ *     core/state.c on why there is deliberately no encoder.
  *
  * A second variable space exists in the original and is NOT here: the CS-side
  * data area (jump table at cs:0x730, the timed_wait parameter block at
@@ -232,10 +233,10 @@ _Static_assert(sizeof(((u2_state *)0)->rng_state) == 6, "rng_state is DS:0x23F..
 _Static_assert(U2_OFF(map_base)   == 0x472, "map_base moved");
 _Static_assert(U2_OFF(left_margin)== 0x54F, "left_margin moved");
 
-/* Packed-decimal helpers: a BCD pair is stored hundreds byte first
- * (0x99 0x97 == 9997), per captures/README.md and the display sites. */
+/* Packed-decimal decode: a BCD pair is stored hundreds byte first
+ * (0x99 0x97 == 9997), per captures/README.md and the display sites.
+ * There is no encoder on purpose — see the note in core/state.c. */
 int  u2_bcd16(uint8_t lo, uint8_t hi);
-void u2_bcd16_encode(int value, uint8_t *lo, uint8_t *hi);
 
 void u2_state_init(u2_state *s);
 

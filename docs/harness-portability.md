@@ -190,6 +190,13 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-22** — A static finding identifies a site, not its reachability. A
+  ticket was written to "fix" a clamping helper that turned out to have **zero
+  callers** — dead code — while the live path beside it was already correct. Same
+  root cause as the play/static limit: static analysis proves a line exists and
+  what it does; it does not prove anything executes it. → any harness that generates
+  candidate fixes must also report caller count, or the queue fills with confident
+  non-bugs.
 * **2026-10-22** — A cross-binary overlap probe can be built and fully calibrated
   without the second target in hand. A target pack's own unrelated executables give
   positive, patched-sibling and true-negative controls, and one of them is typically
