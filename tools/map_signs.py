@@ -23,11 +23,16 @@ for a in range(0x20, 0x3A):
         continue                      # byte 0xC0 is not a letter
     LETTER[a << 2] = chr(ord('A') + (a - 0x20))
 
-# Byte 0x04 (art 01) is the blank background tile that town text is written on, so
-# it doubles as the word separator. Without treating it as a space a sign like
-# TRANSPORT reads correctly but a two-word sign comes out as two fragments.
-# Art 30 / byte 0xC0 stays excluded - it is not a letter (see the no-Q note below).
-SPACE = 0x04
+# Byte 0x7C (art 1F) is the space of the map font: a single cell between words.
+# mapx31 row 0 is the clean example - THINGS 7C ARE 7C NOT 7C AS 7C THEY 7C SEEM.
+# Without treating it as a space every sentence fragments into single words, which
+# is what an earlier revision of this tool did.
+SPACE = 0x7C
+
+# Byte 0x04 (art 01) is the near-blank tile town text is written on. It is ground,
+# not a space, and the distinction matters: the mid-word holes in mapx41 are 0x04,
+# so they are not spaces and must not be absorbed by the separator rule.
+BLANK = 0x04
 
 # Two signs in mapx41 have a single blank cell in the middle of a word: MINIS_RY at
 # 53,15 and PROPAGA_DA at 52,19. The cells above, below and around are all 0x04, so
@@ -36,6 +41,9 @@ SPACE = 0x04
 # silently repaired: per the provenance note in AGENTS.md this pack appears to have
 # community patches applied, and a one-cell hole in two adjacent signs is exactly
 # the kind of artifact that would produce.
+
+# Art 30 / byte 0xC0 stays excluded from LETTER: it is not a letter (see the no-Q
+# note below).
 
 # There is no Q glyph in use. Art 30, where Q would fall in the A-Z sequence, is a
 # structural tile, and 0xC0 never appears between two letter tiles in any
