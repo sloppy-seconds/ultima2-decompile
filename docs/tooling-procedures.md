@@ -36,10 +36,16 @@ from source and patched, so `local-mcp_screenshot` **works** here.
 | --- | --- |
 | Upstream | `https://github.com/OpenRakis/Spice86` (not `pcj/Spice86`; older notes here named the wrong org) |
 | Base commit | `6f27fcde79a1d095ab62a8ca0dffce533613bdcd` |
-| Local patch | `0b3ae43` - screenshot returns base64 via `ImageContentBlock.FromBytes` |
-| Binary MD5 | `130a5afc4631f6a03da5b07289a85d92` |
+| Local patches | `0b3ae43` - screenshot returns base64 via `ImageContentBlock.FromBytes`; `350f5a3` - graphics-mode scroll copied zero pixels and blanked the rows |
+| Patch branch | `~/Projects/ai/spice86` @ `8af7f5f`, branch `combined/screenshot-and-scroll` (both fixes merged, with tests) |
+| Binary MD5 | `fec0a93f644bd056f5c14fcf93f8f0a3` |
 | Built from | `~/Projects/ai/spice86`, `dotnet publish -c Release -r linux-x64 --self-contained true` |
-| Superseded | MD5 `7cd72fff632e63f9ba5f40e1f41d5a51`, kept at `tools/spice86.pre-b64fix-20261021` |
+| Superseded | `130a5afc4631f6a03da5b07289a85d92` (screenshot fix only, still carried the scroll bug) and `7cd72fff632e63f9ba5f40e1f41d5a51` (stock). Both deleted. |
+
+The scroll patch matters for capture work, not just play: until it was applied the emulator
+silently destroyed every message the game printed, so any screenshot taken after a `PASS`, a
+combat result or a shop transaction showed the wrong text. Verify a build with
+`/var/tmp/u2-verify.py <dll> <tag>`, which checks both patches in one run.
 
 The previous vendored build had been copied out of a sibling project, which is what the
 isolation rule forbids; this one is built from a clone this workflow owns. Full patch

@@ -218,10 +218,11 @@ asm regression test and catalog wiring. All render-pipeline instrumentation and
 the `CompleteFrame` guard were removed and verified by reading the lines back -
 this note shows the guard could not have helped.
 
-**Follow-up worth doing:** the vendored build in `tools/spice86/` is stock
-upstream plus the local screenshot patch, so **it still contains this scroll
-bug**. Any capture work that depends on message text will silently lose it until
-the vendored build is rebuilt with this fix. See `docs/tooling-procedures.md`.
+**Follow-up closed:** the vendored build in `tools/spice86/` has been rebuilt from the branch
+carrying both fixes (`8af7f5f`, `Spice86.dll` md5 `fec0a93f644bd056f5c14fcf93f8f0a3`), so
+message text survives scrolling in normal capture work. The superseded builds are deleted.
+See `docs/tooling-procedures.md` for provenance and `tools/spice86/LOCAL_PATCHES.md` for the
+two patches.
 
 The `CompleteFrame` guard tried during the investigation was dropped, since this
 note shows it cannot help.
