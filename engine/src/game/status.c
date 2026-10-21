@@ -92,10 +92,33 @@ void u2_status_draw_character(u2_ctx *ctx)
 
 void u2_status_draw(u2_ctx *ctx)
 {
+    /* The status block is a fixed-region redraw, not a text stream. It writes at
+     * absolute rows using the one shared cursor (DS:0x2E/0x2F), so the cursor it
+     * leaves behind is an accident of whichever field was drawn last — the tail of
+     * the GOLD= line — and not a position anything downstream wants.
+     *
+     * Callers that print after a mid-game redraw were inheriting that stray
+     * cursor: the first character of a command echoed as "GOLD=0000S", and the
+     * message history accumulated shifted "ASS/CMD:ASS" fragments. The initial
+     * draw did not show it only because overworld_open happens to seam_goto after
+     * the redraw; the redraws during play had nothing to correct it.
+     *
+     * Restoring here rather than at each call site means no future caller can
+     * forget. This does not invent a protocol for the original: asm/087D prints
+     * "CMD: " with no cursor set, so the original's echo lands immediately after
+     * the prompt, which is what preserving the cursor reproduces.
+     */
+    const uint8_t row = ctx->state.cursor_row;
+    const uint8_t col = ctx->state.cursor_col;
+
     u2_status_draw_hp(ctx);
     draw_line(ctx, 21, U2_S_STATUS_FOOD, ctx->state.food, ctx->state.food_hi);
     draw_line(ctx, 22, U2_S_STATUS_EXP, ctx->state.exp_lo, ctx->state.exp_hi);
     draw_line(ctx, 23, U2_S_STATUS_GOLD, ctx->state.gold_lo, ctx->state.gold_hi);
     /* The GOLD= tail restores the margin to 0x1d (file 0x5396). */
     ctx->state.right_margin = 0x1d;
+
+    /* Through seam_goto, not by assigning the fields, so the vram cursor stays
+     * in step with the state cursor the way every other writer leaves them. */
+    seam_goto(ctx, col, row);
 }
