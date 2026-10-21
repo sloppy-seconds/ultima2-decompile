@@ -261,3 +261,26 @@ guarded site as unguarded. Both mistakes produced a *plausible* wrong number rat
 than an error, which is the dangerous shape. Prefer failing loudly to returning a
 plausible default, and make unproven numbers say so in the comment next to them.
 
+### A gate that cannot go red is worse than a tool that lies
+
+A checker that returns a wrong answer is bad; a checker that returns a wrong
+**verdict** is worse, because everything downstream treats it as fact. So:
+**demonstrate a gate failing before you trust it passing.** The test is cheap —
+invert one expectation, or feed one known-bad input, confirm the gate goes red,
+restore. Two minutes that would have caught both of these:
+
+* `engine/tests/run_cp5.sh` carried an unconditional `exit 0` on the branch taken
+  while `combat.c` was absent, which swallowed every failure before it. The CP5
+  gate printed `FAIL` and still reported `PASS` to CI — and since that branch was
+  the only one ever taken, the gate had never once been capable of failing.
+* The same script asserted its controls in a comment instead of running them, so
+  the one property that mattered — that the spec rejects a boolean-immunity
+  implementation — had no proof behind it once the throwaway models in `/var/tmp`
+  disappeared. Controls now ship as fixtures
+  (`engine/tests/combat_model_{faithful,boolean_wrong}.c`) and run on every
+  `make test`.
+
+Prefer a gate that fails loudly on its own misconfiguration over one that reports
+success when it checked nothing. A skip is fine; a skip that can hide a failure is
+not.
+
