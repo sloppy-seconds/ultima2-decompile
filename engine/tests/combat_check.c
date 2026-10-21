@@ -1,11 +1,16 @@
 /*
  * combat_check.c — CP5 acceptance specification (tickets C1, C2, C6).
  *
- * THIS IS A SPECIFICATION, NOT A TEST OF CODE THAT EXISTS YET. The engine has
- * no combat module (docs/phase4-state.md § CP5: "scoped, not started", and the
- * overnight contract forbids implementing CP5 unattended). tests/run_cp5.sh
- * therefore SKIPs the behavioural run until src/game/combat.c lands; whoever
- * implements CP5 starts against these assertions rather than a blank.
+ * THIS IS A SPECIFICATION, NOT A TEST OF ENGINE CODE THAT EXISTS YET. The engine
+ * has no combat module (docs/phase4-state.md § CP5: "scoped, not started"), so
+ * the behavioural run against src/game/combat.c is SKIPped until CP5 lands;
+ * whoever implements CP5 starts against these assertions rather than a blank.
+ *
+ * It is nevertheless executed on every `make test`, against two fixture models
+ * that ship beside it: combat_model_faithful.c must pass and
+ * combat_model_boolean_wrong.c must fail. That is what makes "the spec
+ * discriminates" a checked fact rather than a claim in a comment — the original
+ * proof used throwaway models that no longer exist.
  *
  * Every expectation below is a byte in the original, cited by asm file address.
  * Grades per AGENTS.md § 5 are named in the section headers.
