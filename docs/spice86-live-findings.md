@@ -688,13 +688,21 @@ is `0x34` and the plane code is `0x26`, so a transform exists and it is unproven
 `[DS:14]` is written at file `0x6238` from a call to `0x6AC0`, whose index arithmetic
 came out as `y*16 + x` against a 64-wide grid, which is itself unexplained.
 
-### The castle is not a separate map
+### The castle is a sector link, not a separate map format
 
-Entering the castle printed `-CASTLE` (`017D:34B5`) but did not load a new file: the
-live grid at `DS:1800` matched `mapx03` on 4066 of 4096 cells and `DS:49/4A` read
-`0`/`3`. The 30 differing cells were not accounted for. The interior is the sector
-map, and the `A`-`Z` letter tiles spell its room names in situ, which is the
-strongest support yet for F13:
+**Correction to the first draft of this section, which had the conclusion backwards.**
+I wrote that entering the castle "did not load a new file" because the live grid
+matched `mapx03`. It matched `mapx03` because the castle **moved the player from
+sector 00 to sector 03**. The seed is proven: `tmp/20261021-211408/player` still
+carries sector digits `0`/`0` and entry `(30,32)`, so the fight was in sector 00,
+and the post-castle read of `DS:49/4A` = `0`/`3` plus a grid matching `mapx03` on
+4066 of 4096 cells is a sector change, not the same sector. Entering a castle is a
+sector transition, and `-CASTLE` (`017D:34B5`) is its message.
+
+What survives from the first draft: the castle interior is an ordinary sector map
+with no special format, and the `A`-`Z` letter tiles spell its room names in situ.
+`mapx03` holds 113 letter tiles and they decode, from the file alone, to exactly the
+rooms seen live — which is the strongest support yet for F13. `mapx00` holds zero.
 
 ```
 y=0   SHADOW  GUARD      CHAMBER ONE
