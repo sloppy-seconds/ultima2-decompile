@@ -72,11 +72,45 @@ vec2=$(./u2 --seed 0x20 --rng-sequence 6)
     && ok "--seed changes the sequence as the seed model predicts" \
     || bad "--seed 0x20 gave $vec2"
 
-# The engine must never touch the Phase 3 tree.
+# The engine must never change the bytes the reconstruction produces.
+#
+# original/ and references/ are game content: they must be untouched, full stop.
+#
+# asm/ is different. Per AGENTS.md § 3 the asm tree IS the project's one
+# lookup table for address -> behaviour, so discovering a name REQUIRES renaming
+# an asm file and editing its header in the same commit. A blanket "asm/ must be
+# clean" guard therefore blocks the rule it was meant to protect. What actually
+# has to be invariant is the ASSEMBLABLE CONTENT, so that is what is checked
+# here: comment lines (leading '#') may change, everything else may not, and a
+# rename must carry byte-identical non-comment content. The end-to-end case is
+# covered independently by tools/assemble_clean.sh, which rebuilds the whole
+# binary and compares it against the known md5.
 if git rev-parse --git-dir >/dev/null 2>&1; then
-    dirty=$(git status --porcelain -- ../asm ../original ../references 2>/dev/null)
-    [ -z "$dirty" ] && ok "asm/, original/, references/ untouched" \
+    dirty=$(git status --porcelain -- ../original ../references 2>/dev/null)
+    [ -z "$dirty" ] && ok "original/ and references/ untouched" \
                    || bad "protected paths dirty: $dirty"
+
+    root=$(git rev-parse --show-toplevel)
+    asm_bad=""
+    while read -r st path; do
+        [ -n "$st" ] || continue
+        case "$st" in
+            D*) asm_bad="$asm_bad deleted:$path" ;;
+            R*) from=${path% -> *}; to=${path#* -> }
+                a=$(git show "HEAD:$from" 2>/dev/null | grep -v '^#' | md5sum)
+                b=$(grep -v '^#' "$root/$to" 2>/dev/null | md5sum)
+                [ "$a" = "$b" ] || asm_bad="$asm_bad renamed-body:$to" ;;
+            *)  a=$(git show "HEAD:$path" 2>/dev/null | grep -v '^#' | md5sum)
+                b=$(grep -v '^#' "$root/$path" 2>/dev/null | md5sum)
+                [ "$a" = "$b" ] || asm_bad="$asm_bad body-changed:$path" ;;
+        esac
+    done < <(git status --porcelain -- ../asm 2>/dev/null)
+
+    if [ -z "$asm_bad" ]; then
+        ok "asm/ assemblable content unchanged (names and headers may evolve)"
+    else
+        bad "asm/ content changed outside comments:$asm_bad"
+    fi
 fi
 
 [ "$fail" = "0" ] && { echo "CP0 TEST: PASS"; exit 0; } || { echo "CP0 TEST: FAIL"; exit 1; }

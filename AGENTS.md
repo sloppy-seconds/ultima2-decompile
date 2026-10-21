@@ -128,6 +128,26 @@ Verification, in two independent layers:
 
 ## 3. Working Rules
 
+* **`asm/` is the one lookup table for address → behaviour. There is no second
+  one.** The filename carries the discovered name (`asm/0936_walk_loop.asm`) and
+  the header carries `# name-evidence:`, `# provenance:` and `# confidence:`.
+  Do not create flow tables, address cheat-sheets or symbol indexes in `docs/`
+  or `disasm/` that duplicate this — two hand-maintained copies always drift and
+  a stale index is worse than none. Any derived view must be *generated* by a
+  tool, never kept by hand.
+* **Look it up before you investigate it.** Start with
+  `ls asm/ | grep -i <word>` and read the header. If it is already named, the
+  work is done and re-deriving it from raw disassembly is a process failure.
+  Then **spot-check one cited byte or instruction** to prove the entry still
+  holds before trusting the rest of it.
+* **When a session learns or corrects an address→behaviour fact, the same commit
+  renames the `asm/` file and writes the header.** Not a follow-up, not a
+  backlog item. If no file covers the address yet, record it in the owning
+  function's header and say so.
+* **A wrong name is worse than no name.** If bytes contradict an existing name,
+  add a `# NAME DISPUTED:` line in the same commit and propose the rename;
+  do not silently rename on your own inference.
+
 * **Never run the game in place.** The game rewrites its own `player` file.
   `tools/spice86_start.sh` copies pristine `references/ultima2/` into a fresh
   timestamped dir under `tmp/` for every launch. Scratch and logs go to
