@@ -353,15 +353,57 @@ int u2_title_flow(u2_ctx *ctx)
         case 'P':                               /* asm/03A0 -> asm/0764 */
             run_play(ctx);
             break;
-        case 'C':                               /* asm/03A4 -> asm/5400 -> 03AC */
-            /* CP3: real creation flow (game/creation.c). The original returns
-             * here only after a disk swap, which the engine does not need. */
-            if (u2_creation_flow(ctx) < 0)
+        case 'C': {                             /* asm/03A4 -> asm/5400 -> 03AC */
+            const int made = u2_creation_flow(ctx);
+            if (made < 0)
                 stub_not_implemented(ctx, "create: save path unusable");
             /* Ctrl-Q inside the form must leave the game, not just the form.
              * The flow records the intent on the context and unwinds here. */
-            if (ctx->exit_code) return 0;
+            else if (ctx->exit_code) return 0;
+            /* Only a *completed* creation runs the tail. The flow returns 0 when
+             * the player abandons it with ESC and 1 when the form is confirmed
+             * and saved; treating any non-negative return as success made an
+             * abandoned creation restart the program, which then legitimately
+             * cleared the story flag and looked like a demo regression. */
+            else if (made != 1) break;
+            else if (ctx->fidelity == U2_FIDELITY_ENHANCED) {
+                /* Enhanced: the disk swap existed because the program and the
+                 * data were on separate media. There is no media to swap, so the
+                 * whole restart is a dead end inherited from CP/M — skip it and
+                 * go straight into the world. */
+                ctx->enter_world = 1;
+                return 0;
+            } else {
+                /* Original: asm/5400's tail prints "TO PLAY ULTIMA II", then
+                 * "INSERT PROGRAM MASTER", spins on key_poll, and calls the
+                 * startup routine at runtime 0x0100 — a full program restart,
+                 * which is why finishing creation lands on the splash and the
+                 * player must press P to play. Reproduced rather than shortcut,
+                 * because it is what the byte-comparison baseline measures. */
+                seam_clear_screen(ctx);
+                seam_str_out(ctx, U2_S_TO_PLAY);
+                seam_str_out(ctx, U2_S_INSERT_PROGRAM);
+                seam_present(ctx);
+                u2_key k;
+                /* The original spins on the non-blocking key_poll (asm/5400's
+                 * tail: `call key_poll; jne <loop>`), so the engine does the
+                 * same rather than a blocking read. That also avoids a real
+                 * footgun: the script backend signals an exhausted run by
+                 * setting exit_code = 0, which is falsy, so a guard written as
+                 * `!exit_code` can never fire and the loop hangs the harness.
+                 * seam_key_poll sets input_exhausted, which is the flag that
+                 * actually distinguishes "no key yet" from "no keys ever". */
+                for (;;) {
+                    const int got = seam_key_poll(ctx, &k);
+                    if (got != 0) break;
+                    if (ctx->exit_code || ctx->input_exhausted) break;
+                    seam_wait_ms(ctx, 16);
+                }
+                ctx->restart_requested = 1;
+                return 0;
+            }
             break;
+        }
         case 0x11:                              /* Ctrl-Q: quit (deviation D5) */
             /* The original has no quit path: 'Q' in the command set is
              * "QUIT OR SAVE GAME." (string at file 0x3FCA) and it saved rather

@@ -35,6 +35,15 @@ static void usage(const char *argv0)
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
         "  --sdl           bitmap window instead of the text grid (make sdl build)\n"
         "  --play-map      enter the overworld screen directly (CP4 development entry)\n"
+        "  --enhanced      enhanced fidelity: same rules and state as the original, but\n"
+        "                  dead ends the original could not avoid are removed. Today that\n"
+        "                  means finishing character creation enters the world instead of\n"
+        "                  replaying the CP/M disk-swap restart. Default is original,\n"
+        "                  which is what the CP2 byte-comparison baseline measures.\n"
+        "  --auto-pass-polls N\n"
+        "                  idle polls before the engine auto-PASSes. 0 = the original's\n"
+        "                  fixed value, -1 = disabled for pure turn-based play, N = that\n"
+        "                  many. Intended for --enhanced; the original offers no such knob.\n"
         "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
         "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
@@ -118,6 +127,16 @@ int main(int argc, char **argv)
             ctx.use_sdl = 1;
         } else if (strcmp(a, "--play-map") == 0) {
             ctx.play_map = 1;
+        } else if (strcmp(a, "--enhanced") == 0) {
+            /* Same rules and state as the original; dead ends the original
+             * could not avoid are removed. Default is original, which is what
+             * the CP2 byte-comparison baseline is measured against. */
+            ctx.fidelity = U2_FIDELITY_ENHANCED;
+        } else if (strcmp(a, "--auto-pass-polls") == 0 && i + 1 < argc) {
+            /* Idle auto-PASS threshold. 0 restores the faithful default, -1
+             * disables it for pure turn-based play. Only meaningful in enhanced
+             * mode: the original has one fixed value and no way to change it. */
+            ctx.auto_pass_polls = atoi(argv[++i]);
         } else if (strcmp(a, "--script") == 0 && i + 1 < argc) {
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {

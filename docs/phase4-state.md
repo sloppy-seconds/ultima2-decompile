@@ -122,6 +122,28 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Gate log
 
+- **2026-10-21 (owner-approved): T5 shipped, CP2 baseline moved 40 → 42 steps.**
+  A fidelity axis was added — `ctx.fidelity` with `--enhanced`, independent of
+  `u2_mode`, which is a renderer axis. The creation tail is now faithful in
+  `original` mode: `asm/5400`'s tail prints `TO PLAY ULTIMA ][`, then
+  `INSERT PROGRAM MASTER`, spins on `key_poll`, and calls the program startup
+  routine at runtime `0x0100` — a **full restart**, which is why the owner saw
+  the splash reappear and had to press `P`. The engine previously shortcut this,
+  so `original` mode was wrong in a way nobody had noticed until the owner
+  described the splash. `enhanced` mode skips the CP/M disk-swap dead end and
+  enters the world at the created entry point. Both are asserted in CP4, plus a
+  third check that an **abandoned** creation (ESC) does not run the tail —
+  `u2_creation_flow` returns 0 for abandoned and 1 for completed, and treating
+  any non-negative return as success made ESC-rejected creation restart the
+  program. Baseline moved because the tail legitimately paints two more frames;
+  re-recorded with the documented fresh-`--save-dir` command and verified to
+  reproduce. Two strings added through the extractor (`U2_S_TO_PLAY`,
+  `U2_S_INSERT_PROGRAM`); both are byte lists in the listing rather than quoted
+  `db`, and the disassembler had mis-split `TO PLAY ULTIMA ][` into data
+  fragments, so offsets came from the binary. CP1's fallback expectation moves
+  64/27 → 66/29. `--auto-pass-polls` also landed, wiring the earlier
+  `auto_pass_polls` knob so enhanced mode can tune or disable the idle PASS.
+
 - **2026-10-21 (owner-approved): CP2 baseline regenerated, and CI split.**
   `engine/evidence/cp2-playthrough.json` was re-recorded. The recorded step count
   is unchanged at **40** — the apparent 40→41 drift was not a behaviour change at

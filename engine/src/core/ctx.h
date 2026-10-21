@@ -17,8 +17,22 @@ typedef enum u2_mode {
     U2_MODE_HEADLESS = 1/* null renderer, scripted or piped input */
 } u2_mode;
 
+typedef enum u2_fidelity {
+    U2_FIDELITY_ORIGINAL = 0,   /* byte-comparison baseline behaviour */
+    U2_FIDELITY_ENHANCED = 1    /* same rules; dead ends removed */
+} u2_fidelity;
+
 typedef struct u2_ctx {
     u2_mode mode;
+    /* Fidelity axis — independent of `mode`, which is a renderer axis.
+     *   U2_FIDELITY_ORIGINAL  reproduce the original's behaviour, including its
+     *                         dead ends and its bugs (default; what the CP2
+     *                         byte-comparison baseline is measured against)
+     *   U2_FIDELITY_ENHANCED  same rules and state, but dead ends the original
+     *                         could not avoid may be removed — the CP/M disk-swap
+     *                         restart after character creation is the first one.
+     * Chosen at launch with --enhanced; never switched mid-run. */
+    u2_fidelity fidelity;
     const u2_renderer *renderer;
     const u2_input    *input;
     const u2_audio    *audio;
@@ -59,6 +73,14 @@ typedef struct u2_ctx {
      * only `enhanced` should ever set this. There is no fidelity-mode axis in the
      * engine yet (u2_mode is a renderer axis), so nothing sets it today. */
     int auto_pass_polls;
+    /* Program-flow signals set by the title flow and read by u2_game_run.
+     * `restart_requested` reproduces the original's creation tail, which calls
+     * the startup routine (runtime 0x0100) and so re-presents the splash; the
+     * loop in game.c is the engine's equivalent of that call.
+     * `enter_world` is the enhanced-mode shortcut: creation finishes and drops
+     * the player straight into the overworld instead of restarting. */
+    int restart_requested;
+    int enter_world;
     int input_exhausted;    /* set by the script backend when the keys run out;
                                the flow treats it as "the player left" */
     const char *content_source; /* set by the game layer from the generated header */

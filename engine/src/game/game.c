@@ -19,6 +19,7 @@
 #include <string.h>
 #include "game/game.h"
 #include "game/title.h"
+#include "game/overworld.h"
 #include "core/seam.h"
 #include "debug/trace.h"
 
@@ -108,7 +109,23 @@ void u2_game_run(u2_ctx *ctx)
         run_selftest(ctx);
         return;
     }
-    u2_title_flow(ctx);
+    /* The original's creation tail restarts the program by calling its own
+     * startup routine, so re-entering the title flow is the faithful shape of
+     * "the player finished creating a character": splash again, then the menu,
+     * then P to play. Guarded on exit_code so a closed window or an exhausted
+     * script can never spin here. */
+    for (;;) {
+        ctx->restart_requested = 0;
+        u2_title_flow(ctx);
+        if (!ctx->restart_requested || ctx->exit_code) break;
+    }
+
+    /* Enhanced mode's creation tail sets this instead of restarting: straight
+     * into the world, no disk-swap theatre. */
+    if (ctx->enter_world && !ctx->exit_code) {
+        u2_overworld ow;
+        u2_overworld_run(ctx, &ow);
+    }
 }
 
 void u2_game_shutdown(u2_ctx *ctx)

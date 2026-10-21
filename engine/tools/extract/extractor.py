@@ -145,6 +145,15 @@ MANIFEST = [
     # str_out call plus its inline string, so the db-index locator is exact and
     # needs no hand-checked file offset.
     ("U2_S_INVALID_MOVE",      "0A02_invalid_move_msg.asm", 0),
+    # The creation tail (asm/5400 end). Both strings print before the tail calls
+    # the program-startup routine, which is why finishing creation lands on the
+    # splash rather than the menu. They are stored as byte lists in the listing
+    # (`db 0x49,0x4e,...`) rather than quoted strings, so the db-index locator
+    # cannot see them and these use verified run offsets: the disassembler
+    # mis-split "TO PLAY ULTIMA ][" into data fragments, so the true starts were
+    # taken from the binary itself.
+    ("U2_S_TO_PLAY",           "5400_sub_5400.asm", ("run", 0x5C1F, 17)),
+    ("U2_S_INSERT_PROGRAM",    "5400_sub_5400.asm", ("run", 0x5C43, 21)),
 ]
 
 DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')

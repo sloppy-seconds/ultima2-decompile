@@ -45,9 +45,11 @@
     {"at_key": 14, "screen": "766d2376345e3e24585a06a5f8086bda01f7d7fde29781f2a86e93bb480cea47", "state": "4cacf9e3bf1fb6bb266ef0701f57ee884676acf7e87d4ca946eff41c91e9d94b", "rolls": 0},
     {"at_key": 14, "screen": "ce61b7e61b7d5a64804e8cff7cf437462dee8e2d8ebbc59be5e6aa4140467ee7", "state": "358fb1c6b43ce6a921a0d5148795f3a1b3e55e830b137ab9886bbcd2b70b606b", "rolls": 0},
     {"at_key": 14, "screen": "0113216347924464a1c41b8455a8912e51a488c253281a72f68568dca6d56e3d", "state": "29846a7d51906065056964f8e8c2d00faec822100d6f149815a799e1cbd42597", "rolls": 0},
-    {"at_key": 14, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "0090e06f64620c853500e0f5fcfafa0436dda9de257a502531f4832efa31aef1", "rolls": 0},
-    {"at_key": 39, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "3091de8c6f4273a97c6000575a1688eb587921c7b26749e22178822dac073d00", "rolls": 0}
+    {"at_key": 14, "screen": "a4e99839fb294954d6726676d3090b41bc7232c2ed682ae69494358cadfd1e26", "state": "8359cdb860cd5a7db724800208a2a1e9d99d812536ae2389b88c1f50d4c4abde", "rolls": 0},
+    {"at_key": 39, "screen": "e541695ce7a29815c7eff5a1a2e4391bdebff301c32507dbbf5da0ef9bf5cae2", "state": "741e01ed3018dcd23787ae4a6102be64890b738b80d63cfcace149ef2e4a2b25", "rolls": 0},
+    {"at_key": 39, "screen": "3abf2af8ed2a1f28a657d4d5400998aa08ca8cc663ac8a90aa60970661bcb847", "state": "6650198e19018583dc967f35b903a8e7797772acc84cdbba0bac8b03a5873257", "rolls": 0},
+    {"at_key": 39, "screen": "e3dbd4b727604f558d2cd4c68e3ef06d05c70b4fba906c1f6c0f7b81a716b75e", "state": "36941fe98ac079231e0461473ea16f99ad3cc2044f2960cc372aaccd8bca5b50", "rolls": 0}
   ],
   "steps_truncated": false,
-  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2078,"cursor":{"row":19,"col":12,"visible":1}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":40},"text_attr":15,"story_flag":1,"sector_second":0,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
+  "final_state": {"engine":"0.1-cp2","mode":"headless","platform":{"renderer":"null","input":"script","audio":"null","clock":"script"},"screen":{"cols":40,"rows":25,"cells_written":2038,"cursor":{"row":19,"col":12,"visible":1}},"state":{"player_x":0,"player_y":0,"cursor":{"row":19,"col":12},"margins":{"left":0,"right":40},"text_attr":15,"story_flag":0,"sector_second":0,"gold_bcd":[4,0],"gold":400,"spell_pick":0,"rng":{"state":[1,1,0,0,0,0],"rolls":0},"map_base":0},"content":"exe:original/ultimaii.exe md5=fe884d5117971073ac8097cc7a6aca25"}
 }

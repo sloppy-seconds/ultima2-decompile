@@ -312,6 +312,43 @@ else
     printf '  SKIP  screenshot diff not run (needs PIL + captures/screenshots/move-after.png)\n'
 fi
 
+# --- T5: the creation tail, under both fidelities -------------------------
+# The original's tail (asm/5400) prints "TO PLAY ULTIMA II", then "INSERT
+# PROGRAM MASTER", spins on key_poll and calls the program startup routine at
+# runtime 0x0100 — a full restart, so finishing creation lands back on the
+# splash and the player presses P. Enhanced mode drops that CP/M dead end and
+# enters the world directly. Needs a content dir, because the overworld cannot
+# load a sector without mapxNN.
+if [ -n "$CONTENT" ]; then
+    T5KEYS="$WORK/t5.keys"
+    printf 'ESC\nC\n1\n5\n1\n5\n1\n5\n1\n5\n1\n5\n1\n5\nM\n1\n1\nB\nR\nI\nT\nI\nS\nH\n0x0d\n0x0d\n0x0d\n0x0d\n' > "$T5KEYS"
+
+    rm -rf "$WORK/t5orig"; mkdir -p "$WORK/t5orig"
+    ./u2 --headless --data-dir "$CONTENT" --save-dir "$WORK/t5orig" \
+         --script "$T5KEYS" --dump-each > "$WORK/t5orig.out" 2>&1
+    grep -q "CMD:" "$WORK/t5orig.out" \
+        && bad "original mode entered the world after creation; it must restart to the title" \
+        || ok "original mode: completed creation restarts to the title, not the world"
+
+    rm -rf "$WORK/t5enh"; mkdir -p "$WORK/t5enh"
+    ./u2 --headless --enhanced --data-dir "$CONTENT" --save-dir "$WORK/t5enh" \
+         --script "$T5KEYS" --dump-each > "$WORK/t5enh.out" 2>&1
+    grep -q "CMD:" "$WORK/t5enh.out" \
+        && ok "enhanced mode: completed creation drops straight into the world" \
+        || bad "enhanced mode did not enter the world after creation"
+
+    # An abandoned creation must not run the tail at all.
+    rm -rf "$WORK/t5ab"; mkdir -p "$WORK/t5ab"
+    printf 'ESC\nC\n0x1b\n' > "$WORK/t5ab.keys"
+    ./u2 --headless --data-dir "$CONTENT" --save-dir "$WORK/t5ab" \
+         --script "$WORK/t5ab.keys" --dump-each > "$WORK/t5ab.out" 2>&1
+    grep -q "CMD:" "$WORK/t5ab.out" \
+        && bad "abandoning creation still ran the restart tail" \
+        || ok "abandoned creation (ESC) does not run the tail"
+else
+    printf '  SKIP  T5 creation-tail checks (no content dir holding mapx00)\n'
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP4 TEST: PASS\n'
