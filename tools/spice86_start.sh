@@ -41,6 +41,10 @@ usage: spice86_start.sh [options]
                      pristine blank (e.g. tmp/<run>/player from an earlier
                      session). Lets 'P' load a character you already made.
   --harvest          dump the CFG of the running session and exit
+  --patch-arrows     patch the RUN COPY so real arrow keys work, letting
+                     tools/spice86_keys.py drive it with Up/Down/Left/Right
+                     instead of the numpad. Never touches original/ or
+                     references/ — see tools/patch_arrows.py.
   --http-port P      HTTP API port (default: first free at/above 20180)
   --mcp-port P       MCP port (default: first free at/above 20181)
   --gdb-port P       GDB port (default: first free at/above 20190)
@@ -53,6 +57,7 @@ CYCLES=3000
 LABEL=""
 DO_HARVEST=0
 PLAYER_FILE=""
+PATCH_ARROWS=0
 HTTP_PORT=""
 MCP_PORT=""
 GDB_PORT=""
@@ -65,6 +70,7 @@ while [ $# -gt 0 ]; do
         --name)      LABEL=$2; shift 2 ;;
         --player)    PLAYER_FILE=$2; shift 2 ;;
         --harvest)   DO_HARVEST=1; shift ;;
+        --patch-arrows) PATCH_ARROWS=1; shift ;;
         --http-port) HTTP_PORT=$2; shift 2 ;;
         --mcp-port)  MCP_PORT=$2; shift 2 ;;
         --gdb-port)  GDB_PORT=$2; shift 2 ;;
@@ -121,6 +127,13 @@ echo "copying pristine game files into $RUN_DIR"
 cp -- "$REFS"/ultimaii.exe "$REFS"/player "$RUN_DIR"/
 cp -- "$REFS"/mapx*  "$REFS"/monx*  "$REFS"/tlkx*  "$RUN_DIR"/ 2>/dev/null || true
 cp -- "$REFS"/pic*   "$REFS"/monsters "$RUN_DIR"/ 2>/dev/null || true
+
+if [ "$PATCH_ARROWS" = 1 ]; then
+    # Patch the run copy only. The tool refuses if the expected gate bytes are
+    # not present, so a wrong binary fails here rather than mid-capture.
+    python3 "$ROOT/tools/patch_arrows.py" "$RUN_DIR/ultimaii.exe" \
+        || { echo "--patch-arrows failed" >&2; exit 1; }
+fi
 
 if [ -n "$PLAYER_FILE" ]; then
     # Overwrite the blank with a previously created character. The game only
