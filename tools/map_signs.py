@@ -23,6 +23,25 @@ for a in range(0x20, 0x3A):
         continue                      # byte 0xC0 is not a letter
     LETTER[a << 2] = chr(ord('A') + (a - 0x20))
 
+# Byte 0x04 (art 01) is the blank background tile that town text is written on, so
+# it doubles as the word separator. Without treating it as a space a sign like
+# TRANSPORT reads correctly but a two-word sign comes out as two fragments.
+# Art 30 / byte 0xC0 stays excluded - it is not a letter (see the no-Q note below).
+SPACE = 0x04
+
+# Two signs in mapx41 have a single blank cell in the middle of a word: MINIS_RY at
+# 53,15 and PROPAGA_DA at 52,19. The cells above, below and around are all 0x04, so
+# this is not a missing glyph and not a two-row sign - T and N are both used
+# correctly elsewhere in the same sector (TEST, DEFENCE). Left as-is rather than
+# silently repaired: per the provenance note in AGENTS.md this pack appears to have
+# community patches applied, and a one-cell hole in two adjacent signs is exactly
+# the kind of artifact that would produce.
+
+# There is no Q glyph in use. Art 30, where Q would fall in the A-Z sequence, is a
+# structural tile, and 0xC0 never appears between two letter tiles in any
+# non-structural sector: every apparent case is in the A/0xC0 flood sectors, where
+# the two are intermixed as built fabric rather than as text.
+
 for path in sorted(glob.glob('original/mapx*')):
     d = open(path, 'rb').read()[:4096]
     runs = []
@@ -32,10 +51,11 @@ for path in sorted(glob.glob('original/mapx*')):
         while i < 64:
             if row[i] in LETTER:
                 j, s = i, ''
-                while j < 64 and row[j] in LETTER:
-                    s += LETTER[row[j]]
+                while j < 64 and (row[j] in LETTER or row[j] == SPACE):
+                    s += LETTER.get(row[j], ' ')
                     j += 1
-                if j - i >= 2:
+                s = s.rstrip(' ')
+                if len(s.strip()) >= 2:
                     runs.append((i, r, s))
                 i = j
             else:
