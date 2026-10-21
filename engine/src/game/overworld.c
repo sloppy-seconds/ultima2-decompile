@@ -441,10 +441,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
             continue;
         case ' ':
-            /* Space is PASS: the walk loop's own first arm (cmp $0x20 at file
-             * 0x0B3C). It prints PASS, then spends 10 food (file
-             * 0x0B0D..0x0B33). Underflow is death (asm/0C62). The idle auto-PASS
-             * above reaches the same cost through the same print site. */
+        case 'P':
+            /* Space is PASS from the walk loop's own first arm (cmp $0x20 at file
+             * 0x0B3C). 'P' is PASS from the command jump table: asm/3DBC_cmd_P
+             * prints PASS, reached by `jmp *%bx` through cs:0730 entry P. The two
+             * are separate sites in the original and both reach the same result,
+             * so the engine accepts both. It prints PASS, then spends 10 food
+             * (file 0x0B0D..0x0B33). Underflow is death (asm/0C62). The idle
+             * auto-PASS above reaches the same cost through the same print site. */
             echo_cmd(ctx, U2_S_PASS);
             if (food_spend(ctx, U2_FOOD_PER_PASS))
                 u2_status_draw(ctx);
@@ -461,9 +465,17 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         const int ny = (ow->y + dy) & U2_SECTOR_MASK;
 
         if (!u2_tile_passable(&ow->world, nx, ny)) {
-            /* Blocked. The original rolls the step back before anything is
-             * drawn, so no direction word is echoed and the frame is not
-             * repainted - only the complaint. */
+            /* Blocked. Owner report (2026-10-21): the original prints the
+             * direction word first and then adds --INVALID MOVE! — "WEST" then
+             * "--INVALID MOVE!" on the following prompt line.
+             *
+             * An earlier version of this branch asserted the opposite ("no
+             * direction word is echoed") and cited that as observed. It was not
+             * observed; it was inferred, and it was wrong. The step is still not
+             * taken and the map is not repainted, which is what was actually
+             * being described.
+             */
+            echo_cmd(ctx, word);
             echo_cmd(ctx, U2_S_INVALID_MOVE);
             continue;
         }
