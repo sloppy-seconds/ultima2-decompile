@@ -478,4 +478,4 @@ same store § 13 found for dungeons and vehicles.
 
 `asm/` untouched; no engine code changed. `make -C engine test` green.
 
-**Commit: (pending).**
+**Commit: `aaf9bb0`.**
