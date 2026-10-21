@@ -29,11 +29,11 @@ PROBE_BYTES = [b for b in range(0x00, 0x100, 4)]   # 64 values
 
 
 def build(rows):
-    """rows: list of (probe_y, corridor_y, [bytes...])"""
+    """rows: list of (probe_y, corridor_y, start_x, [bytes...])"""
     g = bytearray([BACKGROUND]) * GRID
-    for probe_y, corridor_y, vals in rows:
+    for probe_y, corridor_y, start_x, vals in rows:
         for i, b in enumerate(vals):
-            g[probe_y * 64 + i] = b
+            g[probe_y * 64 + start_x + i] = b
     return bytes(g) + TAIL
 
 
@@ -43,6 +43,9 @@ def main():
     ap.add_argument('-o', '--out', required=True, help='output path (must not be original/ or references/)')
     ap.add_argument('--probe-y', type=int, nargs='*', default=[31, 19])
     ap.add_argument('--corridor-y', type=int, nargs='*', default=[32, 20])
+    ap.add_argument('--start-x', type=int, default=16,
+                    help='first probe column; keep probes off the map edge so the '
+                         'walk never crosses a toroidal wrap and loses track')
     a = ap.parse_args()
 
     low = a.out.lower()
@@ -53,19 +56,21 @@ def main():
     if rows != len(a.corridor_y):
         sys.exit('need one corridor-y per probe-y')
     per = len(PROBE_BYTES) // rows
+    if a.start_x + per > 64:
+        sys.exit('start-x %d + %d probes exceeds the 64-column map' % (a.start_x, per))
     plan = []
     for n, (py, cy) in enumerate(zip(a.probe_y, a.corridor_y)):
         vals = PROBE_BYTES[n * per:(n + 1) * per]
-        plan.append((py, cy, vals))
+        plan.append((py, cy, a.start_x, vals))
 
     data = build(plan)
     with open(a.out, 'wb') as f:
         f.write(data)
 
     print('wrote %s (%d bytes)' % (a.out, len(data)))
-    for py, cy, vals in plan:
-        print('  probe row y=%d (corridor y=%d): %d probes, x=0..%d, bytes 0x%02X..0x%02X'
-              % (py, cy, len(vals), len(vals) - 1, vals[0], vals[-1]))
+    for py, cy, sx, vals in plan:
+        print('  probe row y=%d (corridor y=%d): %d probes, x=%d..%d, bytes 0x%02X..0x%02X'
+              % (py, cy, len(vals), sx, sx + len(vals) - 1, vals[0], vals[-1]))
     print('\nwalk plan: stand on corridor y, step Up into probe at (x, probe_y), step back Down.')
 
 

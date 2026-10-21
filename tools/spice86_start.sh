@@ -45,6 +45,10 @@ usage: spice86_start.sh [options]
                      tools/spice86_keys.py drive it with Up/Down/Left/Right
                      instead of the numpad. Never touches original/ or
                      references/ — see tools/patch_arrows.py.
+  --seed-map PATH    copy PATH (basename must be mapxNN) into the run copy before
+                     launch, replacing that sector's map. Generate one with
+                     tools/u2_mkprobe.py. Must be installed pre-launch: the game
+                     reads mapxNN at startup.
   --http-port P      HTTP API port (default: first free at/above 20180)
   --mcp-port P       MCP port (default: first free at/above 20181)
   --gdb-port P       GDB port (default: first free at/above 20190)
@@ -58,6 +62,7 @@ LABEL=""
 DO_HARVEST=0
 PLAYER_FILE=""
 PATCH_ARROWS=0
+SEED_MAP=""
 HTTP_PORT=""
 MCP_PORT=""
 GDB_PORT=""
@@ -71,6 +76,7 @@ while [ $# -gt 0 ]; do
         --player)    PLAYER_FILE=$2; shift 2 ;;
         --harvest)   DO_HARVEST=1; shift ;;
         --patch-arrows) PATCH_ARROWS=1; shift ;;
+        --seed-map)  SEED_MAP=$2; shift 2 ;;
         --http-port) HTTP_PORT=$2; shift 2 ;;
         --mcp-port)  MCP_PORT=$2; shift 2 ;;
         --gdb-port)  GDB_PORT=$2; shift 2 ;;
@@ -133,6 +139,19 @@ if [ "$PATCH_ARROWS" = 1 ]; then
     # not present, so a wrong binary fails here rather than mid-capture.
     python3 "$ROOT/tools/patch_arrows.py" "$RUN_DIR/ultimaii.exe" \
         || { echo "--patch-arrows failed" >&2; exit 1; }
+fi
+
+if [ -n "$SEED_MAP" ]; then
+    # Install a synthetic sector map into the run copy BEFORE the emulator is
+    # launched. The game reads mapxNN during startup, so writing it after launch
+    # silently leaves the real terrain in memory and every probe result is wrong.
+    # Basename must be mapxNN so the sector is unambiguous.
+    MAP_BASE=$(basename -- "$SEED_MAP")
+    case "$MAP_BASE" in
+        mapx??) [ -f "$SEED_MAP" ] || { echo "--seed-map: no such file: $SEED_MAP" >&2; exit 1; }
+                cp -- "$SEED_MAP" "$RUN_DIR/$MAP_BASE" ;;
+        *) echo "--seed-map: file must be named mapxNN (got $MAP_BASE)" >&2; exit 1 ;;
+    esac
 fi
 
 if [ -n "$PLAYER_FILE" ]; then
