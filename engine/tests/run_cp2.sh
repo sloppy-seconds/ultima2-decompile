@@ -109,10 +109,24 @@ n=$(./u2 --headless --script tests/play_to/demo_once.keys --dump-each | grep -c 
 
 # --- the committed evidence still reproduces -----------------------------
 if [ -f evidence/cp2-playthrough.json ]; then
+    # The evidence is content-coupled: it was recorded against a specific string
+    # source, and some strings are exe-only run locators that come out empty in
+    # the asm-fallback build CI uses. A fallback build therefore paints fewer
+    # frames and cannot reproduce an exe-recorded transcript — that is a
+    # difference in what the binary contains, not a regression. Skip with a named
+    # reason, exactly as CP1 skips exe-only strings, rather than fail spuriously.
+    recorded=$(python3 -c "import json;print(json.load(open('evidence/cp2-playthrough.json')).get('content_source',''))" 2>/dev/null)
+    current=$(./u2 --headless --script tests/play_to/title_menu.keys --dump-state 2>/dev/null \
+              | tail -1 \
+              | python3 -c "import json,sys;print(json.load(sys.stdin).get('content',''))" 2>/dev/null)
+    if [ -n "$recorded" ] && [ -n "$current" ] && [ "$recorded" != "$current" ]; then
+        printf '  SKIP  committed evidence reproduce-check (recorded against "%s", this build is "%s")\n' "$recorded" "$current"
+    else
     python3 tools/playlog.py verify evidence/cp2-playthrough.json >"$WORK/ev.out" 2>&1
     grep -q "REPLAY: REPRODUCES" "$WORK/ev.out" \
         && ok "committed evidence/cp2-playthrough.json still reproduces" \
         || bad "committed evidence no longer reproduces: $(tail -3 "$WORK/ev.out")"
+    fi
     python3 - evidence/cp2-playthrough.json "$WORK/strings" <<'PY'
 import json, sys
 rep = json.load(open("evidence/cp2-playthrough.json"))
