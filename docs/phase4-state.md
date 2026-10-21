@@ -22,10 +22,14 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
-- **If resuming the live-capture work (Spice86 running, passability/combat),
-  read `docs/handoff-live-capture.md` first.** It lists what is proven, what is
-  now known wrong in the engine code, and the capture queue. The CP4b T1 finding
-  and part of T2 were **retracted** the same day — see
+- **Read `docs/handoff-live-capture.md` first.** Rewritten 2026-10-21 evening for
+  a fresh context: running state (nothing running, tree clean, CI green, how to
+  push with `GH_TOKEN`), the true T1–T9 status, what is proven and must not be
+  re-derived, the tool inventory with tested-vs-untested marked, and the standing
+  rules that cost time. Next step per the owner is **working through the overnight
+  task results** — close T1's two named unknowns (mountain tile id, the
+  `DS:15`/`DS:18` travel-mode argument), then T9. The CP4b T1 finding and part of
+  T2 were **retracted** the same day — see
   `docs/phase4-implementation.md § CP4b → RETRACTION` and
   `docs/spice86-live-findings.md`.
 
@@ -312,21 +316,21 @@ adds a `--data-dir` seam and reads the player's own files the way the original
       an out-of-range BCD nibble (e.g. `0x9A`), which would corrupt a counter.
       Tables and offsets: `docs/spice86-live-findings.md` § 11.
 
-- [ ] **Fix `tools/cfg_printed.py` — it currently uses the wrong source and
-      reports messages that never printed.** It reads `CfgBlocks`, which is
-      *discovered* blocks: Spice86 statically expands branch successors, so the
-      list included `MINAX IS DEAD!!`, `RING PROTECTS FROM FIELD!` and
-      `FIELD CAUSES 1000 DAMAGE!` from a session that never met Minax, a ring or
-      a force field. The correct source is `ExecutedInstructions` in
-      `spice86dumpExecutionFlow.json` — a list of `{Offset, Segment, Linear}`
-      dicts, ~2400 entries, which cleanly excludes all three and also excludes
-      `ARMS PARALIZED!` while keeping `LEGS PARALIZED!`. Address model, verified:
-      a block entry is a runtime offset; the inline string sits at
-      `runtime_offset + instr_offset + 3 + 0x200` in the file (do **not** add the
-      segment base as well — that bug silently found nothing). Messages are
-      prefixed with `0x0D`/`0x8D` control bytes which must be stripped before the
-      printable check or `KILLED--GOLD+` disappears. **Highest priority of these
-      items: a tool that confidently lies is worse than no tool.**
+- [x] **`tools/cfg_printed.py` fixed 2026-10-21.** It had two faults, both worth
+      remembering. It read `CfgBlocks`, which is *discovered* blocks — Spice86
+      statically expands branch successors — so it reported `MINAX IS DEAD!!`,
+      `RING PROTECTS FROM FIELD!` and `FIELD CAUSES 1000 DAMAGE!` for a session
+      that met none of them; it now gates on `ExecutedInstructions` in
+      `spice86dumpExecutionFlow.json` (a list of `{Offset, Segment, Linear}`
+      dicts, ~2400 entries) and refuses outright if that file is missing or
+      empty. And messages carry `0x0D`/`0x8D` control bytes on **both** ends, so
+      stripping only the leading ones silently dropped `LEGS PARALIZED!` and
+      `--PARALIZED!` — the exact evidence being hunted. Address model, verified:
+      the inline string sits at `runtime_offset + instr_offset + 3 + 0x200` in the
+      file; do **not** add the segment base as well, which finds nothing silently.
+      Validated across three harvests with a pre-fight negative control.
+      Lesson kept because it generalises: a tool that confidently lies is worse
+      than no tool, and a silent filter is the hardest lie to notice.
 
 - [ ] **`tools/replay.py` — turn replay from the recorder snapshots.** Pure
       offline work on data already on disk, no emulator needed. Read

@@ -194,7 +194,10 @@ The low page holds live state that the save file does not.
 | `0x96` | armour array, 7 slots |
 | `0xB6` | magic array |
 | `0xD6` | items array |
-| `0x137` | monster arrays, stride `0x20`, 32 slots |
+| `0x137` | monster **x**, stride 1, 32 slots — see the correction below |
+| `0x157` | monster **y**, stride 1 |
+| `0x197` | monster **kind**, stride 1 — drives loot and behaviour; the reward switch branches on `0x60`/`0xFC`/`0xF0`/`0xF8` |
+| `0x1B7` | monster **tile**, stride 1 — the byte stamped into the sector map for appearance |
 | `0x1900` | town map base |
 
 ### Counters are packed decimal, not binary

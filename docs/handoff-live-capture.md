@@ -1,126 +1,119 @@
-# Handoff — live-capture work, updated 2026-10-21 (evening)
+# Handoff — 2026-10-21 evening (read this first after a compaction)
 
-Read this first after a compaction or a fresh session. It replaces the morning
-version. Evidence lives in `docs/spice86-live-findings.md`; this file is the
-index, the running state, and the list of what to do next.
+Supersedes the morning version. Everything is committed, pushed, and CI is green
+on both workflows. Nothing is running.
 
-## Running state right now
+## Read in this order
 
-* **Spice86 is stopped.** Ports 20180 / 20181 / 20190 free. Nothing to clean up.
-* **No recorder running.**
-* Owner is offline for the rest of the day — do not start a capture expecting
-  someone to play.
-* Beware: `pgrep -f Spice86` matches its own shell and reports a phantom
-  process. Check the ports instead.
+1. `AGENTS.md` — isolation, licensing, script rules. Hard law.
+2. `docs/phase4-state.md` — resume notes, **Backlog**, Gate log, Deferred
+   decisions. This is the live task state.
+3. `docs/phase4-overnight-cp4b.md` — the T1–T9 queue plus the morning report and
+   the **evening addendum**.
+4. `docs/spice86-live-findings.md` — §7–§11 are today's evidence: combat, loot,
+   provenance, the screen reader, and the editor offset tables.
+5. `docs/handoff-live-capture.md` (this file) — index and running state.
 
-## Harvests on disk
+## Running state
 
-| dir | what it is |
+* **No emulator, no recorder, ports free.** Start one with
+  `tools/spice86_start.sh --name LABEL --player tmp/<run>/player` — a fresh run
+  dir has no character, so `--player` is required or you sit at the title.
+* **Working tree clean, 0 ahead of `origin/main`, HEAD `1b715b3`.** 26 commits
+  today.
+* **CI green**: `asm-checksum` and `engine-tests` are now separate workflows with
+  separate badges. `make test` = CP0..CP4 all PASS.
+* **Pushing needs `GH_TOKEN`.** `git push` fails with a confusing
+  `ksshaskpass died of signal 6` unless you source `.env` first:
+  `set -a; . ./.env; set +a; git push`. `.env` is gitignored; do not commit it.
+* `pgrep -f Spice86` matches its own shell and reports a phantom process. Check
+  the ports instead.
+
+## Overnight queue — where T1–T9 actually landed
+
+| task | state |
 | --- | --- |
-| `captures/spice86/vga-test/` | **newest and richest** — 965 blocks, buffed-character fight, kill observed live |
-| `captures/spice86/play-test-live/` | 959 blocks, the paralyze/thief/sea-monster session; its `spice86dumpMemoryDump.bin` is the one most analysis was run against |
-| `captures/spice86/baseline-fight/` | pre-fight snapshot kept as a diff baseline |
-| `captures/spice86/create-test-live/` | 901 blocks, pre-fight |
-| others | tooling smoke tests, safe to delete with owner approval |
+| **T1** passability + crossing | **open, two named unknowns.** Wrap, `0x00` block and 19-per-move are implemented and cited to observed bytes. Still needed: the **mountain tile id** (one named sample from the owner — `0x10` is *not* mountain, the player stood on it) and the **`DS:15`/`DS:18` travel-mode argument**, which is what decides boat-on-water |
+| **T2** time / food / auto-PASS | **closed.** Auto-PASS is a **poll count, not a clock** — no `INT 1Ah` exists in the corpus and the only `0x40:6C` read is the startup RNG seed. Threshold 256 is a documented placeholder, not proven |
+| **T3, T4, T6, T7, T8** | done |
+| **T5** creation tail | **closed.** Was a real fidelity bug: the original restarts the whole program (`call 0x0100`) after creation, which is why the owner saw the splash. `original` reproduces it; `enhanced` enters the world directly |
+| **T9** blog + retro | **unblocked.** Today is unusually good material — see "what to write about" below |
 
-The before/after **CFG set-difference** is the technique that worked: diff the
-`entry` fields of two `spice86dumpCfgBlocks.json` files and print `asm` for the
-new blocks. It localised the entire combat path in seconds, and it is how the
-gold/exp filename swap was found.
+**Next step, per the owner: work through the overnight task results.** That means
+closing T1's two unknowns, then T9.
 
-## Tools built, and whether they are actually tested
+## What to write about (T9 raw material)
+
+* A static reading that looked airtight and was disproven in ten seconds by a
+  live CFG diff — and the retraction that followed.
+* A cross-reference pass that found a real corpus bug (`2DC1`/`2DEE` transposed)
+  **and** one of mine (a hex miscount invented a false discrepancy) in the same
+  run.
+* A tool that confidently lied: `CfgBlocks` is discovered, not executed, so it
+  reported a Minax fight that never happened.
+* Combat text that provably never survives turn-boundary sampling — 151 turns,
+  zero readable frames, while memory proved a kill.
+* Two owner corrections that each caught a real agent error (green gem; "we never
+  fought Minax"). The argument for the owner as a verifier, not an audience.
+
+## Harvests and tools
+
+`captures/spice86/vga-test/` is the richest (965 blocks, buffed fight).
+`play-test-live/` is the one most analysis ran against. `baseline-fight/` is a
+diff baseline. The **CFG set-difference** between two harvests is the technique
+that localised the whole combat path in seconds.
 
 | tool | status |
 | --- | --- |
-| `tools/vga_screen.py` | **tested, works** — renders the text-mode screen from any memory dump |
-| `tools/map_render.py` | **tested, works** — renders the 64x64 sector with player and monsters |
-| `tools/xref_provenance.py` | **tested, works** — docs↔asm cross-reference |
-| `tools/poll_probe.py` | **tested, works** — measured 250 req/s, zero errors |
-| `tools/turn_recorder.py` | **works, two cosmetic flaws** (below) |
-| `tools/vga_ring.py` | **UNTESTED** — written after the session ended |
+| `tools/cfg_printed.py` | **fixed and validated** — messages a session printed, gated on `ExecutedInstructions` |
+| `tools/vga_screen.py` | works — renders the text-mode screen from a memory dump |
+| `tools/map_render.py` | works — 64×64 sector with player and monsters |
+| `tools/xref_provenance.py` | works — docs↔asm cross-reference |
+| `tools/poll_probe.py` | works — memory API does **250 req/s**, so the old 3 Hz rule is dead for reads |
+| `tools/turn_recorder.py` | works, two cosmetic flaws (see Backlog) |
+| `tools/vga_ring.py` | **UNTESTED** — never run against a live emulator |
 
-`turn_recorder.py` flaws, both known and neither blocking: `DS:20` is scratch
-rather than a pure invalid-move counter so `[reject]` rows are noise; and
-position and food update non-atomically, so one move can split across two
-samples and show as an odometer anomaly.
+## Proven today, do not re-derive
 
-## The one experiment still owed
+* Loot: every kill gives gold `(rand&0x17)|1` and exp `(rand&3)+1`, minimum 1
+  each; the **item drop is gated on monster kind `0xFC`**.
+* `A THIEF STOLE SOMETHING!` prints from the same block that decrements
+  `DS:D6+i` — theft proven, not inferred.
+* `--PARALIZED!` lives at runtime `0x2527`, **inside the passability routine**, so
+  paralysis is a movement rejection — which is why the owner saw `--INVALID
+  MOVE!` while paralyzed.
+* Monster arrays are **stride 1**: `x=0x137+i`, `y=0x157+i`, `kind=0x197+i`,
+  `tile=0x1B7+i`. `docs/spice86-capture.md` said `0x20`; corrected today.
+* Items are `DS:D6+i` against the 16-entry table at file `0x501d`; weapons owned
+  are `DS:76+i`; readied weapon `DS:61`; worn armour `DS:62` (8 entries, which is
+  why the damage roll masks `&7`). Full table in findings §11.
+* RNG seed = BIOS tick low byte at `0x40:6C`, read once at startup into
+  `DS:23F..242` — hence deterministic monsters in a fresh emulator.
+* `Z` pauses on the status screen; writes land instantly but the screen is frozen
+  and no turns occur while paused.
 
-**Paralysis + boots.** Never completed — the owner fought instead. Procedure,
-all of it verified working except the last step:
+## Standing rules that cost time today
 
-1. Start: `tools/spice86_start.sh --name boots-test --player tmp/20261021-084906/player`
-   (that save is the buffed TEST character: stats 99, HP 4000, quick sword, power armour)
-2. Start `tools/vga_ring.py` **before** the fight — turn-boundary sampling cannot
-   catch combat text, continuous sampling is the only hope.
-3. Let the caster paralyze → expect `LEGS PARALIZED!`
-4. Try to act while paralyzed — does it block movement only, or commands too, and
-   does a paralyzed turn still spend food?
-5. Write boots: MCP `local-mcp_write_memory`, `segment=2238, offset=219, data="01"`
-   (`DS:D6[3]`, and the MCP wants **decimal** integers)
-6. Let it try again → expect `SAVED BY MAGICAL BOOTS!`
-
-Step 6 is the payoff: `asm/0E70_combat_paralyzed_legs.asm` carries both strings
-and the boots gate at runtime `0x22FD` returns early when `DS:6D` is non-zero,
-but **no traced edge joins the gate to the paralysis event**. This proves or kills
-the claim behaviourally.
-
-## Fresh findings from today, not yet in the engine
-
-* **The staff was stolen.** `DS:D6[2]` (STAFF) went to 0 during the fight and a
-  BRASS BUTTON appeared at `[11]`. That is the theft decrement at `0x0FE7`
-  observed happening for real — the owner had suspected exactly this.
-* **Combat text does not survive turn-boundary sampling.** 151 turns of a real
-  fight, zero readable lines in the framebuffer, though memory proved a kill.
-* **A kill was measured live**: gold +13, exp +4, monsters 5→4 — inside the
-  `(rand&0x17)|1` and `(rand&3)+1` ranges the model predicts.
-* **`Z` pauses the game on the status screen.** Writes take effect immediately
-  but the screen is frozen, and while paused no turns occur.
-
-## Engine state
-
-Tier 1 shipped this session (`74286ac`): the walk loop wraps instead of refusing,
-an accepted move spends 19 food, `0x00` blocks, and unknown tile ids pass while
-recording themselves into `u2_overworld_unmeasured_tiles()` so a permissive
-default announces itself. `make test` green at HEAD.
-
-Still wrong, still open:
-
-1. Mountain tile id unknown — `0x10` is **not** mountain (the player stood on it)
-   and the owner states mountains never pass on foot. Do not guess again.
-2. Idle auto-PASS (~7.6 s at `--Cycles 3000`, −10 food, also advances monsters)
-   is not modelled. Needs a clock-backend decision so it does not perturb the
-   CP2 baseline under the script clock.
-3. The Q-save on-foot guard reasoning from `DS:13 >= 0x78` — now seen three times
-   in the original, so the idiom is real; the engine's use is probably fine.
-4. `docs/spice86-capture.md` still describes the monster arrays at stride `0x20`.
-5. `engine/src/core/state.h` labels `DS:4D` as int; it is STAMINA. And `DS:4E`
-   vs `DS:4F` (WIS vs CHA) is **not provable** from a character where both are 10
-   — see findings § 11 before labelling either.
-6. `asm/2423` declares a `2423..242C` range for a routine running to ~`0x2680`.
-   A CP3 re-decode of that span is owed.
-
-## Decisions taken (do not re-litigate)
-
-* **Cross-sector attacks**: original mode reproduces the sector-edge targeting
-  restriction including the whiff; enhanced mode fixes it. A cross-sector hit is
-  therefore a *legitimate* CP2 differential mismatch.
-* **Provenance**: add `# provenance:` lines only where we actually know, filled in
-  as work proceeds — not a backfill of `static` everywhere.
-* **asm renames**: `2DC1` is gold gain, `2DEE` is exp gain (done). Renaming corpus
-  files is allowed when byte-proven.
-
-## Standing rules that bit me today
-
-* **Compute indices in code; never split hex by eye.** I miscounted `DS:D6` and
-  built a whole false "green gem vs blue tassle" discrepancy on it. The owner was
-  right and the table was right.
-* **List the corpus before harvesting.** `asm/` already had
-  `0FCD_combat_thief_steal`, `0E70/0EC2_combat_paralyzed_legs/arms`,
-  `0F12_combat_magic_missile`, `0F48_combat_sleep_spell`. I went hunting in
-  runtime data for things already named on disk.
-* **Ask before capturing, and never block for minutes.** Long foreground
-  captures swallow the owner's queued messages. Run detached, check between
-  turns.
-* **Python block-buffers stdout through a pipe** — use `-u` or the recorder looks
+* **Compute indices in code; never split hex by eye.** A miscount invented a false
+  "green gem vs blue tassle" discrepancy.
+* **List the asm corpus before harvesting runtime data.** Paralysis, theft and
+  combat functions were already named on disk the whole time.
+* **Ask before capturing, and never block for minutes.** Long foreground captures
+  swallow the owner's queued messages. Run detached; check between turns.
+* **Rebuild after swapping a generated header.** A guard looked tested but was a
+  silent no-op because the binary still had the old header.
+* **Python block-buffers stdout through a pipe** — use `-u` or a recorder looks
   dead while working.
+* **Prove or pass.** Every claim above cites an address. Where a number is not
+  proven, the code says so in the comment next to it.
+
+## Open engine debt (small, specific)
+
+1. Mountain tile id — blocked on one owner sample.
+2. `asm/2423` declares `2423..242C` for a routine running to ~`0x2680`; a CP3
+   re-decode is owed. The file now carries a WARNING so nobody repeats the error.
+3. `DS:4E` vs `DS:4F` (WIS vs CHA) is **not provable** from a character where both
+   are 10 — `state.h` labels them `cha`/`wis`; settle before shipping an editor
+   label.
+4. Monster advancement on the auto-PASS tick is unimplemented (no monsters in the
+   engine yet) — marked in code, not faked.
