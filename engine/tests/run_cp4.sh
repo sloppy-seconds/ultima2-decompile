@@ -55,6 +55,37 @@ else
     fi
 fi
 
+# --- the generated cleanroom art ---------------------------------------------
+# Two separate guarantees, because a generated file fails quietly. First the
+# committed header must still match the SVGs it came from: hand-editing it, or
+# changing the art and forgetting to regenerate, both leave a header that looks
+# fine and ships stale bytes. Second the bytes must decode through the engine's
+# own u2_tile_pixel() into the pixels the SVGs actually contain, which size
+# assertions alone would not catch.
+ART_SRC=assets/tiles/cleanroom/tiles
+python3 tools/tiles2h.py --src "$ART_SRC" -o "$WORK/tiles_cleanroom.h" \
+    >"$WORK/gen-art.out" 2>&1
+if [ $? -ne 0 ]; then
+    bad "cleanroom art generator failed: $(tail -3 "$WORK/gen-art.out")"
+elif ! cmp -s "$WORK/tiles_cleanroom.h" src/core/tiles_cleanroom.h; then
+    bad "src/core/tiles_cleanroom.h does not match the SVG sources. Regenerate:"
+    echo "        (cd engine && python3 tools/tiles2h.py --src assets/tiles/cleanroom/tiles -o src/core/tiles_cleanroom.h)" >&2
+    diff "$WORK/tiles_cleanroom.h" src/core/tiles_cleanroom.h | head -10 >&2
+else
+    ok "cleanroom art: committed header matches the SVG sources (no drift)"
+fi
+
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/tiles_art_check" \
+   tests/tiles_art_check.c src/core/tiles_builtin.c 2>"$WORK/cc-art.err"
+if [ $? -ne 0 ]; then
+    bad "cleanroom art harness did not build: $(head -5 "$WORK/cc-art.err")"
+elif "$WORK/tiles_art_check" > "$WORK/art.out" 2>&1; then
+    ok "cleanroom art: $(tail -1 "$WORK/art.out")"
+else
+    bad "cleanroom art check failed:"
+    sed 's/^/        /' "$WORK/art.out"
+fi
+
 # --- the viewport mapping -------------------------------------------------
 # The viewport is where a map byte becomes something drawable, so the whole CP4
 # render contract rests on these rules: geometry, the index formula, the

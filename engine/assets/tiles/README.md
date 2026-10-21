@@ -37,6 +37,25 @@ SHA, so the record can be checked even after the spec changes.
     python3 engine/assets/tiles/cleanroom/gen/tiles.py
     git diff --stat engine/assets/tiles/cleanroom/tiles    # should be empty
 
+### Into the engine
+
+The engine cannot read SVG, so the set is converted at build time and the result
+is committed:
+
+    (cd engine && python3 tools/tiles2h.py \
+        --src assets/tiles/cleanroom/tiles \
+        -o src/core/tiles_cleanroom.h)
+
+`src/core/tiles_cleanroom.h` is generated and **committed**, so a normal build
+needs no Python. It is packed 2bpp, the exact inverse of `u2_tile_pixel()`, and
+`core/tiles_builtin.c` turns it into a `u2_tiles`. `make test` enforces both
+halves: the header must still match the SVGs, and the bytes must decode back to
+the pixels the SVGs contain. Editing the header by hand fails the build.
+
+This is a fallback, not a replacement. The player's own extracted art still wins
+when the game files are present; `u2_tiles_builtin()` exists so the engine has
+usable tiles when they are not.
+
 ### Palette
 
 Three inks on a black backdrop: cyan `#55FFFF`, magenta `#FF55FF`, white
