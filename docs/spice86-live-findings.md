@@ -755,8 +755,18 @@ y=62  DEVIL              WORKSHIP?
 
 ### Still unexplained
 
-* Gold went `9999 -> 14` in one turn at turn 209. Cause not identified; not
-guessing at it.
+* ~~Gold went `9999 -> 14` in one turn at turn 209. Cause not identified; not
+guessing at it.~~ **Resolved 2026-10-22 (overnight T4), measured.** It is not a
+theft or a bribe: at turn 209 the five monster-record fields for slot 4
+(`DS:13B/15B/17B/19B/1BB`) were zeroed together exactly as
+`asm/2D8C_combat_kill_reward` does, a map cell reverted `0x34`->`0x08`, and food
+did not change (no turn spent). The character had been seeded to the 9999
+packed-BCD ceiling by `maxout`, and `asm/2DC1`/`asm/2DEE` add the kill reward into
+the 2-byte gold/exp fields with `adc`/`daa` and **no saturation**, so the first
+kill's reward wrapped them mod 10000: `9999 + 15 -> 0014 = 14` (gold, reward
+`0x15` from `asm/2DB7`) and `9999 + 2 -> 0001 = 1` (exp, reward from `asm/2DE4`).
+All result nibbles are valid BCD, so it is a field-width overflow, not nibble
+corruption. See `docs/phase4-overnight-cp5-report.md § T4`.
 * Which map byte the force-field tile is, and what drives its animated
   white/blue/purple render.
 * The 30 live-grid cells that differ from `mapx03`.

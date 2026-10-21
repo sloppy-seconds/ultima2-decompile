@@ -12,7 +12,7 @@ logical commit.
 | T1 | DONE |
 | T2 | DONE |
 | T3 | DONE |
-| T4 | todo |
+| T4 | DONE |
 | T5 | todo |
 | T6 | todo |
 | T7 | todo |
@@ -264,3 +264,109 @@ I replaced it with an honest signal rather than deleting outright:
 * `docs/phase4-overnight-cp5-report.md` (this file)
 
 **Commit: `efef0bb`.**
+
+---
+
+## T4 — the gold that vanished
+
+**Status: DONE.** The mechanism is identified with byte evidence. It is **not**
+a theft, a bribe, or invalid-nibble corruption. It is a **2-byte packed-BCD
+overflow wrap on a legitimate kill reward**, added to a character that
+`tools/u2_edit.py maxout` had already pinned at the 9999 ceiling.
+
+**Grade: measured** — from the recorded raw DS blobs plus the write targets in
+`asm/`, not inferred.
+
+### What actually happened at turn 209 (observed)
+
+Diffing the **whole** DS block across turns 205..213 (not just the gold field)
+shows the gold change is not isolated. At turn 209 exactly one monster record was
+zeroed and one map cell was restored, i.e. a monster died:
+
+```
+DS:013B 1F -> 00   monster slot 4 x   (0x137+4)
+DS:015B 20 -> 00   monster slot 4 y   (0x157+4)
+DS:017B 11 -> 00   monster slot 4 ?   (0x177+4)
+DS:019B 34 -> 00   monster slot 4 kind(0x197+4)  0x34 = legs caster
+DS:01BB 08 -> 00   monster slot 4 tile(0x1B7+4)
+DS:201F 34 -> 08   map cell (31,32): monster stamp -> grass
+DS:0056 99 -> 00   EXP_hi
+DS:0057 99 -> 01   EXP_lo
+DS:0058 99 -> 00   GOLD_hi
+DS:0059 99 -> 14   GOLD_lo
+```
+
+Those five monster fields zeroed together are exactly what
+`asm/2D8C_combat_kill_reward.asm` does — it writes `0x0` to `0x1b7(%di)`,
+`0x177(%di)`, `0x137(%di)`, `0x157(%di)`, `0x197(%di)` for the killed slot. So
+the byte evidence ties the gold change to a **kill**, not to a thief's turn.
+
+Two further observations rule out the three candidate mechanisms the task named:
+
+* **food delta = 0 across the change** (turn 208 and 209 both `food = 999871`).
+  A theft or a bribe is a game turn and would spend food (19/move or 10/pass,
+  findings § 11). No food moved, so no tax was paid.
+* **gold and exp both went *down* together.** A kill *adds* gold and exp
+  (`asm/2DC1`, `asm/2DEE`). They only read as a drop because both fields were
+  already at the packed-decimal ceiling `0x99 0x99 = 9999` from `maxout`
+  (`tools/u2_edit.py` sets gold and exp to 9999). Adding a positive reward to a
+  saturated 2-byte BCD field wraps it.
+
+### The arithmetic (measured, forced by the asm)
+
+`asm/2DC1_combat_gold_gain.asm` adds `[DS:1F]` into the gold pair with `adc` +
+`daa` and stores back to only `DS:58`/`DS:59` — there is **no third byte and no
+saturation clamp**, so the carry out of the high byte is discarded:
+
+```
+clc ; mov 0x59,%al ; adc 0x1f,%al ; daa ; mov %al,0x59   ; low byte
+    ; mov 0x58,%al ; adc $0x0,%al ; daa ; mov %al,0x58   ; high byte, carry dropped
+```
+
+`asm/2DB7_sub_2db7.asm` sets the reward `DS:1F = (rand & 0x17) | 1`, so the raw
+reward byte is one of `{01,03,05,07,11,13,15,17}`. Read as packed decimal, `0x15`
+= 15. The observed `9999 -> 14` is only produced by a **+15** reward:
+
+```
+0x99 0x99 + 0x15 (BCD) = 10014 -> keep 4 digits -> 0x00 0x14 = 14   (unique)
+```
+
+`0x15` is in the achievable reward set, so the value is not invented — it is the
+unique solution the bytes force. The exp path is identical: `asm/2DE4_sub_2de4.asm`
+sets `DS:1F = (rand & 3) + 1` ∈ {1,2,3,4}, and `9999 -> 1` is only produced by
+**+2**:
+
+```
+0x99 0x99 + 0x02 (BCD) = 10001 -> 0x00 0x01 = 1   (unique)
+```
+
+Both were verified by an 8-bit `daa` emulation (script `/var/tmp/t4_track.py`,
+`/var/tmp/t4_diff.py`). The result nibbles `0,0,1,4` and `0,0,0,1` are all valid
+BCD, so this is **not** the invalid-nibble corruption the task listed as a
+candidate — the field is well-formed, it simply overflowed.
+
+### Why it looked like a single mysterious vanishing
+
+Turn 209 is the **first kill of the whole session** (monster count held at 31 for
+turns 0..208, then 31->30 at 209). Because the character was seeded at the 9999
+gold/exp ceiling, the very first kill's reward wrapped both fields at once, which
+reads as "9999 gold vanished in one turn." Later kills (turns 543, 704, 1001,
+…) show the same code adding normally to the now-small values (14->17->18->31…),
+which is the same reward path behaving correctly on an unsaturated field.
+
+### Mechanic finding for the engine
+
+Gold and EXP are **unsaturated 2-byte packed-BCD counters that wrap modulo 10000**
+when a reward is added at the 9999 ceiling. A reconstruction that clamps at 9999,
+or that stores gold in a wider/binary field, will not reproduce this. Recorded in
+`docs/spice86-live-findings.md` § 12 (the open item is now resolved).
+
+### Files
+
+* `docs/phase4-overnight-cp5-report.md` (this section)
+* `docs/spice86-live-findings.md` § 12 (open item resolved, retraction-style: the
+  original "cause not identified; not guessing" line stays visible)
+
+`asm/` untouched; no engine code changed. `make -C engine test` green.
+
+**Commit: (pending).**
