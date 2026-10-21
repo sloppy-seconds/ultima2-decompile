@@ -13,9 +13,9 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
 | CP4 | Overworld + movement | **in-progress (CP4b overnight: T1,T3,T4,T6,T7,T8 done/passed; T2 half; T5 held)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: arrows via a scancode table at `CS:0x4F09`, direction codes as data at `DS:26E..271`, a rejected step is undone before `--INVALID MOVE!`, and crossing x/y >= 64 reloads the sector (`asm/242D`/`2434`/`243E`) rather than straddling. **Viewport now measured from owner screenshots**: tile = 16x16 px = 2x2 text cells, window 20x10 tiles at rows 0-19 full width, player at window tile (9,5), row 24 blank. Dungeons are first-person 3D, so the tile renderer does not cover them (CP7). **CP4b overnight (2026-10-21):** the passability premise was disproven — `asm/2423` never reads a tile, so on-foot walking is never rejected on the overworld (T1 PASSED, write-up in implementation log § CP4b); tile IDs decoded (0=water,4=land,8=plane,0x78=player); sector crossing is the `DS:6E` arrival system, not a foot step. T3/T4/T6 fixed one root-cause class (loops testing `exit_code` but not `input_exhausted`): window-close, SIGTERM, and dummy-driver `--dump-screen` all now stop cleanly. T2 shipped the proven half (PASS spends 10 food, underflow zeroes DS:51..59 = instant death; no gradual HP drain, no per-step tick — the walk loop calls no drain). T7 screenshot differential harness landed (status-block only, poison-checked). T5 held for owner: it moves the CP2 baseline and its pre-approval flag is unresolved. Full detail: `docs/phase4-overnight-cp4b.md § Morning report` | 2026-10-21 |
-| CP5 | Combat | **scoped, not started** | Tickets C1..C7 in § CP5 below. Evidence base is the 2026-10-21 sector-00 caster session: commits `b11bfc6`, `1d7bae3`, `341952d`, `49d8365` and `docs/spice86-live-findings.md` § 12. Nothing may be written before C1/C2, and C5 and C7 are **blocked on a capture** because a required input is still unproven. | 2026-10-21 |
+| CP5 | Combat | **scoped, not started** | Tickets C1..C7 in § CP5 below. Evidence base is the 2026-10-21 sector-00 caster session: commits `b11bfc6`, `1d7bae3`, `341952d`, `49d8365` and `docs/spice86-live-findings.md` § 12. Nothing may be written before C1/C2, and C5 is **blocked on a capture** because a required input is still unproven. C7 is resolved. | 2026-10-21 |
 | CP6 | Towns + full command set | todo | | |
-| CP7 | Time travel + space + dungeons | todo | | |
+| CP7 | Time travel + space + dungeons | **partly informed 2026-10-21** | Dungeons are sectors, not a separate format: entering a cave moved `DS:49/4A` from `3,0` to `3,5` and loaded `mapx35`, with no video mode change (stays CGA mode 4). Rendered as a first-person wireframe. Light is a **step counter** at `DS:26`, zeroed on entry, ~150 on `I`, decremented per move, and `mapx25`/`35`/`45` are byte-identical. Command dispatch is mode-aware: `A` is ATTACK outside and ADVANCE inside. Full detail: `docs/spice86-live-findings.md` § 13. | 2026-10-21 |
 | CP8 | Endgame + full playthrough 🔒 | todo | | |
 | CP9 | SDL2 CGA renderer | todo | needs owner approval for system packages | |
 | CP10 | Sign-off 🔒 | todo | | |
@@ -330,6 +330,48 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Backlog
 
+- [ ] **Decode the dungeon map format and reproduce the wireframe renderer.** This is
+      the largest unexplained surface in the game and it blocks any real dungeon crawl.
+      Unknowns, in the order they need attacking:
+      (1) what a dungeon tile byte *means*. Overworld bytes map to art via
+      `art = map_byte >> 2` and render top-down; dungeon maps are dominated by `0x80`
+      (68% of `mapx34`, 42% of `mapx35`) and the view is a first-person wireframe, so
+      the byte cannot be a floor tile. It must encode wall/door/opening geometry
+      relative to the viewer, but nothing has been read that shows the lookup.
+      (2) which code draws the corridor - the wireframe is CGA mode 4 line primitives,
+      so find the line-drawing routine and the table it indexes with the tile byte.
+      (3) how the 64x64 grid relates to the crawl: the dungeon viewport is not a
+      top-down window, so the mapping from (x, y) to what is in front of you is
+      unproven. (4) `mapx25`/`35`/`45` are byte-identical, so any decode must explain
+      or accept three sector numbers sharing one map.
+      Approach that worked elsewhere here: drive the owner into a known cell, dump the
+      grid plus the frame, and correlate rather than read the listing cold. The
+      `A`-`Z` letter tiles are the foothold - in sectors that spell words they are
+      legible ASCII, so the byte-to-glyph mapping is already known and may be the same
+      table the dungeon uses. Evidence base: `docs/spice86-live-findings.md` § 13 and
+      `captures/spice86/dungeon-entry/`.
+
+- [ ] **Standardised capture tooling: one recorder for gameplay, memory and CFG.**
+      Today three ad-hoc probes were written in one session (`tools/turn_recorder.py`
+      existed and was used; `tools/dungeon_capture.py` was written for the dungeon
+      transition; two throwaway pollers went to `/var/tmp` and are now gone). Each
+      re-solved the same problems and each got some of them wrong. A single tool should
+      own: change-triggered sampling on a caller-supplied signature; full DS + VGA
+      snapshots per event so history can be re-rendered without replaying; a
+      **live** grid read every sample, never cached, because the map mutates during
+      play and a cached grid caused a fabricated "vehicle depot" to be written into
+      the docs and then retracted; the BIOS video mode at physical `0x449`, not
+      `0x449*16`; and a VGA ink metric, which is what proved darkness was a real
+      blank frame rather than a dim render. It should also subsume the CFG harvest
+      and immediately cross-check `ExecutedInstructions` rather than relying on
+      `tools/cfg_printed.py`, which silently dropped a genuinely executed print site
+      (`LAND--NOT HERE!!!!!`, runtime `0x3B72`). Requirements: read-only against the
+      emulator, output into `captures/spice86/<label>/`, and a negative control run
+      per `AGENTS.md` before any result is cited. Fold in the known defects: the
+      recorder's `screen` field is junk in CGA graphics mode, and `turn_recorder.py`
+      logged 76 odometer anomalies in 3000 turns so single-turn boundaries in dense
+      combat are not trustworthy.
+
 - [ ] **Four-question Spice86 capture — passability, the art transform, food on a
       rejected step, and the mountain tile.** Owner must walk; reads are passive.
       Full spec in `docs/passability-findings.md § Open`. In one session in sector
@@ -448,7 +490,7 @@ Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers i
 | C4 | Magic missile: **no save path exists** | todo | `asm/0F12` has no inventory gate and no roll, unlike the other three. The accumulation into `DS:20/21/22` is proven (`+2, +2, +0x40` per cast) but its BCD weight against the HP subtract is **not** — model the no-save property, leave the scaling as a named unknown. |
 | C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But **the tile byte that triggers the field is unknown**, and so is what drives its animated render. Cannot be wired to a tile until a capture names the byte. |
 | C6 | Theft **deletes** from the item array; killing the thief restores nothing | todo | `asm/0FCD`, thief is monster type `0x40`. Measured: 8 items stolen, 0 returned, kill paid a random drop like any other. Because the C2 gates read the item array live, a flagged-but-present item would wrongly keep the resist. |
-| C7 | Map byte -> vehicle code transform for BOARD | **blocked** | `asm/2FAD` dispatches on `[DS:14]` against `0x22/0x24/0x26/0x28`, but every map byte is a multiple of 4 and `0x22`/`0x26` occur zero times across all 33 sectors. The plane tile is `0x34` and the plane code is `0x26`, so a transform exists and is unproven. Also unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid. |
+| C7 | Map byte -> vehicle code transform for BOARD | **resolved 2026-10-21** | `[DS:14] = map_byte >> 1`, measured on 53 of 54 walk samples across four terrain bytes. So vehicle tiles are `0x44` horse, `0x48` ship, `0x4C` plane, `0x50` rocket. Confirmed by the game: `B` on a `0x4C` tile set `[DS:13] = 0x26` and printed `' PLANE'`. An earlier note here claimed the plane was `0x34`; that was a `%02d`-against-hex-filenames render bug and `0x34` is art `0x0D`, a humanoid figure. Still unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid. |
 
 One design constraint that outlives the checkpoint: the original keeps **two** copies
 of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole the

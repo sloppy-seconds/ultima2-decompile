@@ -665,28 +665,53 @@ gate rather than a tax.
 The causal chain is worth keeping as an example of why these systems are not
 independent: the thief took the ring, so the field cost 1000 HP.
 
-### The plane tile, and an open transform
+### The plane tile: a wrong answer, the correction, and how it was settled
 
-The plane is map byte **`0x34`**, art index 13, which decodes to an unmistakable
-side-view aeroplane. The mapping from art index to the location-description table
-in `asm/4C50` (`... NEAR A HORSE. NEAR A FRIGATE. NEAR A PLANE. NEAR A ROCKET.` at
-entries 11, 12, 13, 14) is corroborated independently by the horse, frigate and
-rocket art, so the identification does not rest on the drawing alone. Only eight
-plane tiles exist across all 33 sectors: `mapx00` x3, `mapx03` x3, `mapx32` x1,
-`mapx93` x1. Sector 03 is the town one, with a vehicle yard: frigates at y=14,
-planes at (43,16) and (45,16), rockets at y=18.
+**This section first claimed the plane was map byte `0x34`. That was wrong and the
+retraction matters more than the original claim, so it stays here with its cause.**
+The render used `%02d` against hex-named tile PNGs, so `tile_13.png` - which is art
+`0x13` - loaded under the label "13" and got multiplied into the wrong byte. The
+shape described was real; the byte attached to it was not. `0x34` is art `0x0D`, a
+humanoid figure with arms raised out to the sides, which is why the owner's "you're
+not seeing the winged monsters as planes are you?" was the correct challenge.
 
-`asm/2FAD` dispatches BOARD on `[DS:14]` against `0x22` horse, `0x24` ship,
-`0x26` plane, `0x28` rocket, and the callees write the mounted vehicle into
-`[DS:13]`. `asm/38B0` (LAUNCH) reads `[DS:13]`, and landing a plane is accepted only
-on tile `0x08` (grass).
+The plane is map byte **`0x4C`**, art **`0x13`**. The chain that proves it is
+measurement, not eyeballing:
 
-**Open, and deliberately not smoothed over:** `[DS:14]` cannot be the raw map byte.
-Every byte in every `mapx` file is a multiple of 4, and `0x22` and `0x26` occur zero
-times across all 33 sectors, yet those are the horse and plane codes. The plane tile
-is `0x34` and the plane code is `0x26`, so a transform exists and it is unproven.
-`[DS:14]` is written at file `0x6238` from a call to `0x6AC0`, whose index arithmetic
-came out as `y*16 + x` against a 64-wide grid, which is itself unexplained.
+1. `[DS:14] = map_byte >> 1`, measured live on **53 of 54** walk samples across four
+terrain bytes: `0x0C`->`0x06`, `0x5C`->`0x2E`, `0x70`->`0x38`, `0x08`->`0x04`.
+2. `asm/2FAD` dispatches BOARD on `[DS:14]` against `0x22` horse, `0x24` ship,
+`0x26` plane, `0x28` rocket.
+3. Therefore the vehicle map bytes are `0x44`, `0x48`, `0x4C`, `0x50` - arts `0x11`,
+`0x12`, `0x13`, `0x14`, and three of those are already this file's own horse,
+frigate and rocket candidates in `disasm/tile-art.tsv`.
+4. The game then confirmed it directly: standing on `mapx32` (4,10), a `0x4C` tile,
+`B` set `[DS:13] = 0x26` and printed `' PLANE'`; `L` printed `LAUNCH--PLANE`.
+
+Every plane tile in the game, map byte `0x4C`:
+
+| sector | cells | what the letter tiles say |
+| --- | --- | --- |
+| `mapx41` | 12 tiles at (2-11, 9-11) | `CCCP DEFENCE`, `KGB`, `CCCP TEST LAUNCH`, `PIRATES HARBOUR` |
+| `mapx32` | (4,10) | `AIR PORT` at y13, directly below the tile |
+| `mapx03` | (38,24) | a four-vehicle depot: horse (36,24), ship (37,24), plane (38,24), rocket (39,24) |
+| `mapx80` | (9,40), (50,46), (61,61) | not decoded |
+
+**The sector-00 "vehicle depot" from the first draft of this section did not exist.**
+`mapx00` contains zero horse, ship, plane or rocket tiles. What I read as parked
+vehicles were the `0x34` and `0x38` creature tiles - humanoid figures - which is
+also why that compound turned out to be a 31-monster caster gauntlet. The owner had
+said "there's a town with an airport", and the letter-density table generated in the
+same session already showed `mapx00` had 0 letter tiles while `mapx03` had 113. The
+disconfirming evidence was in my own output and I selected on the wrong column.
+
+Landing is gated: `LAND PLANE.` is accepted only on tile `0x08` (grass), anything
+else gives `LAND--NOT HERE!!!!!` and inertial flight continues. Both branches are in
+the executed set of `captures/spice86/dungeon-35-live` - gate `cmp` at runtime
+`0x3B56`, accept at `0x3B5A`, refuse at `0x3B72`.
+
+**Still open:** the `[DS:14]` writer at file `0x6238` calls `0x6AC0`, whose index
+arithmetic came out as `y*16 + x` against a 64-wide grid. Unexplained.
 
 ### The castle is a sector link, not a separate map format
 
@@ -734,5 +759,126 @@ y=62  DEVIL              WORKSHIP?
 guessing at it.
 * Which map byte the force-field tile is, and what drives its animated
   white/blue/purple render.
-* The `map byte -> vehicle code` transform behind `[DS:14]`.
 * The 30 live-grid cells that differ from `mapx03`.
+
+~~The `map byte -> vehicle code` transform behind `[DS:14]`~~ - resolved in section
+13's predecessor above: `[DS:14] = map_byte >> 1`.
+
+## 13. Vehicles are map tiles, and the dungeon is a sector with a light timer
+
+Harvests `captures/spice86/flight-32-live`, `flight-launched-live` and
+`dungeon-35-live`, plus a purpose-built change-triggered recorder,
+`tools/dungeon_capture.py`, writing to `captures/spice86/dungeon-entry/` (55 events,
+each with a full DS and VGA snapshot).
+
+### The map grid is the vehicle store
+
+There is no separate vehicle list. A parked vehicle **is a tile**, and a ridden
+vehicle is one byte.
+
+| step | effect on the world |
+| --- | --- |
+| `B` on a vehicle tile | `[DS:13]` set to the vehicle code; the tile is rewritten to ground (`0x4C` -> `0x08`) |
+| mounted | the vehicle exists only as `[DS:13]`; there is no tile for it |
+| `L` | inertial flight: the vehicle keeps travelling in the facing direction until turned or landed |
+| `L` on grass | `LAND PLANE.`, and the vehicle tile is **written back at the player's cell** |
+| `L` elsewhere | `LAND--NOT HERE!!!!!`, flight continues |
+
+Measured directly: the plane left `mapx32` (4,10) and appeared at (50,49), the cell
+where the owner got out. Boarding a horse at (58,50) removed that tile and the other
+four horses in the row were untouched. So vehicles are **relocated, not consumed**,
+and combined with `asm/2305` writing the sector back this means leaving a vehicle
+somewhere is a persistent world mutation.
+
+It also means vehicles are finite per sector and cannot be farmed: there are exactly
+17 plane tiles in the shipped maps.
+
+### Passability is per-mode, not per-vehicle, and not per-tile-for-everyone
+
+The owner found the plane could not cross forest, water or mountain. That looked like
+a per-vehicle passability table and would have been the wrong lesson: the real cause
+is **launch state**. Boarded-but-not-launched is ground-bound and obeys normal
+passability, with `DS:20` (the invalid-move counter) climbing while the position does
+not change. After `L` it flies.
+
+This is the second time today the "one boolean per tile" model broke, and it does not
+rescue the CP4b finding either - `asm/2423` still never reads a tile on foot, so
+on-foot overworld walking remains unrejected. What is now established is that the
+reject path exists and is shared: vehicles use the same `--INVALID MOVE!` counter as
+a blocked foot step.
+
+### The command set is context-dependent
+
+| key | overworld | dungeon |
+| --- | --- | --- |
+| `A` | ATTACK | **ADVANCE** |
+| `I` | inventory | **IGNITE TORCH** |
+| `K` | (no-op message) | **climb the rope / exit** |
+| `G` | GET | GET, and it looted a box containing a weapon |
+
+`'IGNITE TORCH'` executed at runtime `0x3794` and `IT'S DARK!` at `0x129C`. The
+engine cannot have one keymap; dispatch must be mode-aware.
+
+### Dungeons are sectors, and the tiles mean something else in them
+
+Entering the cave loaded a **different sector**: `DS:49/4A` went `3,0` -> `3,5`, and
+the live grid at `DS:1800` became `mapx35`. Same mechanism as the castle link
+(`00` -> `03`). No video mode change - it stays CGA mode 4.
+
+This confirms the owner's recollection and resolves a tension with F13. `mapx35` is
+42% `0x80` (`A`) tiles, and the letter-dense sectors are `mapx34` 68%, `mapx44` 53%,
+`mapx24` 46%, `mapx15`/`25`/`35`/`45` ~42%, `mapx85` 30%. A field that is two thirds
+one tile is a wall material, not shopfronts. So F13 needs splitting: `A`-`Z` tiles
+spell signs **where they form words** (`AIR PORT`, `THIEVES GUILD`, `APOTHECARY`,
+`TORTURE CHAMBER`), and a uniform field of `A` is dungeon rock rendered as wireframe.
+
+The dungeon renders as a first-person wireframe corridor in mode 4, with VGA ink
+around 314-542 against roughly 2970 on the overworld.
+
+`mapx25`, `mapx35` and `mapx45` are **byte-identical** (md5 `e274897a...`, 0 of 4224
+bytes differ). Any "which sector is this" check that compares bytes rather than the
+sector digits will conflate them, and a content-addressed save would too.
+
+### Darkness and the torch
+
+| observation | value |
+| --- | --- |
+| on entering a dungeon | `vga_ink` = **0** exactly, and `DS:26` = **0** |
+| `I` ignite | spends **one** torch (`DS:64` 50 -> 49, once) and sets `DS:26` to about **150** |
+| per dungeon move | `DS:26` decrements, roughly 1 per move |
+| on leaving | `DS:26` keeps its value and stops ticking |
+| on re-entering | `DS:26` is **zeroed again** and the screen is dark - you must relight and pay another torch |
+
+So the light is a **step counter, not a clock**, and it is per-visit. The first draft
+of this section claimed exiting ended the torch; that was wrong, the timer survived
+on the overworld at 64, and it is entry that clears it. Reading one surviving value
+as persistence was the error.
+
+**Graded inference, owner-endorsed, not observed:** when `DS:26` reaches 0 mid-dungeon
+the screen goes dark again. Never witnessed - the visit ended with 64 left, and the
+one dark event in the log was an entry reset, not a burn-out. The rebuild may
+implement it, on the owner's confidence, and this line is the record of it being an
+inference rather than a measurement.
+
+### Capture-tool defects found while doing this
+
+* `tools/cfg_printed.py` did not list `LAND--NOT HERE!!!!!` as printed even though
+  runtime `0x3B72` is present in `ExecutedInstructions`. A tool that silently drops a
+  real executed site is the failure mode `AGENTS.md` warns about; until it is fixed,
+  check `ExecutedInstructions` directly for any negative result it reports.
+* A probe that caches the 4 KB grid at startup produces **stale tile labels**, because
+  the map mutates during play. That is what made me describe a vehicle depot that did
+  not exist. `tools/dungeon_capture.py` re-reads the grid every sample for this
+  reason.
+* Reading the BIOS video mode needs physical `0x449` (`0040:0049`). Multiplying the
+  whole address by 16 reads unrelated RAM and reported mode 30 instead of 4.
+* The HTTP memory endpoint returns exactly what is asked for; an `IndexError` seen
+  while writing the recorder was my own out-of-range index, not truncation.
+
+### Still unexplained after this section
+
+* How a `0x50` rocket tile came to exist at `mapx30` (0,0), surrounded by water, when
+  `mapx30` on disk has none - and a boat-art `0x30` at (27,11) where the disk has
+  grass. Two cells, no attributed cause.
+* Whether the dungeon light timer reaching 0 darkens the screen (inference above).
+* What the dungeon's `0x80`-heavy bytes actually encode for the wireframe renderer.
