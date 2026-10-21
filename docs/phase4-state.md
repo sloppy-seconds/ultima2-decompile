@@ -433,3 +433,54 @@ must model paralysis as a movement rejection, not a combat overlay.
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
 | Engine test | `make -C engine test` | CP0 11/11, CP1 9/9, CP2 12/12 PASS |
+
+---
+
+## TODO: internationalisation (i18n)
+
+**Status: not started. Recorded so it is designed once, deliberately, rather than
+bolted on after the text layer has hardened.**
+
+The engine currently has no language axis at all. Text reaches the screen as
+compile-time `#define` string literals in `engine/build/gen_content.h`, generated
+from the original executable by the Makefile. That is simultaneously the good news
+and the obstacle.
+
+**Good news: a seam already exists.** Every string is reached through a `U2_S_*`
+name (`U2_S_CMD_PROMPT`, `U2_S_STATUS_HP`, ...) rather than an inline literal at the
+call site. Callers do not care where the text comes from, so replacing the macro
+layer with a runtime table is a contained change, not a sweep.
+
+**The obstacle is that those strings are game content.** They are extracted from a
+copyrighted binary, they are English-only, and they are only kept out of git by being
+build output. A translation catalogue cannot simply be a translation of them without
+saying clearly which parts are original text and which are engine-authored.
+
+Requirements when this is picked up:
+
+1. **Runtime string table, not macros.** `U2_S_FOO` becomes an id resolved through a
+   lookup, so the language can be chosen at launch (`--lang`) instead of at build
+   time. Keep the existing names as the ids; they already describe intent.
+2. **Separate the two provenances.** Strings extracted from the binary and
+   engine-authored strings (e.g. `[engine] character on disk`, deviation D13) are
+   different things and must be catalogued separately, or a translation project will
+   inherit copyrighted text without knowing it.
+3. **The text grid is fixed and narrow.** 40 columns, 8x8 cells, and several lines
+   are positioned by absolute row and a right margin (`right_margin` 0x28 for the
+   status block, 0x1d after it). German and Finnish will not fit where English does.
+   Layout must be derived from the string, not assumed from the English width.
+4. **The font is ASCII-only.** `core/font8x8_basic.h` is asserted to cover
+   U+0000..U+007F. Accented Latin needs new glyphs; any non-Latin script needs a
+   font and a wider cell model. This is the largest single cost and should be
+   scoped before the rest.
+5. **Numbers are packed BCD, not text.** HP, FOOD, EXP and GOLD are drawn from
+   packed decimal bytes. Locale digit or grouping rules have nowhere to apply until
+   that formatting is separated from the storage format.
+6. **Do not touch the reconstruction.** The `asm/` tree holds the original inline
+   strings because it is a byte-exact reconstruction; it is not the place for a
+   language layer. i18n belongs entirely to the engine.
+
+One concrete oddity worth remembering: the original map font has **no Q glyph**
+(art `30`, where Q would fall, is a structural tile). Any translation that renders
+through map tiles inherits that gap, so a language needing Q must route around it
+rather than assume the glyph exists.
