@@ -95,16 +95,41 @@ cp build/ULTIMA2.EXE ~/u2/
 dosbox -c 'mount c ~/u2' -c 'c:' -c 'ULTIMA2.EXE'
 ```
 
-Ultima II is famously a single-file game — the 37 KB executable you just
-rebuilt *is* the game. (Optional extra proof: place your original as
-`original/ultimaii.exe` before step 2 and `tools/assemble_clean.sh` will
-additionally byte-diff every function against it.)
+Ultima II is **not** a single-file game. The 37 KB executable is the engine; the
+content lives in sidecar files in the same folder — `mapxNN` sector maps,
+`monxNN` monster data, `tlkxNN` NPC dialogue, the `pic*` picture files, and the
+`player` save. The Internet Archive pack used here holds 94 files totalling about
+2.2 MB, and the game reads and rewrites them in place. That is why step 1 extracts
+the whole pack rather than fetching one binary, and why our rebuild is dropped
+*into* that folder instead of run standalone.
+
+If you run the reconstructed binary and it cannot find its data, it is not broken
+— you are in a directory without the sidecar files.
+
+### Optional: the portable C engine (no DOSBox)
+
+`engine/` is a native Linux reimplementation in C11 that runs the same content
+without DOS emulation. It is behavioural work in progress, **not** byte-proven —
+the asm tree remains the only proven artefact.
+
+```bash
+cd engine
+make                      # cc only, C11, no third-party dependencies
+make test                 # CP0..CP4 acceptance checks
+./u2                      # interactive terminal play
+make sdl && ./u2-sdl      # SDL2 bitmap front end (needs sdl2-compat)
+```
+
+Point it at the extracted pack with `--data-dir ~/u2` so it can find `mapxNN`,
+`monxNN`, `tlkxNN` and `player`. See `engine/README.md` for the full flag
+contract, including the headless and scripted modes used by the tests.
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
 | `asm/` | the reconstruction: one file per function (`<SEG>_<name>.asm`), data files, headers with evidence + confidence |
+| `engine/` | portable C11 reimplementation (Phase 4, in progress) with its own `README.md`, tests and `make` targets |
 | `tools/` | our Python/shell toolchain: `check_func.py` (per-function proof), `assemble_clean.sh` (full rebuild), `decode_str.py`, `preclean.py`, `clean_wave.py`, `dialect_masm.py` (MASM/jwasm dual-assembly) |
 | `docs/` | phase plans, state files and implementation logs for Phases 1–3 |
 | `disasm/` | curated analysis: function map, phase summaries, defect verdicts (no bulky dumps) |
@@ -153,8 +178,12 @@ tooling and documentation in this repo are our own authored work.
   boundaries + code/data separation; clean byte-exact ASM reconstruction
   (1283 clean + 3 data + 13 excluded self-modifying = 1299 functions).
   See `disasm/phase3-summary.md`.
-* **Phase 4 (planned): C lifting** from the cleaned tree — draft in
-  `docs/phase4-draft-c-lift.md`.
+* **Phase 4 (in progress): portable C engine** in `engine/` — CP0 through CP4
+  green: title flow, character creation, status rendering, saves, and the
+  overworld with tile passability, the sector wrap and the food/time model.
+  Plan in `docs/phase4-plan.md`, running state in `docs/phase4-state.md`,
+  evidence log in `docs/phase4-implementation.md`. Live-emulator findings that
+  corrected static readings are in `docs/spice86-live-findings.md`.
 * **Phase 5 (planned): portable build** behind the INT/port seams.
 
 ## License

@@ -26,8 +26,6 @@ make content              # regenerate build/gen_content.h only
 
 `build/`, `u2` and every generated header are gitignored.
 
-`build/`, `u2` and every generated header are gitignored.
-
 ## Zero game content
 
 Nothing from the original binary is committed: no strings, no tables, no
