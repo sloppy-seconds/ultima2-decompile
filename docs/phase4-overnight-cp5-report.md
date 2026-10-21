@@ -839,3 +839,5 @@ forces the claim to be re-proven. Grade: measured (offsets, save span); the
 
 `asm/` untouched; no engine combat code written. `make -C engine test` green
 (CP0..CP4 PASS, CP5 spec SKIP-by-design).
+
+**Commit: `dd78947`.**
