@@ -95,3 +95,5 @@ disasm/selfmod-raw/
 # `pycache`, which matches nothing: gitignore is not a substring match, so the
 # directory is named `__pycache__` and needed the underscores.
 __pycache__/
+
+.playwright-mcp/
