@@ -122,6 +122,54 @@ Useful next steps, in order:
    write as an immediate publish. That is a design question for upstream, not a
    bug fix, and it would need the `spanningFrameBoundary` data to justify it.
 
+## Static follow-up: there is no wait anywhere in the PASS path
+
+Followed the handler and its BIOS usage on 2026-10-21. This retires the
+"collapsed wait" framing entirely.
+
+**The game uses exactly three INT 10h functions**, one call site each:
+
+| `AH` | meaning | where |
+| --- | --- | --- |
+| `00h` | set mode | one of `4A3E`/`4A46`/`4A4E`/`5025`/`503D` |
+| `02h` | **set cursor position** | `asm/51FD_str_out_core.asm` |
+| `06h` | **scroll up window** | one site |
+
+`str_out_core` is only the cursor half: it loads `DH=row`, `DL=col` from
+`DS:2F`/`DS:2E`, `CX=1`, `BH=0`, `AH=02h`, `INT 10h`. The measured cursor was
+`(5, 23)` - the **last row of the 24-row BIOS model**, which is where a scroll
+onto the bottom row lands.
+
+**INT 16h is used at exactly one site**, `asm/4F4D_key_poll.asm`: `AH=01h`, the
+*non-blocking* keystroke check, with 23 call sites. There is no blocking
+`AH=00h` wait in the PASS path.
+
+**No `INT 1Ah` exists**, and `0x40:6C` (BIOS tick counter) is read only at
+startup in `asm/0100_sub_0100.asm` as the RNG seed. So there is no timer read
+that could be pacing a message.
+
+Conclusion: the earlier candidate list - keyboard busy-wait, tick-counter poll,
+retrace wait - is **statically dead**. Nothing in this path waits on anything.
+
+**Spice86 does implement `AH=06h`**: `VgaBios.cs:885` maps `0x06 -> ScrollPageUp`,
+through `VgaFunctionality.VerifyScroll` to `Scroll()`. `Scroll` for `lines > 0`
+does `MoveChars` then `ClearCharacters` on the vacated row, and a
+`GraphicalMoveChars` path exists, so the implementation is mode-aware rather
+than naively text-only.
+
+### The remaining candidate
+
+`AH=06h` scroll-up in **graphics mode 4**, with the cursor on the last row of a
+24-row model while the renderer draws 25 rows. If the scroll window coordinates
+(`CL`/`CH`/`DL`/`DH`, `AL`=lines, `BH`=attribute) that the game passes are
+interpreted against a row count that disagrees with what is drawn, the scrolled
+line can be cleared or land off the hashed band - which matches the measured
+A->B->A `window=0` signature.
+
+Next measurement, now pointed at one specific call rather than the whole
+pipeline: log the `AH=06h` parameters every time `P` is pressed, and compare
+against the same call captured under DOSBox-X. That is a single narrow probe.
+
 ## State of the tree
 
 All instrumentation was removed and verified by reading the lines back. Branch
