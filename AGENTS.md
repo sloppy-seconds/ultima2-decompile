@@ -310,3 +310,57 @@ Rules for byte-matching iteration:
 > Note: `original/` is the working copy agents operate on. `references/ultima2/` is an immutable safety copy of the same files — see Section 0.
 
 > **`captures/spice86/spice86-cfg.json` is the authoritative source for routine entry points.** This game's command handlers are reached by `jmp *%bx` through a jump table, not `call`/`ret`, so Ghidra and Reko cannot discover them statically. Blocks in the runtime CFG were actually executed — use their start addresses (segment `017D`, `file_offset = offset + 0x200`) as the seed list for both decompilers. See `captures/README.md` for the schema, address mapping, and the relocation caveat (runtime bytes differ from file bytes wherever an MZ fixup applies).
+>
+> **Correction, 2026-10-21: CFG *blocks* are not proof of execution.** `spice86dumpCfgBlocks.json` lists **discovered** blocks — Spice86 statically expands branch successors — so a block can appear without ever having run. It reported `MINAX IS DEAD!!`, `RING PROTECTS FROM FIELD!` and `FIELD CAUSES 1000 DAMAGE!` for a session that met none of them. The authority for "this ran" is `ExecutedInstructions` inside `spice86dumpExecutionFlow.json` (a list of `{Offset, Segment, Linear}` dicts). Use block entries as a seed list, which is what they are good for, but never as evidence that code executed. See `tools/cfg_printed.py`, which gets this right.
+
+## 7. Evidence Discipline (READ BEFORE ASSERTING ANYTHING)
+
+Grade every claim, and say which grade you are asserting:
+
+| grade | meaning |
+| --- | --- |
+| **observed** | a byte, memory value, or CFG block read from the binary or a live session |
+| **measured** | derived from observations by a tool, with the tool and inputs named |
+| **inferred** | reasoned from a partial read — a listing, a name, a plausible pattern |
+| **recalled** | the owner's memory of playing the original |
+
+### An owner observation outranks an agent inference
+
+When the owner reports what they saw or did — "I was paralyzed", "the staff is
+gone", "it went back to the splash", "it was a green gem" — that is **data**, and
+it outranks anything inferred here. Every such conflict so far has resolved with
+the agent wrong, not the owner: the green gem (a hex miscount, not a wrong table),
+the post-creation splash (the engine had shortcutted a real program restart), the
+stolen staff (later proven by bytes), and mountains blocking on foot.
+
+So on conflict: re-check your own measurement first. Do not conclude the owner
+misremembered until you have disproven your own reading, and if you still
+disagree, **say so explicitly and name the evidence** — never quietly overwrite a
+reported observation with an inference.
+
+### Bytes outrank everyone, including the owner
+
+Recalled design intent is a hypothesis to test, not a conclusion. Where bytes
+disagree with a recollection, record the disagreement rather than picking a side
+silently.
+
+### Derive; do not eyeball
+
+* Compute indices and offsets in code. Splitting a hex string by eye invented a
+  false discrepancy that wasted a session.
+* Read a whole function before describing it. `asm/2423` declares a 10-byte range
+  for a routine running to about `0x2680`; the truncated read produced a
+  retracted finding.
+* List the existing corpus before harvesting runtime data. Paralysis, theft and
+  combat functions were already named on disk while a capture was run to look for
+  them.
+
+### A tool that lies is worse than no tool
+
+Validate any new analysis tool against a **negative control** — a case where the
+answer is known to be *no* — before citing its output. `cfg_printed.py` reported a
+Minax fight that never happened because it read discovered blocks instead of
+executed ones; the pre-fight harvest, used as a control, exposed it immediately.
+Prefer failing loudly to returning a plausible default, and make unproven numbers
+say so in the comment next to them.
+
