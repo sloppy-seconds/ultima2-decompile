@@ -144,6 +144,14 @@ Verification, in two independent layers:
   renames the `asm/` file and writes the header.** Not a follow-up, not a
   backlog item. If no file covers the address yet, record it in the owning
   function's header and say so.
+* **In `asm/`, only the filename and `#` comment lines may change. Labels are body.**
+  A discovered name goes into the filename and the header; the `sub_xxxx:` label line
+  stays exactly as it was. `engine/tests/run_cp0.sh` md5s every non-`#` line, both
+  across a rename and on a modified file, so editing a label fails CP0. **This is the
+  most frequently repeated mistake against this tree** — the instinct is that renaming
+  `sub_2cd8:` to `keys_add_two:` alongside the file is tidier, and it is forbidden.
+  Note it in the header instead (`# label: kept as ... on purpose`). Changing a label
+  at all is a change to a CP0 invariant, not a naming detail: stop and ask.
 * **A wrong name is worse than no name.** If bytes contradict an existing name,
   add a `# NAME DISPUTED:` line in the same commit and propose the rename;
   do not silently rename on your own inference.
@@ -173,7 +181,7 @@ Verification, in two independent layers:
 | `asm/` | the reconstruction: one file per function (`<ADDR>_<name>.asm`), headers carry evidence, confidence and provenance | tracked |
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
 | `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. | tracked |
-| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
+| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
 | `docs/` | phase plans, state, implementation logs, live-capture findings | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
 | `captures/` | runtime captures and screenshots | **gitignored** |
@@ -217,6 +225,12 @@ misremembered until you have disproven your own reading, and if you still
 disagree, **say so explicitly and name the evidence** — never quietly overwrite a
 reported observation with an inference.
 
+A recalled detail is also worth chasing when there is no conflict yet. On
+2026-10-22 the owner recalled stats wrapping to 0 above 99; the bytes agreed
+(1-byte packed decimal, no ceiling guard on any add site) and the recollection
+opened up a general property of the save format that no agent had thought to look
+for. Treat "I remember it did X" as a pointer at a place to measure.
+
 ### Bytes outrank everyone, including the owner
 
 Recalled design intent is a hypothesis to test, not a conclusion. Where bytes
@@ -240,6 +254,10 @@ Validate any new analysis tool against a **negative control** — a case where t
 answer is known to be *no* — before citing its output. `cfg_printed.py` reported a
 Minax fight that never happened because it read discovered blocks instead of
 executed ones; the pre-fight harvest, used as a control, exposed it immediately.
-Prefer failing loudly to returning a plausible default, and make unproven numbers
-say so in the comment next to them.
+`bcd_census.py`'s first draft under-counted guards by 3× because it looked for
+`cmp`/`test` and the real subtract idiom is `cmc; sbb; das; cmc` — the second `cmc`
+re-exposes the borrow in CF for a following `jb`, so a cmp-based detector reports a
+guarded site as unguarded. Both mistakes produced a *plausible* wrong number rather
+than an error, which is the dangerous shape. Prefer failing loudly to returning a
+plausible default, and make unproven numbers say so in the comment next to them.
 
