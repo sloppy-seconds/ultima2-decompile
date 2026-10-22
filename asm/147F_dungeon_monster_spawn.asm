@@ -22,7 +22,7 @@
 #           (152,152,184,184,216,216,248 vs 153,153,185,185,217,217,249).
 #           The guard makes the SLOT the difficulty ladder: type <= (slot>>1)/2 + 1, so
 #           slot 4 admits types 1-2 and slot 31 admits all seven. Detail and grades in
-#           docs/monster-spawn.md § 7.
+#           docs/monster-spawn.md § 9.
 #           NOTE the earlier header line here said [DI+0x1B7] was a sprite and then a
 #           kind index; in a dungeon it is neither, it is slot>>1. The carry out of the
 #           `adc 0x1B7(%di),%al` was 0 in all 54 observations, so its contribution is

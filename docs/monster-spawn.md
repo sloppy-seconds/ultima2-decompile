@@ -14,7 +14,7 @@ There are two:
 | --- | --- | --- |
 | **placed monsters** | `monxNN[64 + slot]` — a byte in the sector's data file | **32/32, 32/32, 31/32** across three captures in two sectors |
 | **wandering spawns** | the nine per-kind immediates in the spawn arms | ~40 captures in sector 20 match the arms exactly |
-| dungeon spawns | computed in `asm/147F_dungeon_monster_spawn` — **now validated live, 54/54 slots, see § 7** | read + `tools/dungeon_spawn_check.py` |
+| dungeon spawns | computed in `asm/147F_dungeon_monster_spawn` — **now validated live, 54/54 slots, see § 9** | read + `tools/dungeon_spawn_check.py` |
 
 **There is no "area override" rule.** That was the wrong frame. Sector 00 reads HP 255
 for every monster because `monx00[64:96]` is literally all `0xFF`. Sector 20 matches the
@@ -27,8 +27,9 @@ special, it was just fully authored.
 ## 2. `monxNN` layout — the documented format is wrong
 
 `docs/phase4-implementation.md` described `monxNN` as "256 monster-ID slots (16x16) +
-128 B tail". It is not. The file is **five parallel 32-byte arrays**, one entry per
-monster slot, followed by padding:
+128 B tail". It is not. The file is **six parallel 32-byte arrays**, one entry per
+monster slot, followed by a tail. (Five when this section was first written; the sixth
+was found 2026-10-23 by the corpus-wide re-scan in § 6.)
 
 | offset | field | live DS array | match, three captures |
 | --- | --- | --- | --- |
@@ -36,7 +37,8 @@ monster slot, followed by padding:
 | `32..63` | y | `DS:0x157+i` | 18/32, 29/32, 13/32 — **drifts, expected** |
 | `64..95` | **HP** | `DS:0x177+i` | **32/32, 32/32, 31/32** |
 | `96..127` | **type** | `DS:0x197+i` | **32/32, 32/32, 32/32** |
-| `128..159` | kind | `DS:0x1B7+i` | 32/32, 28/32, 32/32 |
+| `128..159` | kind | `DS:0x1B7+i` | 32/32, 28/32, 32/32 — **does not hold everywhere, see § 6** |
+| `160..191` | **flag** | `DS:0x1D7+i` | new 2026-10-23; values `01..03` and `81..85` |
 
 x and y under-match because monsters move after spawn; the file holds spawn positions.
 The three static fields match at or near full width. The one 31/32 HP miss is a monster
@@ -64,7 +66,7 @@ The values are loaded from disk.
   routine is unnamed. `asm/22D5` is documented as the `monx` read with `CX=0x100`, which
   is 256 bytes — inconsistent with a 160-byte used region and worth re-reading.
 * **Dungeon sectors do not use this.** `dungeon-35-live` matched `monx35` at 0/27. They
-  have their own encoding — see § 7.
+  have their own encoding — see § 9.
 * **The shop is still untriggered.** See § 5.
 
 ## 5. Why the shop capture failed
@@ -83,7 +85,95 @@ positioned at it, and in sector 03 no merchant is.
 actually stands beside a letter tile, or place one there. That is a data question, not a
 key-injection question.
 
-## 6. Curiosity, unproven
+## 6. The layout re-checked across the whole corpus — B4, 2026-10-23
+
+`tools/monx_layout_scan.py` reads the sector out of every capture on disk (from `DS:49/4A`,
+never from the directory name), loads that sector's `monxNN`, and scores each array over
+**only the slots the file actually authors** — a slot with `monx[96+i] == 0` holds no
+placed monster, so whatever lives there came from a wandering spawn and is not the file's
+business. That distinction is the whole reason this re-scan disagrees with a naive one:
+scoring unauthored slots is what makes sector 20 look like a total layout failure when it
+is actually an empty file.
+
+| sector | captures | x | y | HP | type | kind | flag | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 00 | 4 | 85/124 | 85/124 | **124/124** | **124/124** | 107/124 | **124/124** | holds except `kind` |
+| 03 | 5 | 78/160 | 89/160 | 158/160 | **160/160** | **160/160** | 144/160 | holds; HP misses are damage |
+| 20 | 40 | — | — | — | — | — | — | **`monx20` authors nothing**; untestable |
+| 31 | 12 | 207/384 | 275/384 | **384/384** | **384/384** | 349/384 | **384/384** | holds except `kind` |
+| 32 | 1 | 7/32 | 10/32 | 31/32 | 31/32 | 29/32 | 24/32 | one capture; slot 16 is a killed monster (`type` cleared to 0) |
+
+**`type` and `HP` hold everywhere they can be tested.** Every miss is explained: HP below
+the file value is damage, `type` cleared to zero is a killed and cleared slot. No capture
+shows HP *above* the file value, which is the property that would have broken the model.
+
+**`kind` does not hold, and that is a finding.** Sector 03 matches 160/160, but sector 00
+mismatches 17 slots (file `0x08`, live `0x0C` at slots 28–31), sector 31 mismatches 35
+(file `0x70`, live `0x08` at slot 6), sector 32 mismatches 3. So `DS:0x1B7` is **not**
+faithfully loaded from `monx[128:160]` — something rewrites it after the load. That is
+consistent with § 9, where the dungeon spawner is proven to write `slot >> 1` into the
+same field, and it means the earlier "`kind` matches 32/32" on sectors 00 and 03 was a
+lucky sample rather than a rule.
+
+### The sixth array, and what it looks like
+
+`monx[160:191] → DS:0x1D7` matches live exactly in sectors 00 and 31, and drifts only
+where a wandering spawn overwrote a slot in 03 and 32. Its values are `01`, `02`, `03`
+and `81`–`85`. The high-bit set on `81..85` is the Apple II convention the `tlkx` files
+use, so this array plausibly holds two things: a small group value `1..3` and a flagged
+marker `1..5`. **What it means is not established** — no consumer of `DS:0x1D7` has been
+named beyond `asm/1151_dungeon_darkness`, which writes it (`mov %al,0x1d7(%di)`). It is
+recorded as a field with a location, not a field with a meaning.
+
+### Which sectors author monsters at all — and it is the site-kind scheme again
+
+Scanning all 33 `monxNN` files directly:
+
+* **16 sectors author monsters**: `00`, and every sector whose ones digit is 1, 2 or 3 —
+  `03 11 21 22 23 31 32 33 41 61 71 81 82 92 93`.
+* **17 author nothing** (all five arrays zero): every ones-digit 0 wilderness sector
+  (`10 20 30 40 50 60 70 80 90`), every `X4` tower (`24 34 44`) and every dungeon
+  (`15 25 35 45 85`).
+
+So **`monxNN` is non-empty exactly where `tlkxNN` exists, plus sector 00.** That is a third
+independent channel — after map signs and street dialogue (`docs/place-names.md` § 2c) —
+agreeing with the ones-digit site-kind scheme, and sector 00 is again the exception: the
+compound has authored monsters but no street dialogue.
+
+It also explains a standing confusion in this file. § 1 says sector 20 matches the spawn
+arms "because `monx20[64:96]` is all zeros" — the scan confirms it authors **nothing at
+all**, so all 40 sector-20 captures are pure wandering spawns and the arms were the only
+possible answer there.
+
+### The `monx` tail is a pack-wide pattern
+
+Every `monxNN` is 384 bytes, and in every one checked:
+
+```
+monx[256]          == 0x1A
+monx[257:384]      == monx[129:256]      (byte-identical)
+monx[192:256]      == all zeros
+```
+
+The `0x1A` at offset 256 is the same marker the `player` file carries at `0x100`, and
+`mapxNN` carries one at the head of its own 128-byte tail — so `0x1A` at the start of a
+file's tail region is a pack-wide convention, not a per-file oddity. **What the shifted
+duplicate means is not known.** It is not a second monster table (it duplicates the
+`kind` and `flag` arrays offset by one), and nothing has been found that reads it. The
+open question in `docs/phase4-state.md` § Deferred decisions — "what is the `0x1A` tail"
+— is narrower than it looked, and this is the shape of the answer: a marker plus a
+shifted copy of the last two arrays.
+
+## 7. Follow-ups opened by § 6
+
+| item | note |
+| --- | --- |
+| Name the `flag` array (`monx[160:191]` / `DS:0x1D7`) | it has a location and a value domain but no proven meaning; find a consumer before naming it |
+| Find what rewrites `DS:0x1B7` after the `monx` load | `kind` mismatches in 3 of 4 testable sectors; the dungeon spawner is one such writer, the overworld writer is unnamed |
+| G20 — enter a tower sector | `monx24/34/44` author nothing, so a tower is expected to behave like wilderness for spawning. Testable in one launch |
+| Read the `monx` loader | § 4 notes `asm/22D5` reads it with `CX=0x100` = 256 bytes, which covers arrays 1–5 and **not** the sixth at `160..191`. Either the read is larger than recorded or the sixth array arrives another way |
+
+## 8. Curiosity, unproven
 
 The wizard's "gibberish" in `asm/19D7_magic_shop_menu` reads as **Turkish**:
 `BIR IKI UC` (one two three), `LUTFEN EVET` (please yes), `GULE GULE` (go smiling /
@@ -92,7 +182,7 @@ measurement** — it is one agent's inference from strings and wants a native sp
 eye before it becomes a claim. The interesting version, if it holds, is that the magic
 shop's "mystical language" is a real language rather than invented noise.
 
-## 7. The dungeon encoding — A4, measured
+## 9. The dungeon encoding — A4, measured
 
 `tools/dungeon_spawn_check.py` reads the monster record out of every capture on disk,
 selects dungeon-shaped ones **by encoding rather than by directory name**, and checks
@@ -197,5 +287,5 @@ dungeon geometry question picks up.
 
 That table lists the dungeon `kind` column under the same record layout as the
 overworld. The layout is the same but the **meaning** is not: `0x1B7` is `slot>>1` in a
-dungeon and a kind index on the overworld. Anyone re-deriving this should read § 7 here
-rather than infer from that table.
+dungeon and a kind index on the overworld. Anyone re-deriving this should read this
+section rather than infer from that table.
