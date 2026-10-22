@@ -242,6 +242,67 @@ design. Gold is stable, food is not.
 Gold income is separate and already named: `asm/2D8C_combat_kill_reward` prints
 `KILLED--GOLD+`, so kills award gold directly.
 
+## 4b. The armour shop, opened — first transaction that is not the street vendor
+
+**observed live 2026-10-23**, capture `captures/spice86/armour-buy/`. This is the first
+shop interior ever reached in this project; every prior commerce claim was static.
+
+The reason the earlier attempts failed was a **data** problem, not an input problem, and
+`tools/shop_access.py` now answers it for every sector at once: it walks each shop sign of
+3+ letters and reports which street-transacting NPCs stand on it or in the four orthogonal
+cells. Fifty such pairings exist across the shipped sectors. Sector 32 has
+`ARMOURY` at (35,4) with the **Merchant at (38,3)** — directly above the sign, in the same
+column. Seeded to (38,5) and `T,Up` queued together, the shop opened.
+
+```
+THE ARMOUR SHOPPE:
+1-CLOTH, 2-LEATHER, 3-CHAIN,
+4-PLATE, 5-REFLECT, 6-POWER,
+YOUR INTEREST? 1
+THAT 1ST CLOTH
+FOR YOU ONLY 0012
+NOW 'BOUT IT?
+```
+
+### G8 is closed: `DS:96+i` is the owned-armour count, 1-based on the menu number
+
+| reading | before the purchase | after buying CLOTH (menu item 1) |
+| --- | --- | --- |
+| `DS:96..9F` | `00 00 00 00 00 00 00 00 00 00` | `00 01 00 00 00 00 00 00 00 00` |
+| gold `DS:58/59` | `9999` | `9987` |
+
+`DS:97` went `00 → 01` and gold fell by exactly **12**, which is the quoted `0012`. So:
+
+* **the census inference was right** — `DS:96+i` is an owned-armour count table, sitting
+  beside `DS:76+i` the owned-weapon table, which is why the asm sites do BCD arithmetic on
+  `0x96(%di)` and `0x76(%di)` in the same breath. `engine/src/core/state.h`'s `CANDIDATE,
+  NOT PROVEN` note on `0x96` can be promoted.
+* **the index is the menu number, 1-based.** CLOTH is item `1` and it set `DS:96+1`. `DS:96`
+  itself is unused, so the array is `DS:97..9C` for the six armour types, not `DS:96..9B`.
+  Anyone porting this must not zero-base it.
+
+### Two things this exposed
+
+* **The shop closes after one purchase.** A second `T,Up` followed by `3` then `y` produced
+  `CMD: - ILLEGAL COMMAND!` and then `CMD: YELL WHAT?` — the menu was already gone and the
+  keystrokes fell through to the command loop. So a scripted multi-item buy needs to
+  re-open the shop per item, and a driver that does not check for `ILLEGAL COMMAND` will
+  silently mis-attribute later keys. **A second armour type was therefore not observed**, and
+  the 1-based reading rests on one purchase plus the menu numbering.
+* **`tools/u2_edit.py maxout` does not populate the armour table.** The seeded character
+  reports `wearing 6 (POWER)` at `DS:62` while `DS:96+6` reads `00`. Either the worn item
+  is genuinely not counted as owned, or the seeder is incomplete. **Not established**, and
+  it matters: if owned-means-worn, then `DS:96+i` is not an inventory count at all but
+  something else that happened to tick on purchase. The weapon array gives no help —
+  `maxout` sets all ten of `DS:76..7F` to `01`, so it cannot distinguish the two cases.
+
+### A price data point for § 3b
+
+CLOTH armour quoted `0012`, four digits, printed through the same `DS:27/28` operand pair.
+That is a third price setter alongside the tavern's `0005` and the clue seller's
+typed-digit-as-hundreds, and it is the first one observed executing rather than read
+statically.
+
 ## 4. Street NPCs do not transact
 
 Seven `street_*` handlers exist — guard, jester, merchant, fighter, cleric, wizard, thief
@@ -251,7 +312,28 @@ sells anything**: the merchant offers apples (`asm/412C`), the thief offers a wa
 purchase path. Bytes are proven; none of the three appears in `ExecutedInstructions` in
 any of the 60 harvests, so the trigger conditions are unobserved.
 
-## 5. What selects a shop — still unknown, and a claim withdrawn
+**Amended 2026-10-23:** the last sentence no longer holds — `asm/412C` (the Merchant) has
+now been seen executing, in the vendor food sale and again in § 4b's armour shop. What
+still holds is that the street handler itself has no purchase path: the transaction runs
+through the shop code, and the NPC's role is to be *standing at the right tile*.
+
+## 5. What selects a shop — answered: an NPC standing at the sign
+
+**Closed 2026-10-23 by § 4b.** The selector is neither the tile nor the region nor the
+site kind: it is **a street-transacting NPC standing on the shop sign or in the four
+orthogonal cells, with `T` and the direction queued together**. Sector 32's Merchant at
+(38,3) above the `ARMOURY` run at (35..41,4) opened it on the first try; sector 03, where
+no merchant stands beside a letter tile, never has.
+
+`tools/shop_access.py` enumerates every such pairing in the shipped data — fifty of them
+— so this is now a lookup rather than a hunt. The letter tile is not the selector on its
+own, and neither is the NPC type on its own: the owner confirmed that plenty of characters
+behind letter tiles do not sell, and § 4b shows the same Merchant type selling only where
+it stands at a sign. **Facing** is the remaining unknown — `T,Up` reached the Merchant two
+cells north through a talkable-through letter tile, so the direction names a ray rather
+than an adjacent cell, and a teleported save never sets facing at all.
+
+**The earlier claim stays withdrawn.**
 
 **I wrote here that a shop is selected by the player's region within the sector plus the
 site kind, citing `asm/1590`–`asm/15D0` as trampolines. That is disproven and removed.**

@@ -142,7 +142,7 @@ seeded with `--player`, so character creation is not an obstacle either.
 | G5 | which tile is the mountain (rejection test) | agent + 30 s owner look | **medium** | CP4/CP6 passability |
 | G6 | single-byte counter underflow: is it reachable | agent | **medium** | census claim |
 | G7 | stat cap 99 wrap, observed rather than inferred | agent | **medium** | B1/B2 confidence |
-| G8 | identify `DS:96+i` — owned-armour counts or not | agent | **high** | census candidate |
+| G8 | ~~identify `DS:96+i`~~ **CLOSED 2026-10-23 by `captures/spice86/armour-buy/`.** It **is** the owned-armour count table, and the index is the **menu number, 1-based**: buying CLOTH (item 1) took `DS:97` from `00` to `01` and gold from 9999 to 9987, exactly the quoted `0012`. `DS:96` itself is unused, so the six armour types live at `DS:97..9C` -- do not zero-base it. The shop was reached by the rule in `docs/commerce.md` § 5 (an NPC standing at the sign; sector 32's Merchant at (38,3) above `ARMOURY`), enumerated by `tools/shop_access.py`. Two caveats recorded in § 4b: the shop closes after one purchase so a second type was not observed, and `maxout` leaves the table empty while `DS:62` says POWER is worn | agent | **done** | census candidate, now proven |
 | G9 | dungeon light timer reaching 0 — does the screen darken | agent | **medium** | CP7 |
 | G10 | dungeon geometry + wireframe renderer decode | **owner** | **low** | CP7, T9 |
 | G11 | `A`–`Z` dungeon byte decode | **owner** | **low** | CP7 |
