@@ -42,6 +42,20 @@ following, in this repository or anywhere else:**
 | `disasm/tile-art.tsv` | descriptions written by someone who had the originals in view |
 | `asm/`, `build/`, `captures/` | derived from the copyrighted binary |
 | `tmp/*.png`, `tmp/screens/` | screenshots of the running game |
+| `tmp/*.html` | the map viewer and tile review sheet embed the extracted originals as base64 |
+| `docs/tile-art-evidence.md` | **the answer key**: measured structure of every original |
+| `tools/tile_rules.py` | **also the answer key**: the gate's bands were fitted to the originals — density ranges, periods, component sizes, diagonal runs |
+| `tools/tile_review.py`, `tools/tile_atlas.py`, `tools/monster_shapes.py` | load or render the extracted originals |
+| `engine/assets/tiles/cleanroom/PROVENANCE.md` | legal record; discusses the originals and cites forbidden paths |
+| `/var/tmp/tile-review-ledger.md`, `/var/tmp/game-knowledge-deltas.md` | review working notes containing ASCII pixel dumps of the originals |
+| `/var/tmp/tile_probe.py`, `tile_show.py`, `validate_rule.py`, `gem_*` | tools that read or describe the originals |
+
+**Why the answer-key rows matter as much as the art rows.** A rule fitted to one example
+encodes that example. `tools/tile_rules.py` holds bands such as "diagonals of at least 4",
+"density 26–38%%" and "five hollow components of equal size" — enough to reconstruct the
+original's structure arithmetically without ever seeing it. Reading it would satisfy the
+letter of this protocol and destroy its purpose, which is why the gate is run **against** the
+finished art and never handed to the person making it.
 
 **Also be aware of two non-obvious leaks in this environment:**
 
@@ -134,8 +148,9 @@ allowed to carry facts. What stays off-limits is the drawing - which pixels are 
 and how. Knowing that grass is cyan tells the implementer nothing about how to draw
 grass.
 
-The table below is **measured**, from the extracted art (`tmp/tiles/tiles.json`,
-`color_names` per entry), not from impression.
+The table below records what each colour must **do** in the set. Its derivation is a
+spec-author concern and is kept in `docs/tile-art-evidence.md`, which § 2 forbids to the
+implementer; the requirements themselves are all you need.
 
 | ink | art | meaning |
 | --- | --- | --- |
@@ -177,79 +192,82 @@ Must tile seamlessly when repeated, and must stay quiet under the other classes.
 
 | art | byte | name | must read as |
 | --- | --- | --- | --- |
-| `00` | `0x00` | water | open water; a loose, irregular texture suggesting movement on a dark field |
-| `01` | `0x04` | shallow / rough water | water with more broken texture than `00` |
+| `00` | `0x00` | water | open water; thin regular dashes so a field of these tiles reads as one continuous surface in motion, not static per tile (see § 7a) |
+| `01` | `0x04` | shallow / rough water | horizontal wave lines with **white foam dominant over cyan**; sparser than `00`, not busier (see § 7a) |
 | `02` | `0x08` | grass | open grassland; sparse light speckling on dark ground, the calmest tile in the set |
-| `03` | `0x0C` | forest | woodland; denser, chunkier coverage than grass, clearly "more stuff on the ground" |
-| `04` | `0x10` | mountain | high ground; a regular angular lattice, visually hard and bright |
-| `09` | `0x24` | mountain pass | the mountain texture with an opening at the bottom centre, suggesting an entrance through |
-| `1C` | `0x70` | marsh / reeds | vertical strokes on a dark field; distinct from water by direction, not colour |
+| `03` | `0x0C` | forest | woodland; a few large crowns, not many small marks — clearly "more stuff on the ground" than grass |
+| `04` | `0x10` | mountain | high ground; two families of crossing diagonal lines reading as zigzag peaks or stacked diamonds, fine strokes, all-over coverage |
+| `09` | `0x24` | mountain pass | the mountain texture **plus an arch** open at the bottom centre. The opening is the whole point — do not seal it |
+| `1C` | `0x70` | marsh / reeds | vertical strokes on a dark field; distinct from water by direction, not colour. Naming contested — see § 7a |
 
 ### Structures
 
 | art | byte | name | must read as |
 | --- | --- | --- | --- |
-| `05` | `0x14` | ring formation | a small group of ring shapes |
-| `06` | `0x18` | masonry | a block of squared masonry, regular and man-made |
-| `07` | `0x1C` | tower | a single upright tower with a crenellated or forked top |
-| `08` | `0x20` | gate | two posts under a lintel; an opening you would walk through |
-| `0A` | `0x28` | monument | an upright cross or marker on a base |
-| `0B` | `0x2C` | arched doorway | an arch set in a filled field |
+| `05` | `0x14` | ring formation | five rings of equal size arranged like the five on a die, slightly crooked. Every one must actually be a ring — a stray single pixel among them is a defect |
+| `06` | `0x18` | emblem (command-key square) | one symmetric mark: a square frame with four equal corner loops and a hole at the centre, inset from the edges so tiled copies stay separate. Marks a settlement — see § 7a |
+| `07` | `0x1C` | tower | a **solid** upright rook silhouette, two prongs on top, flaring to the base. Outlining it and filling it with windows is a misreading |
+| `08` | `0x20` | gate | a gateway frame: two posts under a beam, blocky tabs at all four corners, feet flaring, bottom centre open. A thick slab on two posts is not a gate |
+| `0A` | `0x28` | signpost | a post carrying ONE heavy crossbar high up, on a lighter base. A second bar near the foot turns it into a different kind of cross |
+| `0B` | `0x2C` | sea monster in water | a creature rising from sparse water: body low-left, neck and head with an open mouth on the right. The water is the quiet part; the creature is the subject. NOT a doorway — see § 7a |
 | `12` | `0x48` | ship | a boat: hull with a vertical mast |
 | `13` | `0x4C` | plane | an aircraft the player can board with `B` — see amendment A1 |
 | `14` | `0x50` | rocket | a tall tapering form on a wider base, i.e. a rocket on a pad — see amendment A1 |
-| `15` | `0x54` | dungeon mouth | an enclosed opening; the "go down here" tile |
-| `16` | `0x58` | marker | a small diagonal mark with a cross at its foot |
-| `30` | `0xC0` | wall / bulk structure | a dense structural tile that occurs in large repeated blocks; must read as built fabric, not terrain |
+| `15` | `0x54` | dungeon mouth | an enclosed opening; the "go down here" tile. Naming contested — see § 7a |
+| `16` | `0x58` | marker | a small, sparse diagonal mark with a cross at its foot. Naming contested — see § 7a |
+| `30` | `0xC0` | moongate | an arch open at the bottom: solid top, side borders, no bottom line, interior stripes. It is a teleporter, so it must read as an entrance, not as masonry — see § 7a |
 
 ### Amendment A1 — 2026-10-22, arts `13` and `14` renamed
 
 Arts `13` and `14` were originally named **signpost** and **spire** by structural guess,
-before the vehicles had been identified. The bytes are vehicle tiles, proven by
-measurement and confirmed by the game:
+before the vehicles had been identified. They are the **plane** and the **rocket**.
 
-* `[DS:14] = map_byte >> 1`, measured live on **53 of 54** walk samples across four
-terrain bytes (`docs/spice86-live-findings.md` § 12);
-* `asm/2FAD` dispatches BOARD on `[DS:14]` against `0x22` horse, `0x24` ship, `0x26`
-plane, `0x28` rocket — so the vehicle map bytes are `0x44`, `0x48`, `0x4C`, `0x50`, i.e.
-arts `0x11`, `0x12`, `0x13`, `0x14`;
-* the game said so directly: standing on a `0x4C` tile in `mapx32` at (4,10), `B` set
-`[DS:13] = 0x26` and printed `' PLANE'`, and `L` printed `LAUNCH--PLANE`.
-
-`11`/`0x44` horse and `12`/`0x48` ship already agreed with this and are unchanged. Only
-the two names were wrong.
+The proof is byte-level and is recorded in `docs/tile-art-evidence.md`. That file is **not**
+part of this specification and is listed as forbidden in § 2 — an implementer does not need
+it, and reading it would breach the wall. What you need is stated here: art `13` is an
+aircraft the player boards, art `14` is a rocket, and arts `11` and `12` were already
+correct.
 
 **The art set was deliberately not regenerated by this amendment.** Renaming a row is a
-spec-author act and uses live-capture evidence, which the spec author may read. Redrawing
-`tile_13` is an implementer act, and § 2 forbids the implementer from reading
-`disasm/tile-art.tsv` — the file that records this proof — because it describes originals
-seen directly. Whoever performs the redraw must be a fresh implementer working from this
-spec text alone, not from the evidence behind it. Until that happens `tile_13` still
-depicts a notice board, which is a known and recorded mismatch, not an undiscovered one.
+spec-author act and may use evidence the implementer may not see. Redrawing `tile_13` is an
+implementer act, and must be done from this document alone. Until that happens `tile_13`
+still depicts a notice board, which is a known and recorded mismatch, not an undiscovered
+one.
 
 Art `14` needs no redraw: "a tall tapering form on a wider base" already reads as a rocket
 on a pad. Only its name was wrong.
 
-### Creatures
+### Monster sprites
 
-Schematic figures. Distinguish them by silhouette class, not by detail.
+These eleven are the overworld enemy set, **not** non-player characters — the old names
+(person, swordsman, archer) were shape guesses. See § 7a for why. Six have no known name; do
+not invent one.
+
+They must read as creatures that stand up and fill their cell: one figure, one dominant
+colour, upright, substantial — not a small icon floating in the middle, and not scattered
+pieces.
 
 | art | byte | name | must read as |
 | --- | --- | --- | --- |
-| `0C` | `0x30` | person | an upright humanoid figure, arms at sides |
-| `0D` | `0x34` | person, arms raised | same family, arms out and up |
-| `0E` | `0x38` | staff bearer | a humanoid beside a thin vertical staff |
-| `0F` | `0x3C` | group | two figures close together |
-| `10` | `0x40` | robed figure | a humanoid in a wide cloak, triangular silhouette |
-| `11` | `0x44` | horse | a four-legged animal, head at one side |
-| `18` | `0x60` | person, arms out | upright figure, arms angled down and out |
-| `19` | `0x64` | dancer | figure with arms forming a V above the head |
-| `1A` | `0x68` | small person | a noticeably smaller humanoid |
+| `0C` | `0x30` | monster (unnamed) | an upright creature, arms at sides, horned or crested head |
+| `0D` | `0x34` | monster (unnamed) | same family, arms out and up |
+| `0E` | `0x38` | monster (unnamed) | a creature beside a thin vertical staff |
+| `0F` | `0x3C` | monster (unnamed) | a broad, heavy creature |
+| `10` | `0x40` | monster (unnamed) | a cloaked figure, triangular silhouette |
+| `18` | `0x60` | monster (unnamed) | upright creature, arms angled down and out |
+| `1A` | `0x68` | monster (unnamed) | a slight, tall creature |
+| `3C` | `0xF0` | monster (unnamed) | upright creature, broad stance |
+| `3D` | `0xF4` | monster (unnamed) | creature holding a blade up to one side |
+| `3E` | `0xF8` | monster (unnamed) | creature beside a tall vertical bar |
+| `3F` | `0xFC` | monster (unnamed) | creature holding a curved bow |
+
+### Other figures
+
+| art | byte | name | must read as |
+| --- | --- | --- | --- |
+| `11` | `0x44` | horse | a four-legged animal, low and wide, head at one side |
+| `19` | `0x64` | figure, arms up | figure with arms forming a V above the head |
 | `1B` | `0x6C` | crouching figure | humanoid with arms drawn inward |
-| `3C` | `0xF0` | figure, arms out | upright figure, broad stance |
-| `3D` | `0xF4` | swordsman | figure holding a blade up to one side |
-| `3E` | `0xF8` | figure with standard | humanoid beside a tall vertical bar |
-| `3F` | `0xFC` | archer | figure holding a curved bow |
 
 ### Letters A–Z
 
@@ -275,8 +293,9 @@ which is a fact about the original data and not something to fill in here.
 Requirements: a single bold capital glyph centred in the cell, drawn from **any
 public-domain or self-drawn bitmap letterform** — do not trace a reference. These
 tiles are used as shop fronts and notices in towns, so they must be legible at
-16×16 above all else. A horizontal rule above and below the glyph is optional
-decoration, not a requirement.
+16×16 above all else. A horizontal rule above and below the glyph is **required**: every letter tile is a sign
+board, not a floating glyph. See § 7a — an earlier revision of this document called the rules
+optional and every letter tile came out wrong as a result.
 
 Note that in some sectors these same indices are used as structural fill rather
 than as letters. That is the map's business; draw them as letters.
@@ -291,6 +310,77 @@ than as letters. That is the map's business; draw them as letters.
 | `1F` | `0x7C` | edge strip | white at one edge, dark elsewhere |
 | `3A` | `0xE8` | dark fill A | near-black with a small light motif |
 | `3B` | `0xEC` | dark fill B | near-black, motif clearly different from `3A` |
+
+## 7a. Amendment record — 2026-10-22 tile review
+
+The owner reviewed all 64 entries against the extracted originals and re-identified several.
+This section states **what each tile must communicate**. It deliberately does not state
+measured structure — no coordinates, no densities, no periods — because those are traces and
+belong in `docs/tile-art-evidence.md`, which § 2 forbids to you.
+
+A machine gate (`tools/tile_rules.py`, run by `make test`) checks the finished art against
+these requirements. **Do not read the gate.** It is the answer key: its thresholds were fitted
+to the originals, so satisfying it by reading it would tell us nothing.
+
+### Re-identifications — these tiles are not what the old names said
+
+| art | was | is | what it must communicate |
+| --- | --- | --- | --- |
+| `06` | monument | **emblem** | one symmetric mark: a square frame with four equal corner loops and a hole at the centre, inset from the edges. Marks a settlement. |
+| `0A` | signpost | **signpost** (moved here from `13`) | a post carrying ONE heavy crossbar high up, on a lighter base. A second bar near the foot turns it into a different kind of cross. |
+| `0B` | arched doorway | **sea monster in water** | a creature rising from sparse water: body low on the left, neck and head with an open mouth on the right. The water is the quiet part; the creature is the subject. |
+| `30` | wall | **moongate** | an arch open at the bottom — solid top, side borders, no bottom line, interior stripes. It is a teleporter, so it must read as an entrance, not as masonry. |
+| `0C` `0D` `0E` `0F` `10` `18` `1A` `3C` `3D` `3E` `3F` | people | **monster sprites** | see the note below. |
+
+**The eleven monster sprites.** The old spec named these person, robed figure, swordsman,
+archer and so on. They are the overworld enemy set, not non-player characters — one of them
+is the only monster in the game that drops items. So the brief changes: they must read as
+**creatures that stand up and fill their cell**, not as small icons floating in it, and not as
+scattered pieces. One figure, one dominant colour, upright, substantial. Six of the eleven
+have no known name; do not invent one, draw the silhouette class and leave the identity open.
+
+### Requirements the old spec left too loose
+
+* **`00` water** — the dashes must be thin and regular enough that a field of these tiles
+  reads as one continuous surface in motion. Chunky or irregular specks read as static per
+  tile, which is the current substitute's failure.
+* **`01` shallow water** — horizontal wave lines, with **white foam dominant over cyan**. The
+  previous substitute inverted this ratio and buried the foam. Sparser than `00`, not busier.
+* **`03` forest** — a few large crowns, not many small marks. Scattered confetti is the
+  failure mode.
+* **`04` mountain** — two families of crossing diagonal lines, reading as zigzag peaks or
+  stacked diamonds. Fine strokes, all-over coverage. Solid blobs or a single diagonal family
+  do not read as rock.
+* **`05` ring formation** — five rings of equal size arranged like the five on a die, slightly
+  crooked. Every one must actually be a ring: a stray single pixel among them is a defect.
+* **`07` tower** — a **solid** silhouette, two prongs on top, flaring to the base. Outlining
+  the tower and filling it with windows is a misreading of "upright tower".
+* **`08` gate** — a frame with blocky tabs at all four corners and an opening at the bottom
+  centre. A thick slab on two posts is not a gate.
+* **`09` mountain pass** — the mountain texture **plus an arch**. The opening is the entire
+  point; sealing the bottom turns a pass into a wall.
+* **`1D` solid black** — the original carries no ink at all. Since black is the backdrop the
+  engine paints and must never be emitted, **the correct substitute draws nothing**. That is
+  intentional; do not "fix" it by adding texture.
+* **`1E` solid white** — a completely filled white cell, uniform.
+* **`17` checker border** — must repeat exactly on both axes so it tiles seamlessly.
+
+### The letter tiles: the rules are now mandatory
+
+The old text said *"A horizontal rule above and below the glyph is optional decoration, not a
+requirement."* That option was taken and every letter tile came out wrong as a result.
+
+**Changed:** every letter tile is a **sign board** — a full-width rule along the top edge, a
+clear gutter, the glyph, a clear gutter, and a full-width rule along the bottom edge. The
+rules are required, not decorative. Without them a letter reads as a floating glyph rather
+than a shop front, which is what these tiles are used for.
+
+### What is still contested
+
+`15` (dungeon mouth or sign), `16` (marker or sword) and `1C` (marsh or something else) have
+competing readings and no settled answer. Their rows keep their current names; the gate checks
+only their structure. Do not treat an unresolved name as permission to redraw freely — draw
+what the row says and leave the question open.
 
 ## 8. Acceptance criteria
 

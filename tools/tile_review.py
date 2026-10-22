@@ -39,7 +39,8 @@ import os
 import re
 import sys
 
-SPEC_SECTIONS = ("Ground", "Structures", "Creatures", "Blocks and borders")
+SPEC_SECTIONS = ("Ground", "Structures", "Monster sprites", "Other figures",
+                 "Blocks and borders")
 
 
 def load_tiles(tiledir):
@@ -52,10 +53,19 @@ def load_tiles(tiledir):
     return out
 
 
-def load_cleanroom(dirpath):
+def load_cleanroom(dirpath, palette="engine"):
     """Cleanroom substitute SVGs. The committed files carry a viewBox but no
     width/height, which is correct for inline use but not as a CSS background, so
-    the attributes are injected here at embed time."""
+    the attributes are injected here at embed time.
+
+    palette="engine" remaps the SVG's bright spec hexes onto the RGB the engine
+    actually displays (core/frame.c), which is also what tools/tile_atlas.py used for
+    the originals. Without this the cleanroom pane looks brighter than the original
+    pane for a purely cosmetic reason, and that difference leaks into judgements about
+    shape. tiles2h.py packs colour indices, not RGB, so this is preview only and never
+    touches the bytes the engine draws.
+    """
+    REMAP = {"#55FFFF": "#00AAAA", "#FF55FF": "#AA00AA"}
     out = {}
     for n in range(64):
         p = os.path.join(dirpath, "tile_%02X.svg" % n)
@@ -64,6 +74,9 @@ def load_cleanroom(dirpath):
         svg = open(p).read()
         if "width=" not in svg.split(">")[0]:
             svg = svg.replace("<svg ", '<svg width="16" height="16" ', 1)
+        if palette == "engine":
+            for a, b in REMAP.items():
+                svg = svg.replace(a, b)
         out[n] = "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
     return out
 
@@ -169,6 +182,7 @@ button:hover{border-color:#8cf}
   <label>repeat <select id="rep"><option value="2">2x2</option><option value="3">3x3</option>
     <option value="1">1x1</option></select></label>
   <label>zoom <input id="zoom" type="number" min="2" max="10" value="4" style="width:52px"></label>
+  <span id="palnote" style="color:#777">preview normalised to the engine palette</span>
   <button id="exp">export verdicts</button>
   <button id="clr">clear</button>
   <span id="count"></span>
@@ -194,8 +208,12 @@ function card(a){
   const c=document.createElement('div');
   c.className='card'+(v.ver?' '+v.ver:'');
   const h=document.createElement('div');h.className='head';
+  // The map byte is art<<2 (art = map_byte>>2). tile-art.tsv's 'hex' column duplicates
+  // the art index rather than carrying the byte, so it must not be used as one -- doing
+  // so labelled art 03 as byte 03 when the tile the engine actually reads is 0x0C.
+  const byte='0x'+(((a<<2)&0xFF).toString(16).toUpperCase().padStart(2,'0'));
   h.innerHTML='<b>art '+a.toString(16).toUpperCase().padStart(2,'0')+'</b>'
-    +'<span class="byte">byte '+(t.byte||s.byte||'?')+'</span>'
+    +'<span class="byte">byte '+byte+'</span>'
     +'<span class="kind">'+(t.kind||clsOf(a))+'</span>';
   c.appendChild(h);
   const arts=document.createElement('div');arts.className='arts';
@@ -271,6 +289,9 @@ def main():
     ap.add_argument('--tiles', default='tmp/tiles', help='extracted original art (PNG)')
     ap.add_argument('--cleanroom', default='engine/assets/tiles/cleanroom/tiles')
     ap.add_argument('--art', default='disasm/tile-art.tsv')
+    ap.add_argument('--palette', default='engine', choices=('engine', 'spec'),
+                    help='engine = normalise the cleanroom preview onto the RGB the '
+                         'engine actually displays (default; matches the originals)')
     ap.add_argument('--spec', default='docs/tile-art-spec.md')
     ap.add_argument('-o', '--out', required=True)
     a = ap.parse_args()
@@ -280,7 +301,7 @@ def main():
         sys.exit('refusing to write into original/ or references/')
 
     orig = load_tiles(a.tiles)
-    clean = load_cleanroom(a.cleanroom)
+    clean = load_cleanroom(a.cleanroom, a.palette)
     tsv = load_tsv(a.art)
     spec = load_spec(a.spec)
 

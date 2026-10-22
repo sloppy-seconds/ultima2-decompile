@@ -1,5 +1,12 @@
 # Provenance note — substitute tile art
 
+> **This file is NOT an implementer input.** It is the legal record of how the set was made,
+> and it discusses the originals and cites paths that § 2 of `docs/tile-art-spec.md` forbids
+> to whoever draws the art. If you have been asked to draw or redraw tiles, do not read this
+> file: work from `docs/tile-art-spec.md` alone. Reading this one does not disqualify you from
+> the protocol by accident — it disqualifies you because it tells you what the originals were
+> described as, which is the thing the wall exists to keep out.
+
 **Date:** 2026-10-21
 
 ## Roles

@@ -86,6 +86,27 @@ else
     sed 's/^/        /' "$WORK/art.out"
 fi
 
+# --- the tile rules gate -------------------------------------------------------
+# Structural conformance of the substitute art to the requirements the owner stated in
+# docs/tile-art-spec.md § 7a: a ring must be hollow, a pass must be open at the bottom, a
+# signpost must have one crossbar rather than two, a letter tile must carry its rules.
+# Geometry the eye judges badly at 16x16 -- detached fragments that read as confetti, seams
+# that break a repeating pattern -- is exactly what these checks are good at.
+#
+# This gate is NOT shown to whoever draws the art. Its bands were fitted to the originals, so
+# reading it would be reading the answer key; see § 2 of the spec and PROVENANCE.md.
+# Tiles awaiting a clean redraw are listed in PENDING_REDRAW and reported as visible debt
+# rather than failure, so the suite is green now and goes red if a redraw breaks a rule that
+# tile already passes. The pending list is hardcoded on purpose: deriving it from the art
+# would let every failing tile classify itself as pending and make the gate vacuous.
+if python3 ../tools/tile_rules.py --src "$ART_SRC" > "$WORK/rules.out" 2>&1; then
+    ok "$(head -1 "$WORK/rules.out")"
+    grep 'NOTE' "$WORK/rules.out" | sed 's/^/        /' || true
+else
+    bad "tile rules gate failed:"
+    sed 's/^/        /' "$WORK/rules.out"
+fi
+
 # --- the viewport mapping -------------------------------------------------
 # The viewport is where a map byte becomes something drawable, so the whole CP4
 # render contract rests on these rules: geometry, the index formula, the

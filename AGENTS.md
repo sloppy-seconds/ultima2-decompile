@@ -157,6 +157,15 @@ Verification, in two independent layers:
 * **A wrong name is worse than no name.** If bytes contradict an existing name,
   add a `# NAME DISPUTED:` line in the same commit and propose the rename;
   do not silently rename on your own inference.
+
+* **The cleanroom wall separates the implementer from the originals, and an answer key is a
+  breach just like a screenshot is.** `docs/tile-art-spec.md` is the only document someone
+  drawing substitute art may read. It may carry **intent** (what a tile must communicate) but
+  never a **trace** (pixel coordinates, measured densities, periods, component sizes) — a trace
+  lets the original be reproduced without looking at it. Evidence and the bands fitted to it
+  live in `docs/tile-art-evidence.md` and `tools/tile_rules.py`, both listed as forbidden in the
+  spec's § 2. The gate is run **against** finished art and never handed to whoever makes it. If
+  you are doing a redraw, you must not read either file.
 * **`docs/needs-gameplay.md` is the capture worklist, and every blocked-on-play
   question belongs on it with a who-can-do-it verdict.** When a finding is recorded
   as inferred-but-never-observed, or a question is closed as needing a live session,
@@ -202,8 +211,8 @@ Verification, in two independent layers:
 | --- | --- | --- |
 | `asm/` | the reconstruction: one file per function (`<ADDR>_<name>.asm`), headers carry evidence, confidence and provenance | tracked |
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
-| `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. | tracked |
-| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `vga_screen.py`, `map_render.py`, `map_viewer.py`, `tile_review.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
+| `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. The implementer's only legal input is `docs/tile-art-spec.md`; the evidence and the gate's bands live in `docs/tile-art-evidence.md` and `tools/tile_rules.py` and are forbidden to them. | tracked |
+| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `vga_screen.py`, `map_render.py`, `map_viewer.py`, `tile_review.py`, `tile_rules.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
 | `docs/` | phase plans, state, implementation logs, live-capture findings, `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
 | `captures/` | runtime captures and screenshots | **gitignored** |
