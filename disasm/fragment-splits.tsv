@@ -33,8 +33,6 @@ start	end	n_fragments	rets	entry_call	grade
 23BE	23CB	2	1	no	probable
 23CC	23D8	2	1	no	probable
 23D9	23E5	2	1	no	probable
-2402	241E	4	1	no	probable
-241F	2422	2	1	no	probable
 2701	2707	2	1	no	probable
 2744	277A	3	1	no	probable
 310B	330B	2	1	no	probable

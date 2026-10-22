@@ -508,8 +508,19 @@ behaviour now agree.
 `DS:25`, and `asm/10AA`/`asm/10BF` are the matching writers into those arrays. Those are
 **per-entity arrays, not direction vectors** — so `DS:19/1A` is being loaded from
 somewhere that has nothing to do with a keystroke, which is consistent with it reading
-`(1,1)` in every sample and is *not* consistent with it being the talk direction. Two
-unexamined writers remain (`asm/0B0F`, `asm/152E`).
+`(1,1)` in every sample and is *not* consistent with it being the talk direction.
+`asm/0B0F` negates `DS:19/1A` in place (`stc;cmc;sbb` from zero) — a sign flip some caller
+could use, but not a direction source. `asm/152E` sets them to `player − [DI+0x137]/
+[DI+0x157]`, a vector from a creature, also not a keystroke. **All five static writers are
+now accounted for and none of them is the direction handler.**
+
+**And the merged routine says this is not a ray at all.** The cursor is exactly one delta
+step from the player and the scan is an equality test against that single cell, so
+TRANSACT probes **one cell**, not a line. The § 5 note that "`T,Up` reached the Merchant
+two cells north" is therefore not explained by this routine and needs re-checking — either
+the delta was `(0,-2)` at that moment, or something else did the reaching. Separately,
+`dec di ; jne` exits on reaching zero, so **slot 0 is never examined**, and `monx31` slot 0
+is a populated Guard at (29,30). Real gap or intentional is not established.
 
 **So do not claim the ray is aimed by the direction key.** What is measured: the cursor is
 `player + DS:19/1A`, the scan looks for a creature on that cell, and `DS:19/1A` has never

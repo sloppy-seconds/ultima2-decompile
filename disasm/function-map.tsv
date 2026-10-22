@@ -500,13 +500,7 @@ start	end	len	evidence	name_hint
 23D4	23D8	0005	seed+reko	
 23D9	23E0	0008	seed+reko	
 23E1	23E5	0005	seed+reko	
-23E6	2401	001C	seed+call+reko	
-2402	2409	0008	seed+reko	
-240A	2413	000A	seed+reko	
-2414	241D	000A	seed+reko	
-241E	241E	0001	seed+reko	
-241F	2421	0003	seed+reko	
-2422	2422	0001	seed+reko	
+23E6	2422	003D	seed+call+reko	find_creature_at_cursor
 2423	242C	000A	seed+call+reko	
 242D	2433	0007	seed+reko	
 2434	243A	0007	seed+reko	
