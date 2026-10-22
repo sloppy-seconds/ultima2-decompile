@@ -135,7 +135,7 @@ seeded with `--player`, so character creation is not an obstacle either.
 
 | id | item | who | confidence | blocks |
 | --- | --- | --- | --- | --- |
-| G1 | art index: `(map_byte>>1)&0xFE` vs `map_byte>>2` | agent | **high** | renderer correctness |
+| G1 | ~~art index: `(map_byte>>1)&0xFE` vs `map_byte>>2`~~ **CLOSED 2026-10-23 by `captures/spice86/art-index/`.** The transform was never the live question -- `view.h`'s two-step composes to `>>2` for all 256 byte values. The live question was **which field**, and the answer is **the sector grid cell, not the monster `type`**: on the only disagreeing sample in the corpus (sector 00 slot 6, type `0x34`, cell `0x38`) the drawn tile matches art `0x0E` = `cell>>2` at **256/256 pixels** and art `0x0D` = `type>>2` at 171/256. Geometry independently confirmed on 18 further slots at 256/256. Full write-up: `docs/art-index.md` | agent | **done** | renderer correctness |
 | G2 | does a blocked step cost 19 food | agent | **high** | turn economy |
 | G3 | attribute the indirect writers of `DS:2CB`/`DS:2DE` | agent | **med-high** | C5, F3 |
 | G4 | what sets mode byte `0x2e`; step onto a force field | agent | **medium** | C5, T8 |
@@ -320,7 +320,16 @@ end to end; no display, no keystrokes through X.
 **Blocks:** nothing for the HP column, which is measured and live for ordinary
 spawns. The area-override rule is what CP5 combat fidelity needs.
 
-### G18 — which record field drives the art `[ ]`
+### G18 — which record field drives the art `[x]`
+
+> **CLOSED 2026-10-23 by `captures/spice86/art-index/`.** The answer is **neither record
+> field**: the renderer reads the **sector grid cell** at `DS:1800[y*64+x]`, and applies
+> `>>2` to it. Proven on the only type/cell disagreement in the corpus (sector 00 slot 6,
+> type `0x34`, cell `0x38`) where the drawn tile matches art `0x0E` = `cell>>2` at
+> **256/256 pixels** and art `0x0D` = `type>>2` at 171/256, with the viewport geometry
+> independently confirmed on 18 further slots. Full write-up and the one-sample caveat:
+> `docs/art-index.md`. The text below is kept as the record of how the claim got wrong
+> twice before it got right once.
 **What is already settled:** the record is three parallel byte arrays, stride 1,
 32 slots — `x = DS:0x137+i`, `y = DS:0x157+i`, `sprite = DS:0x1B7+i`,
 `active = DS:0x197+i` — measured, and the earlier stride-`0x20` guess is recorded as
