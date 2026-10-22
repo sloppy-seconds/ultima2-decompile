@@ -416,22 +416,9 @@ start	end	len	evidence	name_hint
 19BA	19D3	001A	seed+reko	
 19D4	19D6	0003	seed+reko	
 19D7	2027	0651	seed+reko	
-2028	202B	0004	seed+call+reko	
-202C	2030	0005	seed+reko	
-2031	2034	0004	seed+reko	
-2035	2038	0004	seed+reko	
-2039	2047	000F	seed+reko	
-2048	204C	0005	seed+reko	
-204D	2051	0005	seed+reko	
-2052	206F	001E	seed+call+reko	
-2070	20A3	0034	seed+reko	
-20A4	20A6	0003	seed+reko	
-20A7	20AA	0004	seed+reko	
-20AB	20CE	0024	seed+call+reko	
-20CF	20D6	0008	seed+reko	
-20D7	20EA	0014	seed+reko	
-20EB	2120	0036	seed+reko	
-2121	2121	0001	seed+reko	
+2028	2051	002A	seed+call+reko	read_decimal_digit
+2052	20AA	0059	seed+call+reko	gold_spend_price
+20AB	2121	0077	seed+call+reko	bcd_price_from_stats
 2122	2129	0008	seed+reko	
 212A	212D	0004	seed+reko	
 212E	214C	001F	seed+reko	
