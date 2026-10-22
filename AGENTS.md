@@ -155,6 +155,15 @@ Verification, in two independent layers:
 * **A wrong name is worse than no name.** If bytes contradict an existing name,
   add a `# NAME DISPUTED:` line in the same commit and propose the rename;
   do not silently rename on your own inference.
+* **`docs/needs-gameplay.md` is the capture worklist, and every blocked-on-play
+  question belongs on it with a who-can-do-it verdict.** When a finding is recorded
+  as inferred-but-never-observed, or a question is closed as needing a live session,
+  the same commit adds or ticks an item there. Two rules come with it. First,
+  **"needs gameplay" is not "needs the owner"** — say which, because the difference is
+  a scripted afternoon against waiting on a diary appointment, and the project had
+  conflated them until a "owner must walk" label survived on items an agent could
+  drive. Second, **an item is only closed by a named capture directory**, never by a
+  belief about how the game works.
 * **`docs/harness-portability.md` is a live design report, and updating it is a
   same-commit obligation.** When a finding would change how a *generic* DOS
   decompilation harness should be built — an ISA idiom that broke a detector, a tool
@@ -193,7 +202,7 @@ Verification, in two independent layers:
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
 | `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. | tracked |
 | `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
-| `docs/` | phase plans, state, implementation logs, live-capture findings, and `harness-portability.md` (the generic-harness design report; method only, never conclusions) | tracked |
+| `docs/` | phase plans, state, implementation logs, live-capture findings, `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
 | `captures/` | runtime captures and screenshots | **gitignored** |
 | `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |

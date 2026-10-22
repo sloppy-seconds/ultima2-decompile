@@ -336,6 +336,14 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Backlog
 
+- [ ] **`docs/needs-gameplay.md` is the single tick-list for everything blocked on
+      gameplay** (opened 2026-10-22, thirteen items). It carries a who-can-do-it and
+      confidence verdict per item, and the standing hazards list that every capture
+      session must read first. Several items previously labelled "owner must walk"
+      turned out to be agent-drivable; **G0 (harden the probe so a dropped keystroke
+      is never read as terrain) blocks the rejection-based items and should land
+      first.** The five-question passability capture below is items G1–G5.
+
 - [ ] **Queued for the next unattended batch — see `docs/overnight-harness.md`.**
       Build the generic binary-overlap probe (`H1`), inventory the game constants
       blocking the profile refactor (`H2`), and feed the result back into
