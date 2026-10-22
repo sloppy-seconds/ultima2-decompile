@@ -11,15 +11,32 @@
 #             clc; rcr $1,%al; adc $0x1,%al   -> [DI+0x197]  type
 #             add %al,%al; adc 0x1B7(%di),%al; add %al,%al x3; or $0x10,%al
 #                                          -> [DI+0x177]  HP
-#           So dungeon HP is a function of the drawn sprite byte, which is the shape
-#           the third-party dungeon ranges imply (docs/bestiary.md § 6: min = 17+32k,
-#           max = 153+32*(k//2), 7/7 on both). The `or $0x10` sets bit 4 on every
-#           dungeon monster's HP; whether that is a floor or a flag is not settled.
+#           VALIDATED 2026-10-23 against 54/54 monster slots in the two dungeon
+#           captures on disk (tools/dungeon_spawn_check.py). The formula is
+#             [DI+0x1B7] = slot >> 1                -- a slot number, NOT a creature kind
+#             type       = (rand & 7) + 1, 7 rejected, accepted iff 2*(type-1) <= slot>>1
+#             HP         = ((2*type + (slot>>1)) * 8) | 0x10
+#           So the `or $0x10` is part of the value, not a flag: the envelope it produces
+#           reproduces the third-party dungeon HP table exactly, one lower, on both the
+#           min ladder (16,48,...,208 vs 17,49,...,209) and the paired max ladder
+#           (152,152,184,184,216,216,248 vs 153,153,185,185,217,217,249).
+#           The guard makes the SLOT the difficulty ladder: type <= (slot>>1)/2 + 1, so
+#           slot 4 admits types 1-2 and slot 31 admits all seven. Detail and grades in
+#           docs/monster-spawn.md § 7.
+#           NOTE the earlier header line here said [DI+0x1B7] was a sprite and then a
+#           kind index; in a dungeon it is neither, it is slot>>1. The carry out of the
+#           `adc 0x1B7(%di),%al` was 0 in all 54 observations, so its contribution is
+#           untested rather than proven absent.
+#           The stamp store at L_00171b reads `mov 0x8,%bx` and indexes (%bx,%si), but %si
+#           is set by L_00164c, and this file's declared range ends before whatever
+#           computes the cell address -- the (x,y)->cell transform is NOT in this span.
 # IMPORTANT: this is NOT the townsfolk path. Townsfolk have no HP assignment anywhere
 #           in the monster-kind dispatch — see docs/bestiary.md § 6.
-# provenance: static, 2026-10-22
-# confidence: medium (caller and coordinate range are bytes; the HP formula's meaning
-#           is read, not yet validated against a live dungeon monster)
+# provenance: static, 2026-10-22; formula validated live 2026-10-23 against
+#           captures/spice86/dungeon-35-live and captures/spice86/airport32 by
+#           tools/dungeon_spawn_check.py (54/54 slots)
+# confidence: high for the formula and for [DI+0x1B7]=slot>>1 (bytes + 54/54 live);
+#           low for the cell-address computation, which is outside this span
 # label: kept as sub_147f on purpose — labels are body (CP0)
 # func 147F..152D  len 00AF B  evidence: call+reko
 # calls: L_00164c, L_001694, L_005417
