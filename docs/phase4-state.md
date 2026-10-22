@@ -47,14 +47,15 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   any `STR` line inside a code span in `disasm/redecoded/` must be re-checked
   before being cited. Next step is one breakpoint capture at runtime `0x2423`.
 
-- **Entry point is `docs/handoff-2026-10-22.md`.** It carries the triage of both
-  2026-10-21 handoffs, now archived under `docs/archive/`. The CP4b T1 finding and part
-  of T2 were **retracted** the same day — see
+- **Entry point is `docs/handoff-2026-10-23.md`.** It carries today's closures (G1, G8,
+  G18, G20, the dungeon encoding, the price operand) and the triage of yesterday's open
+  list. The 2026-10-22 handoff it supersedes is archived under `docs/archive/`. The CP4b
+  T1 finding and part of T2 were **retracted** on 2026-10-21 — see
   `docs/phase4-implementation.md § CP4b → RETRACTION` and
   `docs/spice86-live-findings.md`.
 
 - **CP4 is mid-flight and everything is committed. To take over, read
-  `docs/handoff-2026-10-22.md` for current state, then
+  `docs/handoff-2026-10-23.md` for current state, then
   `docs/phase4-kickoff-cp4b.md` for the CP4 work order itself.** The headline it must not
   miss:
   the original has **two display paths** — tiles for the map and banners, and

@@ -231,7 +231,7 @@ can satisfy it from the spec alone.
 * **A blind vision model was used to generate hypotheses** during the review. Its output is
   third-party description of the originals and is treated as `recalled` grade only; it stated
   high confidence on all 24 tiles including the wrong ones, so its confidence field carried no
-  signal. See `docs/handoff-2026-10-22.md` and the deltas notes.
+  signal. See `docs/archive/handoff-2026-10-22.md` and the deltas notes.
 
 ---
 

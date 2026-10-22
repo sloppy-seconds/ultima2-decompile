@@ -4,7 +4,7 @@ Autonomous queue for a fresh agent running unattended. Every task is chosen beca
 needs **no owner interaction**: all inputs already exist inside this project, or are
 reachable by a headless emulator run that needs no display and no keyboard through X.
 
-**Start here:** read `AGENTS.md` (hard law), then `docs/handoff-2026-10-22.md` (the
+**Start here:** read `AGENTS.md` (hard law), then `docs/handoff-2026-10-23.md` (the
 entry point, including the day's addendum), then this file.
 
 Standing context: `docs/phase4-state.md` (checkpoint table, CP5 tickets, gate log),
@@ -192,7 +192,7 @@ into error. A harness that shows the owner makes the wrong story unreadable.
 
 ### C2 — Roll the handoff forward
 
-Create `docs/handoff-2026-10-23.md`, move `handoff-2026-10-22.md` to `docs/archive/`,
+Create `docs/handoff-<date>.md`, move `handoff-2026-10-23.md` to `docs/archive/`,
 and update the pointer in `AGENTS.md`. Carry forward: the four open threads, the standing
 traps, and the fact that CP5 now implements C1/C2/C4/C5/C6 with all gates green.
 
@@ -233,17 +233,28 @@ successful run; one that produced confident prose with no citations is not.
 
 | task | outcome | evidence / reason |
 | --- | --- | --- |
-| A1 | | |
-| A2 | | |
-| A3 | | |
-| A4 | | |
-| A5 | | |
-| B1 | | |
-| B2 | | |
-| B3 | | |
-| B4 | | |
-| C1 | | |
-| C2 | | |
-| C3 | | |
+| A1 | **DONE** | `docs/place-names.md` § 2c. The 15 sign-bearing sectors are exactly the 15 with a `tlkx` — the sets are equal, all ones-digit 1/2/3, none in 0/4/5. Nine sectors corroborate internally (speaker ↔ sign). `tools/tlkx_decode.py` added as the reference decode |
+| A2 | **DONE — negative, with a control** | No vertical signage in any of 33 sectors. Every column run is two stacked horizontal signs or the lone-`I` graphic (`I` is 55.6% lone, 4× any other non-A/Y letter). `tools/map_signs.py --selftest` plants a real downward sign and was perturbed two ways to confirm it goes red. First pass's real misses were two-line signs and 1556 lines of A/Y noise |
+| A3 | **DONE, with a named gap** | `DS:27/28` is the price operand — printed by `asm/51A5`/`asm/53B5` as four BCD digits and charged by `asm/2052` from the same two bytes. Corrects § 3. Tavern `0005` and clue-seller `×100`-as-byte-placement closed statically; who loads `0200` for the vendor goes cold at `asm/20AB` and is registered as **G23**. Also caught and corrected my own branch-polarity error in the same commit |
+| A4 | **DONE** | `tools/dungeon_spawn_check.py`: `HP = ((2*type + slot>>1)*8) | 0x10`, **94/94** slots over four captures. `[DI+0x1B7]` is `slot>>1`, not a kind. The guard makes the slot the difficulty ladder. The formula reproduces the fan table exactly, uniformly −1, on both ladders and the pairing. Stamp population matches the monster histogram; the (x,y)→cell transform is **not** established and says so |
+| A5 | **DONE — proposal only, nothing split** | `docs/g22-split-proposal.md`. The premise was wrong: `2028..2130` is three shared helpers (7/5/3 inbound callers, and the only `ret`s in the span are at `2051`/`20AA`/`2121`), not shop code. Recommends merging 15 fragments into 3 routines and explicitly advises *against* subdividing `19D7..2027` on fall-through grounds |
+| B1 | **DONE — G20 closed** | `captures/spice86/tower-34`, `tower-34-open`. Sector 34 is dungeon-shaped: aligned map bytes, `IT'S DARK!`, torch + light counter, arrows = TURN LEFT/RIGHT, dungeon monster encoding (40/40 formula). Split is `{4,5}` vs `{0,1,2,3}`. Two non-carries: `A` is ATTACK, and the viewport renders empty |
+| B2 | **DONE — G1/G18 closed** | `captures/spice86/art-index/`. The renderer reads the **grid cell**, not the monster `type`: on the only disagreeing sample the drawn tile matches `cell>>2` at 256/256 and `type>>2` at 171/256. Geometry confirmed on 18 further slots at 256/256. `docs/art-index.md` |
+| B3 | **DONE — G8 closed** | `captures/spice86/armour-buy/` — first shop interior ever reached. `DS:97` went `00→01` buying CLOTH (menu item 1), gold −12 = the quoted `0012`. **1-based**: the six types are `DS:97..9C`. Shop closes after one purchase, so a second type was not observed; `maxout` leaves the table empty while `DS:62` says POWER is worn. Selector question closed too: an NPC standing at the sign (`tools/shop_access.py`, 50 pairings) |
+| B4 | **DONE** | `tools/monx_layout_scan.py`. **Six** arrays, not five — `monx[160:191] → DS:0x1D7`. `type`/`HP` hold everywhere testable; **`kind` mismatches in 3 of 4 sectors**. `monxNN` non-empty exactly where `tlkxNN` exists plus sector 00. Tail: `[256]=0x1A` and `[257:384]==[129:256]` in every file checked |
+| C1 | **DONE** | `tools/strings_atlas.py`. 336 strings, every offset verified byte-exact against the exe; selftest asserts the cleric catalogue → `asm/1869_cleric_shrine` and the wizard catalogue → `asm/19D7_magic_shop_menu` and that they differ. The control failed for real twice during development, which is what makes it worth keeping |
+| C2 | **DONE** | `docs/handoff-2026-10-23.md`; 2026-10-22 archived; pointers updated in `AGENTS.md`, `phase4-state.md` and the four documents that cited it |
+| C3 | **DONE** | Seven entries added to `docs/harness-portability.md` § 6, checked clean of addresses, data layouts, record formats and symbol names from this binary |
 
-Gate status at end of run: `make -C engine test` ______ · `assemble_clean.sh` ______
+Gate status at end of run: `make -C engine test` **PASS (CP0–CP4, CP5 spec, tiles art)** · `assemble_clean.sh` **CLEAN REBUILD BYTE-MATCH: 37344 bytes identical**
+
+### Notes for whoever picks this up
+
+* **Four tickets closed** (G1, G8, G18, G20) and **one opened** (G23). `docs/needs-gameplay.md`
+  is updated in place; nothing was closed without naming a capture directory.
+* **`docs/g22-split-proposal.md` needs an owner ruling** and it also *retracts* advice that
+  `commerce.md` § 3 gave, so it should be read before anyone acts on the older text.
+* **Three of today's findings corrected text written earlier the same day** (the price
+  operand, the branch polarity, the array count). Each correction names what it replaced
+  rather than editing silently — see the handoff's § Corrections list.
+* **Nothing was pushed.** `git push` needs `GH_TOKEN` sourced from `.env`.

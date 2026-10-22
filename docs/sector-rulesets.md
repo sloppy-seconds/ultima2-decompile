@@ -126,5 +126,5 @@ finding before it was caught. Any filter over this record must be written per ru
 | --- | --- |
 | Visit an `X4` tower sector — the only unvisited ruleset | **done 2026-10-23** — see § 1b. It is dungeon-shaped; `A`-is-ATTACK and the empty viewport are the two open differences |
 | Map the dungeon encoding: what `0x01`–`0x06` mean, where its objects are drawn from | G18 |
-| HP area-override rule (sector 00 vs 03) | `docs/handoff-2026-10-22.md` Next actions 4 |
+| HP area-override rule (sector 00 vs 03) | `docs/archive/handoff-2026-10-22.md` Next actions 4 |
 | Townsfolk HP assignment — now narrowed: they occupy ordinary slots, so look on a path shared with the arms | G17 |

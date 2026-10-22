@@ -161,7 +161,7 @@ seeded with `--player`, so character creation is not an obstacle either.
 
 G14, G15 and G16 were carried in from the 2026-10-21 handoffs on 2026-10-22, where they
 were open but recorded nowhere but a document being archived. See
-`docs/handoff-2026-10-22.md` § Triage.
+`docs/archive/handoff-2026-10-22.md` § Triage.
 
 G1–G5 are `docs/passability-findings.md § Open` questions 1–5; the technical spec
 lives there. What follows is only the driving plan and the honest verdict.

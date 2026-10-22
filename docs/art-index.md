@@ -14,7 +14,7 @@ Grades per `AGENTS.md` § 5. Capture: `captures/spice86/art-index/`, sector 00, 
 `u2_view_art()` halves it — composes to `((b>>1)&0xFE)>>1`, which equals `b >> 2` for
 every one of the 256 byte values. Checked exhaustively. The ticket that said otherwise
 was quoting line 54 without reading 78–94, and it is recorded as misframed in
-`docs/handoff-2026-10-22.md` triage row L2. **Nothing here reopens that.**
+`docs/archive/handoff-2026-10-22.md` triage row L2. **Nothing here reopens that.**
 
 What was open is a different question: **which field** the renderer applies it to.
 
