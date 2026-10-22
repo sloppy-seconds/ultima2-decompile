@@ -190,6 +190,68 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — A **truncated tool listing reads as an absent tool.** A remote
+  emulator-control surface was queried with a response cap, four of sixty-three tools
+  came back, and the screenshot capability appeared not to exist. The detour that
+  followed — hand-decoding the framebuffer out of memory — produced a structured,
+  plausible, *wrong* image, which is the dangerous shape: it looked like a partial
+  success. → any harness that inspects a remote or paged surface must count what it was
+  offered, compare against any declared total, and fail loudly on a mismatch. A partial
+  list is worse than an exception. And a capability index is worth committing as a tool
+  that prints the count, so the next session does not re-derive it.
+
+* **2026-10-23** — A GUI emulator under X needs a **24-bit visual**, and 8-bit is the
+  classic wrong answer precisely because it is the historically correct recipe for
+  DOS-era pixel fidelity. It yields a blank screen with a completely happy log. →
+  assert the visual depth at startup and refuse to start rather than debugging a blank
+  window; the failure is silent and the obvious causes (display not exported, focus,
+  timing) all look likelier than the real one.
+
+* **2026-10-23** — **Score only what the source actually asserts.** A layout checker
+  over shipped data files reported a clean pass in one sector and a total failure in
+  another, and the failing sector's file simply *authored nothing* — so every populated
+  runtime slot was being compared against a zero the file never claimed. The sector that
+  had something to teach was the one being dismissed. → a conformance checker must
+  restrict itself to entries the source declares, and must report "nothing asserted" as
+  its own verdict rather than folding it into a mismatch count. Absence and contradiction
+  are different findings and a scorer that conflates them produces confident nonsense.
+
+* **2026-10-23** — **Never infer branch polarity from an idiom's name.** A
+  decimal-adjusting subtract chain ends with a complement that inverts the carry, so the
+  following "jump if below" fires on *success*, not on failure. Describing the routine by
+  recognising the idiom produced a summary with the two branches swapped, and it survived
+  review because the swapped version is also coherent — an affordable purchase and an
+  refused one both make sense narratively. → when a flag decides a branch, simulate the
+  flag through the exact instruction sequence over a few concrete operands and include
+  the boundary cases (exactly enough, one short). It costs minutes and the error it
+  prevents is invisible to reading.
+
+* **2026-10-23** — **A filter tuned on one example silently drops a whole class.** An
+  extractor was tightened to require a particular terminator; it removed the noise it was
+  aimed at and also, without complaint, two of the records it existed to attribute —
+  because multi-line records separate their lines with a *different* control byte, so the
+  sample that was checked still looked correct. → when adding a filter, print the count
+  before and after and assert that named known-good entries survive. A filter that only
+  removes what you did not want is otherwise indistinguishable from one that removes what
+  you did, and only the count tells you which.
+
+* **2026-10-23** — **A negative result needs a planted positive.** A sweep that found no
+  downward-oriented text anywhere in the shipped maps became trustworthy only after a
+  synthetic map holding one was constructed and the sweep shown to detect it — and the
+  classifier was then perturbed in two directions to confirm it could still go red.
+  Without that control, "there are none" and "I could not find any" produce identical
+  output. → every detector expected to report a negative must ship with a fixture that
+  makes it report a positive, and the fixture belongs in the tool, not in a scratch dir.
+
+* **2026-10-23** — **Engineer a disagreement instead of collecting more agreement.** Two
+  candidate explanations for a rendered value were indistinguishable across a corpus where
+  the two underlying fields agreed almost everywhere; more samples could not have settled
+  it. One engineered exception — found by scanning the existing corpus for the *few* cases
+  where the fields diverge, then reproducing one live — settled it with a single perfect
+  observation. → when two hypotheses agree on nearly every sample, stop sampling and go
+  look for the exceptions; a tool that reports disagreements first is worth more than one
+  that reports match rates.
+
 * **2026-10-22** — A string extractor that prints an address without its **owning
   function** invites a wrong story. Two similar catalogue strings sitting near each other
   were read as two variants of one thing and ticketed as a per-location difference; the
