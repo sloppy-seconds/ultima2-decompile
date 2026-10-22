@@ -292,26 +292,28 @@ counter rather than a position.
 simultaneous monsters and the spawn RNG is seed-repeatable, so one session can dump
 all 32 slots at spawn and tie the formula to a live record. Memory reads sustain
 about 250 req/s.
-**Now the blocking test, and it is headless.** A live read of all 32 monster slots in
-the sector-0 compound (seeded maxed STRANGER, `--auto-play`) returned **HP = 255 for
-every active monster**, including Daemon, Devil, Wizard and Thief whose arms store
-64/192/224/32. So the arms are real bytes but not the live values here, and the 9/9
-cross-check is a static fact about the binary, not yet a behavioural one. Two
-follow-ups, both scriptable now:
+**Settled from the existing capture corpus, not a new run.** Reading the monster
+record out of every dump in `captures/spice86/` showed the arms ARE the live path:
+about 40 captures have live HP exactly equal to the arm immediate with zero
+mismatches, and `play-test` (the landbridge session) shows a damaged Sea serpent at
+44 of 64. The sector-0 compound reading 255 for everything is an **area override**,
+not a refutation -- `castle-03-live` has a Thief (base 32) at 100/150/200/250 and a
+Devil (base 192) at 255, alongside plainly damaged values.
 
-1. **Non-maxed character, ordinary overworld sector.** If HP comes back as the arm
-   immediates, the arms are the live path and the compound is special; if it is 255
-   again, something overwrites them and the whole HP column drops back to third-party.
-   This single run decides it, and it also settles Guard 255-vs-500, which the
-   byte-ceiling argument could not.
-2. **Townsfolk HP is confirmed to exist** -- Cleric `0xF4` was present with HP 255 --
-   so the earlier "town NPCs may have no HP record" reading is dead. What is still
-   unknown is where their HP is *assigned*, since no arm covers them.
+That same dump confirms the townsfolk and validates the third-party ranges: Guard
+`0x60` at **255** (codex right, Gamer Corner's 500 wrong), Merchant `0x68` at **30 and
+50** (codex 5-50), Cleric `0xF4` at **25/30/40** (codex 10-60). Town NPC HP exists and
+sits inside the published range; what remains unknown is the *assignment* site, since
+no arm covers them.
+
+**Genuinely still open, and narrow:** the rule by which an area raises HP above the
+base (castle vs compound vs overworld), and why the sector-0 compound saturates every
+slot to 255. That is a static question about area setup, not a capture question.
 
 **Needs owner:** no. `--auto-play` and `tools/spice86_type.py` drive a headless run
 end to end; no display, no keystrokes through X.
-**Blocks:** calling any bestiary stat `observed`. Until step 1 runs, every HP figure
-in `bestiary/bestiary.tsv` is third-party or static-only. See `docs/bestiary.md` § 2.
+**Blocks:** nothing for the HP column, which is measured and live for ordinary
+spawns. The area-override rule is what CP5 combat fidelity needs.
 
 ### G18 — which record field drives the art `[ ]`
 **What is already settled:** the record is three parallel byte arrays, stride 1,

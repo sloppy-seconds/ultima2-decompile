@@ -209,45 +209,49 @@ immediates, the community bitmap, and the community stat table all name the same
 creature. Balron is literally `mov $0xff`, the byte ceiling, which is why the
 sources report 255 where a 32-step progression predicts 256.
 
-### Live check contradicts the arms — the 9/9 is not the whole story
+### Live check: the arm value is the base, and area overrides it
 
-A headless capture on 2026-10-22 (`--auto-play`, seeded maxed STRANGER, sector 0 at
-30,32 — the walled compound) read all 32 monster slots live. Every active slot had
-**HP = 255**, and the only values present in the whole array were 0 and 255:
+The first headless capture (seeded STRANGER, sector 0 at 30,32 — the walled
+compound) read **HP = 255 for every active monster**, including types whose arms
+store 64/192/224/32. That was written up as a refutation of the arms. It was half
+right, and the correction over-corrected: **the existing capture corpus already
+answered this.** Sixty-plus dumps were sitting in `captures/spice86/`, and AGENTS.md
+literally says to list the corpus before harvesting runtime data.
 
-| type | art | name | arm stores | **live** | third-party |
-| --- | --- | --- | --- | --- | --- |
-| `0x34` | `0x0D` | Daemon | 64 | **255** | 64 |
-| `0x38` | `0x0E` | Devil | 192 | **255** | 192 |
-| `0xF8` | `0x3E` | Wizard | 224 | **255** | 224 |
-| `0xFC` | `0x3F` | Thief | 32 | **255** | 32 |
-| `0xF4` | `0x3D` | Cleric | *no arm* | **255** | 10 |
-| `0x3C` | `0x0F` | Balron | 255 | 255 | 255 |
+Reading the monster record out of every historical dump settles it:
 
-So the arms' immediates are real bytes in the binary and they are **not** what ends
-up in `[DI+0x177]` in this place. Three readings are still open, and none is proven:
+| captures | active | HP seen | verdict |
+| --- | --- | --- | --- |
+| `baseline-fight`, `probe`, `probe2`, `scrollfix`, `u2-vendored`, `bandhash`, `f9-capture`, `tile-look`, `sweep*` … | 1–8 | 16, 32, 64 | **zero mismatches across ~40 captures** |
+| `play-test` (the landbridge session) | 6 | 16, 32, 44 | 44 is a Sea serpent at 44 of 64 — mid-fight damage |
+| `castle-03-live` | 32 | 1, 25, 30, 40, 50, 60, 100, 150, 187, 200, 250, 255 | damaged **and** buffed |
+| `autoplay`, `e2e`, `passtab` (sector-0 compound) | 31 | 255 only | everything saturated |
 
-1. HP is overwritten after the arm runs — by area, by a later pass, or by this
-   compound being special (the earlier finding already called it a caster gauntlet).
-2. HP scales with the player, and a maxed character saturates everything to the byte
-   ceiling. `maxout` set HP to 9997, so this is a live possibility.
-3. The arms serve only ordinary wandering spawns and this compound is placed by a
-   different path.
+So the model is: **the arm immediate is the base HP of an ordinary wandering spawn;
+the area can raise it; damage lowers it.** Ordinary spawns match exactly. In
+`castle-03-live` a Thief (base 32) appears at 100, 150, 200 and 250 — an arithmetic
+progression far above its base — a Devil (base 192) at 255, while a Fighter (base
+128) sits at 100 and a Devil at 187, which are plainly damaged. The sector-0 compound
+pushes everything to the byte ceiling.
 
-What the capture does settle: **townsfolk do have HP records.** Cleric `0xF4` was
-present with HP 255, so the earlier conclusion that town NPCs might have no HP field
-is wrong. And it refutes the field-width argument about Guard: if everything reads
-back as 255, a byte ceiling cannot distinguish 255 from 500, so the Guard conflict is
-**open again**, not resolved.
+The same dump **confirms the townsfolk have HP and validates the third-party ranges**,
+which is the strongest cross-validation in this document:
 
-The discriminating test is cheap and now fully headless: seed a **non-maxed**
-character into an **ordinary overworld sector** and re-read. If HP comes back as
-16/64/192/224 the arms are the live path and this compound is the exception; if it
-comes back 255 again, something overwrites them and the 9/9 is a static curiosity
-rather than a behavioural fact. Until that runs, treat the overworld HP figures as
-**measured in the binary, unconfirmed in behaviour** — not as `observed`.
+| type | art | creature | third-party | **live observed** |
+| --- | --- | --- | --- | --- |
+| `0x60` | `0x18` | Guard | codex 255 / Gamer Corner 500 | **255** |
+| `0x68` | `0x1A` | Merchant | codex 5–50 | **30, 50** |
+| `0xF4` | `0x3D` | Cleric | codex 10–60 | **25, 30, 40** |
 
-Dump kept at `tmp/20261022-193209/monster-record.bin` (160 B, gitignored scratch).
+The codex's Townsfolk "ranges" are not spawn randomisation — they are the
+area-dependent HP this model predicts, and the live values land inside them. Guard
+reads 255, so the codex is right and Gamer Corner's 500 is wrong, and this time that
+is an observation rather than a field-width argument.
+
+Still open, and now narrow: the rule by which an area raises HP above the base
+(castle vs compound vs overworld), and why the sector-0 compound saturates
+everything. Neither demotes the nine arm values, which are **measured and live** for
+ordinary wandering spawns.
 
 What is *not* explained by the arms: **the townsfolk have no arm at all.** Guard,
 Jester, Merchant, Cleric and King are assigned no HP anywhere in the monster-kind
@@ -328,10 +332,11 @@ not by an argument about which wiki is likelier.
   but `disasm/tile-art.tsv` reads `0B` as a doorway set in a magenta field, and its
   kind is `object`, not `creature`. One of the two readings is wrong. Marked
   `Sea Monster?` and left as a dispute; do not rename on this evidence.
-* **Guard HP — reopened 2026-10-22.** Codex 255, Gamer Corner 500. The byte-width
-  argument that appeared to refute 500 does not survive the live capture in § 6: if
-  every monster reads back as 255 regardless of its arm, a byte ceiling cannot
-distinguish 255 from 500. Unresolved again.
+* **Guard HP — RESOLVED by observation, 2026-10-22.** Codex 255, Gamer Corner 500.
+  `castle-03-live` has type `0x60` (Guard) at HP **255**, so the codex is right and
+  500 is wrong. Note the route here: first "resolved" by a byte-width argument, then
+  reopened when a compound run read 255 for everything, then settled properly by the
+  existing capture corpus.
 * **Merchant HP.** Codex 5–50, Gamer Corner 1. Unresolved.
 * **The codex HP/DMG columns are not HP and DMG in two of the four tables.** Those
   tables carry a second header row (`Min`, `Max`) written without `colspan`, so in
