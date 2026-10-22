@@ -1009,5 +1009,21 @@ inference rather than a measurement.
   not worth a session on its own.
 * ~~The 30 live-grid cells that differ from `mapx03`~~ - resolved above: moved
   monsters, the grid-is-the-object-store mechanism.
+* **What `original/monsters` actually draws — unresolved, and now known to be
+  downstream of the dungeon renderer rather than independently solvable.**
+  Verified 2026-10-22, measured: the file is byte-identical at `DS:2900` in 8 of 10
+  live DS dumps (record *r* at `DS:2900 + r*34`). The two exceptions are exactly the
+  captures that never entered the world, so the load is conditional on entering the
+  world. Structure is 64 records × 17 `(byte,byte)` pairs; `00 00` behaves as a
+  stroke separator or pad, and records 13, 20, 27, 28 and 29 are entirely empty.
+  Every populated record spans a narrow band on one axis (3–6 values) and a wide
+  range on the other (up to 150), and renders as a **stroke** — rec30 is a clean
+  diagonal — so a record is a piece of a drawing, not a whole monster. **The
+  consumer is not in the decoded tree:** `INT 10h` is called only with
+  `AH=01/02/06/09`, all text services; there is no `AH=0C` pixel plot anywhere, and
+  no direct framebuffer write outside `asm/310B_cmd_C`. The dungeon wireframe
+  renderer is therefore undecoded — the same blocker as the backlog's
+  dungeon-geometry item. T9's rendering question belongs to that item and should
+  not be counted as a separate open question.
 * Whether the dungeon light timer reaching 0 darkens the screen (inference above).
 * What the dungeon's `0x80`-heavy bytes actually encode for the wireframe renderer.

@@ -349,8 +349,12 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 - [ ] **Decode the dungeon map format and reproduce the wireframe renderer.** This is
       the largest unexplained surface in the game and it blocks any real dungeon crawl.
-      Not solved here on purpose; these are leads measured on 2026-10-21 so the next
-      session starts from evidence rather than from a blank page.
+      **It also owns the `original/monsters` question** — the 64×34 table at `DS:2900`
+      is stroke data whose consumer is this renderer, so T9's "how do the coordinate
+      pairs become shapes" cannot be answered until the renderer is decoded (see
+      § Still unexplained). Not solved here on purpose; these are leads measured on
+      2026-10-21 so the next session starts from evidence rather than from a blank
+      page.
 
       **Already known, do not re-derive:**
       * Dungeons are sectors. Entering moved `DS:49/4A` from `3,0` to `3,5` and loaded
