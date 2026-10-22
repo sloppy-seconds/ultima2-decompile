@@ -1,0 +1,36 @@
+# VNC display container for Ultima II play-testing.
+#
+# Holds a display server and nothing else. No game files, no emulator, no run copy —
+# those stay on the host under tmp/ because the game rewrites its own `player` file.
+# The host runs Spice86 with DISPLAY pointed at this container's X server.
+#
+# Build and run via ./up.sh (it knows about `sudo podman` on ai).
+
+FROM docker.io/library/ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        xvfb \
+        x11vnc \
+        novnc \
+        websockify \
+        x11-utils \
+        x11-xserver-utils \
+        xdotool \
+        net-tools \
+        passwd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Xvfb listens on TCP 6099 (:99) but only on loopback; see start.sh for the -nolisten
+# decision. Game content is never stored in this image, so the image is safe to keep.
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# rfbauth file is generated on first run into a host-mounted volume so the password
+# survives container rebuilds and never lands in the image or in git.
+VOLUME ["/var/lib/u2vnc"]
+
+EXPOSE 6099 5900 6080
+
+CMD ["/usr/local/bin/start.sh"]
