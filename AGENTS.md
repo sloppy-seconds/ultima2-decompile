@@ -197,6 +197,15 @@ Verification, in two independent layers:
   may inherit and what it must re-derive from its own bytes. If a line only makes
   sense for this game, it belongs in `asm/` or the findings doc instead.
 
+* **Never write a probe, reader or driver that duplicates an existing tool. Look first.**
+  The recurring failure in this project is not a wrong answer, it is an agent building
+  something that already exists and getting a *plausible* result from it — a hand-rolled
+  `dotnet` launch that silently skips the harvest, a text-mode screen decoder that returns
+  confident box-drawing noise, a key injector that is rejected as an illegal command. The
+  tree already has the tool; the index is `docs/spice86-capture.md` "Which tool for which
+  job", and every `tools/*` takes `-h`. If a capture job feels like it needs a new script,
+  the answer is almost always an existing one plus a few lines over it, and saying which
+  one you used is part of the write-up.
 * **Read `docs/spice86-capture.md` before driving the emulator, and use the scripts.**
   `tools/spice86_start.sh -h` lists every option and `tools/spice86_stop.sh` is the
   only safe teardown. That doc has a "Which tool for which job" table because this
@@ -208,6 +217,23 @@ Verification, in two independent layers:
   harvest must come from `monitor dumpAll`, never from a signal. When a capture seems
   to need walking somewhere, seed state instead — `--player` with `tools/u2_edit.py
   setpos` is the only way to change sector, and `--seed-map` installs a synthetic one.
+* **The screen is a screenshot, never a decode.** The game draws text as **glyphs in
+  graphics mode**, so there is no character cell to read: `0xB8000` as a text page is
+  box-drawing noise and as CGA planes is a structured, half-plausible, wrong image. Use
+  `tools/spice86_screenshot.py out.png` (MCP `screenshot`, no display needed) on a live
+  run, and `tools/vga_screen.py` on a full `spice86dumpMemoryDump.bin`. A turn-recorder
+  `turns/NNNNN.vga` is **not** a screen — it is the 6400-byte span the game's own
+  screen-invert routine touches, and no renderer reconstructs a view from it; read the
+  `.ds` dump for state instead, and screenshot live for pixels. This has been gotten wrong
+  three times, each looking like a partial success.
+* **Headless play is a solved loop; do not reinvent it.** `spice86_start.sh --headless
+  --patch-arrows --player <file> --auto-play` loads a seeded character into the world
+  unattended, `tools/spice86_type.py --keys A,Right` drives it (arrows only work because
+  of `--patch-arrows`; without it every one is `ILLEGAL COMMAND!`), `spice86_screenshot.py`
+  shows it, and reading DS over the HTTP API at `0x08BE*16` gives position `0x00/0x01`, HP
+  `0x51`, the 32 creature slots at `0x137/0x157/0x177/0x197/0x1D7` and the sector grid at
+  `0x1800`. Confirm a key landed by reading memory, never by the send returning ok — a
+  dropped key looks exactly like a no-op.
 * **Never run the game in place.** The game rewrites its own `player` file.
   `tools/spice86_start.sh` copies pristine `references/ultima2/` into a fresh
   timestamped dir under `tmp/` for every launch. Scratch and logs go to

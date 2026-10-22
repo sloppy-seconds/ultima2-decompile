@@ -211,6 +211,11 @@ plausible:
 * reading `0xB8000` as CGA mode-4 planes produced a structured but wrong image (content in
   the top half, black below). That structure is what makes it dangerous — it looks like a
   partial success. The framebuffer is 64000 bytes, not 16384.
+* a turn-recorder `turns/NNNNN.vga` is **not a screen at all**. It is 6400 bytes — the span
+  at `VGA_BASE` the game's own screen-invert routine touches, per `VGA_LEN` in
+  `tools/turn_recorder.py` — not the 64000-byte framebuffer, and decoding it as text or as
+  planes yields confident noise. For a historical recording, read the paired `.ds` dump for
+  state and re-run live if pixels are needed.
 
 **The MCP tool list is 63 entries.** An earlier check truncated the JSON at 4000 characters,
 showed 4 tools, and `screenshot` appeared to be missing — which sent a whole detour off
