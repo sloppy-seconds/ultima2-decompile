@@ -669,6 +669,13 @@ def dark_fill_b():
 
 NOT_A_LETTER = {0x30}
 
+# Names follow docs/tile-art-spec.md. Per spec amendment A1, art 0x13 is the PLANE and
+# 0x14 the ROCKET (map bytes 0x4C and 0x50; BOARD dispatch, asm/2FAD). The drawing
+# functions keep their original names on purpose: `signpost()` still produces a notice
+# board, and renaming it to `plane()` would imply an artwork change that has not happened.
+# The redraw is deliberately deferred to a clean implementer pass -- see
+# engine/assets/tiles/cleanroom/PROVENANCE.md, amendment A1. `spire()` needs no redraw;
+# a tapering form on a flared base already reads as a rocket on a pad.
 TILES = {
     0x00: water, 0x01: shallow, 0x02: grass, 0x03: forest,
     0x04: mountain, 0x09: mountain_pass, 0x1C: marsh,

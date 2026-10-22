@@ -27,21 +27,59 @@ authored from scratch as integer pixel grids.
 
 | | |
 | --- | --- |
-| file | `tile-art-spec.md` |
-| git blob SHA | `f214a89b3d068f54f98a0615006699a9bf2cdeaf` |
-| blob size | 11313 bytes |
-| first committed in | `99119e3` ("Original substitute tile art: 64 tiles, generator, provenance") |
+| file | `docs/tile-art-spec.md` |
+| git blob SHA | `c03419892c7a367989c61f5752450314e5a01cf0` |
+| blob size | 15234 bytes |
+| committed in | `3e6adf6` ("tile-art-spec: colour is a fact, so specify it - and black is backdrop, not ink") |
+| vendored into this repo | `b46e5be` ("vendor the cleanroom tile set, and let the viewer compare it against the originals") |
 
-This is the version the implementer was given, and the only specification text
-used. Verify it with:
+**Corrected 2026-10-22.** This section previously pinned
+`f214a89b3d068f54f98a0615006699a9bf2cdeaf` (11313 bytes) and cited `99119e3` as the
+commit that first carried the art. Both were wrong, and the art itself is the proof.
 
-    git hash-object tile-art-spec.md
-    git cat-file -p f214a89b3d068f54f98a0615006699a9bf2cdeaf
+*`f214a89` is the spec's first commit (`9b0c8c5`), 234 lines, and it contains no
+Colour-assignment section and no backdrop rule. § Verification below asserts that every
+`#rrggbb` in the deliverable is one of the four palette colours and that black is the
+backdrop — requirements that exist only from `d9c6df6`/`3e6adf6` onward. An implementer
+handed `f214a89` could not have produced art that satisfies this note. The colour rules
+arrived in `c034198`, which is what the deliverable follows.*
 
-The second command prints the exact text that was implemented, so a reader does
-not have to trust the working tree, which may have moved on. If the spec is later
-amended, the blob above still resolves to the original and this note still
-describes what was actually built.
+*`99119e3` does not resolve in this repository (`git log -1 99119e3` → unknown revision).
+It was a commit in the originating repo. In this repo the set arrived in `b46e5be`.*
+
+Verify:
+
+    git rev-parse 3e6adf6:docs/tile-art-spec.md   # c03419892c7a... the pinned blob
+    git cat-file -p c03419892c7a367989c61f5752450314e5a01cf0 | grep -c 'Colour assignment'   # 1
+    git cat-file -p f214a89b3d068f54f98a0615006699a9bf2cdeaf | grep -c 'Colour assignment'   # 0
+
+Do **not** verify with `git hash-object docs/tile-art-spec.md`: the working tree has moved
+on (amendment A1 changed it), which is the whole reason a blob is pinned here.
+
+The pin's purpose is unchanged: a reader should not have to trust a working tree that
+moves on. What changed is that the pinned blob is now the one that was actually used.
+
+### Amendment A1 — arts `13` and `0x4C`, and `14`/`0x50` renamed (2026-10-22)
+
+The spec named art `13`/`0x4C` **signpost** and art `14`/`0x50` **spire**. Both are
+vehicle tiles: `[DS:14] = map_byte >> 1` (measured on 53 of 54 walk samples) and
+`asm/2FAD` dispatches BOARD against `0x22` horse / `0x24` ship / `0x26` plane / `0x28`
+rocket, so `0x44`/`0x48`/`0x4C`/`0x50` are horse, ship, plane and rocket. The game
+confirmed it: boarding a `0x4C` tile printed `' PLANE'`. Full chain in
+`docs/spice86-live-findings.md` § 12 and `disasm/tile-art.tsv`.
+
+The spec rows were corrected in place (see § Structures, Amendment A1). **The SVGs were
+not redrawn, deliberately.** § 2 forbids the implementer from reading
+`disasm/tile-art.tsv` — the very file holding this proof — because it describes originals
+seen directly. Correcting a spec row is a spec-author act and may use that evidence;
+redrawing `tile_13` is an implementer act and must not. The agent who made this
+correction had read `disasm/tile-art.tsv` in the same session, so is disqualified from
+that role and did not attempt it.
+
+Consequence, stated rather than hidden: **`tile_13.svg` still depicts a notice board for a
+tile the game calls a plane.** That is a known, recorded mismatch awaiting a clean
+implementer pass, not an undiscovered one. `tile_14` needs no redraw — "a tall tapering
+form on a wider base" already reads as a rocket on a pad; only its name was wrong.
 
 ## Forbidden paths
 

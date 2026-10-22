@@ -156,7 +156,7 @@ that the diamond-lattice art (`0x04`) is the mountain:
 | `0x10` | `0x08` arch | gate/pass | accept | 250 |
 | `0x04` | `0x02` sparse dots | scrub | accept | 27 |
 | `0x18/0x1C/0x20` | `0x0C/0x0E/0x10` figures | standing figures | REJECT | 1 each |
-| `0x24/0x28` | `0x12/0x14` boat, spire | boardable / enterable | accept | 1 each |
+| `0x24/0x28` | `0x12/0x14` ship, rocket | boardable / enterable | accept | 1 each |
 
 Evidence for the model, by grade:
 
