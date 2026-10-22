@@ -806,8 +806,11 @@ corruption. See `docs/phase4-overnight-cp5-report.md § T4`.
   mapping is the unattributed indirect store into `DS:2CB`/`DS:2DE` (F3), so the
   map byte is **not statically resolvable** and is left unguessed. The animated
   render is not in `asm/24B5` (it only flashes/sounds). Settled by the backlog
-  four-question passability capture (dump `DS:2CB`/`DS:2DE` + destination tile at
-  the `0x2e` instant). See `docs/phase4-overnight-cp5-report.md § T8`.
+  **five-question** passability capture — specifically its question 5, attributing
+  the `DS:2CB`/`DS:2DE` writers at the `0x2e` instant. Amended 2026-10-22: the
+  capture's original question 2 asked whether the ladder reads a tile, which this
+  finding had already killed, so the spec was rewritten to ask the live question.
+  See `docs/passability-findings.md § Open` and `docs/phase4-overnight-cp5-report.md § T8`.
 * The 30 live-grid cells that differ from `mapx03`.
 
 ~~The `map byte -> vehicle code` transform behind `[DS:14]`~~ - resolved in section

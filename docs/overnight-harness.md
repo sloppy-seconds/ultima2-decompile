@@ -158,7 +158,7 @@ A tool that only works here is a finding about the plan, not a success.
   owner can do it in one step.
 * Any refactoring of existing tools to read the profile.
 * Anything requiring the owner to drive the game: the dungeon geometry decode, the
-  `A`–`Z` dungeon byte decode, the four-question passability capture, CP5 ticket C5.
+  `A`–`Z` dungeon byte decode, the five-question passability capture, CP5 ticket C5.
 * Starting CP5, CP6 or CP7 implementation. Combat is owner-gated; the acceptance
   spec already exists and its controls ship in `engine/tests/`.
 

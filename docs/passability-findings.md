@@ -426,20 +426,39 @@ impassable terrain from it beyond water, which is independently proven.**
 
 ---
 
-## Open: one Spice86 session answers three questions
+## Open: one Spice86 session answers five questions
 
-Scoped 2026-10-21, all three cheap and all three from a single session in sector
-20 with a fresh character. Owner must do the walking; the reads are passive.
+Scoped 2026-10-21, amended 2026-10-22. All cheap, all from a single session in
+sector 20 with a fresh character. Owner must do the walking; the reads are passive.
+
+> **Why this was amended.** The original heading said "three" and listed four, and
+> question 2 had already been overtaken: F10 refuted F8 live on 2026-10-21, and
+> overnight T8 then killed the same premise statically. Running the old spec would
+> have spent the session answering a question nobody still holds. Keep the same
+> breakpoint and the same register dump — they were right — but ask the post-T8
+> question.
 
 1. **Settle the `view.h` contradiction.** Dump the staging buffer at `DS:272`
    (256 B) alongside the sector map, and compare. If `staging == map_byte` then
    claim (2) holds and `art = map_byte >> 1`. If `staging == (map_byte>>1)&0xFE`
    then claim (1) holds, `art = map_byte >> 2`, and F8's mountain assignment is
    wrong and must be re-derived.
-2. **Prove or kill the F8 inference.** Break at runtime `0x2423`; dump `AL`,
-   `DS:13, DS:15, DS:18, DS:29, DS:2CB, DS:2DE` and the destination cell's tile
-   byte, on one accepted and one rejected step. If `AL == destination tile`, the
-   rule is proven and `DS:2CB`'s indirect writer becomes the only remaining link.
+2. **What sets the mode byte the ladder actually tests?** *(rewritten 2026-10-22)*
+   It used to ask whether the ladder's input is the destination tile. That is
+   settled, and the answer is no: `asm/248B→2495→24B1` reads no tile and reaches
+   `asm/24B5` only when `[DS:29]&0x7f == 0x2e` (measured at fight turn 2909, where
+   `[DS:15] = [DS:18] = 0x2e`). There is no tile-vs-`AL` comparison left to make.
+   The live question is: **what writes `0x2e` into the mode slot, and is that write
+   a function of the destination tile at all?** Break at runtime `0x2423`; dump
+   `AL`, `DS:13, DS:15, DS:18, DS:29, DS:2CB, DS:2DE` and the destination cell's
+   tile byte — on one ordinary step **and one step onto a force field**.
+   Note the old "one accepted and one rejected step" pair may not be obtainable on
+   foot at all: the CP4b re-decode found `asm/2423` never rejects an overworld foot
+   step, so use ordinary-vs-field instead.
+   *Success:* a reproducible mapping from the tile/sector inputs to the value in
+   `DS:29`. *Failure:* if `DS:29` is identical on both steps, the mode is not
+   terrain-derived and C5 must be modelled as a non-spatial hazard rather than a
+   tile property — which is also a usable answer.
 3. **Does a rejected step cost food?** Both inline `-19` drains sit BEFORE the
    reject test (file `0x2799` and `0x2826`), which implies walking into a mountain
    burns 19 food like a real step. Inferred from block ordering only, and the
@@ -452,6 +471,15 @@ Scoped 2026-10-21, all three cheap and all three from a single session in sector
    measurement of a blocked tile other than water, which the whole model has been
    missing. Ask the owner to stand next to a visible mountain, note the screen,
    then read `DS:00`, `DS:01`, the destination cell and `AL` at the break.
+5. **Attribute the indirect writers of `DS:2CB`/`DS:2DE`.** This is F3's open link
+   and, since T8, the only remaining route to a C5 trigger. Static search cannot
+   attribute them: the stores are indirect, no static write site names the
+   destination, and `0x2e` occurs 0 times in `mapx00` — which is exactly why it is
+   not statically derivable. At the same break, capture both bytes before and after
+   each of: entering a sector, crossing a sector boundary, boarding and alighting a
+   vehicle, and stepping onto a force field. Whichever event changes them owns the
+   mapping. If the tracer can catch the instruction pointer at the moment of
+   change, record it — that single address closes F3, C5 and T8 together.
 
 ---
 
@@ -463,6 +491,14 @@ DS:2CB, DS:2DE` and the target cell tile, on one accepted and one rejected step.
 If `DS:2CB`/`DS:2DE` differ between the two, the table is terrain-indexed and F3
 completes. If they do not, the reject comes from the `call 0x2575` return value
 and the search moves into the `DS:580` dispatch.
+
+> **Amended 2026-10-22.** Keep the breakpoint and the dump list; the framing above
+> predates F10 and T8 and is now wrong in two ways. `AL` is not a tile byte, so
+> "if `AL == destination tile`" is not a live test. And an accepted-vs-rejected
+> pair may not exist on foot, because the CP4b re-decode found `asm/2423` never
+> rejects an overworld foot step. Use **ordinary step vs step onto a force field**
+> as the discriminating pair, and read question 5 above — attributing
+> `DS:2CB`/`DS:2DE` is now the whole of C5.
 
 ## F13 - the 64 art entries are not 64 terrains; A-Z are shop and sign tiles
 

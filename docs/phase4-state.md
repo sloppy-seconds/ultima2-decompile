@@ -153,7 +153,7 @@ would has been left out rather than approximated. Results land in
 whole checkpoint: the map is **runtime data** (`original/mapxNN`, ~30 files of
 exactly 4224 bytes each), not something the extractor pulls into code, so CP4
 adds a `--data-dir` seam and reads the player's own files the way the original
- did. It also lists the four questions to settle before writing any rendering.
+ did. It also lists the open questions to settle before writing any rendering.
 
 ## Gate log
 
@@ -417,21 +417,30 @@ adds a `--data-dir` seam and reads the player's own files the way the original
       logged 76 odometer anomalies in 3000 turns so single-turn boundaries in dense
       combat are not trustworthy.
 
-- [ ] **Four-question Spice86 capture — passability, the art transform, food on a
-      rejected step, and the mountain tile.** Owner must walk; reads are passive.
-      Full spec in `docs/passability-findings.md § Open`. In one session in sector
+- [ ] **Five-question Spice86 capture — passability, the art transform, food on a
+      rejected step, the mountain tile, and the mode-byte writers.** Owner must
+      walk; reads are passive. Amended 2026-10-22 after T8: question 2 was stale
+      (it asked whether the ladder reads a tile, which F10 refuted live and T8
+      killed statically) and a fifth question was added for the `DS:2CB`/`DS:2DE`
+      attribution that is now the whole of C5. Full spec in
+      `docs/passability-findings.md § Open`. In one session in sector
       20: (1) dump the staging buffer at `DS:272` against the sector map to settle
       whether `art = map_byte >> 1` or `>> 2` — `engine/src/core/view.h` currently
       claims both and they are mutually exclusive; (2) break at runtime `0x2423`
       and dump `AL, DS:13, DS:15, DS:18, DS:29, DS:2CB, DS:2DE` plus the
-      destination tile on one accepted and one rejected step, which proves or
-      kills the F8 claim that the ladder's input is the tile byte; (3) read
+      destination tile on one ordinary step and one step onto a force field, to
+      find what writes mode `0x2e` into `DS:29` and whether that write depends on
+      the tile at all — **not** the old tile-vs-`AL` test, which is settled; (3) read
       `DS:53..55` before and after a deliberately blocked step to find out whether
       a rejected move costs 19 food, which the block ordering implies but does not
       prove; (4) **stand next to a visible mountain, walk into it, and read the
       destination tile byte** — this settles F9, where the engine currently marks
       `0x08` passable while F8 calls it the mountain, and it would be the first
-      honest measurement of a blocked tile other than water.
+      honest measurement of a blocked tile other than water; (5) capture
+      `DS:2CB`/`DS:2DE` before and after sector entry, sector crossing, boarding
+      and alighting, and stepping onto a field — whichever event moves them owns
+      the tile→mode mapping, and the instruction pointer at the moment of change
+      would close F3, C5 and T8 in one datum.
 
 - [ ] **`tools/u2_edit.py` — save-file and live-memory editor.** Owner request,
       2026-10-21. Must do two jobs with one set of tables: edit a `player` save
@@ -553,7 +562,7 @@ Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers i
 | C2 | Resist is a **~75% roll on a live item-array slot**, not immunity: `[DS:D9]` BOOTS, `[DS:DA]` CLOAK, `[DS:E4]` GREEN IDOL; with the item the `L_005417` roll must be `>= 0x40`, without it the effect lands with **no roll at all** | todo | This is the single easiest thing to get wrong, and the pre-existing docs had it wrong as a boolean gate. Needs a distribution test, not a present/absent test. |
 | C3 | Paralysis is a **movement rejection**, not a combat overlay | todo | `--PARALIZED!` is at runtime `0x2527`, inside the passability routine, so a paralysed step takes the same reject path as walking into a mountain. Couples to the CP4 passability work and to the `--INVALID MOVE!` path. |
 | C4 | Magic missile: **no save path exists** | todo | `asm/0F12` has no inventory gate and no roll, unlike the other three. The accumulation into `DS:20/21/22` is proven (`+2, +2, +0x40` per cast) but its BCD weight against the HP subtract is **not** — model the no-save property, leave the scaling as a named unknown. |
-| C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But ~~the tile byte that triggers the field is unknown~~ **Corrected 2026-10-22 (overnight T8): the trigger is not a tile byte at all.** The passability ladder `asm/248B→2495→24B1` reads no tile and falls through to `asm/24B5` only when `[DS:29]&0x7f == 0x2e` — a **mode** byte, measured at the live force-field turn (fight turn 2909: HP −1000, `[DS:D6]=0`, `[DS:15]=[DS:18]=0x2e`). `0x2e` occurs 0× in `mapx00`, and the tile→mode mapping is the unresolved indirect store into `DS:2CB/DS:2DE`, so a map byte is still not statically derivable. Remains blocked; the four-question passability capture in the backlog is what settles it. Do not wire C5 to a tile byte. |
+| C5 | Force field: ring gate `[DS:D6]`, exactly **-1000** via `stc; sbb al,0x10; das` on `[DS:51]`, and a death branch when HP < 1000 | **blocked** | `asm/24B5`. Damage, gate and death branch are proven and both branches have executed. But ~~the tile byte that triggers the field is unknown~~ **Corrected 2026-10-22 (overnight T8): the trigger is not a tile byte at all.** The passability ladder `asm/248B→2495→24B1` reads no tile and falls through to `asm/24B5` only when `[DS:29]&0x7f == 0x2e` — a **mode** byte, measured at the live force-field turn (fight turn 2909: HP −1000, `[DS:D6]=0`, `[DS:15]=[DS:18]=0x2e`). `0x2e` occurs 0× in `mapx00`, and the tile→mode mapping is the unresolved indirect store into `DS:2CB/DS:2DE`, so a map byte is still not statically derivable. Remains blocked; the five-question passability capture in the backlog (question 5 especially) is what settles it. Do not wire C5 to a tile byte. |
 | C6 | Theft **deletes** from the item array; killing the thief restores nothing | todo | `asm/0FCD`, thief is monster type `0x40`. Measured: 8 items stolen, 0 returned, kill paid a random drop like any other. Because the C2 gates read the item array live, a flagged-but-present item would wrongly keep the resist. |
 | C7 | Map byte -> vehicle code transform for BOARD | **resolved 2026-10-21** | `[DS:14] = map_byte >> 1`, measured on 53 of 54 walk samples across four terrain bytes. So vehicle tiles are `0x44` horse, `0x48` ship, `0x4C` plane, `0x50` rocket. Confirmed by the game: `B` on a `0x4C` tile set `[DS:13] = 0x26` and printed `' PLANE'`. An earlier note here claimed the plane was `0x34`; that was a `%02d`-against-hex-filenames render bug and `0x34` is art `0x0D`, a humanoid figure. ~~Still unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid.~~ **Resolved 2026-10-22 (overnight T7):** `asm/68C0` indexes the **dungeon** grid (`word[DS:472] + [DS:25]*256 + y*16 + x`, a 16-wide paged view of the DS:1800 buffer), not the overworld sector grid; reached only from the dungeon path. See `docs/spice86-live-findings.md § 12`. |
 
