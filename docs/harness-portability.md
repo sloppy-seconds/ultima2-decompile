@@ -190,6 +190,15 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-22** — A string extractor that prints an address without its **owning
+  function** invites a wrong story. Two similar catalogue strings sitting near each other
+  were read as two variants of one thing and ticketed as a per-location difference; the
+  owners turned out to be two unrelated routines serving two different player classes, and
+  the difference was class, not location. Any harness that surfaces embedded strings should
+  resolve each one to its function and show the function's name-evidence alongside, so a
+  reader cannot describe a relationship between strings without also seeing that they live
+  in different places. → cheap to build, and it is the difference between a string table
+  and a claim.
 * **2026-10-22** — Shipped data files can carry **leftover source text from the platform
   the game was ported from**, in the same records as real content. A dialogue extractor
   that assumes every record is displayable text will emit assembler mnemonics as NPC
