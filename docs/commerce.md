@@ -397,6 +397,41 @@ it stands at a sign. **Facing** is the remaining unknown — `T,Up` reached the 
 cells north through a talkable-through letter tile, so the direction names a ray rather
 than an adjacent cell, and a teleported save never sets facing at all.
 
+### 5b. The ray, and the message that proves it landed — measured 2026-10-23
+
+`FUNNY, NO RESPONSE!` is **not** a dropped key and **not** a silent failure. It is printed
+by `asm/40A6`, and three guards branch into that printer:
+
+| guard | test | reading |
+| --- | --- | --- |
+| `asm/406E` | `[DS:4A] == 0` | site kind is overworld — nothing deals out in the open |
+| `asm/4081` | `AL != 0x7C` | a type byte that is not this |
+| `asm/409F` | `AL != 0x68` | **`0x68` is the Merchant type** in the street-NPC table |
+
+So the message means *the ray landed on something that will not deal with you*, and it is
+the shared answer for the directional commands — it was observed printing directly after
+`CMD: TRANSACT-NORTH`, which is why `asm/40A6`'s `yell_no_response` name is now marked
+`NAME DISPUTED` in its header.
+
+**This is the oracle the transaction harness needed.** It separates the three outcomes that
+position alone cannot: the key arrived and was rejected, versus the key never arrived. A
+`CMD: TRANSACT-<dir>` line followed by `FUNNY, NO RESPONSE!` is a **delivered, rejected**
+talk. Silence is a dropped key. `tools/reject_trap.py` does the same job for movement; this
+does it for talking, and it needed no trap at all.
+
+**Headless transactions are confirmed working, and my earlier "the recipe does not
+reproduce" was wrong.** Sector 32, maxout character at (38,5), `T,Up` at `--delay 0.02`
+opened `THE ARMOUR SHOPPE`, `1` quoted `FOR YOU ONLY 0012`, `y` completed it: gold
+`9999 → 9987` and `DS:97` `00 → 01`. Reproduced end to end on 2026-10-23 with no human in
+the loop. The sector-31 food vendor failed for a different reason than timing: from every
+reachable tile the ray returned `NO RESPONSE`, so it was not landing on a `0x68` — the
+`monx31` spawn table puts a Merchant at (51,15), but live creatures move, and the shipped
+layout is where they *start*, not where they are.
+
+**What that leaves for G23:** the blocker is now "get the ray onto a transacting creature
+in a food-selling sector", which is a search the oracle makes cheap and automatable, not a
+timing mystery and not owner-only. Recorded in `docs/needs-gameplay.md`.
+
 **The earlier claim stays withdrawn.**
 
 **I wrote here that a shop is selected by the player's region within the sector plus the

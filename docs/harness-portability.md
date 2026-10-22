@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — **A string you treat as an error message may be the oracle.** A capture
+  harness kept failing to reach a shop, and the on-screen line it kept seeing was dismissed
+  as "no response", read as a dropped input; the conclusion drawn was that the input path
+  itself was broken, and a ticket was re-labelled owner-only on the strength of it. The
+  string actually belonged to a printer reached from guards that test the *target* of a
+  directional ray — including one comparing a creature type byte against a specific value.
+  It was a delivered-and-refused answer, which is precisely the distinction the harness
+  needed and had been failing to make. → attribute every diagnostic string to the routine
+  that owns it and to the branch that reaches it before using it as a signal; a message
+  shared by several commands is a shared verdict, not a generic failure. And when a human
+  disagrees with an agent's reading of what the screen means, re-derive it from bytes
+  before restating the inference — the disagreement here is what produced the finding.
+
 * **2026-10-23** — An **emulator breakpoint is a one-way door, and "paused" is not proof
   of a hit.** The monitor surface of the vendored emulator offers a command to *add* an
   address breakpoint and no command to remove one, so a validation self-test that arms on
