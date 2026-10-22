@@ -92,18 +92,30 @@ spent, **cause unresolved**) and to name the byte `scratch_20`. Any earlier
 `rejected: true` in an existing `index.jsonl` is therefore not evidence of a
 reject.
 
-**Viable live signals, one of which must be built and validated:**
+**Viable live signals:**
 
-1. **GDB breakpoint counter at `0A02`.** The plumbing partly exists —
-   `spice86_start.sh --gdb-port` and the gdb live-dump path in
-   `tools/spice86_common.sh`. Exact counts, per-step windows. Preferred.
-2. **Frame-diff on the message region** via `tools/vga_ring.py`. Signal-honest and
-   needs no debugger, but heavier, and it must distinguish the reject message from
-   other text that changes in the same region.
+1. **GDB `breakCsIp` trap on the reject site — BUILT AND MECHANISM-VALIDATED
+   2026-10-22.** `tools/reject_trap.py`. Proven to fire: arming on the address the
+   CPU was already executing produced a stop, with no gameplay involved. It speaks
+   the remote protocol directly rather than driving `gdb(1)`, because gdb with a
+   piped stdin emits nothing at all and `gdb -batch` cannot arm-and-wait (the
+   target is running on attach, so `continue` is refused).
+2. **Frame-diff on the message region** via `tools/vga_ring.py`. Still available as
+   a fallback; heavier, and it must separate the reject message from other text
+   changing in the same region.
 
-**Until one is chosen, validated, and shown to count correctly against a capture
-with a known number of rejects, every automated "impassable" is unproven.** The
-remaining G0 requirements stand unchanged:
+**One trap for whoever uses this, and it is the dangerous kind:**
+`monitor breakCsIp` parses its arguments as **hex**, while `/api/status` reports
+**decimal**. Passing the API's decimal values silently arms a breakpoint on an
+address that can never execute, and every later "no reject observed" then means
+nothing. `tools/reject_trap.py` converts in one asserted place
+(`cs_ip_from_status`) for exactly that reason.
+
+**What still keeps G0 open:** the trap is proven as a mechanism, not yet against a
+real rejected step. Closing G0 needs (a) driving a run into the world, (b) one
+step into a known-blocked tile, (c) confirming the trap fires for it and not for a
+successful step, and (d) wiring that into the probe with the per-step outcome
+record and the tile-class histogram. The remaining requirements are unchanged:
 
 * after each step require **one of**: position changed, or a counted reject; if
   neither, treat it as a **dropped key** and retry — never as terrain;
@@ -114,7 +126,8 @@ remaining G0 requirements stand unchanged:
 
 **Staging is already solved:** `tools/u2_mkprobe.py` generates a probe sector that
 puts every terrain byte next to walkable ground, and `spice86_start.sh --seed-map`
-installs it pre-launch. The gap is purely the reject signal.
+installs it pre-launch. A saved character (`AIRTEST`, seen in `tmp/*/player`) can be
+seeded with `--player`, so character creation is not an obstacle either.
 
 ---
 

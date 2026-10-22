@@ -201,7 +201,7 @@ Verification, in two independent layers:
 | `asm/` | the reconstruction: one file per function (`<ADDR>_<name>.asm`), headers carry evidence, confidence and provenance | tracked |
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
 | `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. | tracked |
-| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
+| `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `vga_screen.py`, `map_render.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
 | `docs/` | phase plans, state, implementation logs, live-capture findings, `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
 | `captures/` | runtime captures and screenshots | **gitignored** |
