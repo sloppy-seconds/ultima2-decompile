@@ -15,6 +15,21 @@ and they differ by constant offsets.
 | Ghidra | `1000:XXXX` | `XXXX + 0x200` |
 | Reko | `0800:XXXX` | `XXXX + 0x200` |
 | `objdump -D -b binary` | prints file offsets | add nothing |
+| **`asm/` filename prefix** | **runtime offset** | **`XXXX + 0x200`** |
+| **`L_XXXX` label inside `asm/`** | **file offset** | **add nothing** |
+
+**Read that last pair again, because it is a trap.** A single `asm/` file mixes two bases:
+the **filename is a runtime offset** and the **`L_xxxx` labels in its body are file
+offsets**, exactly `0x200` apart. `asm/1799_tavern_food_price.asm` declares runtime
+`0x1799`, and its first label is `L_001999`. Proven 2026-10-22 against the bytes: the
+string `THE FOOD HERE COSTS` sits at exe file offset `0x199D`, which is `L_00199a` (the
+3-byte `call`) plus 3 — inside that file, as expected.
+
+The practical failure, which happened the day this was written: mapping a runtime string
+address to its owning function by nearest-preceding **filename** is correct, but comparing
+it against **labels**, or comparing a file offset against a filename, silently shifts every
+result by `0x200` and attributes strings to the wrong routine. When in doubt, convert to
+file offsets and stay there.
 
 **Ghidra's `1000:5eac` and Reko's `0800:5eac` name the same byte.** Both convert to file
 `0x60ac`. Verified on the bytes: file `0x60ac` is `50 53 51 52`, which is `push ax` /

@@ -37,6 +37,15 @@ is a computed immediate. The tavern already shows exactly that (§ 3).
 | Armour | 6 items: CLOTH, LEATHER, CHAIN, PLATE, REFLECT, POWER | `1D39`/`1D56` |
 | Magic shop | 6 spells — **wizard** list | `19EC`/`1A05` |
 | Cleric shrine | 6 spells — **cleric** list, donation asked as "your interest?" | `189E`/`18B7` |
+
+**Audit, 2026-10-22.** Every string in this table was re-derived from the executable and
+re-mapped to its owning routine using the correct convention (`asm/` filenames are runtime
+offsets, `L_xxxx` labels are file offsets — see `docs/decompiling.md` § address bases).
+**All owner attributions hold.** Two start addresses were a few bytes early because the
+earlier pass measured the run of printable bytes rather than the string proper: the
+transport shoppe is `1F89`, not `1F93`, and the clue seller is `1B11`, not `1B02`. Neither
+changes a conclusion. A claim that these attributions were shifted by `0x200` was made in
+session and was itself wrong; the owners were always right.
 | Horse dealer | one item, price quoted then a yes/no deal | `1F93`/`1FC4` |
 | Clue seller | one clue, price chosen by the player × 100 | `1B02` |
 | Tavern | buy a drink, or tip | `15FC`/`1654` |
@@ -81,7 +90,32 @@ sells anything**: the merchant offers apples (`asm/412C`), the thief offers a wa
 purchase path. Bytes are proven; none of the three appears in `ExecutedInstructions` in
 any of the 60 harvests, so the trigger conditions are unobserved.
 
-## 5. Why G21 was never answered — a boundary defect
+## 5. What actually selects a shop — not the tile, and not the NPC behind it
+
+**measured from the trampolines, not yet observed running.** The `T` path reaches a set of
+small dispatchers that branch on **where the player is standing in the sector** and on the
+**site kind**:
+
+| routine | test | target |
+| --- | --- | --- |
+| `asm/1590` | `DS:00` (player x) vs `0x20` | region split |
+| `asm/1598`, `asm/15A2` | `DS:01` (player y) vs `0x20` | `jb` → `L_0017ba` |
+| `asm/15B4` | — | runtime `1F1D` |
+| `asm/15BA` | `DS:4A` (site kind) `== 2` | `204F` if so, else `1CE0` |
+| `asm/15D0` | — | runtime `2175` |
+
+So a sector is divided into regions and each region has its own shop entry, and the site
+kind picks between two of them. **The letter tile byte is not the selector and the NPC type
+behind it is not either** — which is why the "find a merchant standing behind a letter
+tile" heuristic was wrong and the sector-41 target built on it was aimed at the wrong
+thing. The owner's correction stands: plenty of characters stand behind letter tiles and do
+not sell.
+
+**The right experiment** is to stand in each region of a town sector and press `T`, not to
+hunt for a particular NPC. That also means G22's evidence gap is a *position* problem, and
+the region boundaries are readable statically from these tests.
+
+## 6. Why G21 was never answered — a boundary defect (this is G22)
 
 `asm/19D7_magic_shop_menu.asm` declares `# func 19D7..2027`, **0x651 bytes**, and
 contains **59 strings**, including the armour shoppe (`1D20`), the weapons shoppe
@@ -96,7 +130,7 @@ Splitting it is a Phase 2/3 function-boundary change, which touches the byte-pro
 harness, so it is **recorded as a defect and not done here.** It needs the owner's
 go-ahead and a per-function `check_func.py` run for each new range.
 
-## 6. Follow-ups
+## 7. Follow-ups
 
 | item | note |
 | --- | --- |
