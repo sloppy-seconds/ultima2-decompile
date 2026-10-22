@@ -428,25 +428,26 @@ reachable tile the ray returned `NO RESPONSE`, so it was not landing on a `0x68`
 `monx31` spawn table puts a Merchant at (51,15), but live creatures move, and the shipped
 layout is where they *start*, not where they are.
 
-### 5c. The ray, partly decoded — and the food sweep came back empty
+### 5c. The ray is NOT decoded — one hypothesis made here and retracted
 
-`cmd_T` is `asm/4050_cmd_T.asm` (it prints the `TRANSACT-` prefix). The mechanics the
-rejection guards sit inside:
+`cmd_T` is `asm/4050_cmd_T.asm` (it prints the `TRANSACT-` prefix). What is solid is the
+**rejection guards**: `asm/406E` requires site kind `[DS:4A] != 0`; `asm/409F` requires
+the creature type `== 0x68` (Merchant); `asm/4081` tests against `0x7C`. All three branch
+to the shared `FUNNY, NO RESPONSE!` printer at `asm/40A6`. That part is observed.
 
-* `asm/4085` advances an accumulator: `DS:23 += DS:19`, `DS:24 += DS:1A`, then calls
-  `L_0052b3`. So **`DS:19/1A` is the direction delta and `DS:23/24` is the ray cursor.**
-  Read live on 2026-10-23 after `T,Up`: `DS:19/1A = (0x01, 0xFF)` i.e. `(+1, -1)`, and
-  `DS:23/24 = (19, 23)`.
-* The guards that reject: `asm/406E` requires site kind `[DS:4A] != 0`; `asm/409F`
-  requires the creature type `== 0x68` (Merchant); `asm/4081` tests against `0x7C`.
-  All three branch to the shared `FUNNY, NO RESPONSE!` printer at `asm/40A6`.
+**RETRACTED the same day:** this section first claimed `asm/4085` walks a ray, with
+`DS:19/1A` as the direction delta and `DS:23/24` as the cursor, because `asm/4085` does
+`DS:23 += DS:19` and `DS:24 += DS:1A`. It was tested directly and it is **wrong**: after
+`T,Up`, `T,Down`, `T,Left` and `T,Right` in one run, `DS:19/1A` read **(1, 1) every single
+time** — direction-invariant, so it cannot be a direction delta — and `DS:23/24` moved
+only (19,29)→(20,30), which is not a ray walking a line. Whatever `asm/4085`
+accumulates, it is not the talk ray, and the initial `(+1,-1)` reading that made the
+hypothesis look diagonal was itself a stale-value artefact of reading once after a single
+direction.
 
-**Doubt on the delta.** `(+1, -1)` for a `Up` talk is diagonal, which is not what `Up`
-should mean. Either the delta is written by a different command and `T,Up` left a stale
-value behind, or the direction encoding is not a plain screen vector. **Not resolved**
-— and it is the thing that decides where the ray actually goes, so the sweep cannot be
-tuned until it is. Reading `DS:19/1A` immediately after each of the four directions, in
-one run, would settle it in a minute.
+**So the ray mechanism is still undecoded.** Do not cite a ray length, a reach, or a
+standing position for `T` from this document; none of that is known. The guards tell us
+what gets rejected, not what gets found.
 
 **The sweep itself: negative, and recorded as such.** Sector 31, maxout, live creature
 arrays read from `DS:137/157/197`. Live slots confirmed five `0x68` Merchants, including
@@ -459,11 +460,11 @@ the (51,15) Merchant, and (52,17) east of the (55,17) one — in all four direct
 retries at `--delay` 0.02/0.05/0.15, **no price breakpoint ever fired**. The band showed
 `CMD: TRANSACT-NORTH` then `FUNNY, NO RESPONSE!`, i.e. delivered and refused.
 
-So the ray rule is not "stand two cells away", and the geometry that opened sector 32's
-armoury does not generalise to sector 31's restaurant. **G23 remains open, still
-agent-doable, and the next step is now specific rather than a search:** decode the
-direction→delta mapping at `DS:19/1A`, then aim. Walking a maze by trial and error was the
-wrong tool and it did not converge.
+**What to do instead of sweeping.** The ray is worth ~40 instructions of static reading,
+not another walk: find the loop that `asm/409F`'s `cmp $0x68` guards, since whatever
+produced `AL` there is what the ray actually reads, and follow that producer back to the
+step. That is a lookup with a definite answer. Trial-and-error walking was the wrong tool
+and it did not converge.
 
 
 **The earlier claim stays withdrawn.**
