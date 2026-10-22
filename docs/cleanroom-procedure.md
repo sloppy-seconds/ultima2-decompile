@@ -70,6 +70,8 @@ reproduce the original arithmetically.
 | `original/`, `references/`, `tmp/tiles/` | **forbidden** | the game and its extracted art |
 | `asm/`, `build/`, `captures/` | **forbidden** | derived from the copyrighted binary |
 | `tmp/*.png`, `tmp/*.html` | **forbidden** | screenshots, and the viewer pages which embed extracted art as base64 |
+| `bestiary/cache/`, `bestiary/view.html` | **forbidden** | third-party rips of the game's art in seven platform variants, and the FM Towns frames split from them |
+| `bestiary/bestiary.tsv`, `bestiary/matches.md` | **forbidden** | they state which of our art indices a community bitmap is pixel-identical to, which describes the originals |
 | `engine/assets/tiles/cleanroom/PROVENANCE.md` | **forbidden** | legal record; discusses the originals |
 | `/var/tmp/tile-review-ledger.md`, `game-knowledge-deltas.md` | **forbidden** | review notes containing ASCII pixel dumps |
 

@@ -45,6 +45,9 @@ following, in this repository or anywhere else:**
 | `tmp/*.html` | the map viewer and tile review sheet embed the extracted originals as base64 |
 | `docs/tile-art-evidence.md` | **the answer key**: measured structure of every original |
 | `tools/tile_rules.py` | **also the answer key**: the gate's bands were fitted to the originals — density ranges, periods, component sizes, diagonal runs |
+| `bestiary/cache/` | **original art in bulk**: copyrighted rips of the game's tiles in seven platform variants, plus the FM Towns animation frames split from them. Collected for *naming*, not for drawing. |
+| `bestiary/view.html` | embeds those rips and our extracted tiles as data URIs |
+| `bestiary/bestiary.tsv`, `bestiary/matches.md` | they record which of our art indices a community bitmap matched, which is a description of the originals written with the originals in view |
 | `tools/tile_review.py`, `tools/tile_atlas.py`, `tools/monster_shapes.py` | load or render the extracted originals |
 | `engine/assets/tiles/cleanroom/PROVENANCE.md` | legal record; discusses the originals and cites forbidden paths |
 | `/var/tmp/tile-review-ledger.md`, `/var/tmp/game-knowledge-deltas.md` | review working notes containing ASCII pixel dumps of the originals |

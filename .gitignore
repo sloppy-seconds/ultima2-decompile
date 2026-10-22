@@ -102,3 +102,12 @@ __pycache__/
 # rationale as engine/build/ above. It was missed when the sdl target was added, so
 # 64 .o files were being tracked and showed as modified on every `make sdl`.
 engine/build-sdl/
+
+# Third-party creature data pulled by tools/bestiary_fetch.py: copyrighted rips of
+# game art in seven platform variants, the FM Towns frame strips split from them,
+# and view.html, which embeds all of it as data URIs. All regenerable. Only our own
+# derived table (bestiary/bestiary.tsv) and the prose beside it are committed, per
+# the licensing policy above. This is also original art in bulk, so it is forbidden
+# to anyone drawing substitute art — see docs/tile-art-spec.md § 2.
+bestiary/cache/
+bestiary/view.html
