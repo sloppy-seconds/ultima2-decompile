@@ -1,10 +1,12 @@
 # bcd_price_from_stats — derives a BCD amount into DS:27/28 from int + charisma
 # name-evidence: seeds the price pair DS:27/28 AND a second pair DS:29/2A to 0004,
-#           derives a loop count from the bit length of [DS:50]+[DS:4E] (int + cha),
-#           then runs a swap-and-add BCD sequence DI times, leaving the result in
-#           DS:27/28 -- the same operand pair asm/51A5 prints and asm/2052 charges.
-#           Three inbound callers: 17B2 (the tavern food quote), 1869_cleric_shrine,
-#           19D7_magic_shop_menu. All three are places a price is quoted.
+#           derives a loop count from the bit length of [DS:50]+[DS:4E] (int + the
+#           byte at DS:4E -- see DOUBT, its identity is disputed), then runs a
+#           swap-and-add BCD sequence DI times, leaving the result in DS:27/28 -- the
+#           same operand pair asm/17B7 hands to the 4-digit BCD printer and asm/2052
+#           charges. Three inbound callers: 17B2 (the tavern food quote),
+#           1869_cleric_shrine, 19D7_magic_shop_menu. All three are places a price is
+#           quoted.
 # func 20AB..2121  len 0077 B  evidence: seed+call+reko
 # provenance: static, 2026-10-23. NOT validated against a live price -- see DOUBT.
 # confidence: high on the instruction-level mechanics (bytes + a step-by-step
@@ -45,6 +47,16 @@
 #   of direction, not proof of the arithmetic.
 #
 # DOUBT -- read this before citing the routine, and note two retractions inside it
+#   * WHICH STAT IS [DS:4E] IS NOT SETTLED, and this file's name leans on it.
+#     tools/u2_edit.py records the dispute: engine/src/core/state.h labels DS:4E
+#     charisma and DS:4F wisdom, docs/spice86-live-findings.md lists them the other way
+#     round, and it cannot be resolved from a character where both bytes are equal --
+#     which is every maxout character ever seeded here, including the one used for this
+#     analysis. So "int + cha" here means "int + [DS:4E]", and if the labels are swapped
+#     the mechanic is int + WISDOM. The owner's recollection is that CHARISMA moves
+#     prices; that is a reason to hope this is charisma, not proof of it. Do not rename
+#     this file on the strength of the recollection alone. A capture that sets DS:4E and
+#     DS:4F to DIFFERENT values and watches the price settles it.
 #   * RETRACTED (same day, twice): this routine was first described as deriving its
 #     count from `popcount(int + cha)` and as a "multiply by repeated addition".
 #     Both were wrong. The shift loop counts shifts, not set bits, and the loop is a
@@ -52,18 +64,24 @@
 #     subtracting 6 instead of adding, which produced plausible nonsense (01A6 where
 #     the answer is 0012) -- a good illustration of why a model must be checked
 #     against a hand-computed case before it is quoted.
-#   * THE MODEL DOES NOT REPRODUCE THE OBSERVED PRICE. The vendor/tavern quote seen
-#     live printed 0200 (docs/commerce.md § 3). This routine, called from asm/17B2
-#     with AL=3 on a maxed character, yields 0020 -- the same digits, transposed
-#     across the two bytes. Either the byte order of the (DS:27, DS:28) pair is the
-#     other way round from what asm/2052's pairing implies, or the live quote did not
-#     come through this path, or caller_AL was not 3. **None of these is settled and
-#     the discrepancy is left open deliberately.** Do not describe this routine as
-#     "the price formula" until it reproduces a number the game actually printed.
-#   * Which of DS:27 / DS:28 is the high byte is inferred from asm/2052 subtracting
-#     DS:28 from DS:59 and DS:27 from DS:58. It is consistent everywhere checked, but
-#     the transposition above is exactly the symptom that inference would produce if
-#     it were backwards.
+#   * THE MODEL DOES NOT REPRODUCE THE OBSERVED PRICE, and the gap is now known to be
+#     real rather than a misreading of the print. asm/17B7 was decoded on 2026-10-23 --
+#     it turned out to be TWO more fragment-splits of exactly the G22 kind (51A5/51A9/
+#     51AE and 53B5/53C5 are one 4-digit BCD printer each, cut on branch targets). It
+#     emits DS:27 as two decimal digits, then DS:28 as two. So the observed '0200' means
+#     DS:27=0x02, DS:28=0x00, and this routine called from asm/17B2 with AL=3 on a maxed
+#     character leaves DS:27/28 = 0020.
+#     Worse than transposed: the values this loop can ever produce are
+#         4, 8, 12, 20, 32, 52, 84, 136, 220, 356, 576, 932, ...
+#     and **200 is not among them at any loop count**. On the current model this routine
+#     cannot output the number the game printed. Either the food quote does not consume
+#     this routine's result, or the loop is still misread, or the printed string was not
+#     0200. Unresolved; G23 carries it. Do not describe this routine as "the price
+#     formula" until it reproduces a number the game actually printed.
+#   * Which of DS:27 / DS:28 is the high byte is now PROVEN by the printer rather than
+#     inferred from asm/2052: asm/17B7 loads AL=DS:27 and DI=DS:28 and the printer emits
+#     AL's two digits first. It agrees with the asm/2052 pairing. The residual doubt in
+#     the bullet above is about the loop, not about the byte order.
 #   * If DI computes to 0 the loop's `dec %di ; jne` wraps to 0xFFFF and runs 65536
 #     times. Reachable in principle (caller_AL+8+CF == bitlength) and never observed.
 #     Untested; do not assume the original guarded it.

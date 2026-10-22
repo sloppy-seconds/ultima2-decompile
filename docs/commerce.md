@@ -222,13 +222,48 @@ What the bytes say, **observed** and then **measured** by stepping the instructi
   call (`AL=3`) on a maxed character (`int=cha=0x40`): `DI = 11 − 8 = 3` → `0020`. With
   `int=cha=0`: `DI = 10` → `0576`.
 
-**The model does not reproduce the observed price, and that is left open on purpose.** It
-yields `0020` where the game printed `0200` — the same digits transposed across the two
-bytes. Either the byte order of the `(DS:27, DS:28)` pair is the other way round from what
-`asm/2052`'s pairing against `DS:58/59` implies, or the live quote did not come through
-`asm/17B2`, or `AL` was not 3. **None of these is settled.** Do not describe this routine
-as "the price formula" in anything downstream until it reproduces a number the game
-actually printed; call it a stat-dependent BCD generator that writes the price operand.
+**The model does not reproduce the observed price, and the gap is now known to be real
+rather than a misreading of the print.** On 2026-10-23 the printer itself was decoded, and
+it turned out to be **two more fragment-splits of exactly the G22 kind**: `asm/51A5`,
+`asm/51A9` and `asm/51AE` are one routine, and `asm/53B5` and `asm/53C5` are another, each
+cut on branch targets rather than at a boundary. Reassembled, the chain from `asm/17B7` is:
+
+```
+17B7  mov [DS:27],%al ; mov [DS:28],%bl -> %di ; call 51A5
+51A5  push %ax ; call 53B5          ; print DS:27, two decimal digits
+51A9  mov %di,%ax ; call 53B5       ; print DS:28, two decimal digits
+51AE  pop %ax ; ret
+53B5  mov %al,%ah ; shr $1 x4 ; or $0x30 ; emit   ; high nibble
+53C5  mov %ah,%al ; and $0xf ; or $0x30 ; emit    ; low nibble
+```
+
+So the four printed digits are **DS:27 then DS:28, high nibble first**, and the observed
+`0200` means `DS:27 = 0x02`, `DS:28 = 0x00`. That also *settles* the byte-order question
+that was previously only inferred from `asm/2052`: DS:27 is the high byte, and the printer
+says so directly.
+
+**And it makes the discrepancy worse, not better.** The values this loop can ever place in
+`DS:27/28` are
+
+```
+4, 8, 12, 20, 32, 52, 84, 136, 220, 356, 576, 932, ...
+```
+
+and **200 is not among them at any loop count.** On the current model `asm/20AB` cannot
+output the number the game printed. Three ways out, none yet closed: the food quote does not
+consume this routine's result; the loop is still misread; or the printed string was not
+`0200`.
+
+**A live capture was attempted on 2026-10-23 and did not reach the quote.** The run was
+seeded to the owner's exact position from `captures/spice86/food-buy` (sector 31, (50,21),
+Fighter at (51,21)), arrows confirmed working, and `tools/bp_read.py` armed at `17B7`. `T`
+on its own registers — the band prints `CMD: TRANSACT-PASS` — but `T,Right` and `T,Up`
+queued together at `--delay 0.02` both fell through to `CMD: PASS`, and `17B7` never
+executed. The original quote came from a **human driving over VNC**; the documented headless
+recipe does not reproduce it. G23 now carries that as the blocker, plus a cheap bonus: every
+maxout character has `DS:4E == DS:4F`, which is exactly why `tools/u2_edit.py` still marks
+the cha/wis labels DISPUTED, and one quote with the two bytes set **unequal** would settle
+that field dispute as a side effect.
 
 ### Charisma affects costs — owner-confirmed
 
@@ -239,10 +274,15 @@ only stat-dependent arithmetic found anywhere in the commerce path reads `int` a
 and nothing else, and its output decreases as those two rise. That is corroboration of
 direction from an independent source, and it is the strongest support the reading has.
 
-It is still **not** proof of the arithmetic, and the `0020`-vs-`0200` transposition above
-is unresolved. What the recollection buys is a **falsifiable prediction** rather than a
-hunch: a low-charisma character should be quoted a **higher** price than a high-charisma
-one, at the same vendor, for the same item. That is now the shape of the G23 capture.
+It is still **not** proof of the arithmetic, and the printer decode above strengthened the
+case that something is wrong with the model, since 200 is unreachable. There is a second
+hole the recollection does not cover: **`[DS:4E]` may be wisdom, not charisma.**
+`engine/src/core/state.h` and `docs/spice86-live-findings.md` disagree, and every seeded
+character has the two bytes equal, so the identity is unproven. If the labels are swapped
+this routine reads `int + wisdom`, and the charisma recollection points at some *other*
+mechanism still unfound. What the recollection buys is a **falsifiable prediction**: a
+low-charisma character should be quoted a **higher** price at the same vendor for the same
+item — and setting `DS:4E` and `DS:4F` apart is what tells us which byte this even is.
 
 **What is settled regardless:** there is no price table, the printed price and the charged
 price are the same operand pair, and the pair is written by a routine whose output depends

@@ -190,6 +190,34 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — An **emulator breakpoint is a one-way door, and "paused" is not proof
+  of a hit.** The monitor surface of the vendored emulator offers a command to *add* an
+  address breakpoint and no command to remove one, so a validation self-test that arms on
+  the currently-executing address silently poisons the rest of the run, and every later
+  "hit" may be the self-test's trap firing on an idle loop. Separately, the pause flag on
+  the status endpoint is also set by ordinary memory reads, so a concurrent key-injection
+  helper that verifies itself by reading memory produces real pauses at arbitrary
+  addresses. A first version of the capture tool accepted "paused" as the breakpoint
+  signal and reported a confident stop at the wrong address; the memory it printed was
+  genuine, which is exactly what made it dangerous. A breakpoint harness must (a) assert
+  the stop address equals the requested address and fail loudly otherwise, (b) treat a
+  pause at any other address as noise to skip rather than a result, (c) never arm a
+  self-test on an address the program will pass again, and (d) say so in its own output
+  when it has made a run unusable. Breakpoints that cannot be removed mean **one emulator
+  run per capture target**, an operational cost worth designing for up front.
+
+* **2026-10-23** — **A fragment-splitting clean wave leaves the same wound everywhere, not
+  only where it was noticed.** Once function boundaries were examined in one region, the
+  identical pathology turned up in an unrelated one: a number-printing helper cut into five
+  pieces across two call levels, each fragment ending on a branch into the next, none of
+  them a routine. Reading any single fragment produced a plausible but wrong account, and
+  the wrong account was internally consistent. After a mechanical boundary pass, run a
+  detector for the shape instead of waiting to trip over it: a fragment whose only inbound
+  edge is a fall-through from its immediate neighbour and whose tail branches forward into
+  that neighbour is almost certainly one half of a split routine. Report candidates; do not
+  merge them automatically, because a boundary is a claim about intent and the bytes only
+  support the claim sometimes.
+
 * **2026-10-23** — A **content guard must be expressed over content, not over files.** The
   asm-tree guard md5'd each changed file's non-comment lines against HEAD and failed on any
   deletion. That was correct while renaming was the only legal edit, and it silently became a
