@@ -13,7 +13,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
 | CP4 | Overworld + movement | **in-progress (CP4b overnight: T1,T3,T4,T6,T7,T8 done/passed; T2 half; T5 held)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: arrows via a scancode table at `CS:0x4F09`, direction codes as data at `DS:26E..271`, a rejected step is undone before `--INVALID MOVE!`, and crossing x/y >= 64 reloads the sector (`asm/242D`/`2434`/`243E`) rather than straddling. **Viewport now measured from owner screenshots**: tile = 16x16 px = 2x2 text cells, window 20x10 tiles at rows 0-19 full width, player at window tile (9,5), row 24 blank. Dungeons are first-person 3D, so the tile renderer does not cover them (CP7). **CP4b overnight (2026-10-21):** the passability premise was disproven — `asm/2423` never reads a tile, so on-foot walking is never rejected on the overworld (T1 PASSED, write-up in implementation log § CP4b); tile IDs decoded (0=water,4=land,8=plane,0x78=player); sector crossing is the `DS:6E` arrival system, not a foot step. T3/T4/T6 fixed one root-cause class (loops testing `exit_code` but not `input_exhausted`): window-close, SIGTERM, and dummy-driver `--dump-screen` all now stop cleanly. T2 shipped the proven half (PASS spends 10 food, underflow zeroes DS:51..59 = instant death; no gradual HP drain, no per-step tick — the walk loop calls no drain). T7 screenshot differential harness landed (status-block only, poison-checked). T5 held for owner: it moves the CP2 baseline and its pre-approval flag is unresolved. Full detail: `docs/archive/phase4-overnight-cp4b.md § Morning report` | 2026-10-21 |
-| CP5 | Combat | **scoped, not started** | Tickets C1..C7 in § CP5 below. Evidence base is the 2026-10-21 sector-00 caster session: commits `b11bfc6`, `1d7bae3`, `341952d`, `49d8365` and `docs/spice86-live-findings.md` § 12. Nothing may be written before C1/C2, and C5 is **blocked on a capture** because a required input is still unproven. C7 is resolved. | 2026-10-21 |
+| CP5 | Combat | **in progress — scope ruled 2026-10-23** | Tickets C1..C7 in § CP5 below. **Owner scope ruling: the larger scope** — not just the `combat_check` spec tickets but the wiring that makes combat *reachable* in the engine (encounter, turn loop, continuous world). Status per ticket: **C4 and C5 implemented 2026-10-22**, **C7 resolved**, **C1/C2/C3/C6 todo**. C2's discrimination is already CI-enforced (`combat_check.c`: faithful model 4051 checks / 0 failures, boolean-wrong model must fail with 70). C5 is no longer "blocked on a capture" — the field turn is on record (fight turn 2909); what remains is *placement*, which belongs to passability G4, not combat. **Owner recollection on the status effects, recorded as `recalled` and treated as a pointer, not a conclusion:** legs paralysed -> can still fight but not move; arms paralysed -> the reverse; paralysis lasts "some amount of time or moves"; and **"there's not really a leaves-combat state"** — see the design note below. Two owner decisions still open: the acceptance bar (does CP5 need an owner eyeball gate like CP0/CP1/CP2, and of what) and confirmation that C5 placement is out of CP5 scope. | 2026-10-23 |
 | CP6 | Towns + full command set | todo | | |
 | CP7 | Time travel + space + dungeons | **partly informed 2026-10-21** | Dungeons are sectors, not a separate format: entering a cave moved `DS:49/4A` from `3,0` to `3,5` and loaded `mapx35`, with no video mode change (stays CGA mode 4). Rendered as a first-person wireframe. Light is a **step counter** at `DS:26`, zeroed on entry, ~150 on `I`, decremented per move, and `mapx25`/`35`/`45` are byte-identical. Command dispatch is mode-aware: `A` is ATTACK outside and ADVANCE inside. Full detail: `docs/spice86-live-findings.md` § 13. | 2026-10-21 |
 | CP8 | Endgame + full playthrough 🔒 | todo | | |
@@ -617,6 +617,33 @@ of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
 source of truth for item counts, and any resist check must read it rather than a
 cached boolean.
+
+**Second design constraint, from the owner on 2026-10-23, and it is architectural.**
+Asked whether paralysis survives leaving combat, the answer was *"I don't know if that
+survives SAVE, but there's not really a leaves-combat state."* That is a statement about
+the original's shape, not about a detail: combat is not a separate mode you enter and
+exit, it is the same continuous space with a different thing happening in it. Three
+consequences, all of which the scope ruling now commits us to:
+
+* **It independently corroborates C3.** If there is no separate combat mode, then
+  paralysis being a *movement rejection* rather than a combat overlay is not a quirk to
+  emulate, it is the only shape that makes sense — a paralysed step takes the same reject
+  path as walking into a mountain, because there is one movement system, not two.
+* **It contradicts a likely engine assumption.** If the reimplementation grew a battle
+  screen or a combat-mode flag, that is a deviation to surface, not a feature. Check this
+  before writing the encounter wiring, because it is much cheaper to discover now.
+* **It makes the SAVE question the only persistence question.** If nothing is entered and
+  left, then the only way a status counter can outlive its context is by being saved — and
+  C1 already says the counters sit at `DS:26B..26D`, **outside** the proven save record
+  `DS:36..135`. So either they are not persisted at all, or the save record is bigger
+  than `docs/save-format.md` currently proves. Both are testable headlessly: seed
+  non-zero counters, save, reload, read back. Registered as a capture ticket.
+
+The legs/arms asymmetry the owner described — **legs out means you can fight but not move,
+arms out means you can move but not fight** — is consistent with C1's three independent
+counters and with C2's separate item gates (`[DS:D9]` boots, `[DS:DA]` cloak), and is the
+behaviour the CP5 acceptance should assert, since a single boolean "paralysed" flag cannot
+reproduce it.
 
 **C2's discrimination is now CI-enforced, not asserted.** `engine/tests/combat_check.c`
 runs on every `make test` against two shipped fixture models: `combat_model_faithful.c`
