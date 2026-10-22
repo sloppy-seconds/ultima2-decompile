@@ -148,6 +148,13 @@ seeded with `--player`, so character creation is not an obstacle either.
 | G11 | `A`–`Z` dungeon byte decode | **owner** | **low** | CP7 |
 | G12 | force-field animated render (white/blue/purple) source | **owner** | **low** | C5 cosmetics |
 | G13 | reproduce `mapx30 (0,0)=0x50` | agent | **low value** | nothing |
+| G14 | who writes `%di` before `0x3546` — settles five time periods against ten sector tens-groups | agent | **med-high** | time-period display, CP6 |
+| G15 | locate towns: which sector holds which town (`DS:4A` site kind 1 village / 2 town / 4 tower, plus map bytes, give the search) | agent | **medium** | shops, signs, CP6 |
+| G16 | `0xC0` event tile: step on one and record what the event actually is (a probe threw the player y=20→57; 1311 occurrences, exactly 262 in each of `mapx25/35/45`) | agent | **medium** | tile art, CP4/CP6 |
+
+G14, G15 and G16 were carried in from the 2026-10-21 handoffs on 2026-10-22, where they
+were open but recorded nowhere but a document being archived. See
+`docs/handoff-2026-10-22.md` § Triage.
 
 G1–G5 are `docs/passability-findings.md § Open` questions 1–5; the technical spec
 lives there. What follows is only the driving plan and the honest verdict.
