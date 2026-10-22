@@ -1132,6 +1132,28 @@ evidence that `DS:4A` is the site kind (0 = overworld, 1 = village, 2 = town,
 `Files.txt`). Note `DS:0x29` is also the CP3 creation budget, so the byte is
 reused across subsystems.
 
+**Reconciliation, 2026-10-22.** This passage and `docs/map-format.md:110` ("sector is two
+decimal digits at `DS:49/4A`") looked like a contradiction and were read as one, but
+**both are true and they are the same fact**: `DS:4A` is the ones digit of the sector
+number, and that digit *is* the site kind. The shipped file set proves the scheme:
+
+| ones digit | sectors present | `tlkx` dialogue | reading |
+| --- | --- | --- | --- |
+| 0 | 00 10 20 30 40 50 60 70 80 90 | none | wilderness / overworld |
+| 1 | 11 21 31 41 61 71 81 | all | village |
+| 2 | 22 32 82 92 | all | town |
+| 3 | 03 23 33 93 | all | town (third kind) |
+| 4 | 24 34 44 | none | tower — **never visited in any capture** |
+| 5 | 15 25 35 45 85 | none | dungeon / cave |
+
+All 15 `tlkx` files land in ones-digit 1/2/3 and none in 0/4/5, so street dialogue exists
+only where the scheme says towns do. Independent corroboration from a live session:
+entering a cave moved `DS:49/4A` from `3,0` to `3,5` — sector 35, ones digit 5. And
+`dungeon-35-live` is sector 35, which is also where the dungeon monster encoding (types
+`0x01`–`0x06`, no grid stamping) shows up. **The ones digit predicts which ruleset
+applies**, which is why "is it only dungeons that differ?" has a clean answer: see
+`docs/sector-rulesets.md`.
+
 ### Viewport: resolved, and measured from play screenshots
 
 The shape of the answer is **text in CGA graphics mode 4**, not a bitmap: `asm/4B26`

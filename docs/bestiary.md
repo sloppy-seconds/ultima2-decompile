@@ -263,7 +263,8 @@ anywhere in `asm/`. So town NPCs are not created by the wandering-monster spawne
 
 **A lead I promoted and then retracted.** `asm/3611` looked like the townsfolk path
 because it is the only routine in the tree that tests the site kind
-(`cmpb $0x4,[DS:4A]`, tower). It is not. It is reached by fall-through from
+(`cmpb $0x4,[DS:4A]`, tower — and note `DS:4A` is the ones digit of the sector number, so
+that test is really "are we in sector X4"; see `docs/sector-rulesets.md` § 1). It is not. It is reached by fall-through from
 `asm/35F3` — which stores a slot index to `[DS:20]`, rolls `rand | 0x20` into
 `[DS:1F]` at `asm/3606`, and jumps into the HP subtract — so it *applies* a random
 32–63 of damage to a chosen monster slot, and its site-kind test gates a map stamp of

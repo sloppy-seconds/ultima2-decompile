@@ -111,6 +111,10 @@ Covered properly in `docs/save-format.md`. The two facts that matter for map wor
   `MAPXFF`), so sector 20 is the pair `2,0`, and a numeric read gives 512.
   `tools/u2_edit.py set <save> sector 71` handles the split. Verified: digits
   `1,0` boots into sector 10.
+  **The ones digit is also the site kind** — 0 wilderness, 1/2/3 towns (every `tlkx`
+  dialogue file sits in 1/2/3), 4 tower, 5 dungeon/cave. Not a contradiction between
+  this note and the site-kind reading in `phase4-implementation.md`; they are the same
+  fact. See `docs/sector-rulesets.md` § 1.
 
 Since the save record is `DS:36..135` verbatim, a probe map plus a teleport can
 put the character on any tile of any sector without walking there.
