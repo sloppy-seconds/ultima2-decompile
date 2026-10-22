@@ -428,43 +428,49 @@ reachable tile the ray returned `NO RESPONSE`, so it was not landing on a `0x68`
 `monx31` spawn table puts a Merchant at (51,15), but live creatures move, and the shipped
 layout is where they *start*, not where they are.
 
-### 5c. The ray is NOT decoded — one hypothesis made here and retracted
+### 5c. How the talk ray actually works — measured, and it explains the failed sweep
 
-`cmd_T` is `asm/4050_cmd_T.asm` (it prints the `TRANSACT-` prefix). What is solid is the
-**rejection guards**: `asm/406E` requires site kind `[DS:4A] != 0`; `asm/409F` requires
-the creature type `== 0x68` (Merchant); `asm/4081` tests against `0x7C`. All three branch
-to the shared `FUNNY, NO RESPONSE!` printer at `asm/40A6`. That part is observed.
+`cmd_T` is `asm/4050_cmd_T.asm` (it prints the `TRANSACT-` prefix). The chain, every step
+cited to bytes:
 
-**RETRACTED the same day:** this section first claimed `asm/4085` walks a ray, with
-`DS:19/1A` as the direction delta and `DS:23/24` as the cursor, because `asm/4085` does
-`DS:23 += DS:19` and `DS:24 += DS:1A`. It was tested directly and it is **wrong**: after
-`T,Up`, `T,Down`, `T,Left` and `T,Right` in one run, `DS:19/1A` read **(1, 1) every single
-time** — direction-invariant, so it cannot be a direction delta — and `DS:23/24` moved
-only (19,29)→(20,30), which is not a ray walking a line. Whatever `asm/4085`
-accumulates, it is not the talk ray, and the initial `(+1,-1)` reading that made the
-hypothesis look diagonal was itself a stale-value artefact of reading once after a single
-direction.
+1. `asm/406E` rejects if site kind `[DS:4A] == 0`.
+2. `asm/407C` and again `asm/409C` call `L_0052b3`, which is **already named**
+   `asm/50B3_map_tile_ptr`: `AL = byte[y*64 + x + word[DS:472]]` with `x = DS:23`,
+   `y = DS:24`. It returns the **live grid cell**, not a creature record.
+3. `asm/4085` advances that cursor: `DS:23 += DS:19`, `DS:24 += DS:1A`.
+4. The cell value must be `0x7C` (`asm/4081`) or `0x68` (`asm/409F`); otherwise the shared
+   printer at `asm/40A6` says `FUNNY, NO RESPONSE!`.
+5. On a match `asm/40A3` jumps to runtime **`1590`** — the dispatcher that leads to the
+   food price. Corroboration: `1590`, `1591`, `1594`, `1596` all appear in
+   `ExecutedInstructions` of `captures/spice86/food-buy`.
 
-**So the ray mechanism is still undecoded.** Do not cite a ray length, a reach, or a
-standing position for `T` from this document; none of that is known. The guards tell us
-what gets rejected, not what gets found.
+**The finding that matters: tile `0x68` is the merchant marker, and it lives in the map.**
+In `mapx31` the byte `0x68` occurs at exactly seven cells — (14,13), (51,15), (55,19),
+(6,41), (51,44), (50,46), (16,48) — and those are **precisely the seven Merchant spawn
+slots in `monx31`**, a 7/7 exact match. The map encodes where a transactor stands and the
+`monx` record is placed on top of it. So `tools/shop_access.py`'s "NPC standing at the
+sign" rule has a sharper form available: **look for tile `0x68`**.
 
-**The sweep itself: negative, and recorded as such.** Sector 31, maxout, live creature
-arrays read from `DS:137/157/197`. Live slots confirmed five `0x68` Merchants, including
-slot 16 at **(51,15)** — exactly its `monx` spawn position, unmoved — and slot 8 at
-(55,17), which *had* moved from its spawn (55,19). So the live-array lookup works and
-`monx` drift is real but not universal.
+**Why the sweep failed, now explained.** The cell north of the player at (51,16) is
+(51,15), which *is* `0x68` — it should have matched. It did not, because the ray's delta
+is `DS:19/1A`, and that pair is written by the **movement** code (`asm/0B0F`, via `sbb`),
+not by the direction typed after `T`. Measured live, `DS:19/1A` read `(1, 1)` identically
+after `T,Up`, `T,Down`, `T,Left` and `T,Right` — direction-invariant, exactly as this model
+predicts and as the "it is the talk delta" guess did not. The cursor was stepping to
+(52,17), not to (51,15).
 
-From every position the maze allowed — (51,17) and (51,16) two cells and one cell south of
-the (51,15) Merchant, and (52,17) east of the (55,17) one — in all four directions, with
-retries at `--delay` 0.02/0.05/0.15, **no price breakpoint ever fired**. The band showed
-`CMD: TRANSACT-NORTH` then `FUNNY, NO RESPONSE!`, i.e. delivered and refused.
+**Grades.** Steps 1–5 and the 7/7 tile match are **measured** from bytes and a live read.
+"The ray reuses the last movement delta rather than the talk direction" is **inferred** —
+consistent with every observation including the (1,1) reading, but not proven: nobody has
+yet watched `DS:19/1A` immediately after a movement key and then after a talk key in the
+same run. That single read both closes it and yields the working recipe: **step one cell in
+the direction you want to transact toward, then press `T` with no direction at all.**
 
-**What to do instead of sweeping.** The ray is worth ~40 instructions of static reading,
-not another walk: find the loop that `asm/409F`'s `cmp $0x68` guards, since whatever
-produced `AL` there is what the ray actually reads, and follow that producer back to the
-step. That is a lookup with a definite answer. Trial-and-error walking was the wrong tool
-and it did not converge.
+**Superseded, kept so nobody re-adopts it.** An earlier draft of this section claimed the
+ray was undecoded and that `asm/4085`'s accumulator was not the ray. Half right — the
+accumulator *is* the ray step; what was wrong was assuming `DS:19/1A` is written by the
+talk direction. The `(1,1)` measurement that refuted the first draft is the same
+measurement that fits this one.
 
 
 **The earlier claim stays withdrawn.**
