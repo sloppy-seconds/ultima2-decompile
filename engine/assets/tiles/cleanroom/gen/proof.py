@@ -19,7 +19,14 @@ from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TILES = os.path.join(HERE, "..", "tiles")
-OUT = "/var/tmp/ultima-cleanroom-proof"
+# Proof output goes in the project's own tmp/, not /tmp or /var/tmp.
+#
+# Deliberately a subdirectory. The spec's cleanroom table forbids `tmp/tiles/`,
+# `tmp/tiles/tiles.json` and the glob `tmp/*.png`; writing PNGs straight into
+# tmp/ would put the proof sheets under a forbidden path and make them
+# indistinguishable from extracted renderings of the original art. tmp/proof/
+# matches none of those entries.
+OUT = os.path.join(HERE, "..", "tmp", "proof")
 os.makedirs(OUT, exist_ok=True)
 
 SCALE = 8

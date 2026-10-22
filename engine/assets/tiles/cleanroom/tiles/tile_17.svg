@@ -52,6 +52,12 @@
     <rect x="12" y="14" width="2" height="1"/>
   </g>
   <g fill="#FF55FF">
+    <rect x="0" y="3" width="16" height="1"/>
+    <rect x="0" y="7" width="16" height="1"/>
+    <rect x="0" y="11" width="16" height="1"/>
+    <rect x="0" y="15" width="16" height="1"/>
+  </g>
+  <g fill="#FFFFFF">
     <rect x="0" y="0" width="2" height="1"/>
     <rect x="4" y="0" width="2" height="1"/>
     <rect x="8" y="0" width="2" height="1"/>
@@ -100,11 +106,5 @@
     <rect x="6" y="14" width="2" height="1"/>
     <rect x="10" y="14" width="2" height="1"/>
     <rect x="14" y="14" width="2" height="1"/>
-  </g>
-  <g fill="#FFFFFF">
-    <rect x="0" y="3" width="16" height="1"/>
-    <rect x="0" y="7" width="16" height="1"/>
-    <rect x="0" y="11" width="16" height="1"/>
-    <rect x="0" y="15" width="16" height="1"/>
   </g>
 </svg>

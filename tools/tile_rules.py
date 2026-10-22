@@ -358,6 +358,10 @@ PENDING_REDRAW |= set(RULES) - PENDING_REDRAW
 # entry is deleted here in the same commit.
 PENDING_REDRAW -= {0x02, 0x10, 0x1D, 0x1E, 0x3C}
 
+# Revision 2 of the substitute set (cleanroom rebuild against the amended spec) fixed these
+# twelve, so their rules are now enforced rather than recorded as debt.
+PENDING_REDRAW -= {0x04, 0x05, 0x09, 0x0C, 0x0D, 0x0E, 0x16, 0x18, 0x1A, 0x1C, 0x3D, 0x3F}
+
 
 def load_grid(path):
     """Parse a cleanroom SVG into (ink grid, colour grid) for a 16x16 cell.
