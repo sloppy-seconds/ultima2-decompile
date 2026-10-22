@@ -42,14 +42,27 @@ This cannot be changed after launch, and it determines what you are able to obse
 
 | | `--watch` (headed) | `--headless` |
 | --- | --- | --- |
-| window | yes, you can watch it | none (`--HeadlessMode Minimal`) |
-| keystrokes via `tools/spice86_keys.py` | yes | **no** — XTEST needs a focused window |
-| screen capture (`tools/vga_screen.py`) | yes | **no** — nothing is rendered |
+| window on a screen | yes, you can watch it | none (`--HeadlessMode Minimal`) |
+| keystrokes | `tools/spice86_keys.py` (XTEST, needs focus) | **`tools/spice86_type.py`** — MCP `send_keyboard_key`, no window needed |
+| screenshot | `tools/vga_ring.py`, `tools/screenshot_diff.py` | MCP `screenshot` tool returns PNG base64 inline |
 | HTTP memory reads | yes | yes |
 | MCP memory writes | yes | yes |
 | save seeding with `--player` | yes | yes |
 | CFG harvest | on clean exit, or live `dumpAll` | **live `dumpAll` only** |
 | teardown | close the window, or `spice86_stop.sh` | `spice86_stop.sh` |
+
+**Headless is not input-blind.** Spice86's MCP endpoint exposes 63 tools including
+`send_keyboard_key` (args `key`, `isPressed`; a full press is down then up) and
+`screenshot`. `tools/spice86_type.py` wraps the MCP streamable-HTTP handshake so keys
+are one command, and `--auto-play` uses it. This was discovered late, and three
+captures were written off as needing a human before it was found — check here first.
+
+The claim that keystrokes require a display was true only of the **xdotool path**. The
+game reads the keyboard through INT 16h at exactly one site (`asm/4F4D_key_poll`,
+AH=01h then AH=00h), which is the BIOS typeahead ring, so a key is reachable by any
+route that reaches the emulator — no X server required. Poking the ring at
+`0040:001E` directly also works and is kept as `enqueue_bios` in
+`tools/spice86_type.py`, but `send_keyboard_key` is the supported path.
 
 **Measured on this build (2026-10-21): headless Spice86 ignores both SIGTERM and
 SIGINT** — it sat through each until SIGKILL. So in headless mode no signal produces
@@ -90,8 +103,15 @@ python3 tools/u2_edit.py set     tmp/seed/player sector 0
 python3 tools/u2_edit.py setpos  tmp/seed/player 30 32     # X and Y only
 tools/spice86_start.sh --headless --player tmp/seed/player --name seeded
 
+tools/spice86_start.sh --headless --player tmp/seed/player --auto-play --name seeded
+
 # install a synthetic sector before launch (the game reads mapxNN at startup)
 tools/spice86_start.sh --headless --seed-map /var/tmp/probe/mapx20 --name probe
+
+# drive / inspect a running session, no window needed
+python3 tools/spice86_type.py --probe            # CS:IP, key ring, player name
+python3 tools/spice86_type.py --list            # the 63 MCP tools and their args
+python3 tools/spice86_type.py --keys Escape,p   # ESC then P (title -> world)
 
 tools/spice86_start.sh --harvest    # dump the CFG of the live session, keep running
 tools/spice86_stop.sh               # dumpAll -> teardown -> harvest to captures/spice86/<label>/
@@ -172,6 +192,10 @@ Check it before writing anything new against a live session.
 | job | tool | needs a display? |
 | --- | --- | --- |
 | launch / label / seed a run | `tools/spice86_start.sh` (`-h` for options) | no (`--headless`) |
+| **send keys to a headless run** | **`tools/spice86_type.py --keys Escape,p`** | **no** — MCP |
+| enter the world unattended | `tools/spice86_start.sh --auto-play` | no |
+| list what the emulator can do | `tools/spice86_type.py --list` (63 MCP tools) | no |
+| screenshot, headless | MCP `screenshot` (PNG base64) | no |
 | stop and harvest the CFG | `tools/spice86_stop.sh` | no |
 | harvest mid-run without stopping | `tools/spice86_start.sh --harvest` | no |
 | read memory | HTTP API `GET /api/memory/<phys>/range/<len>` | no |
@@ -183,16 +207,19 @@ Check it before writing anything new against a live session.
 | render the text screen from a dump | `tools/vga_screen.py` | no — reads memory, not the window |
 | render the overworld from a dump | `tools/map_render.py` | no |
 | continuous frame ring / screenshots | `tools/vga_ring.py`, `tools/screenshot_diff.py` | **yes** |
-| send keystrokes | `tools/spice86_keys.py` | **yes** |
-| make real arrow keys work | `tools/patch_arrows.py` (via `--patch-arrows`) | yes, to be useful |
+| send keystrokes, headed | `tools/spice86_keys.py` (xdotool/XTEST) | **yes** |
+| screenshots, headed | `tools/vga_ring.py`, `tools/screenshot_diff.py` | **yes** |
 | dungeon-specific probe | `tools/dungeon_capture.py` | no |
 | prove a routine executed | `tools/cfg_printed.py` (reads `ExecutedInstructions`) | no |
 
 Two things worth internalising from that table. **The screen is a memory read, not a
 screenshot** — `vga_screen.py` reconstructs the text mode from the VGA buffer in a
-dump, so "what did the game display" is answerable headless. And **the only rows that
-need a display are the ones that touch the window**: keys, and pixel screenshots. If a
-capture seems to require walking somewhere, it usually requires seeding a save instead.
+dump, so "what did the game display" is answerable headless even without the MCP
+`screenshot` tool. And **input is not window-bound either**: the only rows left that
+truly need a display are the xdotool path and pixel-diff screenshots, both of which
+have a headless equivalent above. If a capture seems to require walking somewhere,
+prefer seeding a save (`--player` + `u2_edit.py set sector`); if it requires a
+keypress, `spice86_type.py` has it.
 
 ## Reading memory: the HTTP API
 

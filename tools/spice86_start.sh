@@ -41,6 +41,13 @@ usage: spice86_start.sh [options]
                      pristine blank (e.g. tmp/<run>/player from an earlier
                      session). Lets 'P' load a character you already made.
   --harvest          dump the CFG of the running session and exit
+  --auto-play        after the API is ready, send ESC then P so a seeded player
+                     loads and the run enters the world. Works HEADLESS: keys go
+                     through Spice86's own send_keyboard_key MCP tool, not XTEST,
+                     so no window and no display is needed. Pair with --player.
+                     Sequence is configurable: AUTO_PLAY_KEYS="Escape,p".
+                     Always confirm it worked by reading memory (tools/spice86_type.py
+                     --probe); a dropped key looks exactly like a no-op.
   --patch-arrows     patch the RUN COPY so real arrow keys work, letting
                      tools/spice86_keys.py drive it with Up/Down/Left/Right
                      instead of the numpad. Never touches original/ or
@@ -60,6 +67,8 @@ MODE=watch
 CYCLES=3000
 LABEL=""
 DO_HARVEST=0
+AUTO_PLAY=0
+AUTO_PLAY_KEYS="${AUTO_PLAY_KEYS:-Escape,p}"
 PLAYER_FILE=""
 PATCH_ARROWS=0
 SEED_MAP=""
@@ -75,6 +84,7 @@ while [ $# -gt 0 ]; do
         --name)      LABEL=$2; shift 2 ;;
         --player)    PLAYER_FILE=$2; shift 2 ;;
         --harvest)   DO_HARVEST=1; shift ;;
+        --auto-play) AUTO_PLAY=1; shift ;;
         --patch-arrows) PATCH_ARROWS=1; shift ;;
         --seed-map)  SEED_MAP=$2; shift 2 ;;
         --http-port) HTTP_PORT=$2; shift 2 ;;
@@ -217,6 +227,19 @@ if s86_wait_api "$HTTP_PORT" 90; then
     echo
 else
     echo "warning: HTTP API did not answer within 90s; see $LOG" >&2
+fi
+
+if [ "$AUTO_PLAY" = 1 ]; then
+    # ESC dismisses the title splash, P loads the previous character from ./player.
+    # A fixed sleep rather than a state probe: the title has no cheap memory
+    # signature that separates it from the poem screen, and a key sent too early is
+    # silently swallowed. Verify afterwards, never here.
+    echo "auto-play: sending $AUTO_PLAY_KEYS via the MCP endpoint"
+    sleep 6
+    python3 "$ROOT/tools/spice86_type.py" \
+        --http-port "$HTTP_PORT" --mcp-port "$MCP_PORT" \
+        --keys "$AUTO_PLAY_KEYS" --delay 1.5 \
+        || echo "auto-play failed; the run is still at the title" >&2
 fi
 
 cat <<EOF
