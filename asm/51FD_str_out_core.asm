@@ -2,6 +2,8 @@
 # name-evidence: target of str_out trampoline (4FDF) and of str_out_at; contains video_int10 seam
 # func 51FD..5211  len 0015 B  evidence: seed+call+reko
 # seams: video_int10
+# provenance: live:airport (+59 other harvests), static
+#           entry executed in 60 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 str_out_core:

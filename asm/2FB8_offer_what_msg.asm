@@ -3,6 +3,8 @@
 # func 2FB8..2FCC  len 0015 B  evidence: seed+reko
 # strings: " WHAT?"
 # calls: L_000c30, L_0051df (str_out)
+# provenance: live:airport32 (+3 other harvests), static
+#           entry executed in 4 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 offer_what_msg:

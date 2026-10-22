@@ -2,6 +2,8 @@
 #           (spell pick?), stores result at DS:0063, prints "SPELL READY => "
 #           plus the value (call sub_508c = numeric out?), returns to dispatcher.
 # func 3B92..3BCD  len 060 B  evidence: seed+reko (jump table cs:0730 entry M)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow proven; callee semantics inferred)
 # notes: slice mis-decoded 0x3da8 as add+jl (swallowed the call opcode); true
 #        read is NUL terminator + call 0x2228. Trailing 0xe8 stop-truncs into

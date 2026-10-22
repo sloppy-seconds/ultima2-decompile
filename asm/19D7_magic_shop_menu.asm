@@ -3,6 +3,8 @@
 # func 19D7..2027  len 0651 B  evidence: seed+reko
 # strings: " MUSERREF OLDUM!"; "FIVE "; "S FOR "; "NO!" (+14 more)
 # calls: L_000c33, L_00175d, L_001c3a, L_001c4f, L_001fad, L_0020d3, L_002228, L_002252 (+6 more)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 magic_shop_menu:

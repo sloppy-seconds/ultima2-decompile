@@ -3,6 +3,8 @@
 # func 2E3D..2F6E  len 0132 B  evidence: reko
 # strings: "HIT!"; "--EXP.+"; "MISS"
 # calls: L_000c33, L_001651, L_00307d, L_003164, L_0051df (str_out), L_005417, L_00543e, L_0055b5 (+1 more)
+# provenance: live:airport32 (+1 other harvests), static
+#           entry executed in 2 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 combat_attack_flow:

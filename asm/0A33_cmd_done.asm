@@ -2,6 +2,8 @@
 # name-evidence: 59 command-handler returns jump here (jmp L_000c33); body loads 0x0D and tail-calls char_print
 # func 0A33..0A37  len 0005 B  evidence: seed+reko
 # calls: L_0055f4
+# provenance: live:airport (+48 other harvests), static
+#           entry executed in 49 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 cmd_done:

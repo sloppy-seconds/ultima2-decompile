@@ -3,6 +3,8 @@
 # func 6999..6B3C  len 01A4 B  evidence: call+reko
 # strings: "  FUEL="; "  XENO="; "  YAKO="; "  ZABO=" (+5 more)
 # calls: L_000911, L_004c3e, L_00514d, L_0051df (str_out), L_0053eb, L_006c77, L_006c79, L_006c86 (+12 more)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 space_status:

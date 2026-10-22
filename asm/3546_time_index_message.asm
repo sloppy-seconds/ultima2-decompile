@@ -21,6 +21,8 @@
 #        body content, and a label emits no bytes, so renaming it buys nothing and
 #        breaks the guard. Naming lives in the filename and this header.
 # calls: L_000c33 (return to command loop), L_0051df (str_out)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (strings and dispatch proven by bytes; the code that
 #           initialises %di is not identified, and no static caller of 3546 was
 #           found, so the index's source is inferred, not observed)

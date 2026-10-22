@@ -3,6 +3,8 @@
 # func 1151..12DA  len 018A B  evidence: seed+reko
 # strings: "IT'S DARK!"; "TORCH BURNED OUT!"
 # calls: L_000a6f, L_001378, L_001491, L_0014cd, L_0014db, L_001508, L_00163c, L_00164c (+7 more)
+# provenance: live:airport (+5 other harvests), static
+#           entry executed in 6 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 dungeon_darkness:

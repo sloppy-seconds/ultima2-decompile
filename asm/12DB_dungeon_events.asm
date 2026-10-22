@@ -3,6 +3,8 @@
 # func 12DB..143B  len 0161 B  evidence: call+reko
 # strings: "YOUR TORCH IS BLOWN OUT!"; "A GREMLIN STOLE SOME FOOD!"; "YOU FEEL A STRONG MAGIC!"
 # calls: L_000e62, L_001378, L_0015ab, L_0015da, L_001610, L_004d26, L_0051df (str_out), L_005417 (+3 more)
+# provenance: live:airport32 (+1 other harvests), static
+#           entry executed in 2 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 dungeon_events:

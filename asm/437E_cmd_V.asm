@@ -1,6 +1,8 @@
 # cmd_V — command handler 'V' (VIEW): "VIEW WHAT?"; with magical helm shows
 #           "VIEW\x8dWITH MAGICAL HELM!" variant.
 # func 437E..43F2  len 0075 B  evidence: seed+reko (jump table cs:0730 entry V)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)

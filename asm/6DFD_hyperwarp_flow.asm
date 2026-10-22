@@ -3,6 +3,8 @@
 # func 6DFD..6FA2  len 01A6 B  evidence: call+reko
 # strings: "HYPERWARP ENGAGED!"; "SHIP OFF COURSE!"; "NO FUEL!"; "HYPERWARP TO:" (+2 more)
 # calls: L_000911, L_00514d, L_0051df (str_out), L_0055f4, L_006c79, L_006d3d, L_006ec4, L_006f5b (+6 more)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 hyperwarp_flow:

@@ -1,6 +1,8 @@
 # map_tile_ptr — address of the current map tile: y(DS:0024)*64 + x(DS:0023) + table DS:0472
 # name-evidence: shl 6 of DS:0024, add DS:0023, add word at DS:0472; 26 call sites
 # func 50B3..50D7  len 0025 B  evidence: seed+call+reko
+# provenance: live:airport (+48 other harvests), static
+#           entry executed in 49 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 map_tile_ptr:

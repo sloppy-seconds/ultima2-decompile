@@ -1,6 +1,8 @@
 # rand_byte — pseudo-random byte: adc-mixes tick counters DS:0240/0243/0244
 # name-evidence: 30 call sites incl. cmd_G item rolls; reads three DS tick bytes with stc/adc chain
 # func 5217..522A  len 0014 B  evidence: seed+call+reko
+# provenance: live:airport (+48 other harvests), static
+#           entry executed in 49 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 rand_byte:

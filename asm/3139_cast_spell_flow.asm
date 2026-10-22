@@ -3,6 +3,8 @@
 # func 3139..330B  len 01D3 B  evidence: call+reko
 # strings: "-FAILED!"; "-FAILED!"
 # calls: L_000c33, L_001651, L_0030d1, L_003432, L_0034a2, L_0034a5, L_0034ad, L_0034d2 (+9 more)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 cast_spell_flow:

@@ -3,6 +3,8 @@
 #           sub_3339 between, runs a timed wait (AH=28h, CX=0x4000 via
 #           sub_54ca), prints "PICXXX  ", returns to dispatcher.
 # func 310B..3138  len 046 B  evidence: seed+reko (jump table cs:0730 entry C)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow proven; PICXXX/delay purpose inferred)
 # notes: slice mis-decoded the mov/call chain (cmp $0xb890...); bytes identical
 cmd_C:

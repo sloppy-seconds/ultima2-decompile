@@ -3,6 +3,8 @@
 # func 2275..2289  len 0015 B  evidence: seed+reko
 # strings: "-ILLEGAL COMMAND!"
 # calls: L_0051df (str_out)
+# provenance: live:create-test-live (+5 other harvests), static
+#           entry executed in 6 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 illegal_command_msg:

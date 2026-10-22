@@ -3,6 +3,8 @@
 #            (fisttps / negative displacements); bytecheck FP adjudicated.
 #            CP5 disposition: data. Bytes byte-proven via check_func.py.
 # func 486D..4879  len 000D B  evidence: reko (island inside seed range)
+# provenance: static
+#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: high (defect verdict documented)
 data_486d_mixed:
 L_004a6d:

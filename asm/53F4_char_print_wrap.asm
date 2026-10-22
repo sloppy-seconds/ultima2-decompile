@@ -2,6 +2,8 @@
 # name-evidence: body is a single call to L_005203 (char_print); 25 call sites
 # func 53F4..53F6  len 0003 B  evidence: seed+call+reko
 # calls: L_005203
+# provenance: live:airport (+48 other harvests), static
+#           entry executed in 49 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 char_print_wrap:

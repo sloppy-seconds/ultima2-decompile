@@ -1,6 +1,8 @@
 # char_print — display character in AL with CR special-casing; command-loop entry
 # name-evidence: and 0x7F / cmp 0x0D prologue; target of char_print_wrap and cmd_done chain; fan-in 10
 # func 5003..500C  len 000A B  evidence: seed+call+reko
+# provenance: live:airport (+59 other harvests), static
+#           entry executed in 60 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 char_print:
