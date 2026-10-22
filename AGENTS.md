@@ -14,6 +14,8 @@ exact byte-for-byte fidelity.
 > `docs/phase4-implementation.md`. To start a fresh agent, read
 > `docs/handoff-cp5-2026-10-23.md` first (current entry point: CP5 combat scope, the
 > combat-mode audit, and the gate defect to fix before anything else), then
+> `docs/phase4-kickoff-cp5.md` (the CP5 wiring build order, what already exists so it is not
+> rebuilt, and the two owner decisions blocking W2 and W7), then
 > `docs/handoff-2026-10-23.md` for the wider day, then `docs/phase4-state.md`. Superseded handoffs and
 > completed overnight queues live under `docs/archive/` — historical record, not entry
 > points.
