@@ -75,10 +75,16 @@ located this. The bytes refined the spelling. Both were needed.
 
 ## 4. What is still not known
 
-* **How `T` reaches a shop.** Tested three times on 2026-10-22 in sector 31 at (52,27),
-  directly below the `MC DONALLS` sign. The screenshot now shows the game's own verdict:
-  **`CMD: TRANSACT-PASS`** — the key was received, `cmd_T` ran, and the game chose to do
-  nothing. No shop code executed.
+* **How `T` reaches a shop — SOLVED, by the owner driving over VNC.** The mechanism is
+  `T` immediately followed by a direction, both queued together
+  (`spice86_type.py --keys T,Up --delay 0.02`), and arrow keys require launching with
+  `--patch-arrows`. The owner talked to a **Fighter** and bought food; the harvest shows
+  461 never-before-executed addresses including the food routine at `179B`–`1826`. Full
+  detail in `docs/commerce.md` § 3.
+* **The jester does not respond to `T`.** Confirmed twice: once by my automated attempt
+  (`TRANSACT-NORTH`, no reply) and once by the owner driving directly. The **Fighter**
+  does: `A FIGHTER SAYS: UGH, ME TOUGH!` (`asm/415F_street_fighter`). So `docs/place-names.md`
+  should not be read as "the nearest NPC is the shopkeeper" — the NPC type matters.
 * **And the facing hypothesis was never actually tested.** The screen also revealed
   `CMD: - ILLEGAL COMMAND!` for every arrow key sent, so **the player never moved** in any
   of these runs. All three attempts were "teleported to a tile, press `T`", which is not
