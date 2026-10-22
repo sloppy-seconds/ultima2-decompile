@@ -109,9 +109,25 @@ go please* — completing the `MC DONALLS` parody the owner recalled
 (`docs/place-names.md` § 3). **The jester does not respond**, confirmed both by an
 automated `TRANSACT-NORTH` and by the owner trying directly.
 
-The tavern remains the worked example of inline pricing: on `1-BUY` the routine sets a
-16-bit value at `DS:27/28` to **5** before printing the price, and the clue seller
-multiplies a typed amount by 100. Neither reads a table.
+The tavern remains the worked example of inline pricing: on `1-BUY` the routine writes
+`$0x5` to `DS:28` and `$0x0` to `DS:27`. **That is a transient scratch write, not the price
+field** — a dump taken after a vendor purchase found `DS:27/28` holding `22 19`, not the
+`0200` the game had just printed. So the price is not stored at `DS:27/28` and anyone
+looking there will find nothing. **The actual price source is still unidentified.**
+
+### The vendor food price, measured
+
+The owner reported the vendor's line in full: **`THE FOOD HERE COSTS 0200 PER 100, WANT
+ONE?`** — 200 gold per 100 food, i.e. **2 gold per point**. Cross-checked against memory:
+gold went 9999 → 9959, a spend of **40**, which is exactly **20 food points** at that rate.
+
+That measurement also settled the gold byte order empirically. `DS:58 = 99`, `DS:59 = 59`,
+and the status band prints **9959** — so `0x58` is the high byte and `0x59` the low, read in
+address order. `state.h` asserted this from a comment; it is now observed.
+
+Food could not be cross-checked the same way: the dump and the screenshot were taken at
+different moments and food drains 19 per accepted step, so the two readings disagree by
+design. Gold is stable, food is not.
 
 Gold income is separate and already named: `asm/2D8C_combat_kill_reward` prints
 `KILLED--GOLD+`, so kills award gold directly.
