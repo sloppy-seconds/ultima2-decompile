@@ -208,6 +208,15 @@ Newest first. One line per learning; the detail stays in the owning document.
   is what stops a reusable tool quietly becoming a one-off. → § 4; add a
   *non-dependencies* clause to every harness component brief.
 
+* **2026-10-22** — A negative table scan is a lead, not an answer. Searching a binary
+  for a per-entity stat table and finding none is consistent with two very different
+  shapes: the value is computed, *or* it is an immediate stored per case inside a
+  dispatch chain -- which hand-coded and early-compiler binaries routinely do and which
+  no table scan can find. The second shape was the real one here. → after a negative
+  table scan, stop looking in the data and find the **store site**: locate the field in
+  the action routine that decrements it, then walk backwards to the initialisers. The
+  field is identified by what mutates it, not by where it lives.
+
 * **2026-10-22** — Before hunting a stored table, test whether the numbers are a
   formula. A per-entity stat table is the obvious place to look for HP, and the obvious
   scan came back empty across every encoding and indexing tried -- which is only useful

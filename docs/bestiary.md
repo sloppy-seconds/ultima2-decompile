@@ -33,8 +33,9 @@ binary.
 | --- | --- | --- |
 | "this community bitmap and art index *NN* are the same 256 pixels" | **measured** | `tools/bestiary_match.py` against `original/ultimaii.exe`, same decode as `tools/tile_atlas.py` |
 | "art index *NN* is called *Orc*" | **third-party** | inherited from the codex or Gamer Corner; the bytes never say |
-| "Daemon has 64 HP and paralyzes legs at range 2" | **third-party, corroborated** | two independent sources agree, and `asm/0E70_combat_paralyzed_legs.asm` proves the leg-paralysis event exists |
-| "monster type byte *T* draws art index *NN*" | **inferred** | `monster_shapes.py` derives `art = type >> 2` from one live finding; not proven end to end |
+| "Daemon has 64 HP" | **measured** | `asm/0D6F_monster_hp_thief_daemon.asm` stores `mov $0x40,%al` into `[DI+0x177]` for type `0x34`; the field is proven HP by `asm/2E3D_combat_attack_flow.asm`. The *name* Daemon is still third-party |
+| "Daemon paralyzes legs at range 2" | **third-party, corroborated** | two independent sources agree, and `asm/0E70_combat_paralyzed_legs.asm` proves the leg-paralysis event exists |
+| "monster type byte *T* draws art index *NN*" | **corroborated 8/8, field authority open** | the spawn arms write type and HP together and every type folds to the right art under `>>2`; see **G18** |
 
 Where a third-party claim contradicts the binary, the binary wins, and the
 contradiction is written down here rather than resolved silently. See § 6.
@@ -161,18 +162,62 @@ One more source smell in the same direction: the codex's dungeon Daemon image is
 filed as `U2DungeonMinotaur.png`, so the source disagrees with itself about what
 that creature is called.
 
-## 6. Monster HP is computed, not stored
+## 6. Monster HP: immediates for the overworld, computed for the dungeon
 
-`tools/hp_table_scan.py` searched the executable for a per-creature HP table.
-**Nothing was found**, across 13 encoding x indexing combinations: raw byte, 16-bit
-LE, and the hundreds-first BCD pair the player's own HP uses (`DS:51/52`), indexed by
-art and by the type/sprite values that fold to an art under `>>2`. The match bar was
-"all but one of the known entries" and no position reached it. `original/monsters`
-was tested the same way and is coordinate pairs, not stats, which removes a candidate
-from T9.
+**This section was wrong when first written and has been corrected the same day.**
+The original conclusion, "HP is computed, not stored", was half right: it is true of
+the dungeon and false of the overworld, and the overworld case is not a computation
+at all.
 
-What the scan found instead is structure in the third-party numbers themselves. The
-seven dungeon HP ranges are two exact arithmetic progressions in dungeon-table order:
+`tools/hp_table_scan.py` searched for a per-creature HP *table* and found none across
+13 encoding x indexing combinations (raw byte, 16-bit LE, and the hundreds-first BCD
+pair the player's own HP uses at `DS:51/52`), match bar "all but one". That negative
+was correct and it was the useful part: **there is no table.** The values are
+immediates scattered through a chain of compares on the monster type byte, which no
+table scan could find and which is exactly what a hand-coded 1983 binary does.
+
+The field is `[DI+0x177]` in the monster record, and it is proven by
+`asm/2E3D_combat_attack_flow.asm`, which at runtime `0x30BD` does:
+
+```
+mov 0x177(%di),%al    ; load monster HP
+stc; cmc              ; clear CF for a no-borrow subtract
+sbb 0x20,%al          ; HP -= the damage byte just stored at [DS:20]
+cmc                   ; re-expose the borrow (the BCD idiom AGENTS.md warns about)
+jae -> store reduced HP, monster survives
+    -> HP=0, type=0, sprite=0, whole record cleared
+```
+
+With the field known, the arms are trivial to read. `tools/monster_hp_dispatch.py`
+extracts them and cross-checks them, and **exits non-zero on a disagreement**:
+
+| type | HP | art | creature | third-party | verdict |
+| --- | --- | --- | --- | --- | --- |
+| `0x30` | 16 | `0x0C` | Orc | 16 | match |
+| `0xFC` | 32 | `0x3F` | Thief | 32 | match |
+| `0x34` | 64 | `0x0D` | Daemon | 64 | match |
+| `0x2C` | 64 | `0x0B` | Sea serpent | 64 | match |
+| `0xF0` | 128 | `0x3C` | Fighter | 128 | match |
+| `0x48` | 160 | `0x12` | Frigate | 160 | match |
+| `0x38` | 192 | `0x0E` | Devil | 192 | match |
+| `0xF8` | 224 | `0x3E` | Wizard | 224 | match |
+| `0x3C` | 255 | `0x0F` | Balron | 255 | match |
+
+**9 for 9, zero disagreements.** So the overworld HP figures are now **measured**,
+not third-party — and they arrived by a third independent route: the binary's own
+immediates, the community bitmap, and the community stat table all name the same
+creature. Balron is literally `mov $0xff`, the byte ceiling, which is why the
+sources report 255 where a 32-step progression predicts 256.
+
+What is *not* explained by the arms: the townsfolk. Guard, Jester, Merchant, Cleric
+and King have no arm here, so their HP comes from another path — which leaves the
+Guard 255-vs-500 conflict open rather than resolved by this.
+
+The dungeon really is computed. `asm/147F_sub_147f.asm` derives HP arithmetically
+(`rcr $1,%al; adc $0x1,%al` into the type, then `add %al,%al` four times around an
+`adc 0x1b7(%di)`, then `or $0x10,%al` into HP) rather than storing an immediate, and
+that is consistent with the third-party dungeon ranges being two exact arithmetic
+progressions in dungeon-table order:
 
 ```
 min = 17 + 32k          max = 153 + 32*(k//2)
@@ -180,15 +225,9 @@ k=0 Orc 17/153   k=1 Ghost 49/153     k=2 Carrion 81/185  k=3 Viper 113/185
 k=4 Gremlin 145/217    k=5 Daemon 177/217   k=6 Balron 209/249
 ```
 
-14 data points, four constants, **7/7 on both**. The overworld values lean the same
-way: `32 x {1,2,2,4,5,6,7}`, with Balron at `255` — `0xFF`, a byte ceiling where 256
-would land — and Orc's 16 the single outlier. Grade carefully: the progressions are
-**measured against third-party numbers**, which is not the same as measured against
-the binary. What follows from them is a claim about the game: dungeon HP is computed
-from creature index and depth, and overworld HP has no depth, so it has no range.
-
-That reframes the verification. It is not "read the HP field", because there is no HP
-field; it is "find the computation", which is static work. See **G17**.
+14 data points, four constants, 7/7 on both. Grade that pair of formulas carefully:
+the fit is **measured against third-party numbers**, and `asm/147F` has not been
+shown to be the dungeon spawner — it is a strong lead, not a closed item. See **G17**.
 
 ## 7. What the join did **not** buy
 
@@ -205,8 +244,11 @@ field; it is "find the computation", which is static work. See **G17**.
   strings and data — calling it `tile_art_table` would be a wrong name, and a wrong
   name is worse than none. The names went to `disasm/tile-art.tsv` and the headers
   that own the behaviour instead.
-* **No HP value is verified**, and § 6 says why that is harder than it looked: there
-  is no stored HP field to read. See `docs/needs-gameplay.md`.
+* **No HP value is verified against a live session.** § 6 promoted the nine
+  overworld figures to *measured* from the binary's own immediates, which is stronger
+  than a capture of the same bytes — but the townsfolk (Guard, Jester, Merchant,
+  Cleric, King) have no arm, so their HP is still third-party and the Guard
+  255-vs-500 conflict is still open. See **G17**.
 
 ## 8. Conflicts on the record
 
@@ -251,14 +293,17 @@ called*; the spec answers *what must the tile communicate*; they must not mix.
 
 ## 10. Next
 
-1. Find the HP **computation** in the spawn and combat code — the stored-table
-   hypothesis is dead (§ 6), so this is disassembly, not a capture. The unexplained
-   fifth record field `DS:0x177+i` is the place to start. Then **G17**'s live step.
-2. Settle which record field drives the art, and the `0x40` contradiction (**G18**).
-   Only then can monster **types** be named.
-3. Decode the dungeon stroke table and identify dungeon creatures from their drawn
+1. Find the **townsfolk** HP path — Guard, Jester, Merchant, Cleric and King have no
+   spawn arm, and Guard is the source of the only live stat conflict (255 vs 500).
+2. Prove `asm/147F_sub_147f.asm` is the dungeon spawner and check its arithmetic
+   against the `17 + 32k` / `153 + 32*(k//2)` fit (**G17**).
+3. Settle whether `[DI+0x1B7]` (sprite) and `[DI+0x197]` (type) are always equal —
+   at spawn they take the same immediate, which is why both fold to the right art
+   (**G18**). Correct the "thief is monster type `0x40`" claim in
+   `docs/spice86-live-findings.md`; the thief is `0xFC`.
+4. Decode the dungeon stroke table and identify dungeon creatures from their drawn
    outline (**G19**, also T9).
-4. Find real DOS sprites for the five dungeon creatures whose codex images are crops.
-5. Cross-check the item-drop claims (Fighter drops torches and helms, Guard drops 2
+5. Find real DOS sprites for the five dungeon creatures whose codex images are crops.
+6. Cross-check the item-drop claims (Fighter drops torches and helms, Guard drops 2
    keys, Wizard drops staves and wands) against the kill-reward code in
    `asm/2D8C_combat_kill_reward.asm` and friends.

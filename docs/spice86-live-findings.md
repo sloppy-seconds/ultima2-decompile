@@ -640,6 +640,17 @@ the type byte against `0x40` at file `0x1244`, so **the thief is monster type
 `0x40`**. Type `0x40` was present in the recording, which supplies the traced edge
 section 8 said was missing.
 
+> **Correction, 2026-10-22: the thief is NOT monster type `0x40`.** The spawn arms
+> store type and HP together, and the thief's arm (`asm/0D6F_monster_hp_thief_daemon`)
+> sets type `0xFC` with HP `0x20` = 32 — which matches art `0x3F`, named Thief by
+> bitmap identity, and the third-party HP for Thief, also 32. `0x40` is the **empty
+> slot sentinel** recorded elsewhere in this document (`cmp [DI+0x197],0x40` at
+> `0x2C2D`), so the `cmp $0x40` at file `0x1244` is skipping empty slots and names no
+> creature. The conclusion "the thief is type `0x40`" and the observation "`0x40` =
+> empty" were both correct readings of the same byte by two sessions that could not
+> see each other; only the second survives. See `docs/bestiary.md` § 6 and
+> `tools/monster_hp_dispatch.py`.
+
 Measured over the whole fight: eight items went `1 -> 0` (RING, GEM, ANKH,
 TRI-LITHIUM, BLUE TASSLE, BOOTS, GREEN GEM, SKULL KEY) and **none ever came back**.
 The kill that ended the fight paid `HELM 1 -> 2` and gold +15, indistinguishable
