@@ -232,6 +232,32 @@ what the game made of an injected key:
 form "the player stood at X and pressed T" was really "the player was teleported to X and
 never moved", and the facing hypothesis was never tested at all. Movement keys need to be
 worked out before any position-dependent experiment means anything.
+
+### Two things that must be right before any `T` experiment means anything
+
+**1. Arrow keys need `--patch-arrows` at launch.** It is opt-in in `spice86_start.sh`. Without
+it the game's AL-gate at runtime `4F85` rejects real arrow keys and every one returns
+`ILLEGAL COMMAND!`. `tools/spice86_keys.py` documents this (mode `real` requires the patch);
+read it before hand-rolling key injection. The symptom of forgetting it is indistinguishable
+from "the game ignores arrows", and it cost several wasted runs.
+
+**2. `T` and the direction must be queued together.** The `TRANSACT` handler reads a pending
+direction and gives up immediately if the buffer is empty. With a human-scale inter-key gap
+the log shows `CMD: TRANSACT-PASS` — the handler ran, found nothing, and returned before the
+arrow arrived. Sent as one batch:
+
+```bash
+python3 tools/spice86_type.py --keys T,Up --delay 0.02
+# -> CMD: TRANSACT-NORTH      (not PASS)
+```
+
+**This is a harness trap with a silent failure mode.** Any driver that injects keys one at a
+a time with a normal delay will see `PASS` forever and conclude the feature is broken. The
+proven-good setup that produced `TRANSACT-NORTH`: `--headless --patch-arrows`, player at
+(48,27) in sector 31, jester (`0x64`) confirmed adjacent at (48,26) by a live read.
+
+Still open: `TRANSACT-NORTH` printed no dialogue. Either the jester is not a transact
+target, or the response renders somewhere other than the `CMD:` log.
 | stop and harvest the CFG | `tools/spice86_stop.sh` | no |
 | harvest mid-run without stopping | `tools/spice86_start.sh --harvest` | no |
 | read memory | HTTP API `GET /api/memory/<phys>/range/<len>` | no |
