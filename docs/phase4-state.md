@@ -333,6 +333,27 @@ adds a `--data-dir` seam and reads the player's own files the way the original
 
 ## Backlog
 
+- [ ] **Improve the cleanroom substitute tile art. NO PRIORITY — deliberately parked.**
+      47 of 64 tiles still fail their structural rules and sit in `PENDING_REDRAW` inside
+      `tools/tile_rules.py`; running `python3 tools/tile_rules.py` prints the current list and
+      the specific reason per tile, so this item needs no separate tracking list and must not
+      acquire one. The set is usable and shipped; it is unfinished, and `make test` says so on
+      every run.
+
+      **The ones the owner judged worst, in case the list is long:** `06` emblem (drawn as five
+      disconnected pieces, not one 4-fold-symmetric mark), `0A` signpost (four pieces), `0B`
+      sea monster (water is not a stipple and the creature is not two components), `30`
+      moongate (no top rule), `00`/`01` water (still chunky, wrong column parity), `03` forest
+      (six components where three were asked for). The 25 letter tiles are close — they now
+      carry their sign rules and fail only because the glyph touches the gutter rows.
+
+      **If this is picked up, read `docs/cleanroom-procedure.md` first.** The redraw must be
+      done by a fresh implementer working from `docs/tile-art-spec.md` alone. Whoever does it
+      must not read `docs/tile-art-evidence.md` or `tools/tile_rules.py` — both are answer keys
+      holding structure measured from the originals, and reading them would void the provenance
+      chain that document exists to protect. Promote fixed tiles out of `PENDING_REDRAW` in the
+      same commit that fixes them.
+
 - [ ] **`docs/needs-gameplay.md` is the single tick-list for everything blocked on
       gameplay** (opened 2026-10-22, thirteen items). It carries a who-can-do-it and
       confidence verdict per item, and the standing hazards list that every capture
