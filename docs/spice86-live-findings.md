@@ -1273,7 +1273,7 @@ In sector 00 the poked counters were watched decaying while the player never mov
 lockstep, at rest. That is `asm/0C33..0C53` running, observed directly, and it is the third
 independent confirmation that the tick is time and not moves.
 
-### `ONLY ON EARTH!` — a save gate nobody had recorded, and it contradicts C6
+### `ONLY ON EARTH!` — seen live for the first time, and it contradicts C6
 
 `Q` outdoors in sector 00 printed `QUIT OR SAVE GAME.` followed by **`ONLY ON EARTH!`** and
 wrote nothing. The gate is `asm/3DFA_offer_only_outdoors_earth`:
@@ -1285,16 +1285,22 @@ je     L_004017        ; zero -> allowed
 ; else print 'ONLY ON EARTH!'
 ```
 
-So **`[DS:6D] != 0` means "not on Earth"**, and the byte is inside the saved record (the
-poked `0` persisted: `DS:6D 01->00` in the diff above).
+**Correction while writing this up:** this gate was *not* unrecorded. The engine already
+lifts all three save gates — `u2_save_policy` in `engine/src/game/overworld.h` names
+"only on Earth (`DS:6D == 0`)" and cites `asm/3DE4`/`asm/3DFA`. What was new to me, and
+worth saying plainly so nobody repeats the detour: an agent can observe a gate firing live,
+walk to the routine that owns it, and call it a discovery, without noticing the engine
+already implements it. Grep the engine before crediting a finding.
 
-**This collides with the CP5 design constraint that `DS:6D` is a stale duplicate of the
+What *is* new is the contradiction. `[DS:6D] != 0` means "not on Earth", and the byte is
+inside the saved record (the poked `0` persisted: `DS:6D 01->00` in the diff above).
+**That collides with the CP5 design constraint claiming `DS:6D` is a stale duplicate of the
 boots count** — the claim behind "the original keeps two copies of some item counts and one
 goes stale". A boots count does not gate whether you are on Earth, and the value `1` seen
-after a thief took the boots is exactly what an on-Earth flag looks like. Either the byte is
-genuinely reused (this code does reuse bytes) or the boots reading was a coincidence of
-value. **Flagged, not resolved** — but it needs resolving before the engine adopts
-"single source of truth for item counts" on the strength of it.
+after a thief took the boots is exactly what an on-Earth flag looks like. The engine's
+reading is the one with a branch behind it. **Flagged, not resolved** — but it needs
+resolving before the engine adopts "single source of truth for item counts" on the strength
+of the boots story.
 
 ### Capture notes worth keeping
 
