@@ -84,5 +84,27 @@ Two things to check on any candidate before proposing it:
 
 ## Status
 
-Draft. Nothing has been merged on its authority yet. The two cases it found that prompted
-it — `51A5..51AF` and `53B5..53CF` — are still unmerged, pending a ruling.
+**Three merges executed 2026-10-23 under the owner's ruling**, all verified by
+`asm_body_guard` (content conserved), `check_func`, `assemble_clean.sh` (37344 B identical)
+and `make -C engine test`:
+
+| merged span | from | result |
+| --- | --- | --- |
+| `4050..40A5` | 13 fragments | `cmd_T` — the TRANSACT ray |
+| `51A5..51AF` | 3 fragments | `print_bcd4_al_di` — four-digit BCD emitter |
+| `53B5..53CF` | 3 fragments | `print_byte_bcd` — two-digit emitter |
+
+`asm/` is now 1271 files, down from 1300 at the start of the day. Candidates remaining:
+**26 strong, 17 probable**.
+
+**The controls had to be re-pointed, and that is the lesson.** `51A5` and `53B5` were the
+positive controls. Merging them made the selftest fail — correctly, because they were no
+longer candidates. A positive control that has been fixed is worse than none, since it
+fails for the right reason forever and trains everyone to ignore it. They moved to the
+negative list and `50F9` / `4A3E` were promoted as positives, both still unmerged.
+**Re-point the positives whenever you merge.**
+
+One more thing the guard caught that is worth recording: it refused the first attempt at
+the printer merges with `+22 body lines`, because I had created the merged files and not
+deleted the originals, so two files claimed the same start address. That is the guard
+earning its existence on an operator error, not a design error.

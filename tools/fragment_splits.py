@@ -51,12 +51,16 @@ CONTROLS -- run these before believing any output
 -------------------------------------------------
 `--selftest` asserts both directions against cases already settled by hand:
 
-  POSITIVE  51A5/51A9/51AE and 53B5/53C5 must come back as candidates. They were
-            decoded manually on 2026-10-23 and are certainly split.
-  NEGATIVE  15E1 (tavern menu) and 1799 (food price) are single-file routines with
-            their own entry and must NOT be flagged. And 2028 / 2052 / 20AB, merged
-            on 2026-10-23, must no longer be flagged -- if they come back, the
-            detector is keying on something other than the merge it already did.
+  POSITIVE  50F9 and 4A3E must come back as candidates. Both are still unmerged; 50F9
+            was spot-checked on 2026-10-23 (25 fragments over 172 bytes, one ret).
+  NEGATIVE  15E1 (tavern menu) is a standalone routine, and 1799 is a zero-`ret`
+            tail-chain, not a split. And 2028 / 2052 / 20AB / 51A5 / 53B5, all merged
+            on 2026-10-23, must no longer be flagged -- if they come back, the detector
+            is keying on something other than the merge it already did.
+
+Positive controls must be re-pointed whenever a candidate is merged, or the test rots.
+That already happened once: 51A5 and 53B5 were the original positives and silently
+became negatives when they were fixed.
 
 A detector that flags everything fails this test, which is the point.
 
@@ -269,10 +273,18 @@ def selftest(runs, rows):
                 return r
         return None
 
-    must = {'51A5': ('51A5', '51A9'), '53B5': ('53B5', '53C5')}
+    # Positive controls must be splits that are STILL UNMERGED, or the test proves
+    # nothing. 51A5 and 53B5 were the originals and were merged on 2026-10-23, so they
+    # moved to the negative list below -- a positive control that has been fixed is
+    # worse than none, because it fails for the right reason forever and teaches
+    # everyone to ignore it.
+    # 50F9..51A4 was spot-checked the same day: 25 fragments over 172 bytes, mostly
+    # 1- and 2-byte basic blocks, single ret at the end. 4A3E..4A73 is 7 fragments.
+    must = {'50F9': ('50F9',), '4A3E': ('4A3E',)}
     must_not = {'15E1 tavern_menu': 0x15E1, '1799 food_price': 0x1799,
                 '2028 (merged)': 0x2028, '2052 (merged)': 0x2052,
-                '20AB (merged)': 0x20AB}
+                '20AB (merged)': 0x20AB,
+                '51A5 (merged)': 0x51A5, '53B5 (merged)': 0x53B5}
     fail = 0
     for label, addrs in must.items():
         r = run_of(int(addrs[0], 16))

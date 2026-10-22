@@ -757,19 +757,7 @@ start	end	len	evidence	name_hint
 3F37	3F58	0022	reko	
 3F59	3F5C	0004	reko	
 3F5D	404F	00F3	reko	
-4050	405C	000D	seed+reko	cmd_T
-405D	405D	0001	seed+reko	
-405E	405F	0002	reko	
-4060	4062	0003	seed+reko	
-4063	406D	000B	seed+reko	
-406E	4074	0007	seed+reko	
-4075	407B	0007	seed+reko	
-407C	407E	0003	seed+reko	
-407F	4080	0002	seed+reko	
-4081	4084	0004	seed+reko	
-4085	409E	001A	seed+reko	
-409F	40A2	0004	seed+reko	
-40A3	40A5	0003	seed+reko	
+4050	40A5	0056	seed+call+reko	cmd_T
 40A6	40BC	0017	seed+reko	
 40BD	40BF	0003	seed+reko	
 40C0	40C7	0008	seed+reko	
@@ -1107,9 +1095,7 @@ start	end	len	evidence	name_hint
 5189	5195	000D	reko	
 5196	51A3	000E	seed+reko	
 51A4	51A4	0001	seed+reko	
-51A5	51A8	0004	seed+call+reko	
-51A9	51AD	0005	seed+reko	
-51AE	51AF	0002	seed+reko	
+51A5	51AF	000B	seed+call+reko	print_bcd4_al_di
 51B0	51EA	003B	call+reko	
 51EB	51FA	0010	seed+call+reko	
 51FB	51FC	0002	seed+reko	
@@ -1145,9 +1131,7 @@ start	end	len	evidence	name_hint
 5379	538E	0016	seed+reko	
 538F	539F	0011	call+reko	
 53A0	53B4	0015	call+reko	
-53B5	53C4	0010	seed+call+reko	
-53C5	53CD	0009	seed+reko	
-53CE	53CF	0002	seed+reko	
+53B5	53CF	001B	seed+call+reko	print_byte_bcd
 53D0	53D8	0009	call+reko	
 53D9	53DE	0006	seed+call+reko	
 53DF	53E5	0007	seed+call+reko	

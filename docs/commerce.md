@@ -453,29 +453,41 @@ slots in `monx31`**, a 7/7 exact match. The map encodes where a transactor stand
 `monx` record is placed on top of it. So `tools/shop_access.py`'s "NPC standing at the
 sign" rule has a sharper form available: **look for tile `0x68`**.
 
-**Why the sweep failed: still not explained, and the explanation offered here is refuted.**
-The cell north of the player at (51,16) is (51,15), which *is* `0x68`, so it should have
-matched. The account given in this section — that the ray's delta `DS:19/1A` is written by
-the movement code rather than the talk direction — was tested the same day and is
-**wrong**. After five real movement keys that demonstrably moved the player
-((51,17)→(51,16)→(51,17)→(50,17)), `DS:19/1A` read `(1, 1)` every single time, exactly as
-it did after the talk keys. It is not a movement delta either. And `DS:23/24` read
-`(21, 27)` at a moment when the player was at `(51, 17)`, so it is **not a player-space
-cursor** — which means the "`asm/4085` steps the ray by `DS:19/1A`" reading is not
-established, and the fragments between `asm/4050` and `asm/409F` may not fall through in
-the order the clean wave's adjacency suggests.
+**Why the sweep failed: explained, with one piece still missing.** The cell north of the
+player at (51,16) is (51,15), which *is* `0x68`, so it should have matched. Reading the
+span as one routine (see `asm/4050_cmd_T.asm`, merged from 13 fragments on 2026-10-23)
+gives the seed: `asm/23E6`, called at `4060`, does
 
-**What survives, and it is the part worth keeping.** The guards are observed: site kind
-`!= 0` (`asm/406E`), cell value `0x7C` or `0x68` (`asm/4081`, `asm/409F`), shared refusal
-printer at `asm/40A6`, success jumping to runtime `1590` (`asm/40A3`) which the `food-buy`
-harvest corroborates. And the **7/7 `0x68`-to-Merchant-spawn correspondence in `mapx31`**
-is measured and independent of every claim about the ray.
+```
+DS:23 = DS:00 + DS:19      cursor = player_x + delta_x
+DS:24 = DS:01 + DS:1A      cursor = player_y + delta_y
+DI    = 31                 top creature slot -- start of a downward slot scan
+```
 
-**Grades.** The guards, the `1590` jump and the 7/7 tile match: **measured**. The cursor and
-delta mechanics: **refuted**, retained only so the next reader does not spend an hour on
-them. The ray's actual step mechanism: **unknown** — it needs the instruction window
-around `asm/407C`/`asm/409C` read as one routine rather than as five fragments, which is
-the G22 problem again, not a capture problem.
+So **`DS:19/1A` really is the delta** and the cursor is one delta-step from the player.
+Every sample ever taken of `DS:19/1A` has read `(1, 1)` — after all four `T,<dir>` keys
+*and* after five movement keys that demonstrably moved the player. So the talk was aiming
+diagonally down-right every single time, which is why no `0x68` was ever landed on.
+**What is still unknown is who writes `DS:19/1A` from a direction.** Unexamined candidates:
+`asm/0B0F`, `asm/1086`, `asm/10AA`, `asm/10BF`, `asm/152E`. That is the last static gap, and
+it is a small one.
+
+**The two paths match on different namespaces, and that is what tripped this up.** `0x68`
+and `0x7C` are **map grid cell values**; `0x6C`, compared at `40D0`, is a **creature type
+byte** read from `[DI+0x197]`. An earlier pass wrote "`0x68` is the Merchant type" and
+conflated the two. What is measured about `0x68` is a strong coincidence, not an identity:
+in `mapx31` it occurs at exactly the seven `monx31` Merchant spawns (7/7), which says the
+map marks where a transactor stands — do not generalise it to other sectors unchecked.
+
+**Also unresolved:** `asm/23E6` sets `DI = 31`, and `4075` takes the creature path when
+`BL != 0` — so on the face of it the map-tile path is unreachable, yet the armour shop
+opened. Something between `23E6` and `4075` must decrement `DI` (almost certainly a scan
+loop in the `2402..241E` fragments) and **that loop has not been read**. Until it is, the
+branch structure is described, not the runtime behaviour.
+
+**Grades.** The guards, the `1590` success jump, the `23E6` seed arithmetic and the 7/7
+tile match: **measured**. "The delta was `(1,1)` in every test" : **measured**. "The scan
+loop decrements DI": **inferred**. The direction→delta writer: **unknown**.
 
 
 **The earlier claim stays withdrawn.**
