@@ -428,9 +428,43 @@ reachable tile the ray returned `NO RESPONSE`, so it was not landing on a `0x68`
 `monx31` spawn table puts a Merchant at (51,15), but live creatures move, and the shipped
 layout is where they *start*, not where they are.
 
-**What that leaves for G23:** the blocker is now "get the ray onto a transacting creature
-in a food-selling sector", which is a search the oracle makes cheap and automatable, not a
-timing mystery and not owner-only. Recorded in `docs/needs-gameplay.md`.
+### 5c. The ray, partly decoded — and the food sweep came back empty
+
+`cmd_T` is `asm/4050_cmd_T.asm` (it prints the `TRANSACT-` prefix). The mechanics the
+rejection guards sit inside:
+
+* `asm/4085` advances an accumulator: `DS:23 += DS:19`, `DS:24 += DS:1A`, then calls
+  `L_0052b3`. So **`DS:19/1A` is the direction delta and `DS:23/24` is the ray cursor.**
+  Read live on 2026-10-23 after `T,Up`: `DS:19/1A = (0x01, 0xFF)` i.e. `(+1, -1)`, and
+  `DS:23/24 = (19, 23)`.
+* The guards that reject: `asm/406E` requires site kind `[DS:4A] != 0`; `asm/409F`
+  requires the creature type `== 0x68` (Merchant); `asm/4081` tests against `0x7C`.
+  All three branch to the shared `FUNNY, NO RESPONSE!` printer at `asm/40A6`.
+
+**Doubt on the delta.** `(+1, -1)` for a `Up` talk is diagonal, which is not what `Up`
+should mean. Either the delta is written by a different command and `T,Up` left a stale
+value behind, or the direction encoding is not a plain screen vector. **Not resolved**
+— and it is the thing that decides where the ray actually goes, so the sweep cannot be
+tuned until it is. Reading `DS:19/1A` immediately after each of the four directions, in
+one run, would settle it in a minute.
+
+**The sweep itself: negative, and recorded as such.** Sector 31, maxout, live creature
+arrays read from `DS:137/157/197`. Live slots confirmed five `0x68` Merchants, including
+slot 16 at **(51,15)** — exactly its `monx` spawn position, unmoved — and slot 8 at
+(55,17), which *had* moved from its spawn (55,19). So the live-array lookup works and
+`monx` drift is real but not universal.
+
+From every position the maze allowed — (51,17) and (51,16) two cells and one cell south of
+the (51,15) Merchant, and (52,17) east of the (55,17) one — in all four directions, with
+retries at `--delay` 0.02/0.05/0.15, **no price breakpoint ever fired**. The band showed
+`CMD: TRANSACT-NORTH` then `FUNNY, NO RESPONSE!`, i.e. delivered and refused.
+
+So the ray rule is not "stand two cells away", and the geometry that opened sector 32's
+armoury does not generalise to sector 31's restaurant. **G23 remains open, still
+agent-doable, and the next step is now specific rather than a search:** decode the
+direction→delta mapping at `DS:19/1A`, then aim. Walking a maze by trial and error was the
+wrong tool and it did not converge.
+
 
 **The earlier claim stays withdrawn.**
 
