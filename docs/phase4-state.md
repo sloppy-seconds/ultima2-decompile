@@ -866,6 +866,29 @@ remake of Ultima I** in Unity, worked on in the open (a devlog with dated per-sy
 and a GitHub repo referenced as `hoyty1/ultima-unified-engine`). It is not Ultima II, but the
 overlap is real and the owner asked for a thorough pass rather than a glance.
 
+**Second lead, unresolved (owner-reported, 2026-10-23).** A post reading *"Build 1.3.2 of the
+Ultimate Ultima Engine for your testing pleasure. The last one had some bugs."* — the owner is
+not sure it is the same project. Checked while logging this: the GitHub repo the U1 Unity
+devlog merges from (`hoyty1/ultima-unified-engine`) returns **404** — private, renamed or
+deleted — and no release numbered 1.3.2 appears in the public devlog. **First task of the
+research pass: establish whether "Ultimate Ultima Engine" is this author's engine under its
+repo name ("Ultima Unified Engine" — the initials match) or a different project entirely.**
+
+**Verified in the meantime.** The same author distributes as **Ultima 1 Unity** on itch
+(<https://archiveofmyth.itch.io/ultima-unity>) with a dated devlog of release notes
+(<https://archiveofmyth.itch.io/ultima-unity/devlog>). Three entries are directly relevant
+here and worth pulling into the research pass:
+
+* *"Added sound effect set from Ultima II, III, and IV"* (2026-09-13) — confirms they parse
+  U2 data files, so their format reading is an independent second opinion on something this
+  project derived alone.
+* *"Monsters will no longer despawn while chasing you around the globe"* (2026-08-09) — U1
+  monster pursuit and lifecycle, the same family of question § 16 just settled for U2.
+* *"Added Gameplay option for original starvation instant death"* (2026-09-21) — they
+  reproduced the starvation edge case this project proved as a BCD underflow
+  (`asm/0C62` zeroing, the fresh character dying on the 4001st PASS). If they modelled it as
+  a mode toggle rather than a wrap, that is a useful contrast for CP11's enhanced rules.
+
 **Why it is worth the time.** This is the same discipline as this project, applied one game
 earlier: they describe pulling apart original DOS binaries, decoding tile and map formats
 (**EGA row-planar tiles, nibble-packed overworld maps, column-major town data**), and
@@ -892,7 +915,10 @@ from the other side.
 4. **Their community-references page.** They credit the Ultima Dragons Discord and community
    docs for sprites, mechanics and quirks. Those sources may hold U2 material of the same
    grade as `bestiary/` — third-party, useful, and not authoritative here.
-5. **Process ideas**: how they structure a public devlog per system, and how they mark
+5. **The itch release notes as a changelog of their reverse-engineering.** The devlog is
+   per-system and dated, so it can be mined for statements of fact about formats and
+   mechanics, not just feature lists.
+6. **Process ideas**: how they structure a public devlog per system, and how they mark
    best-effort reconstructions. This project's equivalent is the `# confidence:` header and
    the evidence grades; worth seeing whether their presentation makes the state easier to
    follow, since the handoff keeps having to explain where the certainty lives.
