@@ -153,14 +153,21 @@ named recipients — and bit 7 means "this slot has a scripted response", not "a
 this is the second field where the bytes declined to cooperate with it. It stays a
 hypothesis about some *other* byte, not a dead one.
 
-**Update, same day — the low nibble moves, so "class" was too tidy (grade: measured, n=2).**
-Two live runs showed an **attacked** Fighter (`type 0xF0`) go `0x03 -> 0x01`, and reading the
-whole table afterwards every Guard is born `0x01`, every Merchant `0x02`, untouched Fighters
-`0x03`. A Fighter that has fought the player ends up holding the value guards are born with.
-Either `01` is "willing to strike you" — which would make this the aggro byte after all, in
-the low bits rather than bit 7 — or the transition is a combat flag and the match with the
-guard value is coincidence. Evidence and the provocation experiments: `docs/spice86-live-findings.md`
-§ 15, captures `cp5-guard-aggro` and `cp5-weak-fight`.
+**Update, same day — the low nibble moves, and § 16 identifies what moves it.**
+Two live runs showed an **attacked** Fighter (`type 0xF0`) go `0x03 -> 0x01`. A baseline
+taken seconds after load shows guards are born `0x03`/`0x00`, so `0x01` is not a class value:
+**it is an alarm.** Landing a blow on *anything* in a town flips every guard in the loaded
+sector to `0x01` at once — including slots 46 tiles from the player — while a missed swing
+flips nothing, and 65 s of idle on a fresh load flips nothing either. Distance from the
+player did not predict which guards flipped, so for the guard class the alarm is
+sector-wide.
+
+So the handoff's instinct about this array was right and the bit was wrong: the aggro state
+lives in the **low nibble**, not bit 7. What bit 7 still means (scripted recipients
+`0x81/0x82/...`) is unchanged. Evidence: `docs/spice86-live-findings.md` § 16, capture
+`captures/spice86/cp5-g25-aggro/`. Open: whether `0x01` is read back as a *cause* of
+attacking (everything here set it by hitting things), and what distinguishes `0x00` from
+`0x03` at load.
 
 Writer attribution also corrected: the writer is `asm/114A_sub_114a` (`mov %al,0x1d7(%di);
 dec %di; jns` — a downward fill loop at runtime `114A..1150`), which **precedes**

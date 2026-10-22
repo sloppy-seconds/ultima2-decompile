@@ -1154,15 +1154,19 @@ a guard brings the town's guards down on you.
 
 ### The role byte carries a state, not only an identity (grade: measured, n=2)
 
-Two separate runs showed an **attacked** `Fighter`'s `[DI+0x1D7]` go `0x03 -> 0x01`. Reading
-the whole table afterwards: every **Guard is `0x01`**, every **Merchant `0x02`**, untouched
-Fighters `0x03`, scripted specials `0x81/0x82`. So the low nibble is not purely a class — a
-Fighter that has fought the player ends up carrying the value guards are born with. Either
-`01` means "willing to hit you" and guards are born hostile, or the transition is a combat
-flag and the coincidence with the guard value is meaningless.
+Two separate runs showed an **attacked** `Fighter`'s `[DI+0x1D7]` go `0x03 -> 0x01`.
 
-**Not settled — and it is the best aggro lead the project has**, because it is a byte that
-changes when a fight starts, in the very array the handoff was pointing at.
+~~Reading the whole table afterwards: every Guard is `0x01`, every Merchant `0x02`,
+untouched Fighters `0x03`, scripted specials `0x81/0x82`. So the low nibble is not purely a
+class — a Fighter that has fought the player ends up carrying the value guards are born
+with. Either `01` means "willing to hit you" and guards are born hostile, or the transition
+is a combat flag and the coincidence with the guard value is meaningless.~~
+
+**Retracted the same day — see § 16.** The guard values were read *after* a fight, and a
+baseline taken seconds after load shows guards are born `0x03`/`0x00`. `0x01` is not a class
+value at all; it is an alarm set by landed violence, sector-wide for the guard class. The
+surviving half of this observation is the interesting half: the byte moves during play, and
+the thing that moves it is combat.
 
 ### What this section does not answer
 
@@ -1182,3 +1186,53 @@ changes when a fight starts, in the very array the handoff was pointing at.
   rather than a subsystem.
 * Death is a state of the world view, not a screen: zero the fields, print
   `<NAME> IS DEAD!` into the CMD log. `asm/0C62` is the citation.
+
+## 16. G25 answered: `0x01` is an alarm, and violence in a town sets it sector-wide (2026-10-23)
+
+Capture: `captures/spice86/cp5-g25-aggro/` (`roles-at-load.txt`, `probe.py` is the reader
+that produced every number here, `player-seed`). Two fresh runs of the same seed, one to
+strike and one as a time control.
+
+**First, a correction to § 15, which got this backwards.** § 15 claimed every Guard is
+*born* `0x01`. A baseline taken seconds after load says otherwise: guards at load are
+`0x03` and `0x00`. The `0x01` values § 15 saw were already the aftermath of the fight it
+was describing. Reading the table before touching anything was the step missing the first
+time.
+
+### What was measured
+
+| observation | value |
+| --- | --- |
+| guard roles at load, before any input | `0x03` (six slots) and `0x00` (two slots) |
+| one landed strike on an adjacent Fighter, `slot 18` | that Fighter `0x03 -> 0x01` |
+| **every guard in the sector, same moment** | all eight `-> 0x01`, **including slots at d31, d44 and d46 that were never touched** |
+| never-struck non-guards in the same tick | Fighters and `0x30` creatures stayed `0x03` |
+| player HP after the guards arrived | `9999 -> 9796`, with the nearest guard at d1 and four formed up at d9-d11 |
+| **time control: fresh load, 65 s, no input at all** | **zero role changes, zero HP changes** — guards wandered (one moved `(30,14) -> (36,20)`) and stayed `0x03`/`0x00` |
+| second control: 35 s idle after the flip | zero further changes |
+| a **missed** swing at a guard (§ 15, `guard1.png`) | no reaction in 14 s |
+
+### The model, graded
+
+`[DI+0x1D7] == 0x01` is an **alerted / willing-to-strike-you state**, and it is set by
+*violence that lands*, not by time, not by proximity and not by the creature being hit
+itself. Striking **any** creature in a town flips **every guard in the loaded sector** —
+the alarm is sector-wide, which also settles G26's radius question for guards: distance
+from the player did not predict which guards flipped (d1 and d46 both did).
+
+The struck creature flips too, so `0x01` is doing double duty: "this one fought you" and,
+for the guard class, "the town is on you". A swing that misses alerts nothing.
+
+This is the aggro marker the handoff was reaching for. It was in `DS:1D7` after all — in the
+low nibble, not bit 7, and as a state rather than a class. The owner's recollection
+("attack a guard and all the guards in town want to fight you") was right and is *wider*
+than recalled: it does not require attacking a guard, only landing on anything in town.
+
+### Still open
+
+* Whether `0x01` is read back as a cause — i.e. does a creature with `0x01` chosen by some
+  other means actually attack. Everything here sets it by hitting things.
+* What the other low values mean (`0x00` vs `0x03` both appear at load on guards).
+* Whether the alarm survives leaving and re-entering the sector, and whether it survives
+  SAVE — that is the same persistence question as G24, now worth asking about `DS:1D7` too.
+* Whether killing rather than wounding escalates further.

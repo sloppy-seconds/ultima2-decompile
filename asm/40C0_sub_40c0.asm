@@ -15,6 +15,11 @@
 #        0x84 with `SHE'S GONE!!!`, and asm/102B tests the slot for zero. See
 #        docs/monster-spawn.md § 6. The owner's aggro-marker reading is not
 #        supported by any consumer found so far.
+# update 2026-10-23: the aggro state IS in this array, but in the LOW nibble, not here.
+#        [slot+0x1D7]==0x01 is an alarm set when a blow lands on anything in a town, and it
+#        flips every guard in the loaded sector at once (docs/spice86-live-findings.md § 16,
+#        capture cp5-g25-aggro). This fragment's bit-7 test remains the scripted/special
+#        split, which is a different question from who will fight you.
 sub_40c0:
 L_0042c0:
         mov    0x1d7(%di),%al
