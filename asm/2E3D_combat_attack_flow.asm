@@ -12,6 +12,12 @@
 #   So [DI+0x177] is decremented by the player's damage and its exhaustion is what
 #   kills the monster. That is what makes the monster_hp_* spawn arms readable:
 #   they store per-kind HP immediates into this field.
+#   LIVE CAVEAT (2026-10-22): a headless read of all 32 monster slots in the sector-0
+#   compound (seeded maxed STRANGER, --auto-play) found HP = 255 for EVERY active
+#   monster, including types whose arms store 64/192/224/32. So the arms are real
+#   bytes but not the values live in that place. The field being HP is unaffected;
+#   what is unproven is that the arm immediates survive to gameplay. Needs a non-maxed
+#   character in an ordinary sector before the arm values are called observed.
 # func 2E3D..2F6E  len 0132 B  evidence: reko
 # strings: "HIT!"; "--EXP.+"; "MISS"
 # calls: L_000c33, L_001651, L_00307d, L_003164, L_0051df (str_out), L_005417, L_00543e, L_0055b5 (+1 more)

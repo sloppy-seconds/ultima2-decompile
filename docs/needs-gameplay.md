@@ -152,7 +152,7 @@ seeded with `--player`, so character creation is not an obstacle either.
 | G15 | locate towns: which sector holds which town (`DS:4A` site kind 1 village / 2 town / 4 tower, plus map bytes, give the search) | agent | **medium** | shops, signs, CP6 |
 | G16 | `0xC0` event tile: step on one and record what the event actually is (a probe threw the player y=20→57; 1311 occurrences, exactly 262 in each of `mapx25/35/45`) | agent | **medium** | tile art, CP4/CP6 |
 | G17 | ~~find the HP computation~~ **done for the overworld**: the field is `[DI+0x177]` (proven by `asm/2E3D_combat_attack_flow.asm`, which subtracts damage from it and zeroes the record on borrow) and nine spawn arms store per-kind immediates that match the third-party HP **9 for 9** (`tools/monster_hp_dispatch.py`, exits non-zero on a disagreement). **Also closed:** `asm/147F_dungeon_monster_spawn.asm` is confirmed the dungeon spawner (only caller `asm/1151_dungeon_darkness`) and computes HP from the sprite, and Guard's 500 is **refuted by field width** -- HP is one byte, so the codex's 255 stands. **What is left:** the townsfolk. They have no arm at all (measured negative -- no `mov $0x60/0x64/0x68/0x6C/0xF4,%al` anywhere), and the static search is now **exhausted**: every write site of `[DI+0x177]` is enumerated (nine spawn immediates, the dungeon computation, two subtract paths, the kill clear) and none can be a town NPC spawner. The `asm/3611` lead raised on the site-kind test was retracted -- it applies damage, it does not create NPCs. So this one needs a live read of `[DI+0x177]` for a Guard or Merchant in a town, which closes the question either way. The dungeon formula is read but not validated against a live monster | agent | **high** | Merchant/Cleric/Jester/King stats; CP5 combat spec | | agent | **high** | Merchant/Cleric/Jester/King stats; CP5 combat spec |
-| G18 | settle **which monster record field drives the drawn art**. Partly resolved the same day it was filed: the spawn arms write type `[DI+0x197]` and sprite `[DI+0x1B7]` from the **same immediate**, which is why both fold to the right art under `>>2` on eight measured values, and the `0x40` contradiction is **closed** -- the thief is type `0xFC` with HP 32, so `0x40` is the empty sentinel and the earlier "thief is monster type 0x40" claim in `docs/spice86-live-findings.md` is wrong. What remains: are the two fields always equal outside spawn, or only at creation? | agent | **med-high** | naming monster types, CP5 |
+| G18 | settle **which monster record field drives the drawn art**. The `0x40` contradiction is **closed** -- the thief is type `0xFC` with HP 32, so `0x40` is the empty sentinel and the earlier "thief is monster type 0x40" in `docs/spice86-live-findings.md` is wrong. But a second claim from the same day is now **retracted**: `[DI+0x1B7]` is NOT a sprite. A live read of all 32 slots shows it holds `0x08`/`0x0C` -- a small kind index, which is exactly what the spawn guards compare against (`cmp $0x8,%al`). The arms write `[DI+0x197]` and the map cell, not `0x1B7`. So the "8 agreements across two fields" was really **4 agreements from one field relabelled**, and the type->art transform rests on the four special-casting types only. What remains: confirm `>>2` on ordinary wandering spawns with a non-maxed character | agent | **medium** | naming monster types, CP5 |
 | G19 | the **dungeon creature set is unreachable by the tile join** — all seven codex dungeon images are `64x41` screenshot crops, and the dungeon is a wireframe renderer whose outlines probably live in `original/monsters` (64 records x 34 B of coordinate pairs, still T9). Dungeon Orc, Daemon and Balron are **different creatures from their overworld namesakes**: different art, HP `17-153` / `177-217` / `209-249` against `16` / `64` / `255`. Identify them through the stroke table, not the tile table | agent | **medium** | dungeon rendering, T9, any dungeon bestiary |
 
 G14, G15 and G16 were carried in from the 2026-10-21 handoffs on 2026-10-22, where they
@@ -292,11 +292,26 @@ counter rather than a position.
 simultaneous monsters and the spawn RNG is seed-repeatable, so one session can dump
 all 32 slots at spawn and tie the formula to a live record. Memory reads sustain
 about 250 req/s.
-**Needs owner:** no. **Success is a disagreement resolved**, not a confirmation:
-Guard is 255 on the codex and 500 on Gamer Corner, Merchant 5-50 against 1, and a
-run that only confirms the numbers both sources already agree on proves little.
-**Blocks:** calling any bestiary stat `observed`. Until then every HP figure in
-`bestiary/bestiary.tsv` is third-party. See `docs/bestiary.md` § 2.
+**Now the blocking test, and it is headless.** A live read of all 32 monster slots in
+the sector-0 compound (seeded maxed STRANGER, `--auto-play`) returned **HP = 255 for
+every active monster**, including Daemon, Devil, Wizard and Thief whose arms store
+64/192/224/32. So the arms are real bytes but not the live values here, and the 9/9
+cross-check is a static fact about the binary, not yet a behavioural one. Two
+follow-ups, both scriptable now:
+
+1. **Non-maxed character, ordinary overworld sector.** If HP comes back as the arm
+   immediates, the arms are the live path and the compound is special; if it is 255
+   again, something overwrites them and the whole HP column drops back to third-party.
+   This single run decides it, and it also settles Guard 255-vs-500, which the
+   byte-ceiling argument could not.
+2. **Townsfolk HP is confirmed to exist** -- Cleric `0xF4` was present with HP 255 --
+   so the earlier "town NPCs may have no HP record" reading is dead. What is still
+   unknown is where their HP is *assigned*, since no arm covers them.
+
+**Needs owner:** no. `--auto-play` and `tools/spice86_type.py` drive a headless run
+end to end; no display, no keystrokes through X.
+**Blocks:** calling any bestiary stat `observed`. Until step 1 runs, every HP figure
+in `bestiary/bestiary.tsv` is third-party or static-only. See `docs/bestiary.md` § 2.
 
 ### G18 — which record field drives the art `[ ]`
 **What is already settled:** the record is three parallel byte arrays, stride 1,

@@ -10,6 +10,15 @@
 # confidence: high for the field and the value (bytes). The creature NAME remains
 #           third-party and is not promoted by this file.
 # label: kept as sub_0d4f on purpose — labels are body (CP0)
+# CORRECTION 2026-10-22 about the guard key: the value this family tests at
+#   [DI+0x1B7] is a small KIND INDEX, not a sprite. A live read of all 32 monster
+#   slots found [DI+0x1B7] holding only 0x08 and 0x0C, which is exactly what the
+#   guards compare against (`cmp $0x8,%al`). The arms write the type to [DI+0x197]
+#   and stamp the same value into the map cell via [bx+si]; they never write
+#   [DI+0x1B7]. docs/spice86-live-findings.md describes [DI+0x1B7] as "monster
+#   sprite stamped into the map cell" and that is wrong — it conflated the two
+#   fields, which is why the type->art transform briefly looked corroborated by two
+#   fields when only one is involved. See docs/needs-gameplay.md G18.
 # func 0D4F..0D63  len 0015 B  evidence: seed+reko
 # calls: L_000daf
 # confidence: low (bytes proven by check_func.py)
