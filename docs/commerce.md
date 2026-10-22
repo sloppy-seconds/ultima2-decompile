@@ -479,15 +479,47 @@ conflated the two. What is measured about `0x68` is a strong coincidence, not an
 in `mapx31` it occurs at exactly the seven `monx31` Merchant spawns (7/7), which says the
 map marks where a transactor stands — do not generalise it to other sectors unchecked.
 
-**Also unresolved:** `asm/23E6` sets `DI = 31`, and `4075` takes the creature path when
-`BL != 0` — so on the face of it the map-tile path is unreachable, yet the armour shop
-opened. Something between `23E6` and `4075` must decrement `DI` (almost certainly a scan
-loop in the `2402..241E` fragments) and **that loop has not been read**. Until it is, the
-branch structure is described, not the runtime behaviour.
+**The scan loop, read.** `asm/23E6` and the fragments after it are **one routine** — a
+creature-slot scan, not just a seed:
 
-**Grades.** The guards, the `1590` success jump, the `23E6` seed arithmetic and the 7/7
-tile match: **measured**. "The delta was `(1,1)` in every test" : **measured**. "The scan
-loop decrements DI": **inferred**. The direction→delta writer: **unknown**.
+```
+23E6  DS:23 = DS:00 + DS:19 ; DS:24 = DS:01 + DS:1A    cursor = player + delta
+      DI = 31                                          top creature slot
+2402  al = [DI+0x197]        ; type
+2406  cmp al,0 ; je  241f                              empty slot -> next
+240A  al = [DI+0x137]        ; x
+240E  cmp al,[DS:23] ; jne 241f
+2414  al = [DI+0x157]        ; y
+2418  cmp al,[DS:24] ; jne 241f
+241E  ret                    ; FOUND -- returns with DI = the matching slot
+241F  dec DI
+2420  jne 2402               ; scan downward
+2422  ret                    ; EXHAUSTED -- returns with DI == 0
+```
+
+That closes the puzzle raised in `asm/4050_cmd_T.asm`'s header. `4075`'s `cmp bl,0;
+jne 40C0` is **not** dead code and the map-tile path is not unreachable: `DI` is whatever
+the scan left behind, so a creature standing on the cursor takes the creature path and an
+empty cursor falls through to the map-tile path. The branch structure and the runtime
+behaviour now agree.
+
+**What writes `DS:19/1A` is still open, and the obvious candidates are wrong.**
+`asm/1086` loads `DS:19` from `[DI+0x1F7]` and `DS:1A` from `[DI+0x217]`, indexed via
+`DS:25`, and `asm/10AA`/`asm/10BF` are the matching writers into those arrays. Those are
+**per-entity arrays, not direction vectors** — so `DS:19/1A` is being loaded from
+somewhere that has nothing to do with a keystroke, which is consistent with it reading
+`(1,1)` in every sample and is *not* consistent with it being the talk direction. Two
+unexamined writers remain (`asm/0B0F`, `asm/152E`).
+
+**So do not claim the ray is aimed by the direction key.** What is measured: the cursor is
+`player + DS:19/1A`, the scan looks for a creature on that cell, and `DS:19/1A` has never
+read anything but `(1,1)`. What is not known: what is supposed to put a direction in there.
+That is the remaining gap, and it is the one that matters for G23.
+
+**Grades.** The guards, the `1590` success jump, the `23E6` seed arithmetic, the scan loop
+above and the 7/7 tile match: **measured**. "The scan resolves the DI branch": **measured**,
+it follows from the loop's two exits. The direction→delta writer: **unknown**, and the
+`10AA`/`10BF`/`1086` family is now ruled out rather than merely unexamined.
 
 
 **The earlier claim stays withdrawn.**
