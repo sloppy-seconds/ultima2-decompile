@@ -312,6 +312,21 @@ adds a `--data-dir` seam and reads the player's own files the way the original
   6. **CI gains an engine job** (build + `make test`); Phase 3 jobs unchanged
      and still green.
 
+- **2026-10-23 — CP0 asm guard restated (gate change, owner-approved direction).**
+  The guard md5'd each changed `asm/` file's non-comment lines against HEAD and failed on
+  **any** deletion. That was right while a rename was the only legal `asm/` edit and it made
+  the G22 merges impossible: merging sixteen fragments into three routines deletes thirteen
+  files, and the gate would have called legitimate maintenance vandalism. The invariant is
+  now the tree's **assemblable content**, not the file boundaries —
+  `engine/tests/asm_body_guard.py` concatenates every `asm/*.asm`'s non-comment lines in
+  start-address order and compares against HEAD. Renames, merges and splits preserve that
+  stream; any body edit, insertion, deletion or reorder breaks it. **No criterion was
+  loosened — the check is strictly stronger than what it replaced**, catching whole-file
+  deletion by content loss rather than by git status, and localising the first divergent
+  line. Demonstrated failing first: a one-line `das`→`daa` in `asm/2052` and a removed file
+  both went red with useful messages; both were reverted. `assemble_clean.sh` remains the
+  end-to-end proof and still reports `37344 bytes identical` after the merges.
+
 ## Deferred decisions (with the breadcrumb location)
 
 | decision | status | breadcrumb |

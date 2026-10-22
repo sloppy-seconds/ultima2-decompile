@@ -1,9 +1,14 @@
 # G22 — function-boundary proposal for `asm/19D7` and the region past its end
 
-**Status: proposal only. Nothing here is executed.** Splitting a function boundary is a
-Phase 2/3 change to the byte-proof harness and needs the owner's approval, plus a
-`check_func.py` run per new range. Opened by ticket G22; this document is task A5 of
-`docs/overnight-2026-10-23.md`.
+**Status: APPROVED AND EXECUTED 2026-10-23.** The owner ruled in favour of § 2 — merge
+where the evidence is hard, leave `19D7..2027` alone — and added that charisma affecting
+costs is known game behaviour. The three merges landed in `4644eb9`; § 6 below is the
+execution record. What follows in § 1–5 is the proposal as written, kept intact because
+the reasoning is the part worth keeping.
+
+Splitting a function boundary is a Phase 2/3 change to the byte-proof harness and needs the
+owner's approval, plus a `check_func.py` run per new range. Opened by ticket G22; this
+document was task A5 of `docs/overnight-2026-10-23.md`.
 
 Grades per `AGENTS.md` § 5. Every address below is **observed** from
 `original/ultimaii.exe` (runtime = file − `0x200`) or **measured** from the `asm/` tree.
@@ -118,10 +123,72 @@ and its `20EB` loop is the one whose boundary is easiest to get wrong).
 
 ## 5. Corrections this forces elsewhere
 
-* `docs/commerce.md` § 3 says the transaction body is "entirely **outside** that file's
+* `docs/commerce.md` § 3 said the transaction body is "entirely **outside** that file's
   declared range" and that a split "must extend the range upward". **Wrong**, per § 1
-  above; it needs amending when the owner rules on this proposal.
+  above; amended 2026-10-23 when the owner ruled on this proposal.
 * `docs/commerce.md` § 3b's description of `asm/2052`'s branch polarity was corrected in
   place on 2026-10-23: the trailing `cmc` inverts the flag, so `jb` is the **affordable**
   path. Simulated against the instruction sequence: `9999 − 0200 → 9799` taken,
   `9959 − 0040 → 9919` taken, `0020 − 0200` not taken, `0004 − 0005` not taken.
+
+## 6. Execution record, 2026-10-23
+
+### The prerequisite nobody asked for: CP0 could not survive a merge
+
+`engine/tests/run_cp0.sh` md5'd each changed `asm/` file's non-comment lines against HEAD
+and treated **any deletion as a failure**. A merge deletes files, so the gate would have
+reported this exact work as vandalism — six of the sixteen files here are deletions.
+
+The invariant was restated rather than relaxed. What must not change is the tree's
+**assemblable content**, not which file a line lives in. `engine/tests/asm_body_guard.py`
+now builds a canonical stream — every `asm/*.asm` sorted by the start address in its
+filename, non-comment lines concatenated — and compares it against HEAD. Because the
+fragments tile their ranges contiguously, ordering by start address makes the stream
+independent of where the boundaries sit: renames, merges and splits preserve it, and any
+body edit, insertion, deletion or reorder breaks it.
+
+Demonstrated failing before being trusted, per `AGENTS.md`:
+
+| case | result |
+| --- | --- |
+| one body line `das` → `daa` in `asm/2052` | **FAIL**, naming body line 5744 and both values |
+| a whole `asm/` file removed | **FAIL**, "13 body line(s) at HEAD now missing" |
+| clean tree | PASS, 26080 lines, 1300 → 1300 files |
+| after all three merges | PASS, 26080 lines, 1300 → 1287 files |
+
+Both perturbations were reverted; `asm/` was untouched by the gate commit itself.
+
+### What was merged
+
+| new file | from | size | inbound callers |
+| --- | --- | --- | --- |
+| `asm/2028_read_decimal_digit.asm` | 7 fragments | 42 B | 7 |
+| `asm/2052_gold_spend_price.asm` | 4 fragments | 89 B | 5 |
+| `asm/20AB_bcd_price_from_stats.asm` | 5 fragments | 119 B | 3 |
+
+Executed cheapest-proof-first, as § 4 suggested. `check_func.py` PASS per range;
+`assemble_clean.sh` → `CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`; `make -C engine
+test` CP0..CP4 all PASS; `xref_provenance --strict` **136/136**, up from 124/124, because
+the merged files carry `name-evidence:` headers the fragments never had.
+
+### What the merge exposed, and the doubt it left
+
+Writing the headers forced a full read of `20AB`, and two claims made in a hurry earlier
+the same day turned out to be wrong. Both are recorded in the file header and in
+`docs/commerce.md` § 3, not silently fixed:
+
+* the loop count is the **bit length** of `int + cha`, not a popcount;
+* the loop is a **Fibonacci-style BCD walk** seeded 4,4, not a multiply by repeated
+  addition. The first simulator of it also had `DAA` subtracting 6 instead of adding, and
+  printed plausible nonsense (`01A6` where the answer is `0012`) — a model that agrees
+  with nothing but itself.
+
+The corrected model yields `0020` for the tavern call on a maxed character where the game
+printed `0200`: the same digits, transposed across the pair. **That discrepancy is open,
+and the routine is named for what it demonstrably does rather than for the price it has not
+yet reproduced.** The owner's confirmation that charisma affects costs supports the
+direction of the mechanism; it does not close the arithmetic. G23 now carries the three
+separate unknowns as a falsifiable capture.
+
+`19D7..2027` was left alone, as recommended. Its four handlers end in tail jumps, so a
+fall-through boundary there would be a judgement presented as a fact.

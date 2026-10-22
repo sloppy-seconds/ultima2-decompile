@@ -200,30 +200,54 @@ observable if anything samples between the two.
 **No site was found that writes `0x02,0x00` into `DS:27/28` for the vendor food quote.**
 The static path into the printer is `asm/15B7` (`jmp L_001999`) → `asm/1799` (prints
 `THE FOOD HERE COSTS `) → `asm/17B2` (`mov $0x3,%al; call L_0022ab`) → `asm/17B7`
-(prints the pair). But `asm/20AB_sub_20ab.asm`, the routine `17B2` calls, writes
-`DS:27=0x00` and `DS:28=0x04` — which would print `0004`, not `0200`. So one of three
-things is true and the bytes read so far do not separate them:
+(prints the pair).
 
-1. the food quote does not enter through `asm/17B2`, and `asm/17B7` is reached from
-   somewhere else with the pair already loaded;
-2. `sub_20ab` is not a price setter but a **BCD multiply by repeated addition** —
-   `asm/20EB_sub_20eb.asm` adds `DS:27/28` into `DS:29/2A` under `dec %di; jne`, and
-   `sub_20ab` seeds both pairs with `0x0004` and derives a loop count from
-   `popcount([DS:50] + [DS:4E])`, i.e. from **int + cha** — and the product lands in
-   `DS:29/2A`, not `DS:27/28`;
-3. something rewrites the pair between the two calls.
+The three candidate explanations this document offered on the first pass are now resolved
+as far as static analysis can resolve them, and **two of them were wrong**. `asm/20AB` is
+one routine, not three fragments, and it is now `asm/20AB_bcd_price_from_stats.asm` with
+the full derivation in its header (merged 2026-10-23 under the G22 ruling).
 
-Option 2 is the interesting one and it is only half-read: a price derived in part from the
-character's intelligence and charisma would be a genuine mechanic, and it would explain
-why nobody found a price table. It is **not established**. The single datum that settles
-it is a live read of `DS:27`, `DS:28`, `DS:29`, `DS:2A` and `DI` at runtime `17B7`, plus
-one at `2052`, during a real vendor transaction. That is a capture, not a static search,
-and it is registered as **G23** in `docs/needs-gameplay.md`.
+What the bytes say, **observed** and then **measured** by stepping the instruction sequence:
+
+* `DS:27/28` and `DS:29/2A` are both seeded to `0004`.
+* The loop count is the **bit length** of `[DS:50] + [DS:4E]` (int + cha), not a popcount.
+  The shift loop is `inc %si; clc; rcr $1,%al; or %al,%al; jne` — shifts to reach zero.
+  An earlier pass here called it `popcount` and was wrong; the correction is recorded in
+  the asm header too.
+* The loop is **not** multiply-by-repeated-addition. Each pair takes the other's old value
+  while the first receives the sum, so the pairs walk a Fibonacci sequence seeded 4,4:
+  `4, 8, 12, 20, 32, 52, 84, 136, 220, 356, 576, 932 ...` and the result lands in
+  `DS:27/28`, the printed and charged pair.
+* Higher `int + cha` means **fewer** iterations, so a **lower** number. For the tavern
+  call (`AL=3`) on a maxed character (`int=cha=0x40`): `DI = 11 − 8 = 3` → `0020`. With
+  `int=cha=0`: `DI = 10` → `0576`.
+
+**The model does not reproduce the observed price, and that is left open on purpose.** It
+yields `0020` where the game printed `0200` — the same digits transposed across the two
+bytes. Either the byte order of the `(DS:27, DS:28)` pair is the other way round from what
+`asm/2052`'s pairing against `DS:58/59` implies, or the live quote did not come through
+`asm/17B2`, or `AL` was not 3. **None of these is settled.** Do not describe this routine
+as "the price formula" in anything downstream until it reproduces a number the game
+actually printed; call it a stat-dependent BCD generator that writes the price operand.
+
+### Charisma affects costs — owner-confirmed
+
+**The owner states on 2026-10-23 that charisma affecting costs is known behaviour of the
+original game.** Grade: **recalled**, and per `AGENTS.md` § 5 an owner recollection is a
+pointer at a place to measure, not a conclusion. It landed on exactly the right place: the
+only stat-dependent arithmetic found anywhere in the commerce path reads `int` and `cha`
+and nothing else, and its output decreases as those two rise. That is corroboration of
+direction from an independent source, and it is the strongest support the reading has.
+
+It is still **not** proof of the arithmetic, and the `0020`-vs-`0200` transposition above
+is unresolved. What the recollection buys is a **falsifiable prediction** rather than a
+hunch: a low-charisma character should be quoted a **higher** price than a high-charisma
+one, at the same vendor, for the same item. That is now the shape of the G23 capture.
 
 **What is settled regardless:** there is no price table, the printed price and the charged
-price are the same operand pair, and two of the three observed price setters are pure
-immediates or byte placement. The `2 gold per food point` figure the owner measured is
-consistent with a `0200` per-100 quote and needs no table to explain it.
+price are the same operand pair, and the pair is written by a routine whose output depends
+on `int + cha`. The `2 gold per food point` figure the owner measured is consistent with a
+`0200` per-100 quote and needs no table to explain it.
 
 ### The vendor food price, measured
 

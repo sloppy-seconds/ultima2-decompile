@@ -190,6 +190,32 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — A **content guard must be expressed over content, not over files.** The
+  asm-tree guard md5'd each changed file's non-comment lines against HEAD and failed on any
+  deletion. That was correct while renaming was the only legal edit, and it silently became a
+  blocker the first time function *boundaries* were allowed to move: merging fragments into
+  routines deletes files by design, so the gate reported sanctioned maintenance as vandalism.
+  The fix was to restate the invariant, not relax it — concatenate every file's non-comment
+  lines in address order and compare the stream, which renames, merges and splits all preserve
+  and which any body edit, insertion, deletion or reorder breaks. → any harness whose proof
+  artefact is a set of named files should guard the **ordered content stream**, keyed on a
+  semantic address rather than a path. Path-keyed guards encode an accident of packaging as a
+  correctness property, and the first legitimate refactor discovers it. Restating was strictly
+  stronger, not weaker: whole-file deletion is now caught by content loss and the first
+  divergent line is named.
+
+* **2026-10-23** — **A hand-written simulator of a target ISA needs a hand-computed case
+  before it needs a conclusion.** A routine was modelled three times in one day and wrong
+  twice: a shift-to-zero loop was read as a popcount, a swap-and-add sequence was read as a
+  multiply, and the first simulator implemented decimal adjust by *subtracting* 6 instead of
+  adding. Every version printed a confident number; the broken one produced a two-digit
+  decimal result that looked like a plausible larger one, and nothing about it looked wrong. → a harness that derives behaviour by
+  re-implementing target instructions in the host language must ship at least one
+  hand-computed vector per emulated opcode, asserted in the same run, and must refuse to print
+  a derived value when a vector fails. The same applies to the *reading*: a loop's exit
+  condition and the order in which a register is read versus overwritten are the two places a
+  confident misread concentrates, and both produce plausible output rather than an error.
+
 * **2026-10-23** — A **truncated tool listing reads as an absent tool.** A remote
   emulator-control surface was queried with a response cap, four of sixty-three tools
   came back, and the screenshot capability appeared not to exist. The detour that
