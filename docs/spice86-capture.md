@@ -36,7 +36,71 @@ the data into a fresh scratch directory and run there.** The launch below copies
 pristine `references/ultima2/` backup into `tmp/<timestamp>/`, so neither the backup nor the
 `original/` working copy is ever mutated.
 
+## Headed or headless — decide before you launch
+
+This cannot be changed after launch, and it determines what you are able to observe.
+
+| | `--watch` (headed) | `--headless` |
+| --- | --- | --- |
+| window | yes, you can watch it | none (`--HeadlessMode Minimal`) |
+| keystrokes via `tools/spice86_keys.py` | yes | **no** — XTEST needs a focused window |
+| screen capture (`tools/vga_screen.py`) | yes | **no** — nothing is rendered |
+| HTTP memory reads | yes | yes |
+| MCP memory writes | yes | yes |
+| save seeding with `--player` | yes | yes |
+| CFG harvest | on clean exit, or live `dumpAll` | **live `dumpAll` only** |
+| teardown | close the window, or `spice86_stop.sh` | `spice86_stop.sh` |
+
+**Measured on this build (2026-10-21): headless Spice86 ignores both SIGTERM and
+SIGINT** — it sat through each until SIGKILL. So in headless mode no signal produces
+the exit dump and the harvest must never depend on one. `tools/spice86_stop.sh`
+therefore runs `monitor dumpAll` over the GDB port *first*; that is what guarantees
+the CFG is written. The signal sequence after it is teardown, not flush.
+
+**An agent shell usually has no display.** On this host `WAYLAND_DISPLAY` and
+`DISPLAY` are both unset in an agent context and **`Xvfb` is not installed**, so
+there is no way to conjure a focusable window. `--headless` is the default for
+unattended work, and keystroke-driven captures are simply unavailable.
+
+**Headless is not a dead end, because keystrokes are rarely the right tool.**
+Position and sector are set by editing the save and relaunching with `--player`, not
+by walking. Poking `DS:00/01` in a live emulator writes and reads back, but that pair
+is a mirror and not the source, and movement then stops working entirely — see the
+`tools/u2_edit.py` docstring, which records this the hard way. Plan a capture around
+**seeding state** rather than driving input and most of them become headless.
+
 ## Launch
+
+**Use the scripts.** They copy the pristine `references/ultima2/` backup into a
+fresh timestamped run directory, pick free ports, write the session state file the
+stop script needs, honour `U2V2_SPICE86_DLL` for A/B-testing a patched build, and
+harvest on the way out. Hand-rolling `dotnet` skips every one of those, and the
+harvest loss is silent. The raw invocation is documented further down only so the
+scripts can be read, not as the way to launch.
+
+```bash
+tools/spice86_start.sh -h                       # every option, always current
+
+tools/spice86_start.sh --watch --patch-arrows --name myrun    # headed, real arrows
+tools/spice86_start.sh --headless --name myrun                # headless
+
+# seed a character instead of creating one in-game (the only way to change sector)
+python3 tools/u2_edit.py maxout  tmp/seed/player
+python3 tools/u2_edit.py set     tmp/seed/player sector 0
+python3 tools/u2_edit.py setpos  tmp/seed/player 30 32     # X and Y only
+tools/spice86_start.sh --headless --player tmp/seed/player --name seeded
+
+# install a synthetic sector before launch (the game reads mapxNN at startup)
+tools/spice86_start.sh --headless --seed-map /var/tmp/probe/mapx20 --name probe
+
+tools/spice86_start.sh --harvest    # dump the CFG of the live session, keep running
+tools/spice86_stop.sh               # dumpAll -> teardown -> harvest to captures/spice86/<label>/
+```
+
+One session at a time, deliberately: the state file is singular and two emulators
+fighting over the same ports is the failure mode this avoids.
+
+### What the script actually runs
 
 ```bash
 # Fresh, timestamped scratch dir inside the project, sourced from the pristine backup.
@@ -55,6 +119,8 @@ dotnet "$SPICE86_DLL" \
     --AllowIvtAddress0 \
     --Cycles 3000
 ```
+
+`--HeadlessMode Minimal` is added when `--headless` is passed.
 
 `tmp/` here is the project-local scratch folder (disk-backed), created fresh per run and named
 by timestamp so runs never collide and each is reproducible from the backup. It is **not** the
@@ -97,6 +163,36 @@ Wayland first is preferable, since the compositor may prefer it for the Avalonia
 
 A killed Spice86 process can leave its previous port bound for a while, and the defaults
 20000 and 8081 are often taken. Probe for free ports before launching rather than assuming.
+
+## Which tool for which job
+
+This table exists because the tooling was re-derived from scratch several times.
+Check it before writing anything new against a live session.
+
+| job | tool | needs a display? |
+| --- | --- | --- |
+| launch / label / seed a run | `tools/spice86_start.sh` (`-h` for options) | no (`--headless`) |
+| stop and harvest the CFG | `tools/spice86_stop.sh` | no |
+| harvest mid-run without stopping | `tools/spice86_start.sh --harvest` | no |
+| read memory | HTTP API `GET /api/memory/<phys>/range/<len>` | no |
+| write memory (build a scenario) | MCP endpoint `write_memory` on `--McpHttpPort` | no |
+| find the safe polling rate | `tools/poll_probe.py` | no |
+| record state on each turn | `tools/turn_recorder.py` | no |
+| set sector / position / stats | `tools/u2_edit.py` (`show\|set\|setpos\|maxout`) | no |
+| synthesise a probe sector | `tools/u2_mkprobe.py` + `--seed-map` | no |
+| render the text screen from a dump | `tools/vga_screen.py` | no — reads memory, not the window |
+| render the overworld from a dump | `tools/map_render.py` | no |
+| continuous frame ring / screenshots | `tools/vga_ring.py`, `tools/screenshot_diff.py` | **yes** |
+| send keystrokes | `tools/spice86_keys.py` | **yes** |
+| make real arrow keys work | `tools/patch_arrows.py` (via `--patch-arrows`) | yes, to be useful |
+| dungeon-specific probe | `tools/dungeon_capture.py` | no |
+| prove a routine executed | `tools/cfg_printed.py` (reads `ExecutedInstructions`) | no |
+
+Two things worth internalising from that table. **The screen is a memory read, not a
+screenshot** — `vga_screen.py` reconstructs the text mode from the VGA buffer in a
+dump, so "what did the game display" is answerable headless. And **the only rows that
+need a display are the ones that touch the window**: keys, and pixel screenshots. If a
+capture seems to require walking somewhere, it usually requires seeding a save instead.
 
 ## Reading memory: the HTTP API
 
@@ -243,3 +339,26 @@ so a loaded character is placed by the map loader rather than restored to a save
 - **Physical, not logical, addresses.** Multiply the segment by 16 yourself.
 - **BCD everywhere.** Binary reads give plausible-looking wrong values.
 - **`--AllowIvtAddress0` or it stops** with a message that looks like a crash.
+- **Headless ignores SIGTERM and SIGINT.** Measured on this build. No signal produces
+  the exit dump, so never kill a headless run to get the CFG — use
+  `tools/spice86_stop.sh`, which does `monitor dumpAll` over the GDB port first.
+- **`monitor dumpAll` is camelCase.** A lowercase `dumpall` is silently ignored and
+  looks like a successful call that produced no files (measured 2026-10-21).
+- **No display does not mean no capture.** An agent shell here has no
+  `WAYLAND_DISPLAY`/`DISPLAY` and `Xvfb` is not installed, so keystrokes are
+  unavailable — but state reads, memory writes, save seeding and the screen-as-memory
+  renderers all work. Reach for `--player` and `--seed-map` before assuming a run must
+  be driven.
+- **Poking `DS:00/01` to teleport does not work.** It writes, it reads back, and then
+  movement stops entirely; it is a mirror. Change sector by editing the save and
+  relaunching: `u2_edit.py set <file> sector NN`, then `setpos <file> X Y` — note
+  `setpos` takes **X and Y only**, not a sector.
+- **`DS:4A` is two different things.** It is the second decimal digit of the sector
+  during a sector read, and the **site kind** (1 village / 2 town / 4 tower) outside
+  one. A `cmpb $0x4,[DS:4A]` therefore means "are we at a tower" only in the second
+  sense, and reading it in the wrong context gives a confident wrong answer. Sector is
+  stored as two decimal digits patched into the filename `MAPXFF`, so sector 20 is the
+  pair `2,0` — a numeric read of that pair yields 512.
+- **CFG blocks are not proof of execution.** `spice86dumpCfgBlocks.json` lists
+  *discovered* blocks. The authority for "this ran" is `ExecutedInstructions` in
+  `spice86dumpExecutionFlow.json`; use `tools/cfg_printed.py`.

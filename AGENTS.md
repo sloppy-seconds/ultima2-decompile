@@ -195,6 +195,17 @@ Verification, in two independent layers:
   may inherit and what it must re-derive from its own bytes. If a line only makes
   sense for this game, it belongs in `asm/` or the findings doc instead.
 
+* **Read `docs/spice86-capture.md` before driving the emulator, and use the scripts.**
+  `tools/spice86_start.sh -h` lists every option and `tools/spice86_stop.sh` is the
+  only safe teardown. That doc has a "Which tool for which job" table because this
+  tooling was re-derived from scratch repeatedly — a hand-rolled `dotnet` launch skips
+  the run-dir copy, the port pick, the state file and the harvest, and the harvest loss
+  is silent. Two facts worth knowing cold: an agent shell on this host has **no display
+  and no Xvfb**, so keystrokes are unavailable and `--headless` is the default for
+  unattended work; and headless Spice86 **ignores SIGTERM and SIGINT**, so a CFG
+  harvest must come from `monitor dumpAll`, never from a signal. When a capture seems
+  to need walking somewhere, seed state instead — `--player` with `tools/u2_edit.py
+  setpos` is the only way to change sector, and `--seed-map` installs a synthetic one.
 * **Never run the game in place.** The game rewrites its own `player` file.
   `tools/spice86_start.sh` copies pristine `references/ultima2/` into a fresh
   timestamped dir under `tmp/` for every launch. Scratch and logs go to
@@ -227,7 +238,7 @@ Verification, in two independent layers:
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
 | `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. The implementer's only legal input is `docs/tile-art-spec.md`; the evidence and the gate's bands live in `docs/tile-art-evidence.md` and `tools/tile_rules.py` and are forbidden to them. **The full procedure, verification chain and recorded failures are in `docs/cleanroom-procedure.md` — read it before commissioning or performing a redraw.** | tracked |
 | `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `vga_screen.py`, `map_render.py`, `map_viewer.py`, `tile_review.py`, `tile_rules.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
-| `docs/` | phase plans, state, implementation logs, live-capture findings, `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
+| `docs/` | phase plans, state, implementation logs, live-capture findings, `spice86-capture.md` (the emulator runbook: headed vs headless, tool index, APIs, gotchas — read it before driving Spice86), `tooling-procedures.md` (input paths and the arrow patch), `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
 | `bestiary/` | third-party creature data joined to our tile table by bitmap identity. `bestiary.tsv` and `matches.md` are our own derived facts; `cache/` and `view.html` hold copyrighted art rips in seven platform variants. Read `docs/bestiary.md` before using it, and note the cleanroom entries. | `cache/` and `view.html` **gitignored** |
 | `captures/` | runtime captures and screenshots | **gitignored** |
