@@ -157,6 +157,12 @@ Verification, in two independent layers:
 * **A wrong name is worse than no name.** If bytes contradict an existing name,
   add a `# NAME DISPUTED:` line in the same commit and propose the rename;
   do not silently rename on your own inference.
+* **Third-party data is a hypothesis the bytes get to veto.** `bestiary/` attaches
+  community creature names to art indices, and it does so by measured bitmap
+  identity — but the *name* itself comes from a wiki, not from this binary, and never
+  will. Keep the two grades apart in anything you write, do not promote a third-party
+  name into an `asm/` filename, and keep `bestiary/cache/` away from anyone drawing
+  substitute art; it holds the originals in more variants than `original/` does.
 
 * **The cleanroom wall separates the implementer from the originals, and an answer key is a
   breach just like a screenshot is.** `docs/tile-art-spec.md` is the only document someone
@@ -223,6 +229,7 @@ Verification, in two independent layers:
 | `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `vga_screen.py`, `map_render.py`, `map_viewer.py`, `tile_review.py`, `tile_rules.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
 | `docs/` | phase plans, state, implementation logs, live-capture findings, `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts | tracked |
+| `bestiary/` | third-party creature data joined to our tile table by bitmap identity. `bestiary.tsv` and `matches.md` are our own derived facts; `cache/` and `view.html` hold copyrighted art rips in seven platform variants. Read `docs/bestiary.md` before using it, and note the cleanroom entries. | `cache/` and `view.html` **gitignored** |
 | `captures/` | runtime captures and screenshots | **gitignored** |
 | `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |
 | `references/` | pristine read-only backup | **gitignored** |

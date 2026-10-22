@@ -208,6 +208,17 @@ Newest first. One line per learning; the detail stays in the owning document.
   is what stops a reusable tool quietly becoming a one-off. → § 4; add a
   *non-dependencies* clause to every harness component brief.
 
+* **2026-10-22** — A third-party wiki can name a tile, but only by bitmap identity.
+  Community creature tables deliver a name and a bitmap in the same table cell, so an
+  exact pixel comparison against the binary's own art table turns a crowd guess into a
+  measured join — and incidentally exposes which community images are screenshot crops
+  rather than rips. The join needs three guards to stay honest: reject any image with no
+  integer path to the native tile size, reject a match that lands only on blank or solid
+  tiles, and report a name claimed by two creatures as a conflict instead of picking one.
+  → any harness that ingests external data must ship controls proving the matcher can
+  answer *no*; a name sourced from outside the binary is a hypothesis the bytes get to
+  veto.
+
 * **2026-10-22** — A gate must be demonstrated failing before it is trusted passing.
   A CI script exited 0 unconditionally on the only branch ever taken, so it printed
   `FAIL` and reported `PASS` for a full checkpoint cycle. Found only by inverting an

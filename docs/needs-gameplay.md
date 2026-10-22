@@ -151,6 +151,8 @@ seeded with `--player`, so character creation is not an obstacle either.
 | G14 | who writes `%di` before `0x3546` — settles five time periods against ten sector tens-groups | agent | **med-high** | time-period display, CP6 |
 | G15 | locate towns: which sector holds which town (`DS:4A` site kind 1 village / 2 town / 4 tower, plus map bytes, give the search) | agent | **medium** | shops, signs, CP6 |
 | G16 | `0xC0` event tile: step on one and record what the event actually is (a probe threw the player y=20→57; 1311 occurrences, exactly 262 in each of `mapx25/35/45`) | agent | **medium** | tile art, CP4/CP6 |
+| G17 | monster record: read a live monster's HP/damage/type bytes and check them against the third-party bestiary table (codex and Gamer Corner agree on Daemon 64, Devil 192, Balron 255, Fighter 128, Wizard 224; they **disagree** on Guard 255 vs 500 and Merchant 5–50 vs 1) | agent | **high** | whether any bestiary stat can be called `observed` |
+| G18 | prove the monster type→art transform (`art = type >> 2`, currently inferred from one live finding in `tools/monster_shapes.py`) — until then no monster **type** may be given a bestiary name, only art indices | agent | **high** | naming types, G1 sibling |
 
 G14, G15 and G16 were carried in from the 2026-10-21 handoffs on 2026-10-22, where they
 were open but recorded nowhere but a document being archived. See
@@ -256,6 +258,31 @@ re-checking opportunistically if a sector-30 session happens for another reason.
 **Do not schedule anything for this.**
 
 ---
+
+### G17 — monster record vs the third-party bestiary `[ ]`
+**Action:** start an encounter, and before attacking, dump the monster record region
+and read off HP, damage and type for the creature on screen. Do it for at least
+Daemon, Devil, Balron, Fighter and Wizard, and for Guard and Merchant in a town.
+**Why the agent can do it:** encounters are already scriptable and this is a memory
+read plus a name lookup.
+**Needs owner:** no. **Success is a disagreement resolved**, not a confirmation: the
+two community sources already contradict each other on Guard (255 vs 500) and
+Merchant (5–50 vs 1), so a run that only confirms the agreeing numbers proves
+little.
+**Blocks:** calling any bestiary stat `observed`. Until then every HP figure in
+`bestiary/bestiary.tsv` is third-party. See `docs/bestiary.md` § 2.
+
+### G18 — the monster type→art transform `[ ]`
+**Action:** with the same encounter dumps as G17, record the monster type byte and
+the art index the renderer actually draws for it, across several types. The current
+`art = type >> 2` comes from one live observation (`map byte 0x34` → art `0x0D`) and
+the fact that it reproduces the overworld sprite; it has never been checked against a
+second type.
+**Why the agent can do it:** same session as G17, same dumps, one extra column.
+**Needs owner:** no.
+**Blocks:** naming monster *types*. Art indices are named already; types are not,
+and a wrong transform would attach every name to the wrong creature. Sibling of G1,
+which is the same question for ordinary map bytes.
 
 ## Session planning — group by setup, not by question
 
