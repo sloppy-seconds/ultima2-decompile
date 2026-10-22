@@ -982,6 +982,31 @@ inference rather than a measurement.
   captures, is not a monster or the player's vehicle, and has no attributed writer
   — left unexplained rather than guessed. See
   `docs/phase4-overnight-cp5-report.md § T5/T6`.
+  **Bounded further 2026-10-22, measured.** Four things ruled out, none of them the
+  answer:
+  * **not a partial or mis-based load.** In `flight-launched-live` the grid is
+    otherwise **byte-perfect** against `mapx30` — exactly 1 differing cell in 4096.
+    A wrong base pointer or off-by-N load would shift or smear many cells; this is a
+    single one-byte store at grid offset `0x0000`.
+  * **`(0,0)` is not structurally special.** Across all 33 `mapx` files the (0,0)
+    byte is ordinary terrain (`0x00`/`0x08`/`0x0C`/`0x10`/`0x78`/`0x80`), and 7 of
+    10 captures match disk at (0,0). The toroidal-wrap-origin idea is dead.
+  * **not a stale sector carry-over.** No `mapx` file anywhere has `0x50` at (0,0),
+    so the value cannot be a leftover from a previously loaded sector.
+  * **the apparent extra instances are false.** `e2e-check-live` and
+    `edge-test-live` also differ from `mapx00` at (0,0) (`0x03`), which looks like
+    corroboration and is not: their grids differ in **2345** cells with non-terrain
+    values, and the run never entered the world (player and entry both (0,0), stamp
+    `0x00`). The grid buffer was simply never loaded. Do not count them as
+    instances of this anomaly.
+
+  Rocket is a legitimate tile value elsewhere in the game — `mapx03` (39,24) is a
+  rocket in the four-vehicle depot — so the byte is not exotic, only misplaced.
+  *Remaining shape, inferred not proven:* a lone store at grid offset 0 is the
+  signature of a write through a zero or uninitialised index register, not of a
+  mechanic, which predicts an arbitrary value and non-reproducibility — both
+  observed. Settling it needs a turn-resolved capture of sector-30 entry, which is
+  not worth a session on its own.
 * ~~The 30 live-grid cells that differ from `mapx03`~~ - resolved above: moved
   monsters, the grid-is-the-object-store mechanism.
 * Whether the dungeon light timer reaching 0 darkens the screen (inference above).
