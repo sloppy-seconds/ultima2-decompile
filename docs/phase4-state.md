@@ -604,7 +604,7 @@ Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers i
 
 | ID | Ticket | Status | Why |
 | --- | --- | --- | --- |
-| C1 | Three independent status counters as persistent state: legs `DS:26B`, arms `DS:26C`, sleep `DS:26D`, each set to `rand & 0xF` (0..15 turns) and stored in the player record | **implemented 2026-10-22** (counters; persistence still open) | `asm/0E70`, `asm/0EC2`, `asm/0F48`. Arms and legs are separate counters with separate items, so a character can be paralysed in one and free in the other; both were observed non-zero simultaneously (9 and 8) alongside sleep 8. **Corrected 2026-10-22 (overnight T10): "stored in the player record" is not byte-proven and is probably wrong.** `DS:26B/26C/26D` are 619..621, outside the proven save record `DS:36..135` (54..309) per `docs/save-format.md`. The counters are proven to exist and to be independent; their persistence is not. `engine/tests/combat_check.c` asserts they live outside the record rather than asserting unsupported persistence. |
+| C1 | Three independent status counters as persistent state: legs `DS:26B`, arms `DS:26C`, sleep `DS:26D`, each set to `rand & 0xF` (0..15 turns) and stored in the player record | **implemented 2026-10-22** (counters); **persistence question CLOSED 2026-10-23 — they are not persisted and cannot be** | `asm/0E70`, `asm/0EC2`, `asm/0F48`. Arms and legs are separate counters with separate items, so a character can be paralysed in one and free in the other; both were observed non-zero simultaneously (9 and 8) alongside sleep 8. **Corrected 2026-10-22 (overnight T10): "stored in the player record" is not byte-proven and is probably wrong.** `DS:26B/26C/26D` are 619..621, outside the proven save record `DS:36..135` (54..309) per `docs/save-format.md`. The counters are proven to exist and to be independent; their persistence is not. `engine/tests/combat_check.c` asserts they live outside the record rather than asserting unsupported persistence. **Settled empirically 2026-10-23**: poked `07 09 08 08`, pressed `Q`, the bytes are absent from the 384-byte file and read back `00 00 00 00` on reload — `captures/spice86/cp5-g24-save/`, `docs/spice86-live-findings.md` § 17. A fourth counter `DS:26A` ticks with them. |
 | C2 | Resist is a **~75% roll on a live item-array slot**, not immunity: `[DS:D9]` BOOTS, `[DS:DA]` CLOAK, `[DS:E4]` GREEN IDOL; with the item the `L_005417` roll must be `>= 0x40`, without it the effect lands with **no roll at all** | **implemented 2026-10-22** | This is the single easiest thing to get wrong, and the pre-existing docs had it wrong as a boolean gate. Needs a distribution test, not a present/absent test. |
 | C3 | Paralysis is a **movement rejection**, not a combat overlay | todo — **wiring, and the owner ruling corroborates it** | `--PARALIZED!` is at runtime `0x2527`, inside the passability routine, so a paralysed step takes the same reject path as walking into a mountain. Couples to the CP4 passability work and to the `--INVALID MOVE!` path. |
 | C4 | Magic missile: **no save path exists** | **implemented 2026-10-22** | `asm/0F12` has no inventory gate and no roll, unlike the other three. Now asserted in `combat_check.c` two ways: the missile applies whatever the inventory holds, **and it consumes no random byte** (`u2_rng_rolls` unchanged) — the second is the sharp one, since a boolean-immunity impl both rolls and skips. The accumulation into `DS:20/21/22` is still **not modelled**: its BCD weight against the HP subtract is unproven and `DS:20` is separately claimed as `move_scratch` (disputed). The spec asserts the proven property and stays silent on magnitude. |ing as a named unknown. |
@@ -632,6 +632,17 @@ of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
 source of truth for item counts, and any resist check must read it rather than a
 cached boolean.
+
+> **`DS:6D` is disputed, 2026-10-23 — do not build on the paragraph above until this is
+> resolved.** `asm/3DFA_offer_only_outdoors_earth` tests `[DS:6D]` and prints
+> `ONLY ON EARTH!` when it is non-zero, which is a location gate observed live while
+> pressing `Q`, not an item count (`docs/spice86-live-findings.md` § 17). The byte is
+> inside the saved record and the value `1` seen after the theft is exactly what an
+> on-Earth flag looks like. Either the byte is genuinely reused or the boots reading was a
+> coincidence of value. The *conclusion* (one source of truth for item counts) is sound on
+> its own merits and `DS:D9` is still the live gate; it is the *evidence* that is now in
+> doubt. Resolving it: steal the boots, then read `DS:6D` and `DS:D9` together and check
+> whether `DS:6D` also flips the save gate.
 
 **Second design constraint, from the owner on 2026-10-23, and it is architectural.**
 Asked whether paralysis survives leaving combat, the answer was *"I don't know if that

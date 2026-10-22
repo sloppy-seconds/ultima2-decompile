@@ -1236,3 +1236,71 @@ than recalled: it does not require attacking a guard, only landing on anything i
 * Whether the alarm survives leaving and re-entering the sector, and whether it survives
   SAVE — that is the same persistence question as G24, now worth asking about `DS:1D7` too.
 * Whether killing rather than wounding escalates further.
+
+## 17. G24 answered: status does not survive a save — and `DS:6D` is not what C6 thought (2026-10-23)
+
+Capture: `captures/spice86/cp5-g24-save/` (`player-seed`, `player-after-save`,
+`check.py`, three screenshots). Method: `write_memory` over the MCP endpoint (the HTTP API
+cannot write), then `Q` in-game, then read the file the run wrote.
+
+### The experiment
+
+Poked `DS:26A..26D = 07 09 08 08` (the values actually observed together on 2026-10-21,
+plus the unnamed fourth counter) and slot 0's role byte to `0x01`, pressed `Q`, and read the
+384-byte `player` file back.
+
+| check | result |
+| --- | --- |
+| is `07 09 08 08` anywhere in the saved file | **no** |
+| bytes differing seed → saved | **five**, all inside the proven record: `DS:55 99->89` (food, −10 = one PASS), `DS:5D 00->51`, `DS:6D 01->00`, `DS:74/75 0000->123a` (the known scratch pair) |
+| where `DS:26A` would have to sit | file offset `0x234` = 564, in a **384-byte** file — past the end |
+| reload the saved character | `DS:26A..26D = 00 00 00 00` |
+
+**G24 is closed: the status counters are not persisted, and not restorable.** The save
+record boundary in `docs/save-format.md` is right; `DS:26B/26C/26D` are simply outside the
+file. The same arithmetic covers the town alarm from § 16 — `DS:1D7` maps to file `0x1A1`
+(417), also past the end — so **an alerted town cannot survive a save either**. Grade:
+measured (the poke-save-reload cycle) plus arithmetic (the offsets).
+
+That settles C1's design question: status is in-session state, full stop. The engine must
+not grow a persistence path for it, and `combat_check.c`'s assertion that the counters live
+outside the record is now backed by a save file rather than by an offset argument alone.
+
+### The tick, seen live rather than reconstructed
+
+In sector 00 the poked counters were watched decaying while the player never moved:
+`07 09 08 08 -> 03 05 04 01 -> 02 04 03 00 -> 01 03 02 00 -> 00 00 00 00`. All four, in
+lockstep, at rest. That is `asm/0C33..0C53` running, observed directly, and it is the third
+independent confirmation that the tick is time and not moves.
+
+### `ONLY ON EARTH!` — a save gate nobody had recorded, and it contradicts C6
+
+`Q` outdoors in sector 00 printed `QUIT OR SAVE GAME.` followed by **`ONLY ON EARTH!`** and
+wrote nothing. The gate is `asm/3DFA_offer_only_outdoors_earth`:
+
+```asm
+mov    0x6d,%al
+or     %al,%al
+je     L_004017        ; zero -> allowed
+; else print 'ONLY ON EARTH!'
+```
+
+So **`[DS:6D] != 0` means "not on Earth"**, and the byte is inside the saved record (the
+poked `0` persisted: `DS:6D 01->00` in the diff above).
+
+**This collides with the CP5 design constraint that `DS:6D` is a stale duplicate of the
+boots count** — the claim behind "the original keeps two copies of some item counts and one
+goes stale". A boots count does not gate whether you are on Earth, and the value `1` seen
+after a thief took the boots is exactly what an on-Earth flag looks like. Either the byte is
+genuinely reused (this code does reuse bytes) or the boots reading was a coincidence of
+value. **Flagged, not resolved** — but it needs resolving before the engine adopts
+"single source of truth for item counts" on the strength of it.
+
+### Capture notes worth keeping
+
+* Sector 00 at (30,30) is a monster hot-spot where the CMD loop never regains control —
+  messages scroll continuously and injected commands are eaten, so `Q` does nothing there.
+  Sector 10 authors no monsters (`monx10` is empty, per `docs/monster-spawn.md` § 6) and is
+  the quiet ground for save/state experiments.
+* `SCRUBED BY MAGICAL BOOTS!` was seen live in the sector 00 crowd — the C2 boots resist
+  firing, with the game's own spelling.

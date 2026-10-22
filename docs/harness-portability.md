@@ -190,6 +190,42 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — **A gate can report a metric that is structurally constant and still be
+  green.** An acceptance runner printed its check count by grepping the child's output for a
+  per-check success line — but the child's assertion macro prints only on failure, so the
+  count was always zero. The exit code was checked, so the gate was not toothless; the defect
+  was that the one number a reader trusts could never move, and a run that executed *zero*
+  checks would have looked like the known cosmetic quirk. Two generic traps in the same
+  file: a control model asserted to be "faithful" also passed on a zero-check build, because
+  only its exit code was examined. → derive a reported count from the child's own summary
+  line, assert it non-zero, and ship a self-test that *forces* a zero-check run and asserts
+  the guard reads a real zero. A guard nobody can make fire is not a guard.
+
+* **2026-10-23** — **Snapshot before the first mutating action, or your baseline is the
+  aftermath.** A live experiment recorded a state field across a fight and concluded a class
+  of creature "is born" with the value it observed. A baseline taken seconds after a fresh
+  load showed the class starts at a different value and had been *changed* by the combat the
+  first reading was taken in. The write-up had to be retracted the same day. → every
+  state-observation protocol needs an explicit pre-touch snapshot step, and any claim of the
+  form "X is born/always has value V" names the load-time read that must back it.
+
+* **2026-10-23** — **A byte whose value fits a story is not evidence of that story.** A
+  field was recorded as a stale duplicate of an item count because it still read `1` after a
+  theft removed the item. Later, the same byte turned up as the operand of a branch that
+  prints a location refusal — a gate about *where you are*, not what you own. The value
+  coincidence was exactly what the flag would have been. → require a consumer that branches
+  on the field before naming it, and when a name was assigned from a value match alone,
+  mark the constraint it supports as resting on doubt rather than quietly inheriting it.
+
+* **2026-10-23** — **Documented dead ends do not get read unless they sit where the work
+  happens.** The runbook already said, under a heading telling the reader not to reconstruct
+  the screen from memory, that decoding video RAM as a text page yields box-drawing noise —
+  and an agent doing exactly that walked into it anyway, because it had a dump file in hand
+  and went looking for a decoder rather than a rule. This is the third recurrence on record.
+  → put the prohibition in the artefact's own description (the dump format's docstring, the
+  recorder's output contract), not only in a linked runbook; a rule that lives one hop away
+  from the temptation loses to it.
+
 * **2026-10-23** — **A string you treat as an error message may be the oracle.** A capture
   harness kept failing to reach a shop, and the on-screen line it kept seeing was dismissed
   as "no response", read as a dropped input; the conclusion drawn was that the input path
