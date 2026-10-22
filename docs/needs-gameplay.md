@@ -350,17 +350,25 @@ they store the type as a plain immediate (`mov $0x30,%al; mov %al,0x197(%di)`).
   every one of the 256 byte values, checked exhaustively. The engine already implements
   `>>2`, in the two-step the original uses. Anyone tempted to "fix" it should read
   `view.h:78-94` first.
-* **Grid stamping holds at scale.** `DS:0x1800[y*64+x] == type` for **330 of 387** monster
-  cells across 49 overworld captures. `phase4-overnight-cp5-report.md:393` established
-  `DS:0x1800` from a single fight capture; this corroborates it broadly. The base was
-  already documented, so this was a re-derivation, not a discovery.
-* **New open question, and it is the interesting one:** in **dungeon and airport mode
-  there is no grid stamping at all.** `dungeon-35-live` and `airport32` (27 monsters each,
-  coords 1–15) give 6/27 at the best of every base and stride in the dump — chance. So
-  those modes keep objects somewhere else, which fits the dungeon spawner computing HP
-  arithmetically instead of through the arms. Different code path, still unmapped.
+* **New open question:** the dungeon `type` field is a **different encoding**, not the
+  overworld type byte. In `dungeon-35-live` the active slots hold `0x01`/`0x02`, not the
+  `0x2C`–`0xFC` of the overworld, and `asm/147F` builds HP as `or $0x10,%al` rather than
+  storing an arm immediate. So dungeon monsters are a separate representation and the
+  overworld grid test does not apply to them.
+* **A term I invented and must not survive:** there is **no "airport mode"**. The
+  `airport*` capture directories are names from a prior session chasing an owner
+  recollection of "a town with an airport"; the game has plane and rocket *tiles*
+  (`mapx03` depot, plane = map byte `0x4C` art `0x13`, landing gated to grass `0x08`),
+  not a mode. `airport32`'s 4 KB grid at `DS:1800` is **byte-identical** to
+  `dungeon-35-live`'s — it is a dungeon capture with a stale name. Any claim of the form
+  "dungeon and airport mode have no grid stamping" was wrong twice over.
+* **Grid stamping holds at scale in the overworld:** `DS:0x1800[y*64+x] == type` for 330 of
+  387 monster cells across 49 captures. The base itself was already documented twice
+  (`spice86-live-findings.md:85` "Sector buffer is loaded at DS:1800" and
+  `phase4-overnight-cp5-report.md:393`), so this was a re-derivation, not a discovery.
 
-**Action:** find where dungeon objects live. Same question for the airport/plane view.
+**Action:** map the dungeon encoding — what `0x01`/`0x02` mean, and where dungeon objects
+are drawn from. Do not reuse the overworld grid test on dungeon dumps.
 **Why the agent can do it:** both dumps are already on disk; this is a search, not a capture.
 **Needs owner:** no.
 **Blocks:** naming monster *types*. Art indices are named already; types are not, and a
