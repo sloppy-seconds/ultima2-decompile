@@ -30,7 +30,9 @@ log).
 3. **Never write to `original/` or `references/`.** They are read-only inputs here.
    The overlap tool reads bytes and writes nothing into those trees.
 4. **No emulator launches.** Everything is offline static analysis.
-5. **`make -C engine test` must be green at every commit.** If anything under `asm/`
+5. **`make -C engine test` must be green at every commit that touches code, tooling or
+   anything a gate reads.** Documentation-only commits may skip it — see `AGENTS.md` § 3. If
+   anything under `asm/`
    is touched — and it should not be — `bash tools/assemble_clean.sh` must still
    print `CLEAN REBUILD BYTE-MATCH: 37344 bytes identical`, and remember that in
    `asm/` only the filename and `#` comment lines may change: **labels are body**.

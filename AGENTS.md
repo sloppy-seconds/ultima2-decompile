@@ -201,9 +201,15 @@ Verification, in two independent layers:
   the file.
 * **Ask before capturing, and never block for minutes.** Long foreground captures
   swallow the owner's queued messages. Run detached and check between turns.
-* **`make test` must be green at every commit.** Baseline moves (CP2 evidence)
-  need owner approval and a named reason in the gate log in
-  `docs/phase4-state.md`.
+* **`make test` must be green at every commit that can break something.** Run it when a
+  commit touches engine source, `asm/`, `engine/tests/`, tooling, or anything a gate reads.
+  **Skip it for documentation-only commits** — prose in `docs/`, `AGENTS.md`, `LICENSE`,
+  `THIRD-PARTY-LICENSES`. Running the suite there buys nothing and costs a couple of minutes
+  per commit; the rule exists to catch regressions, not to certify spelling. If a docs change
+  describes a gate or a tool, verify the commands it claims still work instead of running the
+  suite — a documented command that has silently stopped working is the real defect.
+  Baseline moves (CP2 evidence) still need owner approval and a named reason in the gate log
+  in `docs/phase4-state.md`.
 * **Spice86 polling:** the memory API sustains ~250 req/s (`tools/poll_probe.py`).
   The old 3 Hz limit belonged to the windowed CFG view model, not to reads.
 

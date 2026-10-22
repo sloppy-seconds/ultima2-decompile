@@ -34,7 +34,9 @@ no one to ask.
    the exact command to run once the owner supplies it, and stop.
 3. **No emulator launches.** All work is offline static analysis of bytes already on
    disk.
-4. **`make -C engine test` must be green at every commit.** `asm/` should not need
+4. **`make -C engine test` must be green at every commit that touches code, tooling or
+   anything a gate reads**; documentation-only commits may skip it (`AGENTS.md` § 3).
+   `asm/` should not need
    touching at all.
 5. **Demonstrate every new gate failing before you trust it passing.** Invert one
    expectation, confirm red, restore, and put the result in the report. Two gates in
