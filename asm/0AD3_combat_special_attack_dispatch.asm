@@ -25,10 +25,13 @@
 #   `cmp $0x40` at file 0x1244 in asm/0FCD_combat_thief_steal is skipping empty slots,
 #   and the claim "the thief is monster type 0x40" in
 #   docs/spice86-live-findings.md is wrong and should be corrected there.
-#   Still open: whether [DI+0x1B7] (sprite) and [DI+0x197] (type) are always equal.
-#   At spawn both are written from the same immediate, which is why each folds to the
-#   right art under >>2 -- eight agreements across two fields, see
-#   docs/needs-gameplay.md G18.
+#   RETRACTED 2026-10-22 (same day): [DI+0x1B7] is NOT a sprite. A live read of all 32
+#   slots shows it holds a small kind index (0x08/0x0C), which is what the spawn guards
+#   compare against (cmp $0x8,%al). The arms write [DI+0x197] and the map cell from the
+#   same immediate; they do not write 0x1B7. So the "eight agreements across two fields"
+#   claimed here was really four agreements from one field relabelled, and they are
+#   arithmetic only -- no arm contains a shift, so >>2 is a hypothesis about the renderer,
+#   not a proven transform. See docs/needs-gameplay.md G18 and docs/bestiary.md § 7.
 sub_0ad3:
 L_000cd3:
         mov    0x197(%di),%al

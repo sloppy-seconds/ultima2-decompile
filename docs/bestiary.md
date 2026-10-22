@@ -35,7 +35,7 @@ binary.
 | "art index *NN* is called *Orc*" | **third-party** | inherited from the codex or Gamer Corner; the bytes never say |
 | "Daemon has 64 HP" | **measured** | `asm/0D6F_monster_hp_thief_daemon.asm` stores `mov $0x40,%al` into `[DI+0x177]` for type `0x34`; the field is proven HP by `asm/2E3D_combat_attack_flow.asm`. The *name* Daemon is still third-party |
 | "Daemon paralyzes legs at range 2" | **third-party, corroborated** | two independent sources agree, and `asm/0E70_combat_paralyzed_legs.asm` proves the leg-paralysis event exists |
-| "monster type byte *T* draws art index *NN*" | **corroborated 8/8, field authority open** | the spawn arms write type and HP together and every type folds to the right art under `>>2`; see **G18** |
+| "monster type byte *T* draws art index *NN*" | **hypothesis, 4 arithmetic agreements** | the arms store type and HP as plain immediates (`mov $0x30,%al; mov %al,0x197(%di)`) — **no arm contains a shift or a `0xFC` mask**, so nothing in the spawn path performs `>>2`. It happens that `type >> 2` equals the matched art index on the four special-casting types. That is agreement, not mechanism. See **G18** |
 
 Where a third-party claim contradicts the binary, the binary wins, and the
 contradiction is written down here rather than resolved silently. See § 6.
@@ -307,12 +307,14 @@ not by an argument about which wiki is likelier.
 
 ## 7. What the join did **not** buy
 
-* **No monster type byte is named.** Two record fields are candidates — `sprite =
-  DS:0x1B7+i`, which is stamped into the map cell and so is the renderer's input, and
-  `active = DS:0x197+i`. Both fold to the right art under `>>2` on four measured
-  values each, eight agreements in all, so the transform is well corroborated; what is
-  unresolved is which field is authoritative, and a `0x40` contradiction sits on top
-  of it. See **G18** and the `CONFLICT` note in
+* **No monster type byte is named, and the `>>2` transform is still a hypothesis.** Two
+  record fields were candidates: `DS:0x1B7+i`, called "sprite stamped into the map cell",
+  and `DS:0x197+i`. The first is **retracted** — a live read of all 32 slots shows `0x1B7`
+  holds a small kind index (`0x08`/`0x0C`), which is what the spawn guards compare against,
+  not a sprite. So the earlier "eight agreements across two fields" was really **four
+  agreements from one field relabelled**, and they are arithmetic coincidences: the arms
+  themselves contain no shift, only `mov $imm,%al; mov %al,0x197(%di)`. What remains is to
+  confirm `>>2` against a real drawn tile — **G18**. See also the `CONFLICT` note in
   `asm/0AD3_combat_special_attack_dispatch.asm`. This is the deliberate line from the
   project plan: art names yes, type names not yet.
 * **No asm file was renamed.** The tile-art table lives inside
