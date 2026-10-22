@@ -148,8 +148,43 @@ uint16_t u2_combat_thief_steal(u2_ctx *ctx)
     uint8_t *slot = &ctx->state.items_held[idx];
     if (*slot == 0) return 0;
 
-    *slot = bcd_dec1(*slot);        /* deletion, not a flag: the C2 gates read
-                                     * this array live, so a stolen item must
-                                     * stop conferring its resist. */
+    *slot = bcd_dec1(*slot);        /* deletion, not a flag: the C2 gates read this
+                                     * array live, so a stolen item must stop
+                                     * conferring its resist. */
     return (uint16_t)(ITEM_LO + idx);
+}
+
+/* C4 — asm/0F12. Unlike asm/0E70/0EC2/0F48 there is NO inventory gate and NO
+ * resist roll on this path: the damage always applies. Deliberately consumes no
+ * random byte, which is what the spec asserts.
+ *
+ * NOT modelled: the accumulation into DS:20/21/22 (+2, +2, +0x40 per cast). Its
+ * BCD weight against the HP subtract is unproven, and DS:20 is separately
+ * claimed as move_scratch (disputed). Encoding a magnitude here would state a
+ * fact the bytes do not support, so the function returns only "applied". */
+int u2_combat_magic_missile(u2_ctx *ctx)
+{
+    (void)ctx;
+    return 1;
+}
+
+/* C5 — asm/24B5. Gate is [DS:D6], the RING slot of the live item array
+ * (file 0x26B8: `mov al,[ds:d6]; cmp al,0; je <damage>`). Non-zero prints
+ * RING PROTECTS FROM FIELD! and changes nothing. Zero takes
+ * `stc; sbb al,0x10; das` on [DS:51], the high byte of the 4-digit BCD HP,
+ * which is exactly -1000: 0x88 -> 0x78 turns 8842 into 7842, as observed live.
+ * A borrow (high nibble already zero, i.e. HP < 1000) branches to the death
+ * handler at file 0x271B, so it kills rather than wrapping. */
+int u2_combat_force_field(u2_ctx *ctx)
+{
+    if (ctx->state.items_held[0] != 0) return 0;       /* FIELD_PROTECTED */
+    uint8_t hp = ctx->state.hp;
+    if ((hp >> 4) == 0) {                              /* subtract would borrow */
+        ctx->state.hp = 0;
+        return 2;                                      /* FIELD_KILLED */
+    }
+    /* The low nibble is a decimal digit carried through untouched, so
+     * subtracting 0x10 from the byte is already the das-adjusted result. */
+    ctx->state.hp = (uint8_t)(hp - 0x10);
+    return 1;                                          /* FIELD_DAMAGED */
 }

@@ -117,3 +117,24 @@ uint16_t u2_combat_thief_steal(u2_ctx *ctx)
     }
     return 0;
 }
+
+/* defect 4 — assumes every combat event has an item save, so magic missile
+ * rolls and can be skipped. asm/0F12 has no save path at all. */
+int u2_combat_magic_missile(u2_ctx *ctx)
+{
+    if (u2_combat_item(ctx, I_BOOTS) != 0) {
+        (void)u2_rand_byte(ctx);   /* a roll that must never happen */
+        return 0;
+    }
+    return 1;
+}
+
+/* defect 5 — treats the -1000 as a plain binary subtract of 1 and never takes
+ * the death branch. asm/24B5 does `stc; sbb al,0x10; das` on the high BCD byte
+ * and branches to the death handler on borrow. */
+int u2_combat_force_field(u2_ctx *ctx)
+{
+    if (u2_combat_item(ctx, ITEM_LO) != 0) return 0;
+    ctx->state.hp = (uint8_t)(ctx->state.hp - 1);
+    return 1;
+}

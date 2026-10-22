@@ -126,3 +126,28 @@ uint16_t u2_combat_thief_steal(u2_ctx *ctx)
     }
     return 0;
 }
+
+/* C4 — asm/0F12 has no inventory gate and no roll, so the missile always
+ * applies and consumes no random byte. Damage magnitude is deliberately not
+ * modelled: the DS:20/21/22 accumulation's BCD weight is unproven. */
+int u2_combat_magic_missile(u2_ctx *ctx)
+{
+    (void)ctx;
+    return 1;
+}
+
+/* C5 — asm/24B5. Gate is the RING slot (DS:D6 == ITEM_LO). The damage is
+ * `stc; sbb al,0x10; das` on the HIGH BCD byte of HP, i.e. exactly -1000. */
+int u2_combat_force_field(u2_ctx *ctx)
+{
+    if (u2_combat_item(ctx, ITEM_LO) != 0) return 0;      /* FIELD_PROTECTED */
+    uint8_t hp = ctx->state.hp;
+    if ((hp >> 4) == 0) { ctx->state.hp = 0; return 2; }  /* FIELD_KILLED */
+    ctx->state.hp = (uint8_t)(hp - 0x10);                 /* packed decimal: the
+                                                           * low nibble is carried
+                                                           * through untouched, so
+                                                           * subtracting 0x10 from
+                                                           * the high nibble IS the
+                                                           * das-adjusted result. */
+    return 1;                                             /* FIELD_DAMAGED */
+}

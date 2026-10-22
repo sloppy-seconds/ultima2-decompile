@@ -41,6 +41,15 @@ void    u2_combat_set_counter(u2_ctx *ctx, uint16_t counter_ds, uint8_t value);
 void    u2_combat_set_item(u2_ctx *ctx, uint16_t item_ds, uint8_t count);
 uint8_t u2_combat_item(const u2_ctx *ctx, uint16_t item_ds);
 uint16_t u2_combat_thief_steal(u2_ctx *ctx);
+/* C4: magic missile. Non-zero when damage applies. Must consume NO random
+ * byte — there is no save to roll. spec: asm/0F12 */
+int     u2_combat_magic_missile(u2_ctx *ctx);
+/* C5: force field. 0 = ring protected, 1 = took exactly 1000, 2 = killed.
+ * Mutates state.hp (DS:51, the high BCD byte). spec: asm/24B5 */
+int     u2_combat_force_field(u2_ctx *ctx);
+#define FIELD_PROTECTED 0
+#define FIELD_DAMAGED   1
+#define FIELD_KILLED    2
 
 /* DS offsets named for readability. */
 #define C_LEGS   0x26B
@@ -336,9 +345,94 @@ static void test_c6_theft_kills_the_resist(void)
           resist_after);
 }
 
+/* ========================================================================
+ * C4 — magic missile has NO save path.
+ * Grade: measured (asm/0F12 has no inventory gate and no roll, unlike asm/0E70,
+ * asm/0EC2 and asm/0F48; string executed live in the sector-00 caster fight).
+ *
+ * Scope discipline: the accumulation into DS:20/21/22 (+2, +2, +0x40 per cast)
+ * is proven, but its BCD weight against the HP subtract is NOT, and DS:20 is
+ * already claimed elsewhere as move_scratch (disputed). So the spec asserts
+ * only the no-save property, which IS proven, and says nothing about damage
+ * magnitude. Modelling the scaling as a plain integer would encode an unproven
+ * claim, and nothing here would catch it — that gap is recorded, not papered.
+ * ==================================================================== */
+static void test_c4_no_save_and_no_roll(void)
+{
+    /* Whatever the inventory holds, the missile applies and no RNG is consumed.
+     * A boolean "item grants immunity" impl would both skip and roll. */
+    uint8_t slots[] = { I_RING, I_BOOTS, I_CLOAK, I_IDOL };
+    for (size_t k = 0; k < sizeof slots / sizeof slots[0]; k++) {
+        u2_ctx ctx; fresh(&ctx, (uint8_t)(k + 1));
+        u2_combat_set_item(&ctx, slots[k], 5);
+        uint32_t before = u2_rng_rolls(&ctx);
+        CHECK(u2_combat_magic_missile(&ctx) != 0,
+              "C4: magic missile must apply even with item at DS:%02X held", slots[k]);
+        CHECK(u2_rng_rolls(&ctx) == before,
+              "C4: magic missile must consume NO random byte (no save exists)");
+    }
+    u2_ctx ctx; fresh(&ctx, 9);
+    CHECK(u2_combat_magic_missile(&ctx) != 0, "C4: must apply with empty inventory");
+}
+
+/* ========================================================================
+ * C5 — force field: ring gate, exactly -1000, kills below 1000.
+ * Grade: measured, BOTH branches observed live (owner walked the tile with no
+ * ring: HP 8842 -> 7842; with [DS:D6]=1 the protect branch fired).
+ *
+ * The subtract is `stc; sbb al,0x10; das` on [DS:51], the HIGH byte of the
+ * 4-digit BCD HP, so -0x10 on that byte is exactly -1000 overall: 0x88 -> 0x78
+ * turns 8842 into 7842, which is what was observed.
+ * ==================================================================== */
+static void test_c5_ring_gate(void)
+{
+    u2_ctx ctx; fresh(&ctx, 3);
+    u2_combat_set_item(&ctx, I_RING, 1);
+    ctx.state.hp = 0x88;                       /* 8842, as observed live */
+    CHECK(u2_combat_force_field(&ctx) == FIELD_PROTECTED, "C5: ring held must protect");
+    CHECK(ctx.state.hp == 0x88,
+          "C5: protected must not change HP, got 0x%02X", ctx.state.hp);
+}
+
+static void test_c5_exactly_1000(void)
+{
+    u2_ctx ctx; fresh(&ctx, 3);
+    u2_combat_set_item(&ctx, I_RING, 0);
+    ctx.state.hp = 0x88;
+    CHECK(u2_combat_force_field(&ctx) == FIELD_DAMAGED, "C5: no ring must damage");
+    CHECK(ctx.state.hp == 0x78,
+          "C5: HP high byte must go 0x88 -> 0x78 (8842 -> 7842, exactly -1000), got 0x%02X",
+          ctx.state.hp);
+}
+
+static void test_c5_kills_below_1000(void)
+{
+    /* HP < 1000 makes the BCD subtract borrow, and the borrow branches to the
+     * death handler (asm/24B5 file 0x271B). */
+    u2_ctx ctx; fresh(&ctx, 3);
+    u2_combat_set_item(&ctx, I_RING, 0);
+    ctx.state.hp = 0x05;                       /* 0542: under 1000 */
+    CHECK(u2_combat_force_field(&ctx) == FIELD_KILLED,
+          "C5: HP below 1000 with no ring must kill, not wrap");
+}
+
+static void test_c5_bcd_not_binary(void)
+{
+    /* Pins the decimal adjust: 0x99 - 0x10 must land on 0x89, the packed-decimal
+     * result. A raw binary subtract that skipped `das` would still give 0x89
+     * here, so this is a floor check alongside the 0x88 case above, not a
+     * complete proof of the adjust. */
+    u2_ctx ctx; fresh(&ctx, 3);
+    u2_combat_set_item(&ctx, I_RING, 0);
+    ctx.state.hp = 0x99;
+    (void)u2_combat_force_field(&ctx);
+    CHECK(ctx.state.hp == 0x89,
+          "C5: 0x99 - 0x10 must be 0x89 (packed decimal), got 0x%02X", ctx.state.hp);
+}
+
 int main(void)
 {
-    printf("combat_check — CP5 spec (C1, C2, C6)\n");
+    printf("combat_check — CP5 spec (C1, C2, C4, C5, C6)\n");
     test_c2_no_item_always_lands();
     test_c2_item_present_is_probabilistic();
     test_c2_threshold_is_exactly_0x40();
@@ -349,6 +443,11 @@ int main(void)
     test_c6_theft_deletes();
     test_c6_nothing_restored();
     test_c6_theft_kills_the_resist();
+    test_c4_no_save_and_no_roll();
+    test_c5_ring_gate();
+    test_c5_exactly_1000();
+    test_c5_kills_below_1000();
+    test_c5_bcd_not_binary();
     printf("combat_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

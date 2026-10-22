@@ -27,4 +27,12 @@ void    u2_combat_set_item(u2_ctx *ctx, uint16_t item_ds, uint8_t count);
  * nothing was taken. spec: asm/0FCD */
 uint16_t u2_combat_thief_steal(u2_ctx *ctx);
 
+/* C4: magic missile. Non-zero when the damage applies. Consumes NO random byte,
+ * because no save exists. spec: asm/0F12 */
+int u2_combat_magic_missile(u2_ctx *ctx);
+
+/* C5: force field. 0 = ring protected, 1 = took exactly 1000, 2 = killed.
+ * Mutates state.hp (DS:51, the high BCD byte). spec: asm/24B5 */
+int u2_combat_force_field(u2_ctx *ctx);
+
 #endif /* U2_GAME_COMBAT_H */
