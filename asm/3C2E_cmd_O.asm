@@ -8,6 +8,14 @@
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
+# reads: [DI+0x1D7] with DI = [DS:1F] (the cursor slot) at L_003e9d and L_003eda. This
+#        is the routine that gives that field its shape: bit 7 clear takes the generic
+#        `THANK YOU VERY MUCH!`, bit 7 set requires [DS:4A]==2 && [DS:49]==3 and then
+#        ENUMERATES 0x81 -> `ENILNO IS YOURS!` (+[DS:7F]=1), 0x82 -> `EARN THE RING!`
+#        or `THE RING IS YOURS!` (+[DS:D6]=1, the RING slot of CP5 C5), 0x83 -> a third
+#        recipient. Because the high values are compared one by one, [DI+0x1D7] is a
+#        role/identity byte, not a flag-and-count pair, and bit 7 is not aggro.
+#        See docs/monster-spawn.md § 6.
 cmd_O:
 cmd_O:
 L_003e2e:

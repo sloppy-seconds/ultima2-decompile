@@ -121,15 +121,42 @@ lucky sample rather than a rule.
 where a wandering spawn overwrote a slot in 03 and 32. Its values are `01`, `02`, `03`
 and `81`–`85`. The high-bit set on `81..85` is the Apple II convention the `tlkx` files
 use, so this array plausibly holds two things: a small group value `1..3` and a flagged
-marker `1..5`. **What it means is not established** — but it now has a named **reader**.
-`asm/40C0`, inside the merged `asm/4050_cmd_T.asm`, does
+marker `1..5`. **What it means is not established**, but it now has readers, and one of
+them is decisive enough to narrow the field a lot.
+
+`asm/40C0` (a standalone 8-byte fragment, **not** part of `asm/4050_cmd_T.asm` — it is
+reached from there by `jne L_0042c0` at `asm/4050_cmd_T.asm:103`) does
 `mov 0x1d7(%di),%al ; cmp $0x80,%al ; jb ...`, i.e. it **branches on bit 7**. Found
-2026-10-23 while decoding the TRANSACT path. That is the first consumer beyond
-`asm/1151_dungeon_darkness`, which only writes it (`mov %al,0x1d7(%di)`). **Do not read
-this as meaning** — a reader that tests bit 7 in the transact path is a lead, not a
-semantics, and the owner's aggro-marker hypothesis is exactly that: a hypothesis worth
-pulling, not a fact. It is recorded as a field with a location and a reader, still no
-meaning.
+2026-10-23 while decoding the TRANSACT path.
+
+**`asm/3C2E_cmd_O` (OFFER GOLD) is the reader that gives the field its shape, and it
+contradicts the aggro reading.** It reads `[DI+0x1D7]` with `DI = [DS:1F]` (the cursor
+slot), and where bit 7 is **clear** it falls through to the generic `THANK YOU VERY
+MUCH!`; where bit 7 is **set** it requires `[DS:4A]==2 && [DS:49]==3` (site kind/index)
+and then **enumerates the individual high values**, each with its own scripted outcome
+(observed bytes, `asm/3C2E_cmd_O.asm:94-150`):
+
+| value | branch | cited consequence |
+| --- | --- | --- |
+| `0x81` | `L_003eed` | needs `[DS:27] >= 5`, prints `ENILNO IS YOURS!`, sets `[DS:7F]=1` |
+| `0x82` | `L_003f10` | with `[DS:6C]==0` prints `EARN THE RING!`, else `THE RING IS YOURS!` and sets `[DS:D6]=1` — the **RING slot** from C5 |
+| `0x83` | `L_003f52` | third scripted recipient |
+
+`asm/2C38_sub_2c38` writes the constant `0x84` into `[DI+0x1D7]` immediately before
+printing `SHE'S GONE!!!` — a departure transition, not a mood. And `asm/102B_sub_102b`
+tests the slot for **zero**, which is what an empty-slot check looks like.
+
+**Reading, graded `inferred` from the above `observed` bytes:** `DS:0x1D7+i` is a
+per-slot **role / scripted-identity** byte — `0` empty, `1..3` ordinary classes, `0x81..0x85`
+named recipients — and bit 7 means "this slot has a scripted response", not "awake".
+**The owner's aggro-marker hypothesis is not supported by any consumer found so far**, and
+this is the second field where the bytes declined to cooperate with it. It stays a
+hypothesis about some *other* byte, not a dead one.
+
+Writer attribution also corrected: the writer is `asm/114A_sub_114a` (`mov %al,0x1d7(%di);
+dec %di; jns` — a downward fill loop at runtime `114A..1150`), which **precedes**
+`asm/1151_dungeon_darkness` (`1151..12DA`) and is not part of it. An earlier note here
+cited `1151`.
 
 ### Which sectors author monsters at all — and it is the site-kind scheme again
 
@@ -174,7 +201,7 @@ shifted copy of the last two arrays.
 
 | item | note |
 | --- | --- |
-| Name the `flag` array (`monx[160:191]` / `DS:0x1D7`) | it has a location and a value domain but no proven meaning; find a consumer before naming it |
+| Name the `flag` array (`monx[160:191]` / `DS:0x1D7`) | **narrowed 2026-10-23, not finished.** § 6 now reads it as a per-slot role/scripted-identity byte (`0` empty, `1..3` ordinary, `0x81..0x85` named recipients) from `cmd_O`'s enumerated branches. Remaining: prove the *low* group `1..3` means something, and find who writes the per-slot values — `asm/114A` is a constant fill, not a per-slot load |
 | Find what rewrites `DS:0x1B7` after the `monx` load | `kind` mismatches in 3 of 4 testable sectors; the dungeon spawner is one such writer, the overworld writer is unnamed |
 | G20 — enter a tower sector | `monx24/34/44` author nothing, so a tower is expected to behave like wilderness for spawning. Testable in one launch |
 | Read the `monx` loader | § 4 notes `asm/22D5` reads it with `CX=0x100` = 256 bytes, which covers arrays 1–5 and **not** the sixth at `160..191`. Either the read is larger than recorded or the sixth array arrives another way |
