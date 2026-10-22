@@ -733,3 +733,51 @@ One concrete oddity worth remembering: the original map font has **no Q glyph**
 (art `30`, where Q would fall, is a structural tile). Any translation that renders
 through map tiles inherits that gap, so a language needing Q must route around it
 rather than assume the glyph exists.
+
+---
+
+## TODO: VNC desktop container for remote watching
+
+**Status: parked, and explicitly not blocking.** Recorded because it is genuinely
+worth having, not because anything is waiting on it.
+
+**Do not build this to unblock a capture.** Headless input and headless screenshots
+already work through Spice86's MCP endpoint — see `tools/spice86_type.py` and
+`spice86_start.sh --auto-play` in `docs/spice86-capture.md`. The idea for this
+container came out of assuming a capture needed a display, and that assumption was
+wrong.
+
+**What it is.** A podman container providing a virtual X display plus VNC, so the
+owner can watch a live run from anywhere on the LAN, and so the headed-only tools
+(`tools/vga_ring.py`, `tools/screenshot_diff.py`, `tools/spice86_keys.py`) become
+usable from an agent shell, which currently has no `DISPLAY`, no `WAYLAND_DISPLAY`
+and no `Xvfb`.
+
+**Shape.**
+
+| piece | plan |
+| --- | --- |
+| base image | `docker.io/library/ubuntu:24.04` — already present on `ai` |
+| packages | `xvfb x11vnc novnc websockify x11-utils xdotool` |
+| display | `Xvfb :99 -screen 0 1024x768x8`; host runs Spice86 with `DISPLAY=127.0.0.1:99` |
+| networking | `--network host`, so 6099 (X), 5900 (VNC) and 6080 (noVNC web) land on the host directly |
+| viewer | `x11vnc -display :99 -forever -shared -rfbauth` and `websockify 6080 localhost:5900`, browser at `http://ai.lan:6080/vnc.html` |
+| X auth | X over TCP needs the server bound to `127.0.0.1` and an explicit `xhost`/`-auth` decision; do not reach for `-ac` |
+
+**Constraints to honour when it gets built.**
+
+1. **`sudo podman` is required on `ai`**, and passwordless sudo must be re-tested
+   (`sudo -n echo SUCCESS`) rather than assumed.
+2. **`0.0.0.0` exposure needs a password at minimum.** VNC auth over plain HTTP is
+   weak; on a LAN it is a judgement call, so make it deliberately and record it, and
+   prefer an SSH tunnel (`ssh -L 5900:localhost:5900 ai`) as the default recipe with
+   the open listener as the opt-in.
+3. **Never put game files in the image.** The container holds a display server only;
+   the emulator and its run copy stay on the host under `tmp/`, per the usual rule
+   that the game rewrites its own `player`.
+4. If it becomes a long-lived service, do it as a **quadlet `.container`** — and
+   remember `sudo systemctl daemon-reload` after any unit edit, then stop, `podman
+   rm -f`, and start, or the old generated unit is cached and the change silently
+   does nothing.
+5. Keep it out of the reconstruction's gates. It is a viewing convenience; nothing in
+   `make test` or `assemble_clean.sh` should ever depend on it.
