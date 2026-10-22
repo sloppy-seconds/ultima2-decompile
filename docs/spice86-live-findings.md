@@ -1038,3 +1038,78 @@ inference rather than a measurement.
   not be counted as a separate open question.
 * Whether the dungeon light timer reaching 0 darkens the screen (inference above).
 * What the dungeon's `0x80`-heavy bytes actually encode for the wireframe renderer.
+
+## 14. Combat entry is a command, and the fight *is* the world view (2026-10-23)
+
+Capture: `captures/spice86/cp5-fight/` (`screen1..4.png`, `player-seed`, CFG and memory
+dumps). Run: headless, seeded from `tmp/seed/player` (G23MAX, sector 31, entry (50,21)),
+`--patch-arrows --auto-play`, driven by `tools/spice86_type.py` and read back over the
+memory API. No display, no manual play.
+
+### What a fight looks like (grade: observed, on screen)
+
+`A` plus a direction attacks the adjacent cell in that direction. Verbatim from the
+screenshots, in the rolling `CMD:` log at the foot of the world view:
+
+```
+CMD: ATTACK--EAST--HIT!!!
+CMD: ATTACK--EAST--HIT!!!
+CMD: KILLED--GOLD+1--EXP.+02
+```
+
+Nothing else about the screen changed. **There is no battle screen, no overlay, no mode
+switch, no prompt** — the fight UI is one line of the command log drawn over the map the
+player is already looking at. This is the strongest possible confirmation of the owner's
+*"there's not really a leaves-combat state"*: it is not a recollection any more, it is what
+the screen does.
+
+The kill paid gold and exp and **both fields wrapped on screen** — GOLD `9999 -> 0010`,
+EXP `9999 -> 0001` — because the seed was maxed at 9999. That is the BCD wrap the BCD
+tickets describe, seen live rather than inferred from `asm/2DC1`/`asm/2DEE`.
+
+Other observations from the same exchange:
+
+* A creature **blocks** movement. `Right` onto `(51,21)` printed `EAST--INVALID MOVE!`
+  although the tile reads `112`, the same map byte the player is standing on. So an
+  occupied tile is impassable and `A` is how you clear it — which puts C3's "paralysis is
+  a movement rejection" alongside an existing rejection rather than inventing one.
+* Creatures move without any player input: slot 18 (`type 0xF0`) was adjacent east at
+  `(51,21)` with `[DI+0x1D7]=0x03`; after the exchange it was gone and slot 7
+  (`type 0x60`, hp 255) had walked to `(49,21)`, adjacent west.
+* `[DS:29]` went `0x14 -> 0x00` across the first attack. Recorded, **not** interpreted;
+  that byte is the mode byte C5's field trigger reads (`[DS:29]&0x7f == 0x2e`) and G4 owns
+  the tile→mode question.
+
+### The status tick is time, not moves (grade: measured, from an existing capture)
+
+`captures/spice86/fight-20261021-castle03/` holds 3000 recorded turns of DS+VGA from a
+real fight. Across it `DS:26B/26C/26D` were set and then decremented by 1 repeatedly
+**while the player position never changed** — every turn tagged `reject`, pos pinned to
+`(30,32)`/`(31,32)`. Example run: `00 00 03 0b -> 00 00 02 0a -> 00 00 01 09 -> 00 00 00 08`.
+
+The owner's open question was whether paralysis lasts "some amount of time or moves".
+**Not moves.** The tick is the game's own loop, not the movement path, so in the engine it
+belongs to the main loop and not to `overworld` movement.
+
+The tick routine is `asm/0C33..0C53` — six bulk-wave fragments, contiguous, each of
+`mov`/`or`/`je` past a `decb`, one per counter. It ticks a **fourth counter at `DS:26A`**,
+which read `0x00` for the whole recorded fight and has no name. `asm/080D` zeroes
+`DS:26A..26D`; its caller is still undiscovered, so init-vs-load remains unproven.
+
+### What this changes for CP5
+
+* Combat entry needs no new subsystem: a command handler plus an adjacency test against the
+  creature arrays at `DS:137/157/177/197`. It goes on the engine's `cmd_*` surface.
+* The acceptance bar "a rendered fight" is now a defined target, not a vibe: world view,
+  `A`+direction, `--HIT!!!` / `KILLED--GOLD+n--EXP.+m` in the CMD log, HP/gold/exp as BCD.
+* C3 gains a sibling path (occupied tile = rejected move) instead of needing its own.
+
+### Still open after this section
+
+* G24 — whether the counters survive SAVE. The static argument says they cannot (they sit
+  outside `DS:36..135`), but the empirical seed-save-reload is still owed.
+* What distinguishes a hostile creature from a merely present one. Nothing here
+  distinguished them: the attack landed on a `role=03` creature with no provocation, and no
+  guard response was seen in that short exchange. The guard-hostility hypothesis is
+  untested, not refuted.
+* What `[DS:29]`'s `0x14 -> 0x00` means, and what `DS:26A` is for.

@@ -612,6 +612,21 @@ Full evidence: `docs/spice86-live-findings.md` § 12, and the function headers i
 | C6 | Theft **deletes** from the item array; killing the thief restores nothing | **implemented 2026-10-22** — premise corrected the same day | ~~thief is monster type `0x40`~~ **wrong on two counts.** `asm/0FCD` contains exactly one `cmp $0x40` (file `0x11D1`, not `0x1244`, which is outside the span) and it compares a **random value** — a ~25% chance of attempting a theft, not a type test. The routine never reads a monster record; which monster reaches it is the caller `asm/0AD3` dispatching on the **kind index** `[DI+0x1B7]`. Mechanics to implement: roll `<0x40`; pick slot `DS:D6 + (rand & 0xF)`; if that slot is **zero, do nothing and print nothing** (a failed theft is silent); else BCD-decrement it by 1 and print `A THIEF STOLE SOMETHING!`. Measured: 8 items stolen, 0 returned, kill paid a random drop like any other. Because the C2 gates read the item array live, a flagged-but-present item would wrongly keep the resist. |
 | C7 | Map byte -> vehicle code transform for BOARD | **resolved 2026-10-21** | `[DS:14] = map_byte >> 1`, measured on 53 of 54 walk samples across four terrain bytes. So vehicle tiles are `0x44` horse, `0x48` ship, `0x4C` plane, `0x50` rocket. Confirmed by the game: `B` on a `0x4C` tile set `[DS:13] = 0x26` and printed `' PLANE'`. An earlier note here claimed the plane was `0x34`; that was a `%02d`-against-hex-filenames render bug and `0x34` is art `0x0D`, a humanoid figure. ~~Still unexplained: the `y*16 + x` indexing at file `0x6AC0` against a 64-wide grid.~~ **Resolved 2026-10-22 (overnight T7):** `asm/68C0` indexes the **dungeon** grid (`word[DS:472] + [DS:25]*256 + y*16 + x`, a 16-wide paged view of the DS:1800 buffer), not the overworld sector grid; reached only from the dungeon path. See `docs/spice86-live-findings.md § 12`. |
 
+**Combat entry is now observed, not designed (2026-10-23).** `A` + a direction attacks the
+adjacent cell; the fight is drawn as one line of the world view's `CMD:` log
+(`ATTACK--EAST--HIT!!!`, then `KILLED--GOLD+1--EXP.+02`) with no battle screen and no mode
+switch. A creature also *blocks* movement — stepping onto one prints `EAST--INVALID MOVE!`
+over a walkable tile. Full evidence and the live screenshots: `docs/spice86-live-findings.md`
+§ 14, capture `captures/spice86/cp5-fight/`. Two consequences: the encounter wiring is a
+command handler plus an adjacency test, not a subsystem; and the acceptance bar "a rendered
+fight" is now a concrete target rather than a vibe.
+
+**The status tick is time, not moves** — measured from the existing
+`fight-20261021-castle03` recording, where `DS:26B/26C/26D` decremented while the player
+never moved. The tick routine is `asm/0C33..0C53`, and it ticks a **fourth, unnamed counter
+at `DS:26A`** (zero throughout that fight). So in the engine the tick belongs to the main
+loop, not to `overworld` movement — which is what C3's "one movement system" needs anyway.
+
 One design constraint that outlives the checkpoint: the original keeps **two** copies
 of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole the
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
