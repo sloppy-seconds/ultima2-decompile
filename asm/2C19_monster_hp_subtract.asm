@@ -3,6 +3,10 @@
 #           falling through to asm/2C26_monster_hp_set on a hit. Same BCD-guard idiom
 #           as asm/2E3D_combat_attack_flow (which subtracts [DS:20]); here the damage
 #           source is [DS:1F], so this is a different damage route onto the same field.
+#           [DS:1F] is now traced: asm/3606 sets it to `rand | 0x20`, i.e. 32..63,
+#           immediately before asm/3611_monster_damage_apply jumps here. So this site
+#           deals a random 32-63 to a slot chosen by [DS:20]. What selects the slot
+#           and why that magnitude is not established.
 #           Reached by `jmp L_002e19` from asm/3611, which is the one routine found
 #           that is aware of the site kind (`cmpb $0x4,[DS:4A]`, tower). That makes
 #           asm/3611 the best remaining lead for how town and tower NPCs take damage,

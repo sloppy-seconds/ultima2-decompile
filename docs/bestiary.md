@@ -216,9 +216,23 @@ chain (a bit-tree on a small kind index, guards at runtime `0xF06`–`0xF21`, ar
 `0xF44`–`0x106F`, shared epilogue `asm/0BAF_monster_hp_epilogue`), and there is no
 `mov $0x60/0x64/0x68/0x6C/0xF4,%al` — the type values those arts fold back to —
 anywhere in `asm/`. So town NPCs are not created by the wandering-monster spawner.
-The best remaining lead is `asm/3611_sub_3611.asm`, the only routine found that is
-aware of the site kind (`cmpb $0x4,[DS:4A]`, tower) and that jumps into the HP
-subtract path at `asm/2C19_monster_hp_subtract`.
+
+**A lead I promoted and then retracted.** `asm/3611` looked like the townsfolk path
+because it is the only routine in the tree that tests the site kind
+(`cmpb $0x4,[DS:4A]`, tower). It is not. It is reached by fall-through from
+`asm/35F3` — which stores a slot index to `[DS:20]`, rolls `rand | 0x20` into
+`[DS:1F]` at `asm/3606`, and jumps into the HP subtract — so it *applies* a random
+32–63 of damage to a chosen monster slot, and its site-kind test gates a map stamp of
+`0x8`, not NPC creation. Renamed `3611_monster_damage_apply` with the retraction in
+its header, because a wrong name left in place propagates.
+
+The static search is now exhausted on this question, and that is a finding rather
+than a failure: **every write site of `[DI+0x177]` is accounted for** — nine spawn
+immediates, the dungeon computation, the two subtract paths, and the kill clear.
+There is no tenth site where town NPC HP could be assigned. So either town NPCs
+reuse one of these paths in a way the bytes alone cannot show, or they have no HP
+record at all. Only a live read of a town NPC's `[DI+0x177]` distinguishes them.
+That is **G17**'s live step, and it is the last move on this question.
 
 The dungeon really is computed, and the routine is now identified.
 `asm/147F_dungeon_monster_spawn.asm` scans the 32 slots for an empty one, rolls the
@@ -313,10 +327,10 @@ called*; the spec answers *what must the tile communicate*; they must not mix.
 
 ## 10. Next
 
-1. Find the **townsfolk** HP path. There is no spawn arm (§ 6, measured negative), so
-   start at `asm/3611_sub_3611.asm` — the only site-kind-aware routine on the HP
-   damage path. Jester, Merchant, Cleric and King HP stay third-party until then;
-   Guard's conflict is already resolved by field width.
+1. **Townsfolk HP needs a live read, not more static work.** Every write site of
+   `[DI+0x177]` is enumerated and none of them can be a town NPC spawner (§ 6),
+   including the `asm/3611` lead that was raised and retracted. Read `[DI+0x177]` for
+   a Guard or Merchant in a town and the question closes either way.
 2. Validate `asm/147F_dungeon_monster_spawn.asm`'s arithmetic against a live dungeon
    monster and check it against the `17 + 32k` / `153 + 32*(k//2)` fit (**G17**).
 3. Settle whether `[DI+0x1B7]` (sprite) and `[DI+0x197]` (type) are always equal —
