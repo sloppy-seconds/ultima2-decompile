@@ -1113,3 +1113,72 @@ which read `0x00` for the whole recorded fight and has no name. `asm/080D` zeroe
   guard response was seen in that short exchange. The guard-hostility hypothesis is
   untested, not refuted.
 * What `[DS:29]`'s `0x14 -> 0x00` means, and what `DS:26A` is for.
+
+## 15. Hostility: what attacks you, what happens when you win, and what happens when you lose (2026-10-23)
+
+Captures: `captures/spice86/cp5-guard-aggro/` and `captures/spice86/cp5-weak-fight/`.
+Driven headless with a seeded character; the owner's suggestion to lower the stats is what
+produced the miss and death frames, which a maxed character cannot show.
+
+### The whole fight arc renders in the one log line
+
+| stage | on screen |
+| --- | --- |
+| miss | `CMD: ATTACK--EAST--MISS` |
+| hit | `CMD: ATTACK--EAST--HIT!!!` |
+| kill | `CMD: KILLED--GOLD+1--EXP.+02` |
+| low HP | `H.P.=0030` drawn in **red** — a renderer state CP4 never had to produce |
+| death | `G23MAX IS DEAD!`, and HP, FOOD, EXP **and** GOLD all read `0000` |
+
+The death frame is `asm/0C62` seen live: it stores 0 into `DS:51..59` and calls
+`L_0052f9`. Four separate on-screen fields going to zero from one nine-store routine is now
+confirmed by the screen rather than by the disassembly alone.
+
+### Hostility is provoked, not ambient (grade: observed)
+
+* A `Fighter` (`type 0xF0`) stood **adjacent** to the player in a town across several runs
+  and never struck unprovoked. `P` (PASS) x4 produced no monster turn either, so there is
+  no "creatures act while you wait" loop doing the work here.
+* Strike a **Guard** (`type 0x60`) and everything changes: guard HP `255 -> 221`, **player
+  HP `9999 -> 9797`**, and the other guards converged. Sum of manhattan distances to the
+  player fell `203 -> 165 -> 156 -> 137 -> 133` over ~50 s, with individuals going `d9 -> d4`
+  and `d12 -> d6`. `guard2.png` shows them arriving in a line.
+* A **missed** swing provoked nothing: the first attack on that guard was
+  `ATTACK--WEST--MISS` and 14 s of watching showed zero reaction.
+* Monsters 16 tiles away wandered randomly and did not pursue, so aggro has a **range**; it
+  is not "the whole sector".
+
+This corroborates the owner's model (`recalled`, and it has now survived every test so far):
+monsters do not simply attack on sight in a town, town NPCs do not start fights, and hitting
+a guard brings the town's guards down on you.
+
+### The role byte carries a state, not only an identity (grade: measured, n=2)
+
+Two separate runs showed an **attacked** `Fighter`'s `[DI+0x1D7]` go `0x03 -> 0x01`. Reading
+the whole table afterwards: every **Guard is `0x01`**, every **Merchant `0x02`**, untouched
+Fighters `0x03`, scripted specials `0x81/0x82`. So the low nibble is not purely a class — a
+Fighter that has fought the player ends up carrying the value guards are born with. Either
+`01` means "willing to hit you" and guards are born hostile, or the transition is a combat
+flag and the coincidence with the guard value is meaningless.
+
+**Not settled — and it is the best aggro lead the project has**, because it is a byte that
+changes when a fight starts, in the very array the handoff was pointing at.
+
+### What this section does not answer
+
+* Whether the low nibble is cause or effect: does `role=01` make a creature attack, or does
+  attacking set it to `01`?
+* Whether the guard response is sector-wide or radius-based.
+* Whether *killing* a guard escalates further than wounding one.
+* What `DS:26A` is, and what `[DS:29]`'s `0x14 / 0x09 / 0x00` values mean.
+
+### Consequences for the CP5 design
+
+* The encounter model is **not** a random-encounter roll and not an always-on aggro: it is a
+  per-creature willingness byte plus a proximity test, and provocation flips it. Build the
+  engine so hostility is data on the creature, not a rule about creature kinds.
+* Retaliation is the monster's attack, so the engine needs no separate monster AI turn to
+  reach a rendered fight — which is what makes "a rendered fight" a small piece of wiring
+  rather than a subsystem.
+* Death is a state of the world view, not a screen: zero the fields, print
+  `<NAME> IS DEAD!` into the CMD log. `asm/0C62` is the citation.

@@ -153,6 +153,15 @@ named recipients — and bit 7 means "this slot has a scripted response", not "a
 this is the second field where the bytes declined to cooperate with it. It stays a
 hypothesis about some *other* byte, not a dead one.
 
+**Update, same day — the low nibble moves, so "class" was too tidy (grade: measured, n=2).**
+Two live runs showed an **attacked** Fighter (`type 0xF0`) go `0x03 -> 0x01`, and reading the
+whole table afterwards every Guard is born `0x01`, every Merchant `0x02`, untouched Fighters
+`0x03`. A Fighter that has fought the player ends up holding the value guards are born with.
+Either `01` is "willing to strike you" — which would make this the aggro byte after all, in
+the low bits rather than bit 7 — or the transition is a combat flag and the match with the
+guard value is coincidence. Evidence and the provocation experiments: `docs/spice86-live-findings.md`
+§ 15, captures `cp5-guard-aggro` and `cp5-weak-fight`.
+
 Writer attribution also corrected: the writer is `asm/114A_sub_114a` (`mov %al,0x1d7(%di);
 dec %di; jns` — a downward fill loop at runtime `114A..1150`), which **precedes**
 `asm/1151_dungeon_darkness` (`1151..12DA`) and is not part of it. An earlier note here
