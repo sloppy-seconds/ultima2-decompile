@@ -35,17 +35,28 @@ is a computed immediate. The tavern already shows exactly that (§ 3).
 | --- | --- | --- |
 | Weapons | 8 items, two-letter abbreviations (DA, MA, AX, BO, SW, GR, LI, PH) | `1E69`/`1E81` |
 | Armour | 6 items: CLOTH, LEATHER, CHAIN, PLATE, REFLECT, POWER | `1D39`/`1D56` |
-| Magic | 6 spells, **two different lists** (see below) | `189E`/`18B7`, `19EC`/`1A05` |
+| Magic shop | 6 spells — **wizard** list | `19EC`/`1A05` |
+| Cleric shrine | 6 spells — **cleric** list, donation asked as "your interest?" | `189E`/`18B7` |
 | Horse dealer | one item, price quoted then a yes/no deal | `1F93`/`1FC4` |
 | Clue seller | one clue, price chosen by the player × 100 | `1B02` |
 | Tavern | buy a drink, or tip | `15FC`/`1654` |
 | Cleric | accepts a gold offering | `asm/3C2E_cmd_O` |
 
-**The two spell lists are the one real per-town difference.** One ends
-`4-PASS, 5-SURFACE, 6-PRAYER`, the other `4-M.M., 5-BLINK, 6-KILL`; the first three
-spells are identical. So magic shops differ in their high tier. **inferred** — the
-strings exist, but nothing has yet shown which town selects which list. That is the
-follow-up worth doing, and it is answerable statically by finding the branch.
+**The two spell lists are two different services, not two towns — and my first reading
+of them was wrong.** I wrote this up as "the one real per-town difference" before checking
+the owners. The bytes say otherwise:
+
+| routine | framing | list |
+| --- | --- | --- |
+| `asm/1869_cleric_shrine` | `WELCOME ` / `BROTHER ` / `SISTER `, gated on `[DS:46]` (gender) | `4-PASS, 5-SURFACE, 6-PRAYER` |
+| `asm/19D7_magic_shop_menu` | wizard gibberish (`MUSERREF OLDUM!`, `BIR IKI UC...?`) | `4-M.M., 5-BLINK, 6-KILL` |
+
+Each is **class-gated**: `asm/184C_not_a_cleric_msg` prints `YOU ARE NOT A CLERIC!` and
+`asm/19BA_not_a_wizard_msg` prints `YOU ARE NOT A WIZARD!`. So the shared first three
+spells and the differing high tier are a healing/utility shrine versus an offensive
+wizard shop — different buildings, different classes. **No town-to-town variation in any
+shop catalogue is demonstrated anywhere.** The weapon and armour lists each exist once in
+the shop code, which is consistent with every shop selling the same stock.
 
 The same weapon and armour catalogue text appears **twice**: once in the shop and once in
 the use-command (`cmd_W` reuses the armour list). So a shop and a command share strings;
@@ -89,7 +100,8 @@ go-ahead and a per-function `check_func.py` run for each new range.
 
 | item | note |
 | --- | --- |
-| Find the branch that selects between the two spell catalogues | static, answers whether magic shops differ per town |
+| ~~Find the branch that selects between the two spell catalogues~~ **closed same day** — there is no town branch; the two lists are the cleric shrine and the wizard shop, each class-gated | resolved above |
 | Walk each shop routine's arithmetic to confirm every price is computed | closes the § 1 limit |
 | Split `asm/19D7` into its real routines | boundary change, needs approval + `check_func.py` per range |
 | Observe a real purchase | none of the shop routines appears in any harvest; all behaviour here is static |
+| Confirm `[DS:46]` is gender and find the class byte the `NOT A CLERIC/WIZARD` guards test | the guards exist; the tested field is not yet named |
