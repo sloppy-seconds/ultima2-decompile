@@ -209,15 +209,26 @@ immediates, the community bitmap, and the community stat table all name the same
 creature. Balron is literally `mov $0xff`, the byte ceiling, which is why the
 sources report 255 where a 32-step progression predicts 256.
 
-What is *not* explained by the arms: the townsfolk. Guard, Jester, Merchant, Cleric
-and King have no arm here, so their HP comes from another path — which leaves the
-Guard 255-vs-500 conflict open rather than resolved by this.
+What is *not* explained by the arms: **the townsfolk have no arm at all.** Guard,
+Jester, Merchant, Cleric and King are assigned no HP anywhere in the monster-kind
+dispatch, and this is a measured negative, not a shrug: the nine arms are the whole
+chain (a bit-tree on a small kind index, guards at runtime `0xF06`–`0xF21`, arms
+`0xF44`–`0x106F`, shared epilogue `asm/0BAF_monster_hp_epilogue`), and there is no
+`mov $0x60/0x64/0x68/0x6C/0xF4,%al` — the type values those arts fold back to —
+anywhere in `asm/`. So town NPCs are not created by the wandering-monster spawner.
+The best remaining lead is `asm/3611_sub_3611.asm`, the only routine found that is
+aware of the site kind (`cmpb $0x4,[DS:4A]`, tower) and that jumps into the HP
+subtract path at `asm/2C19_monster_hp_subtract`.
 
-The dungeon really is computed. `asm/147F_sub_147f.asm` derives HP arithmetically
-(`rcr $1,%al; adc $0x1,%al` into the type, then `add %al,%al` four times around an
-`adc 0x1b7(%di)`, then `or $0x10,%al` into HP) rather than storing an immediate, and
-that is consistent with the third-party dungeon ranges being two exact arithmetic
-progressions in dungeon-table order:
+The dungeon really is computed, and the routine is now identified.
+`asm/147F_dungeon_monster_spawn.asm` scans the 32 slots for an empty one, rolls the
+RNG three times for x and y as **odd values in 1..15** — the dungeon coordinate
+range, not the overworld's 0..63 — and derives HP from the drawn sprite byte
+(`rcr/adc` into the type, then `add %al,%al` four times around an `adc 0x1B7(%di)`,
+then `or $0x10,%al` into HP). Its only caller in the tree is
+`asm/1151_dungeon_darkness.asm`, which is what makes it the dungeon spawner rather
+than a guess. That is consistent with the third-party dungeon ranges being two exact
+arithmetic progressions in dungeon-table order:
 
 ```
 min = 17 + 32k          max = 153 + 32*(k//2)
@@ -226,8 +237,15 @@ k=4 Gremlin 145/217    k=5 Daemon 177/217   k=6 Balron 209/249
 ```
 
 14 data points, four constants, 7/7 on both. Grade that pair of formulas carefully:
-the fit is **measured against third-party numbers**, and `asm/147F` has not been
-shown to be the dungeon spawner — it is a strong lead, not a closed item. See **G17**.
+the fit is **measured against third-party numbers**, and although the routine is now
+identified by its caller, its arithmetic has not been validated against a live
+dungeon monster. See **G17**.
+
+One consequence of the field width, which settles a conflict without any capture:
+**monster HP is a single byte.** Every immediate is `<= 0xFF`, the arithmetic is
+byte-width `sbb`, and Balron is literally `mov $0xff`. So Gamer Corner's Guard HP of
+**500 is impossible** and the codex's 255 stands — refuted by the width of the field,
+not by an argument about which wiki is likelier.
 
 ## 7. What the join did **not** buy
 
@@ -256,7 +274,9 @@ shown to be the dungeon spawner — it is a strong lead, not a closed item. See 
   but `disasm/tile-art.tsv` reads `0B` as a doorway set in a magenta field, and its
   kind is `object`, not `creature`. One of the two readings is wrong. Marked
   `Sea Monster?` and left as a dispute; do not rename on this evidence.
-* **Guard HP.** Codex 255, Gamer Corner 500. Unresolved.
+* **Guard HP — RESOLVED 2026-10-22.** Codex 255, Gamer Corner 500. Monster HP is a
+  single byte (§ 6), so 500 cannot exist. The codex wins on field width. Note this
+  came from the binary's representation, not from a capture.
 * **Merchant HP.** Codex 5–50, Gamer Corner 1. Unresolved.
 * **The codex HP/DMG columns are not HP and DMG in two of the four tables.** Those
   tables carry a second header row (`Min`, `Max`) written without `colspan`, so in
@@ -293,10 +313,12 @@ called*; the spec answers *what must the tile communicate*; they must not mix.
 
 ## 10. Next
 
-1. Find the **townsfolk** HP path — Guard, Jester, Merchant, Cleric and King have no
-   spawn arm, and Guard is the source of the only live stat conflict (255 vs 500).
-2. Prove `asm/147F_sub_147f.asm` is the dungeon spawner and check its arithmetic
-   against the `17 + 32k` / `153 + 32*(k//2)` fit (**G17**).
+1. Find the **townsfolk** HP path. There is no spawn arm (§ 6, measured negative), so
+   start at `asm/3611_sub_3611.asm` — the only site-kind-aware routine on the HP
+   damage path. Jester, Merchant, Cleric and King HP stay third-party until then;
+   Guard's conflict is already resolved by field width.
+2. Validate `asm/147F_dungeon_monster_spawn.asm`'s arithmetic against a live dungeon
+   monster and check it against the `17 + 32k` / `153 + 32*(k//2)` fit (**G17**).
 3. Settle whether `[DI+0x1B7]` (sprite) and `[DI+0x197]` (type) are always equal —
    at spawn they take the same immediate, which is why both fold to the right art
    (**G18**). Correct the "thief is monster type `0x40`" claim in

@@ -1,4 +1,26 @@
-# sub_147f — mechanical clean (bulk wave); behavior not yet reviewed
+# dungeon_monster_spawn — scans the 32 monster slots for an empty one and fills it
+#           with a RANDOM monster whose HP is computed, not an immediate
+# name-evidence: its only caller in the tree is asm/1151_dungeon_darkness, which
+#           establishes the context. It loops `bl = 0x1f` down to 1 over the record
+#           arrays, tests [DI+0x197] for empty, then calls the RNG (L_005417) three
+#           times: x = (rand&7)*2|1 and y likewise, i.e. odd coordinates in 1..15,
+#           which matches the dungeon coordinate range already recorded in
+#           docs/spice86-live-findings.md and NOT the overworld range of 0..63.
+#           A retry loop at runtime 0x16EA rejects values that collide with
+#           [DI+0x1B7]. Then type and HP are DERIVED rather than stored:
+#             clc; rcr $1,%al; adc $0x1,%al   -> [DI+0x197]  type
+#             add %al,%al; adc 0x1B7(%di),%al; add %al,%al x3; or $0x10,%al
+#                                          -> [DI+0x177]  HP
+#           So dungeon HP is a function of the drawn sprite byte, which is the shape
+#           the third-party dungeon ranges imply (docs/bestiary.md § 6: min = 17+32k,
+#           max = 153+32*(k//2), 7/7 on both). The `or $0x10` sets bit 4 on every
+#           dungeon monster's HP; whether that is a floor or a flag is not settled.
+# IMPORTANT: this is NOT the townsfolk path. Townsfolk have no HP assignment anywhere
+#           in the monster-kind dispatch — see docs/bestiary.md § 6.
+# provenance: static, 2026-10-22
+# confidence: medium (caller and coordinate range are bytes; the HP formula's meaning
+#           is read, not yet validated against a live dungeon monster)
+# label: kept as sub_147f on purpose — labels are body (CP0)
 # func 147F..152D  len 00AF B  evidence: call+reko
 # calls: L_00164c, L_001694, L_005417
 # confidence: low (bytes proven by check_func.py)
