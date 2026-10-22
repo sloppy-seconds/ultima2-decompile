@@ -122,6 +122,7 @@ small{color:#888}
 </style></head><body>
 <div id="panel">
 <h1>Ultima II sector maps</h1>
+<div style="margin:0 0 6px"><a href="tile-review.html" style="color:#8cf">tile review sheet — original vs cleanroom, all 64</a></div>
 <label>World / time (tens digit)</label><select id="grp"></select>
 <label>Sector</label><select id="sec"></select>
 <label>Tile art</label><select id="art"></select>
