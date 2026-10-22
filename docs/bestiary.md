@@ -209,7 +209,7 @@ immediates, the community bitmap, and the community stat table all name the same
 creature. Balron is literally `mov $0xff`, the byte ceiling, which is why the
 sources report 255 where a 32-step progression predicts 256.
 
-### Live check: the arm value is the base, and area overrides it
+### Live check: the arm value is the base for wandering spawns — and there is a second source
 
 The first headless capture (seeded STRANGER, sector 0 at 30,32 — the walled
 compound) read **HP = 255 for every active monster**, including types whose arms
@@ -228,11 +228,12 @@ Reading the monster record out of every historical dump settles it:
 | `autoplay`, `e2e`, `passtab` (sector-0 compound) | 31 | 255 only | everything saturated |
 
 So the model is: **the arm immediate is the base HP of an ordinary wandering spawn;
-the area can raise it; damage lowers it.** Ordinary spawns match exactly. In
-`castle-03-live` a Thief (base 32) appears at 100, 150, 200 and 250 — an arithmetic
-progression far above its base — a Devil (base 192) at 255, while a Fighter (base
-128) sits at 100 and a Devil at 187, which are plainly damaged. The sector-0 compound
-pushes everything to the byte ceiling.
+placed monsters get their HP from the sector's `monxNN` file instead; damage lowers
+whatever it was.** Ordinary spawns match exactly. In `castle-03-live` a Thief (base 32)
+appears at 100, 150, 200 and 250 and a Devil (base 192) at 255 — not an override, but
+`monx03[64 + slot]` holding those values — while a Fighter (base 128) sits at 100 and a
+Devil at 187, which are plainly damaged. The sector-0 compound reads 255 everywhere
+because `monx00[64:96]` is all `0xFF`. See `docs/monster-spawn.md` § 1.
 
 The same dump **confirms the townsfolk have HP and validates the third-party ranges**,
 which is the strongest cross-validation in this document:

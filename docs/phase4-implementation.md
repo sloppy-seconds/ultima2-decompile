@@ -1281,7 +1281,7 @@ which is the fan pack and not the original), with the code that opens it:
 | file | count x size | what it is | evidence |
 | --- | --- | --- | --- |
 | `mapxNN` | 33 x 4224 | 64x64 tile **IDs** (4096 B) + 128 B tail | read `asm/2290` CX=0x1000; written `asm/2305`; indexed `asm/50B3` |
-| `monxNN` | 33 x 384 | 256 monster-ID slots (16x16) + 128 B tail | read `asm/22D5` CX=0x100; values are small IDs (0x1c..0x24) |
+| `monxNN` | 33 x 384 | **five parallel 32-byte arrays**: x `0..31`, y `32..63`, HP `64..95`, type `96..127`, kind `128..159`, then padding | **corrected 2026-10-22.** Previously recorded here as "256 monster-ID slots (16x16) + 128 B tail" — wrong. Proven by matching all five arrays against live DS in three captures across sectors 00 and 03: HP/type/kind match 32/32, x/y under-match because monsters move. See `docs/monster-spawn.md` § 2 |
 | `tlkxNN` | 15 x 384 | street-NPC dialogue, **high-bit-set ASCII** | decoded below |
 | `monsters` | 1 x 2176 | monster table, records of small integers | **no inline FCB name found** — open |
 | `pic*` | 6 files, 16384 (16512 for the dragon) | full-screen 2bpp demonstration pictures | `asm/03AC` reads each with CX=0x4000 |

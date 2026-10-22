@@ -14,11 +14,12 @@ segment (docs/spice86-live-findings.md):
     type = DS:0x197 + i     # 0x40 = empty sentinel
     kind = DS:0x1B7 + i     # small kind index, NOT a sprite
 
-Finding, for the record: the arm immediate is the BASE HP of an ordinary wandering
-spawn. Area can raise it (castle-03-live: Thief base 32 seen at 100/150/200/250,
-Devil base 192 at 255) and damage lowers it (Fighter 100 of 128, Devil 187 of 192).
-The sector-0 compound saturates every slot to 255. So one 255-everywhere reading
-proves nothing about the arms — check the area before concluding.
+Finding, for the record: there are **two spawn sources**, not an area override. Placed
+monsters take HP from `monxNN[64 + slot]`; wandering spawns take it from the nine arms.
+Sector 00 reads 255 everywhere because `monx00[64:96]` is all `0xFF`, and sector 20
+matches the arms because `monx20[64:96]` is all zeros. Values ABOVE the arm base are
+therefore expected and are not a contradiction — they are authored data. See
+`docs/monster-spawn.md`.
 
 Usage:
     python3 tools/monster_record_scan.py                 # summary per capture
@@ -123,8 +124,10 @@ def main():
         print('%-24s %-9s %5s  %-26s %s'
               % (d.parent.name, r['name'][:9] or '-', len(act),
                  str(vals)[:26], note))
-    print('\n%d dumps with monsters; %d match the arm bases exactly with no damage or '
-          'buff; %d contain values ABOVE the base (area override)' % (clean + buffed, clean, buffed))
+    print('\n%d dumps with monsters; %d match the arm bases exactly with no damage; '
+          '%d contain values ABOVE the arm base' % (clean + buffed, clean, buffed))
+    print('Above-base is expected: those sectors author HP in monxNN[64+slot]. '
+          'See docs/monster-spawn.md.')
     print('Read the corpus before running a new capture — this answer was already here.')
 
 

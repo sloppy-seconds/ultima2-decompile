@@ -299,9 +299,10 @@ about 250 req/s.
 record out of every dump in `captures/spice86/` showed the arms ARE the live path:
 about 40 captures have live HP exactly equal to the arm immediate with zero
 mismatches, and `play-test` (the landbridge session) shows a damaged Sea serpent at
-44 of 64. The sector-0 compound reading 255 for everything is an **area override**,
-not a refutation -- `castle-03-live` has a Thief (base 32) at 100/150/200/250 and a
-Devil (base 192) at 255, alongside plainly damaged values.
+44 of 64. The sector-0 compound reading 255 for everything is **not** an override and
+never was -- `monx00[64:96]` is all `0xFF`, and placed monsters load HP from that table.
+See `docs/monster-spawn.md` § 1, which supersedes the "area override" framing used here
+earlier the same day.
 
 That same dump confirms the townsfolk and validates the third-party ranges: Guard
 `0x60` at **255** (codex right, Gamer Corner's 500 wrong), Merchant `0x68` at **30 and
