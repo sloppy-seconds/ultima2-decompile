@@ -436,8 +436,10 @@ cited to bytes:
 1. `asm/406E` rejects if site kind `[DS:4A] == 0`.
 2. `asm/407C` and again `asm/409C` call `L_0052b3`, which is **already named**
    `asm/50B3_map_tile_ptr`: `AL = byte[y*64 + x + word[DS:472]]` with `x = DS:23`,
-   `y = DS:24`. It returns the **live grid cell**, not a creature record.
-3. `asm/4085` advances that cursor: `DS:23 += DS:19`, `DS:24 += DS:1A`.
+   `y = DS:24`. It returns the **live grid cell**, not a creature record. (What feeds
+   `DS:23/24` is *not* established — see the refutation below.)
+3. `asm/4085` does `DS:23 += DS:19`, `DS:24 += DS:1A`. Whether that is the ray stepping is
+   **not established** — see the refutation below.
 4. The cell value must be `0x7C` (`asm/4081`) or `0x68` (`asm/409F`); otherwise the shared
    printer at `asm/40A6` says `FUNNY, NO RESPONSE!`.
 5. On a match `asm/40A3` jumps to runtime **`1590`** — the dispatcher that leads to the
@@ -451,26 +453,29 @@ slots in `monx31`**, a 7/7 exact match. The map encodes where a transactor stand
 `monx` record is placed on top of it. So `tools/shop_access.py`'s "NPC standing at the
 sign" rule has a sharper form available: **look for tile `0x68`**.
 
-**Why the sweep failed, now explained.** The cell north of the player at (51,16) is
-(51,15), which *is* `0x68` — it should have matched. It did not, because the ray's delta
-is `DS:19/1A`, and that pair is written by the **movement** code (`asm/0B0F`, via `sbb`),
-not by the direction typed after `T`. Measured live, `DS:19/1A` read `(1, 1)` identically
-after `T,Up`, `T,Down`, `T,Left` and `T,Right` — direction-invariant, exactly as this model
-predicts and as the "it is the talk delta" guess did not. The cursor was stepping to
-(52,17), not to (51,15).
+**Why the sweep failed: still not explained, and the explanation offered here is refuted.**
+The cell north of the player at (51,16) is (51,15), which *is* `0x68`, so it should have
+matched. The account given in this section — that the ray's delta `DS:19/1A` is written by
+the movement code rather than the talk direction — was tested the same day and is
+**wrong**. After five real movement keys that demonstrably moved the player
+((51,17)→(51,16)→(51,17)→(50,17)), `DS:19/1A` read `(1, 1)` every single time, exactly as
+it did after the talk keys. It is not a movement delta either. And `DS:23/24` read
+`(21, 27)` at a moment when the player was at `(51, 17)`, so it is **not a player-space
+cursor** — which means the "`asm/4085` steps the ray by `DS:19/1A`" reading is not
+established, and the fragments between `asm/4050` and `asm/409F` may not fall through in
+the order the clean wave's adjacency suggests.
 
-**Grades.** Steps 1–5 and the 7/7 tile match are **measured** from bytes and a live read.
-"The ray reuses the last movement delta rather than the talk direction" is **inferred** —
-consistent with every observation including the (1,1) reading, but not proven: nobody has
-yet watched `DS:19/1A` immediately after a movement key and then after a talk key in the
-same run. That single read both closes it and yields the working recipe: **step one cell in
-the direction you want to transact toward, then press `T` with no direction at all.**
+**What survives, and it is the part worth keeping.** The guards are observed: site kind
+`!= 0` (`asm/406E`), cell value `0x7C` or `0x68` (`asm/4081`, `asm/409F`), shared refusal
+printer at `asm/40A6`, success jumping to runtime `1590` (`asm/40A3`) which the `food-buy`
+harvest corroborates. And the **7/7 `0x68`-to-Merchant-spawn correspondence in `mapx31`**
+is measured and independent of every claim about the ray.
 
-**Superseded, kept so nobody re-adopts it.** An earlier draft of this section claimed the
-ray was undecoded and that `asm/4085`'s accumulator was not the ray. Half right — the
-accumulator *is* the ray step; what was wrong was assuming `DS:19/1A` is written by the
-talk direction. The `(1,1)` measurement that refuted the first draft is the same
-measurement that fits this one.
+**Grades.** The guards, the `1590` jump and the 7/7 tile match: **measured**. The cursor and
+delta mechanics: **refuted**, retained only so the next reader does not spend an hour on
+them. The ray's actual step mechanism: **unknown** — it needs the instruction window
+around `asm/407C`/`asm/409C` read as one routine rather than as five fragments, which is
+the G22 problem again, not a capture problem.
 
 
 **The earlier claim stays withdrawn.**
