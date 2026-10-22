@@ -1,5 +1,10 @@
 # combat_thief_steal — thief steals something mid-combat
 # name-evidence: string 'A THIEF STOLE SOMETHING!'
+# corroboration 2026-10-22: Gamer Corner's Thief tile is pixel-identical to our art
+#   0x3F (see bestiary/bestiary.tsv), and both sources give "can steal any item".
+#   Note the codex lists Thief as both a wandering monster and a townsfolk NPC, so
+#   the string's 'A THIEF' agrees with a creature, not only the player class at
+#   file 0x50FE. External claim; changes no name.
 # func 0FCD..1012  len 0046 B  evidence: call+reko
 # strings: "A THIEF STOLE SOMETHING!"
 # calls: L_0051df (str_out), L_005417

@@ -1,5 +1,9 @@
 # combat_minax_attack — Minax boss attack event
 # name-evidence: string 'MINAX CRIES: DIE FOOL!'
+# corroboration 2026-10-22: Gamer Corner's Minax tile is pixel-identical to our art
+#   0x10 (see bestiary/bestiary.tsv), and it describes "exactly 100 damage, range 3".
+#   External claim; the 100-damage figure matches docs/spice86-live-findings.md and
+#   needs a live re-check before it is treated as observed. Changes no name.
 # func 0F8E..0FCC  len 003F B  evidence: call+reko
 # strings: "MINAX CRIES: DIE FOOL!"
 # calls: L_000e62, L_0051df (str_out), L_00543e, L_0060f2

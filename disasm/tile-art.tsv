@@ -25,6 +25,13 @@
 # byte means. See docs/passability-findings.md.
 #
 # kind: terrain | object | creature | font | block
+#
+# Creature names (2026-10-22): a leading name before the em-dash is a THIRD-PARTY
+# name from the Ultima Codex or Gamer Corner, attached because that source's DOS
+# bitmap is pixel-identical to our tile (tools/bestiary_match.py, 6 controls, and
+# the gate was proven able to fail). The identity is measured; the name is not.
+# A name with a question mark conflicts with something. Unnamed rows are unnamed.
+# Per-art detail and the conflicts are in bestiary/bestiary.tsv and docs/bestiary.md.
 
 	id	hex	kind	description	glyph	notes
 	00	00	terrain	magenta dashes in loose diagonal rows on black	:	most common byte in every *x0 sector
@@ -38,23 +45,23 @@
 	08	08	object	white gate frame, two posts under a lintel	+	NOT a plane; corrects the old 8=plane note
 	09	09	terrain	white diamond lattice with an arch opening at bottom centre	!	cave or pass through a range
 	0A	0A	object	solid white cross standing on a base	/	monument
-	0B	0B	object	magenta field with a white arch and a white mound	[	doorway set in a field
-	0C	0C	creature	white humanoid, arms down, legs apart	\	first NPC figure
-	0D	0D	creature	white humanoid, arms raised out to the sides	]	
-	0E	0E	creature	white humanoid beside a magenta-topped staff	{	
-	0F	0F	creature	two white humanoids close together, magenta above	}	group of figures
-	10	10	creature	white humanoid in a wide cape or robe	(	
+	0B	0B	object	Sea Monster? — magenta field with a white arch and a white mound	[	doorway set in a field
+	0C	0C	creature	Orc — white humanoid, arms down, legs apart	\	first NPC figure
+	0D	0D	creature	Daemon — white humanoid, arms raised out to the sides	]	
+	0E	0E	creature	Devil — white humanoid beside a magenta-topped staff	{	
+	0F	0F	creature	Balron — two white humanoids close together, magenta above	}	group of figures
+	10	10	creature	Minax — white humanoid in a wide cape or robe	(	
 	11	11	creature	quadruped, head at left, four legs and a tail	)	horse candidate
-	12	12	object	boat hull with mast and yard	<	frigate candidate
+	12	12	object	Frigate — boat hull with mast and yard	<	frigate candidate
 	13	13	object	crossbar over a vertical post on a base	>	PLANE, map byte 0x4C. Proven 2026-10-21 by measurement, not by the drawing: BOARD dispatches on [DS:14] (asm/2FAD) against 0x22 horse / 0x24 ship / 0x26 plane / 0x28 rocket, and [DS:14] was measured live as map_byte >> 1 on 53 of 54 walk samples across three terrain bytes. That puts the plane at map byte 0x4C, i.e. art 0x13, and arts 0x11/0x12/0x14 are independently this file's own horse, frigate and rocket candidates. An earlier note here claimed 0x34 and was wrong: the render used %02d against hex-named PNGs, so art 0x13 was displayed under the label "13" and attached to the wrong byte. The 0x34 tiles are art 0x0D, a humanoid figure with arms raised.
 	14	14	object	white spire, pointed top, flared base	=	rocket candidate, NOT 0x08
 	15	15	object	white square frame enclosing an S curve	?	dungeon mouth candidate
 	16	16	object	diagonal stroke with a small cross at the foot	'	
 	17	17	block	magenta, cyan and white checkerboard rows	"	
-	18	18	creature	white humanoid, arms out and down	;	
-	19	19	creature	white figure, arms raised in a V, legs crossed	`	
-	1A	1A	creature	small white humanoid	~	small stature, child or hobbit
-	1B	1B	creature	white humanoid, arms bent inward		
+	18	18	creature	Guard — white humanoid, arms out and down	;	
+	19	19	creature	Jester — white figure, arms raised in a V, legs crossed	`	
+	1A	1A	creature	Merchant — small white humanoid	~	small stature, child or hobbit
+	1B	1B	creature	King — white humanoid, arms bent inward		
 	1C	1C	terrain	magenta vertical dashes on black (56 magenta px)		
 	1D	1D	block	solid black (256 black px)		corrects an eyeballed first pass
 	1E	1E	block	solid white (256 white px)		
@@ -87,7 +94,7 @@
 	39	39	font	capital Z	Z	
 	3A	3A	block	near-black, 46 white px in a thin arrangement		NOT solid black
 	3B	3B	block	near-black, 46 white px, arrangement differs from 0x3A		NOT solid white
-	3C	3C	creature	white humanoid, arms out		
-	3D	3D	creature	white humanoid holding a blade up and to the right		
-	3E	3E	creature	white humanoid beside a tall vertical bar	sword upright
-	3F	3F	creature	white humanoid holding a curved bow		
+	3C	3C	creature	Fighter — white humanoid, arms out		
+	3D	3D	creature	Cleric — white humanoid holding a blade up and to the right		
+	3E	3E	creature	Wizard — white humanoid beside a tall vertical bar	sword upright
+	3F	3F	creature	Thief — white humanoid holding a curved bow		

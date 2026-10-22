@@ -1,5 +1,9 @@
 # combat_sleep_spell — sleep-spell combat event (idol save)
 # name-evidence: strings 'SLEEP SPELL!' / 'SAVED BY IDOL!'
+# corroboration 2026-10-22: third-party bestiary names the caster Balron, and the
+#   codex DOS bitmap for Balron is pixel-identical to our art 0x0F (see
+#   bestiary/bestiary.tsv). Both sources give "puts enemies to sleep (range 2)".
+#   External claim, agrees with the strings; it is not proof and changes no name.
 # func 0F48..0F8D  len 0046 B  evidence: call+reko
 # strings: "SLEEP SPELL!"; "SAVED BY IDOL!"
 # calls: L_004d26, L_0051df (str_out), L_005417, L_0061c3

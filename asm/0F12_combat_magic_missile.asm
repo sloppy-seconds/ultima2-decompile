@@ -1,5 +1,9 @@
 # combat_magic_missile — magic-missile combat spell event
 # name-evidence: string 'MAGIC MISSILE!'
+# corroboration 2026-10-22: third-party bestiary names the caster Wizard, and the
+#   codex DOS bitmap for Wizard is pixel-identical to our art 0x3E (see
+#   bestiary/bestiary.tsv). Both sources give "Magic Missile (range 2)". External
+#   claim, agrees with the in-binary string; it is not proof and changes no name.
 # func 0F12..0F47  len 0036 B  evidence: call+reko
 # strings: "MAGIC MISSILE!"
 # calls: L_004d26, L_0051df (str_out), L_0061c3

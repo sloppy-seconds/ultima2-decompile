@@ -1,5 +1,9 @@
 # combat_paralyzed_arms — arm-paralysis combat event (magic cloak save)
 # name-evidence: strings 'ARMS PARALIZED!' / 'SAVED BY MAGICAL CLOAK'
+# corroboration 2026-10-22: third-party bestiary names the caster Devil, and the
+#   codex DOS bitmap for Devil is pixel-identical to our art 0x0E (see
+#   bestiary/bestiary.tsv). Both sources give "paralyzes arms (range 2)". External
+#   claim, agrees with the in-binary strings; it is not proof and changes no name.
 # func 0EC2..0F11  len 0050 B  evidence: call+reko
 # strings: "ARMS PARALIZED!"; "SAVED BY MAGICAL CLOAK"
 # calls: L_004d26, L_0051df (str_out), L_005417, L_0061c3
