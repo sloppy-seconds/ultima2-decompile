@@ -858,3 +858,59 @@ and no `Xvfb`.
    does nothing.
 5. Keep it out of the reconstruction's gates. It is a viewing convenience; nothing in
    `make test` or `assemble_clean.sh` should ever depend on it.
+
+## TODO: research the U1 Unity rebuild for transferable findings (opened 2026-10-23, owner-found)
+
+**Target:** <https://u1unity.archiveofmyth.com/> — a fan project rebuilding the **1987 DOS
+remake of Ultima I** in Unity, worked on in the open (a devlog with dated per-system entries,
+and a GitHub repo referenced as `hoyty1/ultima-unified-engine`). It is not Ultima II, but the
+overlap is real and the owner asked for a thorough pass rather than a glance.
+
+**Why it is worth the time.** This is the same discipline as this project, applied one game
+earlier: they describe pulling apart original DOS binaries, decoding tile and map formats
+(**EGA row-planar tiles, nibble-packed overworld maps, column-major town data**), and
+decompiling **combat formulas from the original EXE where possible**, with the guesswork
+labelled as such. They also state plainly where they approximated — spawn tables "from
+observed behavior since the exact original logic isn't fully understood", space behaviour as
+"best guess from SPACE.EXE, close but probably not byte-exact". That candour is what makes a
+sibling project usable: you can tell their facts from their guesses. They additionally import
+**Ultima II art and sound effects**, so they have already decoded some U2 data structures
+from the other side.
+
+**What to look for, in priority order.**
+
+1. **Combat formulas and turn structure.** Anything they publish on hit/miss rolls, damage
+   rolls, or monster turn logic, even for U1 — the family is close and § 15/§ 16 just
+   established that U2's hostility is a provoked state, so a second data point on how these
+   games roll is worth having.
+2. **U2 asset import paths.** If they document how they read Ultima II tiles or SFX, that is
+   a second, independent reading of formats this project decoded from its own bytes — useful
+   as corroboration and as a place a mistake could show up.
+3. **Format techniques**: row-planar tile decoding, nibble-packed maps, column-major town
+   layout. Compare against `docs/map-format.md` and the tile work; a technique that worked
+   for them may explain a U2 structure that has been resisting.
+4. **Their community-references page.** They credit the Ultima Dragons Discord and community
+   docs for sprites, mechanics and quirks. Those sources may hold U2 material of the same
+   grade as `bestiary/` — third-party, useful, and not authoritative here.
+5. **Process ideas**: how they structure a public devlog per system, and how they mark
+   best-effort reconstructions. This project's equivalent is the `# confidence:` header and
+   the evidence grades; worth seeing whether their presentation makes the state easier to
+   follow, since the handoff keeps having to explain where the certainty lives.
+
+**Standing cautions, which the isolation and cleanroom rules already cover.**
+
+* **Third-party data is a hypothesis the bytes get to veto** (`AGENTS.md` § 3). Nothing from
+  this site promotes into `asm/` or into a claim about this binary without being re-derived
+  from `original/` and `captures/` here. Same rule as `bestiary/`.
+* **The cleanroom wall is not negotiable.** They hold Ultima II art. Anyone drawing
+  substitute tiles must not read this site or anything it links — the only legal input for a
+  redraw stays `docs/tile-art-spec.md`. Note this explicitly in the research write-up so the
+  next agent does not treat "researched the U1 site" as harmless before an art task.
+* **Different game, different binary.** U1's 1987 DOS remake is not U2's 1983 engine;
+  conclusions do not transfer, methods do. That is the same boundary
+  `docs/harness-portability.md` draws for generic tooling.
+
+**Suggested shape of the deliverable:** one new document, `docs/external-u1-unity.md`, with a
+table of claim → what they assert → whether this project's bytes agree → action taken. Empty
+is a fine outcome; the point is a recorded pass rather than an unrecorded glance. Do it as its
+own session, not as a side trip inside a checkpoint.
