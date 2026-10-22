@@ -52,7 +52,7 @@ python3 tools/bestiary_view.py       # -> bestiary/view.html
 file, so `--offline` re-parses what is already on disk and makes no requests. It
 splits the animated FM Towns GIFs into numbered frames **and** a single strip, so
 the animation is usable with and without a GIF decoder. It also handles the codex's
-ragged tables explicitly (§ 6), because a flat column map there ships a plausible
+ragged tables explicitly (§ 8), because a flat column map there ships a plausible
 wrong stat on most rows.
 
 `bestiary_match.py` refuses to be generous:
@@ -124,21 +124,91 @@ codex's dungeon creature images are 224x142 screenshot crops, not rips. Ghost,
 Carrion creeper, Viper, Gremlin and Goblin stay unnamed until a real DOS dungeon
 sprite is found or one is extracted from a live session.
 
-## 5. What the join did **not** buy
+## 5. Three creature sets, and the boundary of this join
 
-* **No monster type byte is named.** The type→art path (`art = type >> 2`) is
-  inferred from a single live observation. Naming a *type* needs that transform
-  proven in bytes first. This is the deliberate line from the project plan: art
-  names yes, type names not yet.
+The sources do not describe one monster list. They describe three, and the overlap
+between them is not one kind of overlap:
+
+| set | count | members |
+| --- | --- | --- |
+| Creatures of the land | 10 | Orc, Goblin, Thief, Daemon, Sea serpent, Fighter, Pirate ship, Devil, Wizard, Balron |
+| Townsfolk | 6 | Jester, Merchant, Thief, Cleric, Wizard, Guard |
+| Creatures in Dungeons | 7 | Orc, Ghost, Carrion creeper, Viper, Gremlin, Daemon, Balron |
+
+Overlaps: land ∩ dungeon = **Orc, Daemon, Balron**; land ∩ town = **Thief, Wizard**;
+town ∩ dungeon = **none**.
+
+Those two overlaps are different things wearing the same word:
+
+* **Town reuses overworld creatures as NPCs.** Thief and Wizard carry the *same* DOS
+  image (`U2Thief.PNG`, `U2Wizard.PNG`) and the same HP in both tables. Same
+  creature, two contexts.
+* **The dungeon creatures are different creatures with the same names.** Dungeon Orc
+  is `U2-OrcDung.png` with HP `17-153`; overworld Orc is `U2Orc.PNG` with HP `16`.
+  Same for Daemon (`177-217` vs `64`) and Balron (`209-249` vs `255`).
+
+**This is the hard boundary on everything above.** The join named **zero** dungeon
+arts, and that was the eligibility rule working, not a gap to close later: every
+codex dungeon image is a `64x41` screenshot crop rather than a 16x16 rip. And the
+dungeon is a wireframe renderer whose outlines `tools/monster_shapes.py` already
+suspects live in `original/monsters` (64 records x 34 B of coordinate pairs, still
+open as T9) — so dungeon creatures may never be drawn from the tile table at all, and
+no tile-based join can name them. Filed as **G19**.
+
+So: a name earned from the overworld tile table must never be carried into a dungeon
+row. The bestiary names the overworld and town set and is silent about the dungeon.
+One more source smell in the same direction: the codex's dungeon Daemon image is
+filed as `U2DungeonMinotaur.png`, so the source disagrees with itself about what
+that creature is called.
+
+## 6. Monster HP is computed, not stored
+
+`tools/hp_table_scan.py` searched the executable for a per-creature HP table.
+**Nothing was found**, across 13 encoding x indexing combinations: raw byte, 16-bit
+LE, and the hundreds-first BCD pair the player's own HP uses (`DS:51/52`), indexed by
+art and by the type/sprite values that fold to an art under `>>2`. The match bar was
+"all but one of the known entries" and no position reached it. `original/monsters`
+was tested the same way and is coordinate pairs, not stats, which removes a candidate
+from T9.
+
+What the scan found instead is structure in the third-party numbers themselves. The
+seven dungeon HP ranges are two exact arithmetic progressions in dungeon-table order:
+
+```
+min = 17 + 32k          max = 153 + 32*(k//2)
+k=0 Orc 17/153   k=1 Ghost 49/153     k=2 Carrion 81/185  k=3 Viper 113/185
+k=4 Gremlin 145/217    k=5 Daemon 177/217   k=6 Balron 209/249
+```
+
+14 data points, four constants, **7/7 on both**. The overworld values lean the same
+way: `32 x {1,2,2,4,5,6,7}`, with Balron at `255` — `0xFF`, a byte ceiling where 256
+would land — and Orc's 16 the single outlier. Grade carefully: the progressions are
+**measured against third-party numbers**, which is not the same as measured against
+the binary. What follows from them is a claim about the game: dungeon HP is computed
+from creature index and depth, and overworld HP has no depth, so it has no range.
+
+That reframes the verification. It is not "read the HP field", because there is no HP
+field; it is "find the computation", which is static work. See **G17**.
+
+## 7. What the join did **not** buy
+
+* **No monster type byte is named.** Two record fields are candidates — `sprite =
+  DS:0x1B7+i`, which is stamped into the map cell and so is the renderer's input, and
+  `active = DS:0x197+i`. Both fold to the right art under `>>2` on four measured
+  values each, eight agreements in all, so the transform is well corroborated; what is
+  unresolved is which field is authoritative, and a `0x40` contradiction sits on top
+  of it. See **G18** and the `CONFLICT` note in
+  `asm/0AD3_combat_special_attack_dispatch.asm`. This is the deliberate line from the
+  project plan: art names yes, type names not yet.
 * **No asm file was renamed.** The tile-art table lives inside
   `asm/72A0_sub_72a0.asm`, which spans `72A0..8386` and is a mixed region of code,
   strings and data — calling it `tile_art_table` would be a wrong name, and a wrong
   name is worse than none. The names went to `disasm/tile-art.tsv` and the headers
   that own the behaviour instead.
-* **No HP value is verified.** Nothing here has been checked against a live monster
-  record. See `docs/needs-gameplay.md`.
+* **No HP value is verified**, and § 6 says why that is harder than it looked: there
+  is no stored HP field to read. See `docs/needs-gameplay.md`.
 
-## 6. Conflicts on the record
+## 8. Conflicts on the record
 
 * **art `0B`.** Gamer Corner's "Sea Monster" tile is pixel-identical to our `0B`,
   but `disasm/tile-art.tsv` reads `0B` as a doorway set in a magenta field, and its
@@ -164,7 +234,7 @@ sprite is found or one is extracted from a live session.
 * **`0x1D` and `0x1E`.** Blank and solid art respectively. They are not creatures and
   cannot name anything, whatever a naive comparison says.
 
-## 7. Licensing and the cleanroom wall
+## 9. Licensing and the cleanroom wall
 
 Every image in `bestiary/cache/` is a copyrighted rip of game art, in seven platform
 variants, and `bestiary/view.html` embeds all of it plus our extracted tiles. Both
@@ -179,12 +249,16 @@ in `docs/tile-art-spec.md` § 2 and `docs/cleanroom-procedure.md`. Whoever draws
 substitute art may not read any of them. The bestiary answers *what is this creature
 called*; the spec answers *what must the tile communicate*; they must not mix.
 
-## 8. Next
+## 10. Next
 
-1. Prove `art = type >> 2` in bytes, then monster **types** become nameable.
-2. Verify HP and damage against a live monster record — an agent-drivable capture,
-   filed in `docs/needs-gameplay.md`.
-3. Find real DOS sprites for the five dungeon creatures whose codex images are crops.
-4. Cross-check the item-drop claims (Fighter drops torches and helms, Guard drops 2
+1. Find the HP **computation** in the spawn and combat code — the stored-table
+   hypothesis is dead (§ 6), so this is disassembly, not a capture. The unexplained
+   fifth record field `DS:0x177+i` is the place to start. Then **G17**'s live step.
+2. Settle which record field drives the art, and the `0x40` contradiction (**G18**).
+   Only then can monster **types** be named.
+3. Decode the dungeon stroke table and identify dungeon creatures from their drawn
+   outline (**G19**, also T9).
+4. Find real DOS sprites for the five dungeon creatures whose codex images are crops.
+5. Cross-check the item-drop claims (Fighter drops torches and helms, Guard drops 2
    keys, Wizard drops staves and wands) against the kill-reward code in
    `asm/2D8C_combat_kill_reward.asm` and friends.

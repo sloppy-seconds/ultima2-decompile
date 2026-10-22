@@ -208,6 +208,15 @@ Newest first. One line per learning; the detail stays in the owning document.
   is what stops a reusable tool quietly becoming a one-off. → § 4; add a
   *non-dependencies* clause to every harness component brief.
 
+* **2026-10-22** — Before hunting a stored table, test whether the numbers are a
+  formula. A per-entity stat table is the obvious place to look for HP, and the obvious
+  scan came back empty across every encoding and indexing tried -- which is only useful
+  because the tool's threshold made a false positive impossible. The structure was in
+  the numbers themselves: the values formed two arithmetic progressions, which says the
+  quantity is *computed* and redirects the search from a data region to the routine that
+  derives it. → commit the negative scan as a tool, not just the note; and run a
+  progression check over any external stat table before scanning the binary for it.
+
 * **2026-10-22** — A third-party wiki can name a tile, but only by bitmap identity.
   Community creature tables deliver a name and a bitmap in the same table cell, so an
   exact pixel comparison against the binary's own art table turns a crowd guess into a

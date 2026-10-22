@@ -151,8 +151,9 @@ seeded with `--player`, so character creation is not an obstacle either.
 | G14 | who writes `%di` before `0x3546` — settles five time periods against ten sector tens-groups | agent | **med-high** | time-period display, CP6 |
 | G15 | locate towns: which sector holds which town (`DS:4A` site kind 1 village / 2 town / 4 tower, plus map bytes, give the search) | agent | **medium** | shops, signs, CP6 |
 | G16 | `0xC0` event tile: step on one and record what the event actually is (a probe threw the player y=20→57; 1311 occurrences, exactly 262 in each of `mapx25/35/45`) | agent | **medium** | tile art, CP4/CP6 |
-| G17 | monster record: read a live monster's HP/damage/type bytes and check them against the third-party bestiary table (codex and Gamer Corner agree on Daemon 64, Devil 192, Balron 255, Fighter 128, Wizard 224; they **disagree** on Guard 255 vs 500 and Merchant 5–50 vs 1) | agent | **high** | whether any bestiary stat can be called `observed` |
-| G18 | prove the monster type→art transform (`art = type >> 2`, currently inferred from one live finding in `tools/monster_shapes.py`) — until then no monster **type** may be given a bestiary name, only art indices | agent | **high** | naming types, G1 sibling |
+| G17 | confirm the monster **HP model** on a live monster — read HP off a live record and check it against the computed model. **Prerequisite is static, not a capture:** the stored-table hypothesis is dead (`tools/hp_table_scan.py`, 13 encoding x indexing combinations negative, and `original/monsters` is coordinate pairs, not stats), so the formula has to be found in the code first. The dungeon ranges fit `min = 17 + 32k`, `max = 153 + 32*(k//2)` at 7/7 and 7/7 | agent, after the static step | **high** | whether any bestiary stat can be called `observed`; CP5 combat spec |
+| G18 | settle **which monster record field drives the drawn art**, and resolve the `0x40` contradiction. Two fields exist, `sprite = DS:0x1B7+i` (stamped into the map cell, so the renderer input) and `active = DS:0x197+i` (`0x40` = empty sentinel), and **both** fold to the right art under `>>2` on eight independent measured values — so the transform is effectively corroborated and what remains is authority, not discovery. The contradiction: `0x197` is documented as the empty sentinel at `0x40` **and** as "the thief is monster type `0x40`"; both cannot hold | agent | **med-high** | naming monster types, the steal routine, CP5 |
+| G19 | the **dungeon creature set is unreachable by the tile join** — all seven codex dungeon images are `64x41` screenshot crops, and the dungeon is a wireframe renderer whose outlines probably live in `original/monsters` (64 records x 34 B of coordinate pairs, still T9). Dungeon Orc, Daemon and Balron are **different creatures from their overworld namesakes**: different art, HP `17-153` / `177-217` / `209-249` against `16` / `64` / `255`. Identify them through the stroke table, not the tile table | agent | **medium** | dungeon rendering, T9, any dungeon bestiary |
 
 G14, G15 and G16 were carried in from the 2026-10-21 handoffs on 2026-10-22, where they
 were open but recorded nowhere but a document being archived. See
@@ -160,6 +161,12 @@ were open but recorded nowhere but a document being archived. See
 
 G1–G5 are `docs/passability-findings.md § Open` questions 1–5; the technical spec
 lives there. What follows is only the driving plan and the honest verdict.
+
+G17, G18 and G19 were rewritten the same day they were filed, after the bestiary
+join pulled up the existing monster findings. The first versions of G17 and G18
+were both wrong about what is actually unknown: G17 assumed a monster HP field had
+been located (it never has, and it is now known not to be stored), and G18 assumed
+the type→art transform rested on one observation (it is corroborated by eight).
 
 ### G1 — art index `[ ]`
 **Action:** enter any sector, take three ordinary steps, dump `DS:272` (256 B) and
@@ -259,30 +266,92 @@ re-checking opportunistically if a sector-30 session happens for another reason.
 
 ---
 
-### G17 — monster record vs the third-party bestiary `[ ]`
-**Action:** start an encounter, and before attacking, dump the monster record region
-and read off HP, damage and type for the creature on screen. Do it for at least
-Daemon, Devil, Balron, Fighter and Wizard, and for Guard and Merchant in a town.
-**Why the agent can do it:** encounters are already scriptable and this is a memory
-read plus a name lookup.
-**Needs owner:** no. **Success is a disagreement resolved**, not a confirmation: the
-two community sources already contradict each other on Guard (255 vs 500) and
-Merchant (5–50 vs 1), so a run that only confirms the agreeing numbers proves
-little.
+### G17 — the monster HP model `[ ]` *(static prerequisite first)*
+**What is already settled:** monster HP is **not stored**. `tools/hp_table_scan.py`
+searched the executable for a per-creature HP table across 13 encoding x indexing
+combinations — raw byte, 16-bit LE and the hundreds-first BCD pair the player's own
+HP uses, indexed by art and by the type/sprite values that fold to an art under
+`>>2` — and nothing reached even a "all but one" bar. `original/monsters`
+(64 records x 34 B) was tested the same way and is coordinate pairs, not stats, so
+T9 loses that candidate. A loose threshold would have invented a table; the negative
+is the useful answer.
+**What the ranges say instead:** the seven dungeon HP ranges are two exact
+arithmetic progressions, `min = 17 + 32k` and `max = 153 + 32*(k//2)` in
+dungeon-table order — 14 data points, four constants, 7/7 on both. The overworld
+values lean the same way: `32 x {1,2,2,4,5,6,7}` with Balron at `255` (`0xFF`, a
+byte ceiling where 256 would land) and Orc's 16 the one outlier. Dungeon HP is
+computed from creature index and depth; overworld HP has no depth, so it has no
+range. Grade: **measured against third-party numbers**, which is not the same as
+measured against the binary.
+**Static step (do this first, no emulator):** find the computation in the spawn and
+combat code. The unexplained fifth record field `DS:0x177+i` is the obvious
+candidate — it is written from `asm/0D4F`, `asm/0D6F`, `asm/0DAF`, `asm/0DC4` and
+`asm/147F`, and `asm/212A` does `incb 0x177(%di)`, which reads like a per-monster
+counter rather than a position.
+**Live step (then this):** the compound at sector 00 (30,32) already holds 31
+simultaneous monsters and the spawn RNG is seed-repeatable, so one session can dump
+all 32 slots at spawn and tie the formula to a live record. Memory reads sustain
+about 250 req/s.
+**Needs owner:** no. **Success is a disagreement resolved**, not a confirmation:
+Guard is 255 on the codex and 500 on Gamer Corner, Merchant 5-50 against 1, and a
+run that only confirms the numbers both sources already agree on proves little.
 **Blocks:** calling any bestiary stat `observed`. Until then every HP figure in
 `bestiary/bestiary.tsv` is third-party. See `docs/bestiary.md` § 2.
 
-### G18 — the monster type→art transform `[ ]`
-**Action:** with the same encounter dumps as G17, record the monster type byte and
-the art index the renderer actually draws for it, across several types. The current
-`art = type >> 2` comes from one live observation (`map byte 0x34` → art `0x0D`) and
-the fact that it reproduces the overworld sprite; it has never been checked against a
-second type.
+### G18 — which record field drives the art `[ ]`
+**What is already settled:** the record is three parallel byte arrays, stride 1,
+32 slots — `x = DS:0x137+i`, `y = DS:0x157+i`, `sprite = DS:0x1B7+i`,
+`active = DS:0x197+i` — measured, and the earlier stride-`0x20` guess is recorded as
+wrong. Two of those fields are candidate "type" bytes, and **both** fold to the
+right art under `>>2`:
+
+| field | measured value | `>>2` | bestiary name | documented behaviour |
+| --- | --- | --- | --- | --- |
+| `0x197` | `0x34` | `0x0D` | Daemon | leg paralysis |
+| `0x197` | `0x38` | `0x0E` | Devil | arm paralysis |
+| `0x197` | `0x3C` | `0x0F` | Balron | sleep |
+| `0x197` | `0xF8` | `0x3E` | Wizard | magic missile |
+| `0x1B7` | `0x60` | `0x18` | Guard | drops 2 keys |
+| `0x1B7` | `0xF0` | `0x3C` | Fighter | drops torches |
+| `0x1B7` | `0xF8` | `0x3E` | Wizard | magic missile |
+| `0x1B7` | `0xFC` | `0x3F` | Thief | steals items |
+
+Eight for eight, from two independent fields, against names that came from a wiki
+neither session had read. The transform is not the open question any more.
+**The contradiction to resolve:** `0x197` is documented as the active/sentinel field
+where `0x40` means *empty slot* (`cmp [DI+0x197], 0x40` at `0x2C2D`), and also as
+the basis for "the thief is monster type `0x40`" (a `cmp` against `0x40` at file
+`0x1244`). Both cannot be true. Either `0x40` is the sentinel and the steal loop is
+skipping empty slots — in which case the thief's type is unknown — or `0x40` is the
+thief and the sentinel reading is wrong. This would silently corrupt a reimplementation
+of combat.
+**Action:** one live slot, both fields dumped together, plus the art actually drawn.
 **Why the agent can do it:** same session as G17, same dumps, one extra column.
 **Needs owner:** no.
 **Blocks:** naming monster *types*. Art indices are named already; types are not,
-and a wrong transform would attach every name to the wrong creature. Sibling of G1,
+and a wrong field would attach every name to the wrong creature. Sibling of G1,
 which is the same question for ordinary map bytes.
+
+### G19 — the dungeon set is outside the tile join `[ ]`
+**Why it exists:** the bestiary join named **zero** dungeon arts, and that was
+design, not a miss — every codex dungeon image is a `64x41` screenshot crop, so the
+eligibility rule rejected all seven. Worse, the dungeon is a wireframe renderer, and
+`tools/monster_shapes.py` already suspects `original/monsters` (64 records x 34 B of
+coordinate pairs) is where the outlines live.
+**The trap:** dungeon Orc, Daemon and Balron are **different creatures from their
+overworld namesakes** — different art, and HP `17-153` / `177-217` / `209-249`
+against `16` / `64` / `255`. Town is the opposite case: Thief and Wizard are the
+*same* creature as on the overworld, same image and same HP, reused as NPCs.
+So a name earned from the overworld tile table must never be carried into a dungeon
+row. Note also that the codex's dungeon Daemon image is filed as
+`U2DungeonMinotaur.png` — the source disagrees with itself about what that creature
+is called.
+**Action:** decode the stroke table (this is also T9), then identify dungeon
+creatures from their drawn outline.
+**Why the agent can do it:** static decode plus a dungeon session already scriptable.
+**Needs owner:** no, though G10 (dungeon geometry) does.
+**Blocks:** any dungeon bestiary, T9, the dungeon renderer.
+
 
 ## Session planning — group by setup, not by question
 
