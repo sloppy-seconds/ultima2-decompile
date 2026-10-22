@@ -1,16 +1,15 @@
 /*
  * combat_check.c — CP5 acceptance specification (tickets C1, C2, C6).
  *
- * THIS IS A SPECIFICATION, NOT A TEST OF ENGINE CODE THAT EXISTS YET. The engine
- * has no combat module (docs/phase4-state.md § CP5: "scoped, not started"), so
- * the behavioural run against src/game/combat.c is SKIPped until CP5 lands;
- * whoever implements CP5 starts against these assertions rather than a blank.
+ * This is BOTH a specification and a live test: src/game/combat.c implements
+ * C1/C2/C6 and `run_cp5.sh` links this file against it on every `make test`
+ * (4066 checks, 0 failures at the time of writing — the gate prints the real
+ * number, do not trust a copy of it).
  *
- * It is nevertheless executed on every `make test`, against two fixture models
- * that ship beside it: combat_model_faithful.c must pass and
- * combat_model_boolean_wrong.c must fail. That is what makes "the spec
- * discriminates" a checked fact rather than a claim in a comment — the original
- * proof used throwaway models that no longer exist.
+ * It is additionally executed against two fixture models that ship beside it:
+ * combat_model_faithful.c must pass and combat_model_boolean_wrong.c must fail.
+ * That is what makes "the spec discriminates" a checked fact rather than a claim
+ * in a comment — the original proof used throwaway models that no longer exist.
  *
  * Every expectation below is a byte in the original, cited by asm file address.
  * Grades per AGENTS.md § 5 are named in the section headers.
@@ -26,6 +25,7 @@
  *                0xE4 GREEN IDOL                        (findings § 12)
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -433,6 +433,12 @@ static void test_c5_bcd_not_binary(void)
 int main(void)
 {
     printf("combat_check — CP5 spec (C1, C2, C4, C5, C6)\n");
+    /* CP5_SPEC_NO_TESTS=1 skips every test body, leaving a binary that reports
+     * "0 checks, 0 failures". It exists so run_cp5.sh can prove its own
+     * zero-check guard actually fires (AGENTS.md: demonstrate a gate failing
+     * before trusting it passing). The guard turns this hatch into a visible red,
+     * so exporting it cannot hide a failure. */
+    if (getenv("CP5_SPEC_NO_TESTS") == NULL) {
     test_c2_no_item_always_lands();
     test_c2_item_present_is_probabilistic();
     test_c2_threshold_is_exactly_0x40();
@@ -448,6 +454,7 @@ int main(void)
     test_c5_exactly_1000();
     test_c5_kills_below_1000();
     test_c5_bcd_not_binary();
+    }
     printf("combat_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

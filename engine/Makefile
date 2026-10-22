@@ -78,9 +78,11 @@ test-cp3: $(BIN)
 test-cp4: $(BIN)
 	bash tests/run_cp4.sh
 
-# CP5 is a specification, not an implementation: the combat acceptance tests land
-# as SKIP until src/game/combat.c exists (the checkpoint is owner-gated). See
-# tests/run_cp5.sh and docs/phase4-state.md § CP5.
+# CP5 combat: src/game/combat.c implements C1/C2/C6 and is linked into the engine
+# build (src/game/*.c), so the behavioural spec runs for real. The two fixture
+# controls and the zero-check self-test run whether or not combat.c is present,
+# so the spec cannot go soft on a revert. See tests/run_cp5.sh and
+# docs/phase4-state.md § CP5.
 test-cp5:
 	bash tests/run_cp5.sh
 

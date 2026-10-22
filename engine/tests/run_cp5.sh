@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # tests/run_cp5.sh — CP5 combat acceptance SPEC (tickets C1, C2, C6).
 #
-# CP5 is scoped but NOT started (docs/phase4-state.md § CP5), and the overnight
-# contract forbids implementing combat unattended. So this runner does two things:
+# src/game/combat.c exists and implements C1/C2/C6, so the behavioural run is the
+# main event. The SKIP path is kept for the case where combat.c is removed again
+# (a revert, a branch bisect) so the spec can still land ahead of the code. This
+# runner does three things:
 #
 #   1. Always syntax-check tests/combat_check.c, so the specification is proven
-#      to be well-formed C and its API contract is pinned even while the engine
-#      has no combat module. This runs in CI.
-#   2. Run the behavioural spec only when src/game/combat.c exists. Until then
-#      each ticket is reported SKIP with the exact missing hook named, and the
-#      suite stays green (a skipped spec must not turn the gate red).
+#      to be well-formed C and its API contract is pinned. This runs in CI.
+#   2. Always run the two fixture controls, so the spec is proven to discriminate
+#      whether or not combat.c is present.
+#   3. Run the behavioural spec against src/game/combat.c. If that file is
+#      absent, each ticket is reported SKIP with the exact missing hook named and
+#      the suite stays green (a skipped spec must not turn the gate red).
 #
 # The spec (combat_check.c) is written to DISCRIMINATE: a boolean-immunity
 # resist, a wrong roll threshold, a fixed (non-random) counter, or a theft that
@@ -32,6 +35,13 @@ skip() { printf '  SKIP  %s\n' "$1"; }
 
 WORK=$(mktemp -d "${TMPDIR:-/var/tmp}/u2-cp5.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
+
+# Every harness linked here shares combat_check.c's main, so all three print the
+# same summary line: "combat_check: N checks, M failures". That line is the only
+# trustworthy check count: the CHECK macro prints on FAILURE only, so counting
+# per-check output is structurally impossible (an earlier version grepped for
+# '  ok  ' and reported 0 forever). Empty output means no summary line at all.
+summary_checks() { sed -n 's/^combat_check: \([0-9]\{1,\}\) checks, [0-9]\{1,\} failures$/\1/p' "$1" | tail -1; }
 
 printf 'engine CP5 spec\n'
 
@@ -62,6 +72,15 @@ run_model() {
     local rc=0
     "$WORK/$m" > "$WORK/$m.log" 2>&1 || rc=$?
     local summary; summary=$(tail -1 "$WORK/$m.log")
+    # Exit code alone cannot tell "every check passed" from "no check ran", and a
+    # silent main() would report the faithful control as a pass. Guard the count
+    # before the verdict — same class of defect as the old unconditional `exit 0`
+    # and the always-zero grep below (AGENTS.md: a gate that cannot go red).
+    local n; n=$(summary_checks "$WORK/$m.log")
+    if [ "${n:-0}" -eq 0 ]; then
+        bad "CP5 control $m executed 0 checks — the spec is not running (last line: ${summary:-<no output>})"
+        return
+    fi
     if [ "$want" = "pass" ] && [ "$rc" -ne 0 ]; then
         bad "CP5 POSITIVE control failed — the spec itself is wrong, not the future impl ($summary)"
         sed 's/^/        /' "$WORK/$m.log" | head -20
@@ -76,6 +95,25 @@ run_model() {
 
 run_model combat_model_faithful pass
 run_model combat_model_boolean_wrong fail
+
+# --- 1c. self-test: prove the zero-check guard can fire ---------------------
+# The guards below go red when a run reports 0 checks. That is only worth
+# anything if the parser can tell "0 checks" from "no summary line", so build a
+# deliberately empty run and check the parse lands on a literal 0. If this ever
+# prints FAIL, the guard is broken and every PASS above is unproven.
+if [ -x "$WORK/combat_model_faithful" ]; then
+    CP5_SPEC_NO_TESTS=1 "$WORK/combat_model_faithful" > "$WORK/zero.log" 2>&1
+    z=$(summary_checks "$WORK/zero.log")
+    if [ "$z" = "0" ]; then
+        ok "CP5 zero-check self-test: guard reads a real 0 ($(tail -1 "$WORK/zero.log"))"
+    elif [ -z "$z" ]; then
+        bad "CP5 zero-check self-test: summary line did not parse — the 0-check guard cannot be trusted"
+    else
+        bad "CP5 zero-check self-test: expected 0 checks from the empty run, got '$z'"
+    fi
+else
+    bad "CP5 zero-check self-test: faithful control binary missing, guard unproven"
+fi
 
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
@@ -102,7 +140,16 @@ if [ $? -ne 0 ]; then
     bad "CP5 combat harness did not build (combat.c present but does not link):"
     sed 's/^/        /' "$WORK/cc.err"
 elif "$WORK/combat_check" > "$WORK/combat.out" 2>&1; then
-    ok "CP5 spec: C1/C2/C6 behaviour ($(grep -c '  ok  ' "$WORK/combat.out") checks, $(tail -1 "$WORK/combat.out"))"
+    # The count is parsed from the summary line and asserted non-zero. A run that
+    # executed zero checks used to print "0 checks" and still report PASS, which
+    # is indistinguishable from the old cosmetic quirk — the failure mode this
+    # line exists to catch.
+    n=$(summary_checks "$WORK/combat.out")
+    if [ "${n:-0}" -eq 0 ]; then
+        bad "CP5 behavioural run executed 0 checks — the spec is not running (last line: $(tail -1 "$WORK/combat.out"))"
+    else
+        ok "CP5 spec: C1/C2/C6 behaviour ($n checks, $(tail -1 "$WORK/combat.out"))"
+    fi
 else
     bad "CP5 spec failed:"
     sed 's/^/        /' "$WORK/combat.out"
