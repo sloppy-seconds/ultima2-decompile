@@ -219,7 +219,16 @@ typedef struct u2_state {
                                          NB: docs/phase4-plan.md §1 called these "tick
                                          counters"; the full decode shows PRNG state, and
                                          nothing else in the binary writes them. */
-    /* 0x245 */ uint8_t reserved_245[0x22D];
+    /* 0x245 */ uint8_t reserved_245[0x26];  /* 0x245..0x26A */
+    /* 0x26B */ uint8_t paral_legs;   /* C1: legs-paralysis turns, 0..15.
+                                       * Set by asm/0E70 (`and 0xf`), read live by the
+                                       * movement check. Resisted by a roll on
+                                       * items_held[BOOTS] (DS:D9), not by immunity. */
+    /* 0x26C */ uint8_t paral_arms;   /* C1: arms-paralysis turns, 0..15 (asm/0EC2,
+                                       * gate items_held[CLOAK] at DS:DA). */
+    /* 0x26D */ uint8_t paral_sleep;   /* C1: sleep turns, 0..15 (asm/0F48,
+                                       * gate items_held[GREEN IDOL] at DS:E4). */
+    /* 0x26E */ uint8_t reserved_26E[0x204];  /* 0x26E..0x471 */
     /* 0x472 */ uint16_t map_base;    /* map table base offset, asm/50B3_map_tile_ptr.asm */
     /* 0x474 */ uint8_t reserved_474[0x0DB];
     /* 0x54F */ uint8_t left_margin;  /* column a CR returns to; 0 or 1 at the sites
@@ -270,6 +279,9 @@ _Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
 _Static_assert(U2_OFF(boots_count)    == 0x06D, "boots_count moved");
 _Static_assert(U2_OFF(weapons_owned)  == 0x076, "weapons_owned moved");
 _Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
+_Static_assert(U2_OFF(paral_legs)     == 0x26B, "paral_legs moved");
+_Static_assert(U2_OFF(paral_arms)     == 0x26C, "paral_arms moved");
+_Static_assert(U2_OFF(paral_sleep)    == 0x26D, "paral_sleep moved");
 _Static_assert(sizeof(((u2_state *)0)->weapons_owned) == 10,
                "weapons_owned is 10 entries");
 _Static_assert(sizeof(((u2_state *)0)->items_held) == 16,
