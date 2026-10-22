@@ -81,35 +81,26 @@ vec2=$(./u2 --seed 0x20 --rng-sequence 6)
 # an asm file and editing its header in the same commit. A blanket "asm/ must be
 # clean" guard therefore blocks the rule it was meant to protect. What actually
 # has to be invariant is the ASSEMBLABLE CONTENT, so that is what is checked
-# here: comment lines (leading '#') may change, everything else may not, and a
-# rename must carry byte-identical non-comment content. The end-to-end case is
-# covered independently by tools/assemble_clean.sh, which rebuilds the whole
-# binary and compares it against the known md5.
+# here: comment lines (leading '#') may change, everything else may not.
+#
+# The check is deliberately NOT per-file. A per-file md5 plus "no deletions" was
+# correct while the only legal asm/ edit was a rename, and it became actively
+# wrong the first time function boundaries moved: merging seven fragments into one
+# routine deletes six files, and the old guard reported that as vandalism. The
+# conserved quantity is the whole tree's body content, ordered by each file's
+# declared start address -- which renames, merges and splits all preserve and which
+# any body edit breaks. See engine/tests/asm_body_guard.py.
+# The end-to-end case is covered independently by tools/assemble_clean.sh, which
+# rebuilds the whole binary and compares it against the known md5.
 if git rev-parse --git-dir >/dev/null 2>&1; then
     dirty=$(git status --porcelain -- ../original ../references 2>/dev/null)
     [ -z "$dirty" ] && ok "original/ and references/ untouched" \
                    || bad "protected paths dirty: $dirty"
 
-    root=$(git rev-parse --show-toplevel)
-    asm_bad=""
-    while read -r st path; do
-        [ -n "$st" ] || continue
-        case "$st" in
-            D*) asm_bad="$asm_bad deleted:$path" ;;
-            R*) from=${path% -> *}; to=${path#* -> }
-                a=$(git show "HEAD:$from" 2>/dev/null | grep -v '^#' | md5sum)
-                b=$(grep -v '^#' "$root/$to" 2>/dev/null | md5sum)
-                [ "$a" = "$b" ] || asm_bad="$asm_bad renamed-body:$to" ;;
-            *)  a=$(git show "HEAD:$path" 2>/dev/null | grep -v '^#' | md5sum)
-                b=$(grep -v '^#' "$root/$path" 2>/dev/null | md5sum)
-                [ "$a" = "$b" ] || asm_bad="$asm_bad body-changed:$path" ;;
-        esac
-    done < <(git status --porcelain -- ../asm 2>/dev/null)
-
-    if [ -z "$asm_bad" ]; then
-        ok "asm/ assemblable content unchanged (names and headers may evolve)"
+    if guard=$(python3 tests/asm_body_guard.py 2>&1); then
+        ok "$guard"
     else
-        bad "asm/ content changed outside comments:$asm_bad"
+        bad "asm/ body content changed: $(printf '%s' "$guard" | tr '\n' ' ')"
     fi
 fi
 
