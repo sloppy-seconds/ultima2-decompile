@@ -140,15 +140,28 @@ def main():
                 if not ok:
                     anomalies += 1
                 moved = (px, py) != (prev[0], prev[1])
-                rejected = head[0x20] != prev[5]
+                # DS:20 is NOT a reject signal. engine/src/core/state.h says so
+                # explicitly: "DISPUTED: docs called this an invalid-move counter,
+                # but the harvest shows it decremented in the walk loop and
+                # overwritten at runtime 0x2BC7. Treat as scratch; do not use as a
+                # reject signal." An earlier version of this recorder labelled turns
+                # "reject" from it, which asserted a mechanic off a scratch byte.
+                # A turn with no move and no food spent is therefore UNRESOLVED,
+                # not a rejection: it may be a reject, an idle auto-PASS, or a
+                # dropped keystroke. Distinguishing them is item G0 in
+                # docs/needs-gameplay.md and needs a live signal this recorder
+                # does not have.
+                scratch_changed = head[0x20] != prev[5]
                 rec = {
                     "n": n, "t": round(time.time(), 3),
                     "pos": [px, py], "food": food, "delta": delta,
                     "moves": dec[0] if dec else None,
                     "passes": dec[1] if dec else None,
-                    "moved": moved, "rejected": rejected,
+                    "moved": moved,
+                    "stalled": (delta == 0 and not moved),
+                    "scratch_changed": scratch_changed,
                     "odometer_ok": ok,
-                    "invalid_ctr": head[0x20],
+                    "scratch_20": head[0x20],
                     "hp": bcd3(head[0x51:0x53]),
                     "gold": bcd3(head[0x58:0x5A]),
                     "exp": bcd3(head[0x56:0x58]),
@@ -167,7 +180,7 @@ def main():
                 rec["vga_ink"] = sum(1 for b in vga if b)
                 idx.write(json.dumps(rec) + "\n")
                 flag = "" if ok else "  <-- ODOMETER ANOMALY"
-                kind = ("reject" if (delta == 0 and rejected)
+                kind = ("stalled" if (delta == 0 and not moved)
                         else f"{rec['moves']}mv/{rec['passes']}pass")
                 print(f"  turn {n:4d} pos=({px:2d},{py:2d}) d={delta:>5} "
                       f"[{kind}] hp={rec['hp']:5d} gold={rec['gold']:5d} "
