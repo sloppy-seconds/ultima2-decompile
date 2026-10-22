@@ -66,19 +66,55 @@ These are all paid-for. Every one of them produced a wrong answer at some point.
 
 **Who: agent. Confidence: high. Blocks: G2, G4, G5, G6.**
 
-No automated passability or rejection result is trustworthy until the probe proves
-key arrival before interpreting a non-move. The fix is small and it is the entire
-difference between data and the sweep's output:
+> **Finding 2026-10-22, measured — the obvious way to do G0 does not work, and two
+> of the three candidate signals are already known-bad.** This section was written
+> assuming a reject could be counted from the execution dump. It cannot.
 
-* after each step, require **one of**: position changed, or the ladder's reject
-  message fired in the printed set;
-* if neither, treat it as a **dropped key** and retry — never as terrain;
-* record which of the three outcomes occurred, per step, in the harvest;
+**The reject site is real.** `asm/0A02_invalid_move_msg` prints `--INVALID MOVE!`,
+and `tools/cfg_printed.py` confirms it genuinely printed in `mountain-walk`,
+`play-test-live`, `create-test-live` and `sweep00`. So the address is right.
+
+**But `ExecutedInstructions` is a deduplicated address set, not a trace.** In
+`mountain-walk`, `play-test-live` and `create-test-live` the offset `0A02` appears
+**exactly once each**, while the dumps hold 1,564–2,477 entries with only ~6
+repeats total (offsets 0, 4, 12, 16 — not real re-executions). So it can answer
+"did a reject ever happen in this session" and **cannot** answer "how many, and
+between which steps". Per-step classification from existing dumps is impossible,
+which is exactly what a passability probe needs.
+
+**The second candidate is explicitly forbidden.** `DS:20` was documented as an
+invalid-move counter, and `engine/src/core/state.h` now says: *"DISPUTED: docs
+called this an invalid-move counter, but the harvest shows it decremented in the
+walk loop and overwritten at runtime 0x2BC7. Treat as scratch; do not use as a
+reject signal."* `tools/turn_recorder.py` was nevertheless labelling turns
+`reject` from `DS:20` — it has been corrected to emit `stalled` (no move, no food
+spent, **cause unresolved**) and to name the byte `scratch_20`. Any earlier
+`rejected: true` in an existing `index.jsonl` is therefore not evidence of a
+reject.
+
+**Viable live signals, one of which must be built and validated:**
+
+1. **GDB breakpoint counter at `0A02`.** The plumbing partly exists —
+   `spice86_start.sh --gdb-port` and the gdb live-dump path in
+   `tools/spice86_common.sh`. Exact counts, per-step windows. Preferred.
+2. **Frame-diff on the message region** via `tools/vga_ring.py`. Signal-honest and
+   needs no debugger, but heavier, and it must distinguish the reject message from
+   other text that changes in the same region.
+
+**Until one is chosen, validated, and shown to count correctly against a capture
+with a known number of rejects, every automated "impassable" is unproven.** The
+remaining G0 requirements stand unchanged:
+
+* after each step require **one of**: position changed, or a counted reject; if
+  neither, treat it as a **dropped key** and retry — never as terrain;
+* record which outcome occurred, per step, in the harvest;
 * assert the sample actually contains the tile class being claimed. The sweep
   measured fifteen tiles and all fifteen were letters `B`–`P`; a per-run histogram
   of tile classes would have caught that instantly.
 
-Until this lands, treat every automated "impassable" as unproven.
+**Staging is already solved:** `tools/u2_mkprobe.py` generates a probe sector that
+puts every terrain byte next to walkable ground, and `spice86_start.sh --seed-map`
+installs it pre-launch. The gap is purely the reject signal.
 
 ---
 
