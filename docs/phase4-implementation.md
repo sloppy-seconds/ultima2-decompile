@@ -1301,6 +1301,18 @@ Four things this settled that were not known before:
    confirmed across all 15 files (byte 0 is a marker, then high-bit-set text,
    `0x8D` ending lines). **The extractor must mask the high bit** for talk files or
    every string arrives as mojibake.
+
+   **Found 2026-10-22, and it is a provenance artefact worth knowing about:** four of
+   the fifteen files (`tlkx11`, `tlkx21`, `tlkx22`, `tlkx32`) carry the **same fragment
+   of 6502 assembly source** inside them — mnemonics and an inline string, in Apple II
+   form (`PRBYTE`, `PRINT`, `$0D,"...",$00`). It is not our decode going wrong; the
+   bytes are in the file at the same offset in all four. *Ultima II* was hand-coded in
+   6502 for the Apple II before the DOS port (`AGENTS.md` § 1), so this is shipped source
+   text left in the data by that port. Two consequences: an extractor must expect
+   non-dialogue bytes in these files rather than treating every record as NPC text, and
+   it is the most direct physical link we have to the 6502 original. Entry counts per file
+   run 5–10, not a fixed four, so the record structure is length-delimited rather than
+   fixed-stride — unproven beyond that.
 2. **There is no sprite or tile art anywhere in the game data.** The only bitmaps
    are the six full-screen demonstration pictures. So the tile art is in
    `ultimaii.exe`, and the draw loop is what will expose the table. This also means

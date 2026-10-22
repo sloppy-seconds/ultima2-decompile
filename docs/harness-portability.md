@@ -190,6 +190,15 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-22** — Shipped data files can carry **leftover source text from the platform
+  the game was ported from**, in the same records as real content. A dialogue extractor
+  that assumes every record is displayable text will emit assembler mnemonics as NPC
+  lines. Two guards worth building in from the start: never assume a fixed record stride
+  (entry counts varied per file in the corpus that found this), and sample the tail of
+  each file rather than only the head, because the stray bytes sit where the padding
+  should be. Any harness that auto-generates a text decoder from one example file will
+  encode the wrong structure. → see the data-inventory section of the owning
+  implementation report.
 * **2026-10-22** — A static finding identifies a site, not its reachability. A
   ticket was written to "fix" a clamping helper that turned out to have **zero
   callers** — dead code — while the live path beside it was already correct. Same
