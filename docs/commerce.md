@@ -90,30 +90,21 @@ sells anything**: the merchant offers apples (`asm/412C`), the thief offers a wa
 purchase path. Bytes are proven; none of the three appears in `ExecutedInstructions` in
 any of the 60 harvests, so the trigger conditions are unobserved.
 
-## 5. What actually selects a shop — not the tile, and not the NPC behind it
+## 5. What selects a shop — still unknown, and a claim withdrawn
 
-**measured from the trampolines, not yet observed running.** The `T` path reaches a set of
-small dispatchers that branch on **where the player is standing in the sector** and on the
-**site kind**:
+**I wrote here that a shop is selected by the player's region within the sector plus the
+site kind, citing `asm/1590`–`asm/15D0` as trampolines. That is disproven and removed.**
+A live test on 2026-10-22 — seeded to sector 31 (Port Boniface) directly below the
+`MC DONALLS` sign, `T` sent — executed `cmd_T` at `4050`/`405D` and then went to the
+return-to-prompt path at `0C33`. **None of `1590`–`15D0` executed.** Those fragments sit
+immediately before `asm/15E1_tavern_menu` and are at least as likely to be tavern
+plumbing. The `DS:4A == 2` test in `asm/15BA` is real bytes; what it dispatches is not
+known.
 
-| routine | test | target |
-| --- | --- | --- |
-| `asm/1590` | `DS:00` (player x) vs `0x20` | region split |
-| `asm/1598`, `asm/15A2` | `DS:01` (player y) vs `0x20` | `jb` → `L_0017ba` |
-| `asm/15B4` | — | runtime `1F1D` |
-| `asm/15BA` | `DS:4A` (site kind) `== 2` | `204F` if so, else `1CE0` |
-| `asm/15D0` | — | runtime `2175` |
-
-So a sector is divided into regions and each region has its own shop entry, and the site
-kind picks between two of them. **The letter tile byte is not the selector and the NPC type
-behind it is not either** — which is why the "find a merchant standing behind a letter
-tile" heuristic was wrong and the sector-41 target built on it was aimed at the wrong
-thing. The owner's correction stands: plenty of characters stand behind letter tiles and do
-not sell.
-
-**The right experiment** is to stand in each region of a town sector and press `T`, not to
-hunt for a particular NPC. That also means G22's evidence gap is a *position* problem, and
-the region boundaries are readable statically from these tests.
+What is known about the trigger: the letter tile is not the selector, and neither is the
+NPC type standing behind it — the owner confirmed that plenty of characters behind letter
+tiles do not sell. The remaining suspect is **facing**, which a teleported save does not
+set. See `docs/place-names.md` § 4.
 
 ## 6. Why G21 was never answered — a boundary defect (this is G22)
 
