@@ -1597,7 +1597,7 @@ last sectors of each planet. Flagged for CP5+, not CP4.
 
 ## CP4b — overnight run (T1..T8) — 2026-10-20/21
 
-Autonomous run under the prove-or-pass contract (`docs/phase4-overnight-cp4b.md`).
+Autonomous run under the prove-or-pass contract (`docs/archive/phase4-overnight-cp4b.md`).
 Each task's outcome is in the morning report in that file; this section is the
 durable technical record of what the bytes said.
 

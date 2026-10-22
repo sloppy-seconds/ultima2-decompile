@@ -1,5 +1,12 @@
 # Overnight task queue — CP5 prep, tool hardening, cold cases
 
+> **ARCHIVED 2026-10-22 — queue complete: 9 DONE, 1 PASSED (T8), 16 commits.**
+> The per-task results and evidence are in `docs/phase4-overnight-cp5-report.md`, which
+> stays live because it is the detailed record behind the BCD census, the T5/T6 object-store
+> finding and the T7 dungeon-grid correction. Do not resume work from this file; the open
+> tickets it spawned are in `docs/phase4-state.md` (B1..B5, C1..C7) and
+> `docs/needs-gameplay.md` (G0..G13).
+
 Autonomous queue for a fresh agent running unattended. Every task here is chosen
 because it needs **no owner interaction**: no walking the game, no judgement calls
 about design, no approvals. If a task turns out to need any of those, pass it with a

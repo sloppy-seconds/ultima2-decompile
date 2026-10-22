@@ -1,5 +1,9 @@
 # Overnight agent prompt — CP4b autonomous run
 
+> **ARCHIVED 2026-10-22.** This queue was run and completed. Kept only as the record of
+> how the batch was specified. For a fresh unattended batch see
+> `docs/overnight-harness-prompt.md`.
+
 Paste this to a fresh agent to start the overnight queue:
 
 ---

@@ -1,5 +1,10 @@
 # Overnight agent prompt — CP5 prep, tool hardening, cold cases
 
+> **ARCHIVED 2026-10-22.** This queue was run and completed (9 DONE, 1 PASSED). Kept as
+> the record of how the batch was specified, including the guardrails that were later
+> promoted into `AGENTS.md` (labels are body; demonstrate a gate failing). For a fresh
+> unattended batch see `docs/overnight-harness-prompt.md`.
+
 Paste this to a fresh agent to start the overnight queue:
 
 ---

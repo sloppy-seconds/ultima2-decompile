@@ -1,5 +1,12 @@
 # Handoff — 2026-10-21 (read this first after a compaction)
 
+> **ARCHIVED 2026-10-22.** Superseded that same evening by `handoff-2026-10-21-evening.md`,
+> and now by `docs/handoff-2026-10-22.md`. Kept as the record of what was known at
+> midday, including claims later corrected. Not an entry point: the live queues are
+> `docs/phase4-state.md` and `docs/needs-gameplay.md`. Anything asserted here that
+> was not re-measured is suspect by default — note the `>>1` vs `>>2` art-index
+> question below, which was still open as of item G1.
+
 Supersedes the earlier same-day version, which was already stale by lunchtime.
 Everything below is committed and pushed; both CI workflows green; nothing
 running; ports free.

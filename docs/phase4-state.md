@@ -12,7 +12,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP2.5 | Re-decode tooling (scoped, owner-approved) | done 2026-10-27 | `tools/redecode.py` + `disasm/redecoded/` for the five blob functions; save path and creation flow decoded; `asm/` untouched so the byte-exact invariant is unaffected | 2026-10-27 |
 | CP3 | Character creation + status line | **done, awaiting owner gate** | (a) save/disk model + byte-compatible player record. (b) creation flow + status block. (c) form rework: field-addressable with D1-D4 (Tab/arrows, editing backspace, refuse-in-place, visible cursor); rules and state unchanged. CP3 test 8/8 + 23-assertion `save_check`. **CP2 evidence baseline moved three times deliberately** — see gate log | 2026-10-27 |
 | CP11 | Mod surface + original/enhanced modes (owner-scheduled, deferred from CP3) | not started | two modes, sparse-diff overrides, content + rules surfaces, mandatory provenance; save-record layout non-overridable; no `.pat` reimplementation. Needs owner input on what existing U2 mods actually patch | |
-| CP4 | Overworld + movement | **in-progress (CP4b overnight: T1,T3,T4,T6,T7,T8 done/passed; T2 half; T5 held)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: arrows via a scancode table at `CS:0x4F09`, direction codes as data at `DS:26E..271`, a rejected step is undone before `--INVALID MOVE!`, and crossing x/y >= 64 reloads the sector (`asm/242D`/`2434`/`243E`) rather than straddling. **Viewport now measured from owner screenshots**: tile = 16x16 px = 2x2 text cells, window 20x10 tiles at rows 0-19 full width, player at window tile (9,5), row 24 blank. Dungeons are first-person 3D, so the tile renderer does not cover them (CP7). **CP4b overnight (2026-10-21):** the passability premise was disproven — `asm/2423` never reads a tile, so on-foot walking is never rejected on the overworld (T1 PASSED, write-up in implementation log § CP4b); tile IDs decoded (0=water,4=land,8=plane,0x78=player); sector crossing is the `DS:6E` arrival system, not a foot step. T3/T4/T6 fixed one root-cause class (loops testing `exit_code` but not `input_exhausted`): window-close, SIGTERM, and dummy-driver `--dump-screen` all now stop cleanly. T2 shipped the proven half (PASS spends 10 food, underflow zeroes DS:51..59 = instant death; no gradual HP drain, no per-step tick — the walk loop calls no drain). T7 screenshot differential harness landed (status-block only, poison-checked). T5 held for owner: it moves the CP2 baseline and its pre-approval flag is unresolved. Full detail: `docs/phase4-overnight-cp4b.md § Morning report` | 2026-10-21 |
+| CP4 | Overworld + movement | **in-progress (CP4b overnight: T1,T3,T4,T6,T7,T8 done/passed; T2 half; T5 held)** | kickoff § 2 items 1 and 2 **settled from the bytes**: the name is `MAPX` + two digits self-patched into the code stream (`asm/2290`, file `0x24b7`), and a tile is **one byte** in a **64x64** sector read with `AH=27h, CX=0x1000` into `[DS:0x472]` (`asm/50B3_map_tile_ptr.asm`). New finding: `asm/2305` **writes the sector back**, so world content is mutable. EGA question answered: `original/updated/` is the Exodus Project upgrade and EGA is a **separate binary** (`U2EGA.EXE`), so the accommodation is a tile-ID seam plus data-driven naming, not a mode flag. Direction keys are **arrows**, proven via a scancode table at `CS:0x4F09`. Movement is proven: arrows via a scancode table at `CS:0x4F09`, direction codes as data at `DS:26E..271`, a rejected step is undone before `--INVALID MOVE!`, and crossing x/y >= 64 reloads the sector (`asm/242D`/`2434`/`243E`) rather than straddling. **Viewport now measured from owner screenshots**: tile = 16x16 px = 2x2 text cells, window 20x10 tiles at rows 0-19 full width, player at window tile (9,5), row 24 blank. Dungeons are first-person 3D, so the tile renderer does not cover them (CP7). **CP4b overnight (2026-10-21):** the passability premise was disproven — `asm/2423` never reads a tile, so on-foot walking is never rejected on the overworld (T1 PASSED, write-up in implementation log § CP4b); tile IDs decoded (0=water,4=land,8=plane,0x78=player); sector crossing is the `DS:6E` arrival system, not a foot step. T3/T4/T6 fixed one root-cause class (loops testing `exit_code` but not `input_exhausted`): window-close, SIGTERM, and dummy-driver `--dump-screen` all now stop cleanly. T2 shipped the proven half (PASS spends 10 food, underflow zeroes DS:51..59 = instant death; no gradual HP drain, no per-step tick — the walk loop calls no drain). T7 screenshot differential harness landed (status-block only, poison-checked). T5 held for owner: it moves the CP2 baseline and its pre-approval flag is unresolved. Full detail: `docs/archive/phase4-overnight-cp4b.md § Morning report` | 2026-10-21 |
 | CP5 | Combat | **scoped, not started** | Tickets C1..C7 in § CP5 below. Evidence base is the 2026-10-21 sector-00 caster session: commits `b11bfc6`, `1d7bae3`, `341952d`, `49d8365` and `docs/spice86-live-findings.md` § 12. Nothing may be written before C1/C2, and C5 is **blocked on a capture** because a required input is still unproven. C7 is resolved. | 2026-10-21 |
 | CP6 | Towns + full command set | todo | | |
 | CP7 | Time travel + space + dungeons | **partly informed 2026-10-21** | Dungeons are sectors, not a separate format: entering a cave moved `DS:49/4A` from `3,0` to `3,5` and loaded `mapx35`, with no video mode change (stays CGA mode 4). Rendered as a first-person wireframe. Light is a **step counter** at `DS:26`, zeroed on entry, ~150 on `I`, decremented per move, and `mapx25`/`35`/`45` are byte-identical. Command dispatch is mode-aware: `A` is ATTACK outside and ADVANCE inside. Full detail: `docs/spice86-live-findings.md` § 13. | 2026-10-21 |
@@ -47,20 +47,16 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   any `STR` line inside a code span in `disasm/redecoded/` must be re-checked
   before being cited. Next step is one breakpoint capture at runtime `0x2423`.
 
-- **Read `docs/handoff-live-capture.md` first.** Rewritten 2026-10-21 evening for
-  a fresh context: running state (nothing running, tree clean, CI green, how to
-  push with `GH_TOKEN`), the true T1–T9 status, what is proven and must not be
-  re-derived, the tool inventory with tested-vs-untested marked, and the standing
-  rules that cost time. Next step per the owner is **working through the overnight
-  task results** — close T1's two named unknowns (mountain tile id, the
-  `DS:15`/`DS:18` travel-mode argument), then T9. The CP4b T1 finding and part of
-  T2 were **retracted** the same day — see
+- **Entry point is `docs/handoff-2026-10-22.md`.** It carries the triage of both
+  2026-10-21 handoffs, now archived under `docs/archive/`. The CP4b T1 finding and part
+  of T2 were **retracted** the same day — see
   `docs/phase4-implementation.md § CP4b → RETRACTION` and
   `docs/spice86-live-findings.md`.
 
-- **CP4 is mid-flight and everything is committed. To take over, paste
-  `docs/phase4-kickoff-cp4b.md` to a fresh agent — it is the current handoff and
-  supersedes the notes below on what to do next.** The headline it must not miss:
+- **CP4 is mid-flight and everything is committed. To take over, read
+  `docs/handoff-2026-10-22.md` for current state, then
+  `docs/phase4-kickoff-cp4b.md` for the CP4 work order itself.** The headline it must not
+  miss:
   the original has **two display paths** — tiles for the map and banners, and
   INT 10h teletype text (`str_out_at` runtime `0x51EB` -> `str_out_core`
   runtime `0x51FD`) for the status band, menu and creation form. There are no
@@ -142,11 +138,12 @@ Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
 
 ## Next checkpoint
 
-**Overnight queue armed 2026-10-21:** `docs/phase4-overnight-cp5.md` is a
-owner-independent task queue (T1..T10) and `docs/phase4-overnight-cp5-prompt.md` is the
+**Overnight queue armed 2026-10-22:** `docs/overnight-harness.md` is an
+owner-independent task queue (H1..H3) and `docs/overnight-harness-prompt.md` is the
 text to paste to a fresh agent to run it. Nothing in it needs the owner; anything that
-would has been left out rather than approximated. Results land in
-`docs/phase4-overnight-cp5-report.md`.
+would has been left out rather than approximated. The CP5-prep queue this replaces
+(T1..T10) ran 2026-10-21/22 and is **complete** — queue and prompt archived under
+`docs/archive/`, results in `docs/phase4-overnight-cp5-report.md`.
 
 **CP4 — overworld + movement.** Start a fresh session from
 `docs/phase4-kickoff-cp4.md`, which records the one decision that shapes the

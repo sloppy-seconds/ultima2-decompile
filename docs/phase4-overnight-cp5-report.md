@@ -1,6 +1,11 @@
 # Overnight CP5-prep report — 2026-10-22 run
 
-Autonomous run of `docs/phase4-overnight-cp5.md` (T1..T10). Owner asleep; the
+> **Queue complete; this report stays live.** It is the detailed evidence record behind
+> the BCD census (B1..B5), the T5/T6 live-object-store finding, the T7 dungeon-grid
+> correction and the T10 CP5 spec. The task queue it executed is archived at
+> `docs/archive/phase4-overnight-cp5.md`.
+
+Autonomous run of `docs/archive/phase4-overnight-cp5.md` (T1..T10). Owner asleep; the
 contract is *prove or pass*. Statuses: `DONE` / `PASSED — reason` / `BLOCKED — need`.
 Grades per `AGENTS.md` § 5: observed / measured / inferred / recalled.
 

@@ -1,5 +1,10 @@
 # CP4b overnight task list — owner-approved work queue
 
+> **ARCHIVED 2026-10-22 — queue complete.** The morning report is § Morning report
+> below, and the summary landed in the CP4 row of `docs/phase4-state.md`. One item (T5)
+> was held for the owner and its pre-approval flag is still unresolved. Do not resume
+> work from this file.
+
 Drafted 2026-10-20 evening, amended with the owner's time/food model.
 Work through in order. Each task commits independently; `make test` must be
 green at every commit. If a task's evidence is insufficient, STOP that task,
