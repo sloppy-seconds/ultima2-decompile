@@ -196,6 +196,42 @@ Check it before writing anything new against a live session.
 | enter the world unattended | `tools/spice86_start.sh --auto-play` | no |
 | list what the emulator can do | `tools/spice86_type.py --list` (63 MCP tools) | no |
 | screenshot, headless | MCP `screenshot` (PNG base64) | no |
+
+### Reading the screen headless — the recipe that works
+
+`tools/spice86_screenshot.py out.png` calls the MCP `screenshot` tool and writes the PNG.
+It needs no display. `read_video_state` reports **320x200, BufferSize 64000**, so the
+renderer exposes a linear 8-bpp framebuffer.
+
+**Do not try to reconstruct the screen from memory.** Two attempts failed and each looked
+plausible:
+
+* reading `0xB8000` as a text page returns box-drawing noise — the game draws its text as
+  **glyphs in graphics mode**, so there is no character cell to read;
+* reading `0xB8000` as CGA mode-4 planes produced a structured but wrong image (content in
+  the top half, black below). That structure is what makes it dangerous — it looks like a
+  partial success. The framebuffer is 64000 bytes, not 16384.
+
+**The MCP tool list is 63 entries.** An earlier check truncated the JSON at 4000 characters,
+showed 4 tools, and `screenshot` appeared to be missing — which sent a whole detour off
+into hand-decoding video memory. `spice86_screenshot.py --list-tools` now prints the full
+list and counts it.
+
+### The `CMD:` log is the feedback channel
+
+The bottom of the screen keeps a rolling command log, and it is the fastest way to learn
+what the game made of an injected key:
+
+| log line | meaning |
+| --- | --- |
+| `CMD: TRANSACT-PASS` | `T` was received, the handler ran, and it decided to do nothing |
+| `CMD: - ILLEGAL COMMAND!` | the key is not a command the game accepts |
+
+**Arrow keys are rejected as illegal commands.** `Left, Left, Up` produced three
+`ILLEGAL COMMAND!` lines and the player did not move. So every earlier conclusion of the
+form "the player stood at X and pressed T" was really "the player was teleported to X and
+never moved", and the facing hypothesis was never tested at all. Movement keys need to be
+worked out before any position-dependent experiment means anything.
 | stop and harvest the CFG | `tools/spice86_stop.sh` | no |
 | harvest mid-run without stopping | `tools/spice86_start.sh --harvest` | no |
 | read memory | HTTP API `GET /api/memory/<phys>/range/<len>` | no |

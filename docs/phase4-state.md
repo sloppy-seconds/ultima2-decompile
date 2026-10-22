@@ -747,6 +747,12 @@ already work through Spice86's MCP endpoint — see `tools/spice86_type.py` and
 container came out of assuming a capture needed a display, and that assumption was
 wrong.
 
+**Amended 2026-10-22:** this is now *more* true, not less. `tools/spice86_screenshot.py`
+captures the screen headlessly via the MCP `screenshot` tool, so an agent can see the
+game without any display at all — which was the last reason this container seemed urgent.
+What it does **not** provide is a human driving interactively. If the owner wants to play
+and narrate, that still needs a window somewhere; but no agent task is waiting on it.
+
 **What it is.** A podman container providing a virtual X display plus VNC, so the
 owner can watch a live run from anywhere on the LAN, and so the headed-only tools
 (`tools/vga_ring.py`, `tools/screenshot_diff.py`, `tools/spice86_keys.py`) become

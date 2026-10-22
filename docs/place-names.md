@@ -75,15 +75,18 @@ located this. The bytes refined the spelling. Both were needed.
 
 ## 4. What is still not known
 
+* **How `T` reaches a shop.** Tested three times on 2026-10-22 in sector 31 at (52,27),
+  directly below the `MC DONALLS` sign. The screenshot now shows the game's own verdict:
+  **`CMD: TRANSACT-PASS`** — the key was received, `cmd_T` ran, and the game chose to do
+  nothing. No shop code executed.
+* **And the facing hypothesis was never actually tested.** The screen also revealed
+  `CMD: - ILLEGAL COMMAND!` for every arrow key sent, so **the player never moved** in any
+  of these runs. All three attempts were "teleported to a tile, press `T`", which is not
+  the same experiment. Work out the real movement keys first; until then no
+  position-dependent result from a seeded save should be trusted.
 * **Which sector is which named town.** Sector 31 is Port Boniface because the sign is
   *in* it, but that is one data point. The `tlkx` files are keyed by sector and the names
   are keyed by sector, so the mapping is available — it just has not been assembled.
-* **How `T` reaches a shop.** Tested today: seeded to sector 31 at (52,27), directly below
-  the `DONALLS` sign on walkable grass, sent `T`. **`cmd_T` executed** (`4050`, `405D`) —
-  so the key was received and the handler ran — and then control went to the
-  return-to-prompt path at `0C33`. **No shop code ran.** The trigger is still unfound.
-* **Facing is the obvious suspect.** The player was teleported, so facing is whatever the
-  save leaves it. A real walk up to the counter may be required.
 
 ## 5. A claim I am withdrawing
 
