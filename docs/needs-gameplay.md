@@ -333,21 +333,38 @@ right art under `>>2`:
 | `0x1B7` | `0xF8` | `0x3E` | Wizard | magic missile |
 | `0x1B7` | `0xFC` | `0x3F` | Thief | steals items |
 
-Eight for eight, from two independent fields, against names that came from a wiki
-neither session had read. The transform is not the open question any more.
-**The contradiction to resolve:** `0x197` is documented as the active/sentinel field
-where `0x40` means *empty slot* (`cmp [DI+0x197], 0x40` at `0x2C2D`), and also as
-the basis for "the thief is monster type `0x40`" (a `cmp` against `0x40` at file
-`0x1244`). Both cannot be true. Either `0x40` is the sentinel and the steal loop is
-skipping empty slots — in which case the thief's type is unknown — or `0x40` is the
-thief and the sentinel reading is wrong. This would silently corrupt a reimplementation
-of combat.
-**Action:** one live slot, both fields dumped together, plus the art actually drawn.
-**Why the agent can do it:** same session as G17, same dumps, one extra column.
+**Correction, 2026-10-22 (same day).** The table above is the retracted version. The
+"eight for eight from two independent fields" claim is **wrong**: `[DI+0x1B7]` is not a
+sprite but a small kind index (`0x08`/`0x0C`), which is what the spawn guards compare
+against. So there were never two fields — there were **four agreements from one field
+relabelled**, and they are arithmetic only. The spawn arms contain no shift and no mask;
+they store the type as a plain immediate (`mov $0x30,%al; mov %al,0x197(%di)`).
+
+**What is settled now, and it is more than the transform:**
+
+* The `0x40` contradiction is **closed** — the thief is type `0xFC` with HP 32, `0x40` is
+  the empty sentinel, and "the thief is monster type `0x40`" in
+  `docs/spice86-live-findings.md` is wrong.
+* **`view.h` is not defective and L2 was misframed.** `u2_view_index` returns the staging
+  byte `(map_byte>>1)&0xFE` and `u2_view_art` halves it; `((b>>1)&0xFE)>>1 == b>>2` for
+  every one of the 256 byte values, checked exhaustively. The engine already implements
+  `>>2`, in the two-step the original uses. Anyone tempted to "fix" it should read
+  `view.h:78-94` first.
+* **Grid stamping holds at scale.** `DS:0x1800[y*64+x] == type` for **330 of 387** monster
+  cells across 49 overworld captures. `phase4-overnight-cp5-report.md:393` established
+  `DS:0x1800` from a single fight capture; this corroborates it broadly. The base was
+  already documented, so this was a re-derivation, not a discovery.
+* **New open question, and it is the interesting one:** in **dungeon and airport mode
+  there is no grid stamping at all.** `dungeon-35-live` and `airport32` (27 monsters each,
+  coords 1–15) give 6/27 at the best of every base and stride in the dump — chance. So
+  those modes keep objects somewhere else, which fits the dungeon spawner computing HP
+  arithmetically instead of through the arms. Different code path, still unmapped.
+
+**Action:** find where dungeon objects live. Same question for the airport/plane view.
+**Why the agent can do it:** both dumps are already on disk; this is a search, not a capture.
 **Needs owner:** no.
-**Blocks:** naming monster *types*. Art indices are named already; types are not,
-and a wrong field would attach every name to the wrong creature. Sibling of G1,
-which is the same question for ordinary map bytes.
+**Blocks:** naming monster *types*. Art indices are named already; types are not, and a
+wrong field would attach every name to the wrong creature. Sibling of G1.
 
 ### G19 — the dungeon set is outside the tile join `[ ]`
 **Why it exists:** the bestiary join named **zero** dungeon arts, and that was
