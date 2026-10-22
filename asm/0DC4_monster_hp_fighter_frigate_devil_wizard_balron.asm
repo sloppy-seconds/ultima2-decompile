@@ -1,4 +1,20 @@
-# sub_0dc4 — mechanical clean (bulk wave); behavior not yet reviewed
+# monster_hp_fighter_frigate_devil_wizard_balron — five spawn arms, type + HP each
+# name-evidence: each arm stores a type immediate to [DI+0x197], stamps it into the
+#           map cell, then stores an HP immediate to [DI+0x177] (monster HP, proven by
+#           asm/2E3D_combat_attack_flow). The five pairs, with the art each type folds
+#           to under >>2 and the third-party HP for that art:
+#             0xF0 -> 0x80 (128)  art 0x3C Fighter   third-party 128   match
+#             0x48 -> 0xA0 (160)  art 0x12 Frigate   third-party 160   match
+#             0x38 -> 0xC0 (192)  art 0x0E Devil     third-party 192   match
+#             0xF8 -> 0xE0 (224)  art 0x3E Wizard    third-party 224   match
+#             0x3C -> 0xFF (255)  art 0x0F Balron    third-party 255   match
+#           Balron is `mov $0xff`: the literal byte ceiling, which is why the sources
+#           report 255 where the 32-step progression would predict 256. The overworld
+#           HP "table" does not exist as data — it is immediates in a compare chain,
+#           which is why tools/hp_table_scan.py correctly found nothing.
+# provenance: static, 2026-10-22; extracted by tools/monster_hp_dispatch.py
+# confidence: high for the fields and values (bytes); creature names remain third-party
+# label: kept as sub_0dc4 on purpose — labels are body (CP0)
 # func 0DC4..0E6F  len 00AC B  evidence: seed+reko
 # calls: L_000daf, L_000fc4, L_000ff3, L_001012, L_001031
 # confidence: low (bytes proven by check_func.py)

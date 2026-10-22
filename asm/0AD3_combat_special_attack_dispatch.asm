@@ -15,17 +15,20 @@
 #           reach none of these, so they are plain melee attackers. The gate that
 #           decides whether a special is attempted at all is asm/0AAA.
 # confidence: high (dispatch table proven by bytes; callees proven by execution)
-# CONFLICT, open (2026-10-22): this dispatch reads [DI+0x197] as a monster *type*,
-#   and docs/spice86-live-findings.md also records [DI+0x197] as the slot's
-#   active/sentinel byte where 0x40 means EMPTY (cmp [DI+0x197],0x40 at 0x2C2D).
-#   The same document concludes "the thief is monster type 0x40" from a cmp against
-#   0x40 at file 0x1244. Both cannot hold: if 0x40 is the empty sentinel then that
-#   steal loop is skipping empty slots and the thief's type is unknown. Note the
-#   third field [DI+0x1B7], the sprite stamped into the map cell, ALSO folds to the
-#   right art under >>2 on four measured values (0x60 Guard, 0xF0 Fighter, 0xF8
-#   Wizard, 0xFC Thief), as do four 0x197 values here. Unresolved; needs one live
-#   slot with both fields dumped (docs/needs-gameplay.md G18). Do not encode either
-#   reading into the engine until it is settled.
+# RESOLVED 2026-10-22 (was: CONFLICT, open): [DI+0x197] is the monster TYPE and 0x40
+#   is the EMPTY sentinel -- it is not the thief. The spawn arms store type and HP
+#   together (asm/0D4F_monster_hp_orc, asm/0D6F_monster_hp_thief_daemon,
+#   asm/0DAF_monster_hp_sea_serpent,
+#   asm/0DC4_monster_hp_fighter_frigate_devil_wizard_balron) and the thief's arm sets
+#   type 0xFC with HP 0x20 (32), matching art 0x3F (Thief, by bitmap identity) and the
+#   third-party HP for Thief (32). 0x40 appears in none of the nine arms. So the
+#   `cmp $0x40` at file 0x1244 in asm/0FCD_combat_thief_steal is skipping empty slots,
+#   and the claim "the thief is monster type 0x40" in
+#   docs/spice86-live-findings.md is wrong and should be corrected there.
+#   Still open: whether [DI+0x1B7] (sprite) and [DI+0x197] (type) are always equal.
+#   At spawn both are written from the same immediate, which is why each folds to the
+#   right art under >>2 -- eight agreements across two fields, see
+#   docs/needs-gameplay.md G18.
 sub_0ad3:
 L_000cd3:
         mov    0x197(%di),%al

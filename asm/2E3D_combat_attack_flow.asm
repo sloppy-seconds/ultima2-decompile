@@ -1,5 +1,17 @@
 # combat_attack_flow — player attack resolution (hit/kill/miss)
 # name-evidence: strings 'HIT!' + 'KILLED--GOLD+'; 306 B combat routine
+# HP FIELD PROVEN here, 2026-10-22 (this is the strongest evidence in the tree for
+#   what [DI+0x177] is). At runtime 0x30BD:
+#     mov 0x177(%di),%al   ; load monster HP
+#     stc; cmc             ; clear CF for a no-borrow subtract
+#     sbb 0x20,%al         ; HP -= the damage byte just stored at [DS:20]
+#     cmc                  ; re-expose the borrow (the BCD idiom AGENTS.md warns about:
+#                          ;   a cmp-based detector calls this unguarded and under-counts)
+#     jae -> mov %al,0x177(%di)          ; survived, store the reduced HP
+#     else -> 0x177=0, 0x197=0, 0x1b7=0  ; died, whole record cleared
+#   So [DI+0x177] is decremented by the player's damage and its exhaustion is what
+#   kills the monster. That is what makes the monster_hp_* spawn arms readable:
+#   they store per-kind HP immediates into this field.
 # func 2E3D..2F6E  len 0132 B  evidence: reko
 # strings: "HIT!"; "--EXP.+"; "MISS"
 # calls: L_000c33, L_001651, L_00307d, L_003164, L_0051df (str_out), L_005417, L_00543e, L_0055b5 (+1 more)
