@@ -73,35 +73,45 @@ do not read a second occurrence as a second shop.
 
 ## 3. Prices are computed inline, not stored
 
-**First observed transaction, 2026-10-22.** The owner drove the game over VNC, talked to a
-Fighter, and bought food then declined. Harvesting that session's `ExecutedInstructions`
-shows **461 addresses executed that had never executed before**, and the commerce code among
-them. The strings in the newly-executed range identify it exactly:
+**First observed transaction, 2026-10-22.** The owner drove the game over VNC and
+interacted with **two different characters**: a Fighter, who only said `UGH, ME TOUGH!`,
+and a **vendor** — the Merchant — who actually sold the food. Harvesting that session shows
+**461 addresses executed that had never executed before**. Which routines ran, checked
+against the harvest rather than inferred:
 
-| runtime | string | routine |
+| routine | range | executed |
 | --- | --- | --- |
-| `179B` | `THE FOOD HERE COSTS ` | `asm/1799_tavern_food_price` |
-| `17C9` | `PER 100, WANT ONE?` | the food offer |
-| `17FA` | `YES, NO ONIONS AND TO GO PLEASE!` | the accepted order |
-| `1826` | `THANK YOU, COME AGAIN!` | `asm/181A_tavern_thanks` |
-| `2089` | `YOU DONT HAVE THAT MUCH!` | refusal on insufficient gold |
-| `4162`/`4172` | `A FIGHTER SAYS: UGH, ME TOUGH!` | `asm/415F_street_fighter` — the "tough guy" |
+| `asm/412C_street_merchant` (the vendor) | `412C..415F` | **yes** |
+| `asm/415F_street_fighter` | `415F..4188` | yes — flavour line only |
+| `asm/4108_street_jester` | `4108..412C` | entry ran, **no reply** |
+| `asm/1799_tavern_food_price` | `1799..17B2` | **yes** — `THE FOOD HERE COSTS` |
+| `asm/181A_tavern_thanks` | `181A..183E` | **yes** — `THANK YOU, COME AGAIN!` |
+| **`asm/19D7` declared span** | `19D7..2027` | **no — zero addresses** |
+| **the transaction body** | **`2052..2130`** | **yes — 74 addresses** |
 
-So the food price is **per 100 gold**, the seller is a **Fighter** street NPC, and the
-joke lands as a fast-food order — *no onions and to go please*. That completes the
-`MC DONALLS` parody the owner recalled (`docs/place-names.md` § 3): the sign is spelled on
-the map in sector 31 and the response is this routine. **The jester does not respond**, as
-the owner confirmed by trying.
+Strings in the newly-executed range: `PER 100, WANT ONE?` (`17C9`), `YES, NO ONIONS AND TO
+GO PLEASE!` (`17FA`), `THANK YOU, COME AGAIN!` (`1826`), `YOU DONT HAVE THAT MUCH!`
+(`2089`), and `A FIGHTER SAYS: UGH, ME TOUGH!` (`4162`/`4172`).
 
-**This also settles the direction of the G22 boundary error.** `2052..2121` executed during
-the transaction, and `2089` carries a shop string — all of it **past the declared end
-`2027` of `asm/19D7`**. The file's span is not too wide or mislabelled in the middle, it is
-**short at the top**. Any split must extend the range, not just subdivide it.
+**Two corrections to what I wrote a moment ago.** First, I attributed the sale to the
+Fighter because its string appeared in the same harvest — but the owner talked to two
+characters, and the **seller is the Merchant**. Second, and more importantly: **the
+`asm/19D7` span did not execute at all.** The transaction ran through `2052..2130`, which
+is entirely **outside** that file's declared range of `19D7..2027`.
 
-The tavern is the worked example of inline pricing. On `1-BUY` the routine sets a 16-bit
-value at `DS:27/28` to **5** (`mov $0x5,%al; mov %al,0x28` / `mov $0x0,%al; mov %al,0x27`)
-before printing the price. The clue seller asks the player to type an amount and multiplies
-it by 100. Neither reads a table.
+So G22's boundary defect is worse than "four shops in one file". The code that actually
+handled the first observed purchase is **past the end of the file**, and the routines the
+file is named after were never reached. Any split must extend the range upward and look for
+a routine boundary in the `2028..2130` region, not merely subdivide what is there.
+
+The price is **per 100 gold** and the joke lands as a fast-food order — *no onions and to
+go please* — completing the `MC DONALLS` parody the owner recalled
+(`docs/place-names.md` § 3). **The jester does not respond**, confirmed both by an
+automated `TRANSACT-NORTH` and by the owner trying directly.
+
+The tavern remains the worked example of inline pricing: on `1-BUY` the routine sets a
+16-bit value at `DS:27/28` to **5** before printing the price, and the clue seller
+multiplies a typed amount by 100. Neither reads a table.
 
 Gold income is separate and already named: `asm/2D8C_combat_kill_reward` prints
 `KILLED--GOLD+`, so kills award gold directly.
