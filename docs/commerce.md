@@ -161,7 +161,7 @@ in `asm/19D7_magic_shop_menu` and in `asm/42D1_sub_42d1` — every shop quotes i
 through this one operand pair.
 
 **3. The charge uses the same pair.** `asm/2052_sub_2052.asm` (runtime `2052`, file
-`0x2252`) is the gold subtract, and its subtrahend is `DS:27/28`:
+`0x2252`) is the gold charge, and its subtrahend is `DS:27/28`:
 
 ```
 stc
@@ -170,10 +170,19 @@ mov    0x58,%al ;       sbb 0x27,%al ; das ; cmc ; mov %al,0x58
 jb     L_0022a7
 ```
 
-That is the `cmc;sbb;das;cmc` idiom the BCD census names, borrow tested once on the top
-byte, and `asm/2070_sub_2070.asm` is the branch it falls into — it adds the pair back and
-prints `YOU DONT HAVE THAT MUCH!`. **Print operand and charge operand are the same two
-bytes**, which is why the printed price and the gold actually spent can never disagree.
+**Read the branch polarity carefully, because the trailing `cmc` inverts it.** After the
+`cmc;sbb;das;cmc` chain, `CF = 1` means **no borrow**, so `jb` is the **affordable** path:
+it tails to `20A7` (`mov $0x0,%al ; ret`) with gold already reduced by the trial
+subtract. Falling through means the player cannot afford it, and `asm/2070_sub_2070.asm`
+adds the pair back and prints `YOU DONT HAVE THAT MUCH!`. Simulated against the real
+instruction sequence: `9999 − 0200 → 9799, jb taken`; `9959 − 0040 → 9919, jb taken`
+(the observed purchase); `0020 − 0200 → jb not taken`; `0004 − 0005 → jb not taken`.
+
+One incidental consequence worth recording: on the failure path the trial subtract
+briefly leaves the BCD-underflow value in gold — `0004 − 0005` writes `0x9999` — before
+the add-back restores it. That is the `das` underflow the BCD census predicted, reached
+through a real code path and then undone, so it is not a lasting corruption but it *is*
+observable if anything samples between the two.
 
 ### Two price setters, with their arithmetic
 
