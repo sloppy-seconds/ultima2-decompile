@@ -12,7 +12,9 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-2026-10-23.md` first, then `docs/phase4-state.md`. Superseded handoffs and
+> `docs/handoff-cp5-2026-10-23.md` first (current entry point: CP5 combat scope, the
+> combat-mode audit, and the gate defect to fix before anything else), then
+> `docs/handoff-2026-10-23.md` for the wider day, then `docs/phase4-state.md`. Superseded handoffs and
 > completed overnight queues live under `docs/archive/` — historical record, not entry
 > points.
 

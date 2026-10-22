@@ -121,9 +121,15 @@ lucky sample rather than a rule.
 where a wandering spawn overwrote a slot in 03 and 32. Its values are `01`, `02`, `03`
 and `81`–`85`. The high-bit set on `81..85` is the Apple II convention the `tlkx` files
 use, so this array plausibly holds two things: a small group value `1..3` and a flagged
-marker `1..5`. **What it means is not established** — no consumer of `DS:0x1D7` has been
-named beyond `asm/1151_dungeon_darkness`, which writes it (`mov %al,0x1d7(%di)`). It is
-recorded as a field with a location, not a field with a meaning.
+marker `1..5`. **What it means is not established** — but it now has a named **reader**.
+`asm/40C0`, inside the merged `asm/4050_cmd_T.asm`, does
+`mov 0x1d7(%di),%al ; cmp $0x80,%al ; jb ...`, i.e. it **branches on bit 7**. Found
+2026-10-23 while decoding the TRANSACT path. That is the first consumer beyond
+`asm/1151_dungeon_darkness`, which only writes it (`mov %al,0x1d7(%di)`). **Do not read
+this as meaning** — a reader that tests bit 7 in the transact path is a lead, not a
+semantics, and the owner's aggro-marker hypothesis is exactly that: a hypothesis worth
+pulling, not a fact. It is recorded as a field with a location and a reader, still no
+meaning.
 
 ### Which sectors author monsters at all — and it is the site-kind scheme again
 
