@@ -478,6 +478,29 @@ returning ok.
 **Success criterion:** a named capture directory holding the frame *after* the
 announcement, plus a verdict on whether `DS:00/01` moved under a direction key.
 
+### G28 — what makes a world-map cell a town gate `[ ]` *(agent-drivable)*
+
+**Question:** `E` (ENTER) dispatches on `[DS:14] >> 1` — 6 town, 7 tower, 8 castle,
+9 dungeon — and refuses with ` WHAT?` everywhere else. `DS:14` is `mode_a`, copied from
+the `DS:2DF` region by `asm/5B71_mode_table_copy`, and that region has no direct writers
+(`docs/passability-findings.md` F3). So the open question is narrow: **what is `DS:14` at
+a cell where `E` works, and how does it relate to the tile byte under the player?**
+
+**Why it matters:** this is the last thing between the engine and "walk into a town". The
+entry machinery itself is six steps and a digit and is written up in
+`docs/sector-rulesets.md` § 6; the sector-edge leave path is already fully proven. Only
+the gate value is missing.
+
+**Who can do it:** an agent, unattended, and the cheap version is not a 4096-cell sweep.
+Start a world sector (`mapx30`), and at each of a dozen cells of *different tile bytes*
+read the mode block `DS:12..DS:18` over the HTTP API and press `E`, recording whether the
+answer is ` WHAT?`. Twelve samples of (tile byte, DS:14, DS:15, DS:18, E-answer) is
+enough to see whether `DS:14` is a function of the tile at the player's cell or of
+something else entirely — which is the answer that actually unblocks the work.
+
+**Success criterion:** a named capture directory holding the sample table, and a verdict
+on whether `mode_a` is derived from the tile byte.
+
 ## Closed
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.

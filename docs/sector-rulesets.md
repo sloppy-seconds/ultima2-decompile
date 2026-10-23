@@ -128,3 +128,84 @@ finding before it was caught. Any filter over this record must be written per ru
 | Map the dungeon encoding: what `0x01`–`0x06` mean, where its objects are drawn from | G18 |
 | HP area-override rule (sector 00 vs 03) | `docs/archive/handoff-2026-10-22.md` Next actions 4 |
 | Townsfolk HP assignment — now narrowed: they occupy ordinary slots, so look on a path shared with the arms | G17 |
+
+## 6. How a site is entered and left — `E` is the door, not a tile (2026-10-27)
+
+The engine has never crossed from a world sector into a town, and the assumption in
+`docs/passability-findings.md` F3 was that the trigger must be the unresolved
+tile→mode mapping: the indirect store that fills `DS:2CB`/`DS:2DE`, which is what the
+passability ladder reads. That assumption was wrong, and it made town entry look blocked
+behind a problem it is not behind.
+
+**Entering a site is the `E` command.** `asm/3389_cmd_E` prints `ENTER` and falls through
+into the dispatch at `asm/33A6..0x33FF`:
+
+```
+3392  al := [DS:4A] ; if al != 0 -> " WHAT?"        ; already inside a site
+33a6  al := [DS:13] ; if al >= 0x78 -> continue      ; else "-ONLY ON FOOT!"
+33c3  v := [DS:14] >> 1
+35cc  v == 5 -> L_00360f
+35d4  v == 6 -> L_003647   -TOWN     (asm/343F)
+35dd  v == 7 -> L_00367c   -TOWER    (asm/343F)
+35e6  v == 8 -> L_0036b5   -CASTLE   (asm/34B5)
+35ef  v == 9 -> L_0036ec   -DUNGEON  (asm/34E4)
+35f8  v == 10 -> L_003725
+```
+
+`DS:13` is the player stamp (`0x78` on foot, `state.h`), so the gate is "you must be on
+foot", and `DS:14` is `mode_a`, one of the four mode bytes `asm/5B71_mode_table_copy`
+copies out of the `DS:2DF` region. So the *value* that says "this cell is a town gate"
+still lives in the unresolved table — but it is read at the moment `E` is pressed, at the
+player's own cell, and not during movement. That is a much smaller question than the one
+F3 posed, and it is answerable by sweeping `E` over a world sector and reading `DS:14`.
+
+`DS:4A == 0` means the world map, and `E` inside a site answers ` WHAT?`. The sibling is
+`asm/334D_cmd_D` (DESCEND), which requires `[DS:4A]` to be 4 or 5 — a tower or a dungeon —
+and refuses `-WHAT?` anywhere else. So the site grammar is: walk on the world map, press
+`E` at a gate, go down with `D` inside a tower or dungeon.
+
+### What each entry routine does, and it is the same six steps every time
+
+`asm/341E` (v==5), `asm/343F` (-TOWN, -TOWER), `asm/34B5/34CF` (-CASTLE),
+`asm/34E4` (-DUNGEON) all follow one shape:
+
+```
+str_out "-TOWN"                       ; the announcement, a suffix on the CMD line
+[DS:5A] := [DS:00] ; [DS:5B] := [DS:01]   ; remember where we came in
+call L_0024fd                        ; asm/22FD — store the outgoing sector
+[DS:00] := 0x1f ; [DS:01] := 0x3e    ; arrive at (31, 62), bottom-centre
+[DS:4A] := <site digit>              ; 1 village, 2 town, 3 third kind, 4 tower, 5 dungeon
+call L_002490                        ; asm/2290 — load the sector map
+call L_0024d5                        ; asm/22D5 — load the sector monsters
+[DS:12] := 0x4                       ; the off-sector tile marker
+jmp L_000c33                         ; asm/0A33 cmd_done
+```
+
+The tower and dungeon arms additionally zero `DS:25`, set `DS:03`/`DS:02` and start the
+player at `(5,5)` rather than `(31,62)` — the first-person view has its own entry cell.
+
+**Leaving is the sector-edge test**, `asm/242D`/`asm/2434`, which runs before the
+coordinates are masked:
+
+```
+242d  if [DS:00] >= 0x40 -> 243e
+2434  if [DS:01] >= 0x40 -> 243e
+243e  [DS:00] := [DS:5A] ; [DS:01] := [DS:5B]   ; back to where we entered from
+      [DS:4A] := 0                                ; the world map
+      call L_002490                              ; reload
+```
+
+So a site is left by walking off any edge of it, and the player reappears at the cell they
+pressed `E` on. That also explains why the engine's unconditional `& 0x3f` wrap is wrong
+for site sectors: the original tests the unmasked coordinate first and only masks when the
+test does not fire.
+
+### What this does to the CP5/CP6 plan
+
+* Town entry is **not** blocked behind F3. The machinery is six steps and a digit, and the
+  engine already loads any sector a save names — sector 32 renders and plays today.
+* The one unknown is the gate value of `DS:14` on the world map. Registered as **G28** on
+  `docs/needs-gameplay.md`, agent-drivable: stand on each cell of a world sector, press
+  `E`, and record the first cell where the answer is not ` WHAT?`, with `DS:14` beside it.
+* The edge test belongs to the movement path and is independent of the gate, so it can be
+  implemented and tested now.
