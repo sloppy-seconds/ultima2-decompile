@@ -49,9 +49,19 @@ typedef struct u2_state {
      * re-decode of asm/2423_passability.asm and the raw writer scan; narrative
      * in docs/passability-findings.md. Before this these bytes sat inside
      * `reserved_02`, which is why the walk loop had to be re-derived by hand. */
-    /* 0x12 */ uint8_t tile_offsector;  /* off-sector cells take their tile from
-                                         * here; reads back as 0xFF in-world, which
-                                         * is an out-of-range marker, not a tile. */
+    /* 0x12 */ uint8_t tile_offsector;  /* NAME DISPUTED 2026-10-28: not a tile and not an
+                                        * off-sector tile source. It is a mode byte --
+                                        * 0xFF on the world map, 4 in an interior sector --
+                                        * written by asm/0C1F/asm/0C2B on the DS:4A branch
+                                        * (DS:4A is the sector's low decimal digit), and its
+                                        * only readers are asm/5AB1_view_origin_by_mode and
+                                        * asm/5AF9. 5AB1 is the routine the monster spawn
+                                        * arms call, and DS:12 == 0xFF is how it decides
+                                        * whether the viewport origin wraps (`and $0x3f`).
+                                        * Live: 0xFF in sector 20, 4 in sector 32.
+                                        * Nothing reads this field in the engine, so the
+                                        * wrong name has cost nothing yet; renaming it is an
+                                        * owner call. docs/monster-spawn.md § 15.2. */
     /* 0x13 */ uint8_t player_stamp;    /* the sprite stamped INTO the map cell.
                                          * 0x78 = on foot. NOT the terrain under the
                                          * player: observed 0x78 while standing on

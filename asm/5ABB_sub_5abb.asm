@@ -1,6 +1,14 @@
-# sub_5abb — mechanical clean (bulk wave); behavior not yet reviewed
+# 5ABB_view_origin_plain — viewport origin for an INTERIOR sector: same origin, no wrap
+# name-evidence: reached from asm/5AB1_view_origin_by_mode when DS:12 != 0xFF. Computes
+#           DS:03 = [DS:01] - 6 and DS:02 = [DS:00] - 10 and deliberately does NOT mask,
+#           then zeroes DS:04, DS:05, SI and DI. asm/5B98_view_origin_wrapped is the same
+#           arithmetic plus `and $0x3f`. Unwrapped means a cell off the edge is off the
+#           array rather than wrapped to the far side, which is what a dungeon or tower
+#           interior needs and the overworld must not have.
+# label: kept as sub_5abb on purpose (CP3 cross-reference anchor).
 # func 5ABB..5AE0  len 0026 B  evidence: seed+reko
-# confidence: low (bytes proven by check_func.py)
+# provenance: static reassembly 2026-10-28
+# confidence: high for the arithmetic
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_5abb:
 L_005cbb:

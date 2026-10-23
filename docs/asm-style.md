@@ -99,6 +99,14 @@ replaceable.
   decoding hex. Do not narrate every register move.
 * Keep the `# func ...` map line out of cleaned files — the header template
   carries that info.
+* **Never write an uppercase `L_<hex>` token in a header comment.** `check_func.py`
+  collects label references from the file text and requires every target inside the
+  function's own range to be defined there — and it does not stop at `#` lines. Measured
+  2026-10-28: a header sentence quoting `"what L_005CB1 does"` made the proof fail with
+  `L_005CB1 targets inside the function range but is not defined in asm/5AB1_....asm`,
+  even though the body defines the lowercase `L_005cb1` the callers actually use. Labels in
+  this tree are lowercase hex; quote them that way, or name the address as `0x5CB1` instead
+  of a label.
 
 ## 9. Hard rules (recap)
 

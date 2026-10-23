@@ -855,7 +855,9 @@ five arrays out of `monxNN`.
    status tick. Implementing a plausible rule without this is exactly the inference the
    project keeps getting punished for, so the engine gets no spawn logic until it is found.
 2. **The kind source.** What writes `[DI+0x1B7]` before the chain runs.
-3. **`L_005cb1`.**
+3. **`L_005cb1`.** — **answered 2026-10-28, see § 15.2.** It is a viewport-origin setter that
+   branches on `DS:12 == 0xFF` (world map vs interior), not spawn machinery. Why the spawn
+   arms all end by calling it is a separate question and is not answered here.
 
 **How to close it, cheapest first.** A capture, not a read: break at runtime `0x0D44` in a
 headless sector-20 session, dump `DI`, `[DI+0x1B7]`, the slot index and the CS:IP return
@@ -1009,6 +1011,39 @@ back and leaves the field untouched. That is a coherent reason for the measured 
 it is exactly the kind of elegant-but-unverified story this project has been burned by, so it
 stays labelled inferred until paired `(DS:60, [DI+0x1B7], arm taken)` samples either confirm
 it or kill it.
+
+### `L_005cb1`, which § 15 left open, and what `DS:12` really is (handoff item 6)
+
+Chasing the return address meant stopping inside the spawner, and the epilogue every arm ends
+in is `call L_005cb1` — so the same run that produced the null result also walked into the
+callee. It is `asm/5AB1_view_origin_by_mode`, and it is not spawn machinery at all:
+
+```
+5AB1: cmpb $0xff,0x12 ; jne 5ABB        ; DS:12 == 0xFF -> world map
+5AB8: jmp L_005d98                       ; -> asm/5B98_view_origin_wrapped
+5ABB: stc; mov 0x1,%al; cmc; sbb $0x5,%al; cmc; mov %al,0x3   ; DS:03 = y - 6
+      stc; mov 0x0,%al; cmc; sbb $0x9,%al; cmc; mov %al,0x2   ; DS:02 = x - 10
+      (and DS:04, DS:05, SI, DI = 0)
+5B98: the same two lines, each followed by `and $0x3f,%al`     ; wrapped into 0..63
+```
+
+The two branches differ **only** by the `and $0x3f`. So `DS:02/03` are a viewport origin,
+the overworld wraps it and an interior does not — the byte-level version of the seamless-
+scroll result the owner reported and the viewport-wrap fix chased from the other end.
+
+Which means **`DS:12` is not a tile and never was.** It is a mode byte, 0xFF on the world
+map and 4 in an interior, written by `asm/0C1F_status_tick_branch` and `asm/0C2B` on the
+`DS:4A` branch — and `DS:4A` is the sector's low decimal digit (§ above). Live cross-check:
+`DS:12` read **0xFF in sector 20** (digit 0) and **4 in sector 32** (digit 2). Two
+independent bytes agreeing on the same branch is worth more than either alone, and it is a
+second confirmation of the `DS:4A` reading that came from a completely different question.
+
+`engine/src/core/state.h` still calls it `tile_offsector` and `overworld.c` still writes 4
+into it; nothing reads the field, which is why the wrong name has been harmless so far. The
+rename is an engine change and is left for an owner. The unreconciled detail, stated rather
+than smoothed: `state.h` cites `asm/5AE1` for a window origin of `(x-9, y-5)`, while these
+two branches compute `(x-10, y-6)`. Different routines, and nobody has checked whether one
+of the readings is wrong.
 
 ### What this does and does not license the engine to do
 

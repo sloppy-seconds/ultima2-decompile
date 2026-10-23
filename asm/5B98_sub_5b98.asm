@@ -1,6 +1,16 @@
-# sub_5b98 — mechanical clean (bulk wave); behavior not yet reviewed
+# 5B98_view_origin_wrapped — viewport origin for the WORLD MAP: origin, then `and $0x3f`
+# name-evidence: reached only from asm/5AB1_view_origin_by_mode when DS:12 == 0xFF, i.e.
+#           on the world map. `stc ; mov 0x1,%al ; cmc ; sbb $0x5,%al ; cmc ; and $0x3f,%al`
+#           puts DS:03 at [DS:01] - 6 wrapped into 0..63, and the same shape with $0x9 puts
+#           DS:02 at [DS:00] - 10 wrapped. The mask is the whole difference from
+#           asm/5ABB_sub_5abb.asm, which computes the same two values unwrapped.
+# This is the byte-level statement that the overworld is a torus at the viewport level, and
+# that an interior sector is not -- which is the shape the engine's viewport-wrap fix
+# reached for from the other end. See docs/monster-spawn.md § 15.2 and handoff item 6.
+# label: kept as sub_5b98 on purpose (CP3 cross-reference anchor).
 # func 5B98..5BC1  len 002A B  evidence: seed+reko
-# confidence: low (bytes proven by check_func.py)
+# provenance: static reassembly 2026-10-28
+# confidence: high for the arithmetic; see the -9/-5 vs -10/-6 note in asm/5AB1's header
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_5b98:
 L_005d98:
