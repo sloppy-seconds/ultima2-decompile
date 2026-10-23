@@ -332,6 +332,35 @@ else
         bad "CP5 W9 control failed: the fight gate would pass with nothing to fight"
         sed 's/^/        /' "$WORK/w9ctl.out"
     fi
+
+    # --- and the fight has to be a fight: the creature must be able to answer ----
+    # A plain melee type (0x30, no special) at role 2 — alerted, so it walks in and
+    # swings and casts nothing. Six passes and the seeded H.P.=9997 must be lower.
+    # This is the only CI proof that the melee chain reaches the screen rather than
+    # stopping inside ai.c, which is exactly where it would silently not work.
+    python3 tests/cp5_fight_seed.py "$WORK/w9m" >/dev/null 2>&1
+    python3 - "$WORK/w9m/content/monx00" <<'PYEOF'
+import sys
+p = sys.argv[1]
+d = bytearray(open(p, 'rb').read())
+d[64 + 0] = 40      # hp: too much for the scripted swing to end it in one hit
+d[96 + 0] = 0x30    # type: Fighter — a plain melee attacker, no special at all
+d[160 + 0] = 2      # role: alerted, so it closes and swings
+open(p, 'wb').write(bytes(d))
+PYEOF
+    for i in 1 2 3 4 5 6; do printf 'SP\n'; done > "$WORK/w9m.keys"
+    ./u2 --headless --play-map --cleanroom \
+         --data-dir "$WORK/w9m/content" --save-dir "$WORK/w9m/save" \
+         --script "$WORK/w9m.keys" --dump-state > "$WORK/w9m.out" 2>&1
+    # The seed is H.P.=9997, so "fell below the seed" is exactly "does not read
+    # 9997". A pattern is the wrong tool here and the first draft had one.
+    HP_LINE=$(grep -oE "H\.P\.=[0-9]{4}" "$WORK/w9m.out" | tail -1)
+    if [ -n "$HP_LINE" ] && [ "$HP_LINE" != "H.P.=9997" ]; then
+        ok "CP5 W9: a plain melee creature wounds the player — H.P. reads ${HP_LINE#H.P.=}, not the seeded 9997"
+    else
+        bad "CP5 W9: the melee chain did not reach the screen — H.P. is still 9997 after six turns"
+        grep -E "H\.P\.|CMD" "$WORK/w9m.out" | sed 's/^/        /'
+    fi
 fi
 
 printf '\n'
