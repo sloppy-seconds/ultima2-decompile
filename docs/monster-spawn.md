@@ -500,3 +500,49 @@ moved from *suspect measurement* to *expected behaviour*.
 * **The AI itself.** Still unfound. The search now has a positive shape to look for: code
   that reads a creature coordinate, adds a delta, and calls `0EC0`/`0EDC` — or writes
   `mon_x` directly without this cluster at all.
+
+### Live check contradicts the semantic reading — corrected the same day
+
+The bytes above are CP0-proven and were re-verified by disassembling the loaded image.
+**The interpretation of what the bytes mean is a different grade, and it did not survive
+one live session.** Recorded immediately, not filed for later.
+
+Test: headless run, sector 71, execution breakpoint on the `mon_x` store entry (linear
+`9360`, disassembly-verified as `mov BH,0 / mov BL,[DS:1F] / mov DI,BX /
+mov [DI+0x137],AL`), then 40 turn-generating keys.
+
+| observation | value | consequence |
+| --- | --- | --- |
+| turns occurred | player moved to `(51,26)`, food fell `153,148,89` | the session was live and processing turns |
+| breakpoint hits on the `mon_x` store | **zero** | **overworld creature movement does not go through this code** |
+| `DS:1F` after the session | **120** | cannot be a slot index — the table has 32 slots. `DS:1F` is a shared scratch byte with 20+ writers, and this cluster is one of its users, not its owner |
+| `DS:60` after the session | **0** | the `incb [0x60]` path never ran, so "spawn counter" is unsupported by any observation |
+
+So the claims to downgrade are: **"this is the overworld spawner"** (unproven — it is a
+placement-shaped routine that did not run during ordinary play), **`DS:1F` = the spawner's
+slot cursor** (contradicted), and **`DS:60` = a spawn counter** (unsupported). The free-slot
+scan shape at `0E9C..0EB6` and the per-species HP branch at `0F4F` are still exactly what
+the bytes say; what was wrong was promoting a plausible reading of them into a named
+subsystem.
+
+This is the third time in one day that a static or derived reading was promoted past its
+evidence — the `monx` slice error, the castle movement metric, and this. The pattern is
+identical each time: the local structure is real, and the naming outran it. The fix that
+actually works is the one this project already has as a rule — **run the negative check
+before naming**, here a single breakpoint on the address, which cost two minutes and
+returned "never executed".
+
+### The address model, which was wrong in the notes and is worth having
+
+**Linear address = file offset + `0x17D0`.** Verified by disassembly: file `0x0CC0` →
+linear `9360`, which decodes as exactly `asm/0CC0_sub_0cc0.asm`'s body. The CFG note's
+"segment `017D`" is that same base expressed as a segment, and `read_disassembly` with
+segment `0x249` (585) offset `0` lands on the same linear address.
+
+Two traps this walked into, both worth not repeating: `0x17D:0xEC0` is **string data**
+(`ARMS P…`), so the intuitive `runtime = file + 0x200` from the asm label numbering is
+wrong for address arithmetic — the `L_000ec0` label numbering and the linear address
+space are not the same thing. And `search_memory` for a hand-assembled multi-instruction
+pattern returned nothing while a 6-byte fragment matched eight times, because the
+accessor idiom `mov bl,[0x1f] / mov di,bx` is **widespread** — which is itself the hint
+that `DS:1F` is general scratch, not a dedicated cursor.

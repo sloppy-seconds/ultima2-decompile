@@ -1,15 +1,14 @@
-# sub_0cee — overworld spawner: store mon_kind[DS:1F], then dispatch on DS:60
-# After the kind store this does `incb [0x60]` and falls into a chain of
-# `clc ; rcr al,1 ; jae …` bit tests on DS:60, each bit selecting a species branch that
-# sets type and HP for the slot — asm/0D4F_monster_hp_orc.asm is the Orc branch and
-# writes type 0x30 with hp 0x10 = 16, which independently matches the bestiary's Orc HP
-# of 16 from a completely different source. Two kinds of evidence agreeing on a number
-# neither was derived from is the reason this reading is graded high.
-# UNPROVEN: what DS:60 actually is. "Spawn counter" is the working name from `incb`
-# plus the bit dispatch; a remaining-spawn bitmask or a seed fit the bytes equally well.
-# See docs/monster-spawn.md § 11, "Still open".
-# provenance: static, reassembled in address order 2026-10-23
-# confidence: high for the bytes and the dispatch shape; low for DS:60's meaning
+# sub_0cee — store mon_kind[DI], then a bit-test dispatch on DS:60
+# After the kind store: `incb [0x60]` then a chain of `clc ; rcr al,1 ; jae …`, each bit
+# selecting a species branch that sets type and HP for the slot. asm/0D4F_monster_hp_orc
+# is the Orc branch and writes type 0x30 with hp 0x10 = 16, matching the bestiary's Orc
+# HP of 16 from an unrelated third-party source — the one cross-check in this cluster
+# that holds up independently.
+# NOT ESTABLISHED, and the live check made it worse rather than better: DS:60 read 0 after
+# a session in which the player moved and food fell, so the `incb` path never ran and
+# "spawn counter" has no observation behind it at all. See docs/monster-spawn.md § 11.
+# provenance: static reassembly 2026-10-23, live-disproved same day
+# confidence: high for the bytes and the dispatch shape; LOW for DS:60's meaning
 # func 0CEE..0D05  len 0018 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

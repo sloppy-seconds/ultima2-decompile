@@ -1,4 +1,4 @@
-# sub_0cdc — overworld spawner: store mon_y[DS:1F] and mirror it to staging DS:24
+# sub_0cdc — store mon_y[DI] and mirror to staging DS:24 (cluster naming unconfirmed)
 # Reached from asm/0CD4_sub_0cd4.asm, which does `and al,0x3f` first — the overworld is
 # a torus and that is where the wrap is enforced on the way in. asm/0CD2_sub_0cd2.asm
 # sends a negative value out through the common exit at 0DAF instead.

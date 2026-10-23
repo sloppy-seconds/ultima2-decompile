@@ -1,4 +1,4 @@
-# sub_0c9c — overworld spawner: start a downward free-slot scan at slot 31
+# sub_0c9c — start a downward scan for a free slot, beginning at slot 31 (naming unconfirmed)
 # Part of the 0C9A..0E00 spawner cluster; see docs/monster-spawn.md § 11 for the
 # reassembled routine, which the bulk-wave fragment split made unreadable in isolation.
 # NOTE the operand is the immediate 0x1f, NOT a read of DS:1F. Reading it as a cursor

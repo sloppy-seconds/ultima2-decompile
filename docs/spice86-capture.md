@@ -319,6 +319,26 @@ The response is JSON with a `values` array of byte integers, not a raw binary bo
 {"values": [138, 190, 0, 4, ...]}
 ```
 
+### Address model: file offset, runtime label, and linear address are three different things
+
+**Linear = file offset + `0x17D0`.** Verified by disassembly on 2026-10-23: `asm/0CC0_sub_0cc0.asm`
+(file offset `0x0CC0`) lives at linear `9360`, and `read_disassembly` there returns exactly
+that file's body. The CFG's "segment `017D`" is the same base expressed as a segment; segment
+`0x249` offset `0` is the same linear address.
+
+Two traps, both walked into:
+
+* The `L_000ec0` label numbering inside the asm files suggests `runtime = file + 0x200`. It is
+  **not** an address you can compute breakpoints from — `0x17D:0xEC0` is string data (`ARMS P…`).
+  Labels are anchors, not a second address space.
+* `search_memory` with a hand-assembled multi-instruction pattern can miss while a short fragment
+  matches everywhere, because common idioms (`mov bl,[0x1f]` / `mov di,bx` matched eight times)
+  are not unique. Search a fragment, then disassemble each hit and compare the body.
+
+For breakpoints, prefer `CPU_EXECUTION_ADDRESS` on a code linear address over `MEMORY_WRITE` on
+a data address whenever the effective address is computed at run time — a data breakpoint on a
+fixed slot offset silently misses every write that goes through an index register.
+
 ### The data segment
 
 For this game, once the main body is running, **`DS = 0x08BE`**. Confirmed by the player name

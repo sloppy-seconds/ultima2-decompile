@@ -1,4 +1,4 @@
-# sub_0cc0 — overworld spawner: store mon_x[DS:1F] and mirror it to staging DS:23
+# sub_0cc0 — store mon_x[DI] and mirror to staging DS:23 (cluster naming unconfirmed)
 # Entered only from asm/0CB9_sub_0cb9.asm (`cmp al,0x3f ; jb`), so the value arriving
 # here has already passed a < 64 bounds check; a coordinate outside the sector exits
 # at 0DAF instead. This is a PLACEMENT store, not movement: nothing here computes a new
