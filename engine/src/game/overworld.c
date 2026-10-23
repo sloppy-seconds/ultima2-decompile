@@ -220,11 +220,36 @@ static void site_enter(u2_ctx *ctx, u2_overworld *ow, int digit,
 
 /*
  * asm/242D/2434/243E: leaving is the sector-edge test, run on the UNMASKED
- * coordinate before the wrap. It only tests the high edge, so walking east or
- * south out of a sector returns you to the cell you entered on, while walking
- * west or north wraps round the torus. That asymmetry is in the bytes and is
- * reproduced rather than tidied.
+ * coordinate before the wrap -- and it only applies inside a site.
+ *
+ * Measured 2026-10-28, three sectors, walking east off x=63 with the save's entry
+ * point set by tools/u2_edit.py setpos so the two hypotheses could be told apart:
+ *
+ *   sector 31 (second digit 1), entry (63,35): one step past the edge -> digits
+ *           3,1 -> 3,0, position back at the entry point, DS:12 4 -> 0xFF.
+ *   sector 23 (second digit 3), entry (62,2):  one step past the edge -> digits
+ *           2,3 -> 2,0, position back at (62,2), DS:12 4 -> 0xFF.
+ *   sector 20 (second digit 0): the edge WRAPS and the sector does not change --
+ *           the 511/512 result against the discriminating rows of mapx20/mapx30.
+ *
+ * So the second digit is not a compass axis and the edge is not a sector border in
+ * the overworld: crossing it leaves the SITE and returns you to the cell you
+ * entered on, in the sector whose second digit is 0. That is what site_leave()
+ * does, and it is why the call is gated on u2_site_edge_leaves() rather than run
+ * unconditionally. The earlier engine behaviour -- leaving on any edge crossing --
+ * turned the overworld's torus wrap into a teleport to the entry cell, which is a
+ * defect that looked like the seam work being wrong rather than this.
+ *
+ * What is NOT established: whether the high-edge-only asymmetry (east and south
+ * leave, west and north wrap) survives as its own rule or was an artefact of the
+ * same misreading. Only the east edge was re-measured here.
  */
+int u2_site_edge_leaves(int sector_second)
+{
+    /* A sector whose second digit is 0 is the world map: the edge wraps there. */
+    return sector_second != 0;
+}
+
 static void site_leave(u2_ctx *ctx, u2_overworld *ow)
 {
     ow->x = ctx->state.entry_x;
@@ -1027,10 +1052,11 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         const int raw_x = ow->x + dx;
         const int raw_y = ow->y + dy;
 
-        /* asm/242D/2434: the edge test runs on the unmasked coordinate and only
-         * checks the high edge, so east and south leave the sector while west and
-         * north wrap. See site_leave(). */
-        if (raw_x >= U2_SECTOR_EDGE || raw_y >= U2_SECTOR_EDGE) {
+        /* asm/242D/2434: the edge test runs on the unmasked coordinate, and it
+         * only leaves anywhere when the sector is a site. On the world map the
+         * same crossing is the torus wrap below. See site_leave(). */
+        if (u2_site_edge_leaves(ow->sector_lo) &&
+            (raw_x >= U2_SECTOR_EDGE || raw_y >= U2_SECTOR_EDGE)) {
             site_leave(ctx, ow);
             continue;
         }

@@ -148,6 +148,23 @@ int main(int argc, char **argv)
           "town paving 0x70 is passable: it is the ground between the buildings, "
           "12889 cells across 15 sectors");
 
+    /* --- the sector edge: a site leaves, the world map wraps -----------------
+     * Measured 2026-10-28 by walking east off x=63 with the save's entry point set
+     * away from the edge, so "returned to the entry cell" and "wrapped to x=0"
+     * could be told apart:
+     *   sector 31 (digit 1) -> digits 3,0, player back at the entry point, DS:12 4->0xFF
+     *   sector 23 (digit 3) -> digits 2,0, player back at the entry point, DS:12 4->0xFF
+     *   sector 20 (digit 0) -> wraps, sector unchanged (the 511/512 mapx20/mapx30 result)
+     * Before this the walk loop called site_leave() on ANY high-edge crossing, which
+     * turned the overworld's torus wrap into a teleport back to the entry cell. */
+    CHECK(u2_site_edge_leaves(0) == 0,
+          "a world sector (second digit 0) WRAPS at the edge, it does not leave");
+    CHECK(u2_site_edge_leaves(1) != 0,
+          "sector 31 leaves across the east edge, into sector 30");
+    CHECK(u2_site_edge_leaves(3) != 0,
+          "sector 23 leaves across the east edge, into sector 20 -- so the digit is a "
+          "site index, not a compass axis: 3 goes to 0, not to 2");
+
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");
     return fails != 0;
