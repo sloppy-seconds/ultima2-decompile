@@ -546,3 +546,83 @@ space are not the same thing. And `search_memory` for a hand-assembled multi-ins
 pattern returned nothing while a 6-byte fragment matched eight times, because the
 accessor idiom `mov bl,[0x1f] / mov di,bx` is **widespread** — which is itself the hint
 that `DS:1F` is general scratch, not a dedicated cursor.
+
+## 12. The creature AI region — `0x2122..0x2260`, found by following a third-party claim into the bytes
+
+Graded **observed** for the instruction sequence (CP0-proven bytes, read in address order
+the way § 11 should have been) and **inferred** for the behaviour names below. Opened by
+`docs/u2-game-meta-analysis.md`, a third-party synthesis, which asserted:
+
+> When an overworld monster's Hit Points drop to 15 HP or lower, its AI behavior toggles
+> from aggression to retreat mode. The entity moves away from the player and regenerates
+> Hit Points each turn. Once its HP recovers to 16, aggressive pursuit resumes.
+
+A falsifiable claim with two hard numbers in it. The bytes say:
+
+```
+2122  mov  al,[di+0x177]      ; mon_hp[slot]
+2126  cmp  al,0x10            ; compare against 16, exactly as claimed
+2128  jae  232e               ; HP >= 16 -> go straight to the move
+212a  incb [di+0x177]         ; HP < 16 -> REGENERATE, +1 per turn, as claimed
+212e  clc / mov al,[di+0x137] / adc al,[0x19] / and al,0x3f / mov [0x23],al
+      clc / mov al,[di+0x157] / adc al,[0x1a] / and al,0x3f / mov [0x24],al
+      call L_0052b3           ; candidate: passability / occupancy probe
+```
+
+`DS:19` and `DS:1A` are the movement delta, added to the creature's cell and wrapped by the
+same `and 0x3f` torus mask seen in § 11. **`asm/152E` sets `DS:19/1A` to `player - creature`
+— a vector toward the player — and `asm/0B0F` negates them in place (`stc; cmc; sbb` from
+zero). Toward is pursuit; negated is retreat.** That closes the loop § 11 left open about
+what writes those bytes, and it was sitting in a routine I had dismissed as dungeon-only.
+
+### The attack trigger, which answers a question watching could not settle
+
+```
+2201  mov al,[0x0] / cmp al,[0x23] / jne 2416   ; is the new x the PLAYER's x?
+220a  mov al,[0x1] / cmp al,[0x24] / jne 2416   ; and the new y the player's y?
+2213  jmp 238b                                  ; both equal -> the contact path
+```
+
+A creature finishing its step **on the player's cell** branches to `238b`, which tests
+`DS:4A` and jumps to `0x1240`. Contact is the trigger: monsters attack by walking onto you,
+not by a separate ranged decision. Consistent with every live capture, where damage only
+ever arrived after a creature closed the last cell, and with the measured rarity of hits
+(8 HP changes in 2999 turns).
+
+### The move-rate gate, which explains the breakpoint that would not fire
+
+`2199` writes `DS:1F` from `AL`; `21a6..21d8` dispatch on `mon_type` and compare `DS:1F`
+against a ladder — `0x5c`, `0x10`, `4`, `0`, `0x14`, `0x70` — where `0x23fc` returns `0xFF`
+(refuse) and `0x23f7` returns `0` (accept).
+
+**This is why § 11's breakpoint returned zero hits while creatures moved.** `DS:1F` read 120
+(`0x78`) in that session; `0x78` matches none of the ladder, so the routine exited at `23fc`
+with a refusal and never reached the coordinate stores. So the sentence immediately above
+this section — "`DS:1F` is general scratch, not a dedicated cursor" — is itself now too
+hasty in one direction and wrong in the other: it is a per-creature value feeding a rate
+gate. Two confident claims about `DS:1F` in one day, both wrong.
+
+### Also present
+
+* `21e2..21f0` reject a move onto `(0,0)` on either axis, and `21e2` branches on `DS:4A`
+  — the same byte `cmd_A` gates on, so site kind affects creature movement too.
+* `2216` saves pre-move coordinates into staging `DS:27/28`; `2233` commits them back into
+  `mon_x/mon_y` and writes `mon_kind` into the 6-byte-stride table. **§ 11's "placement
+  API" is the commit half of this move routine**, not a separate spawner — which is exactly
+  why a breakpoint on `0CC0` saw nothing while this region did the work.
+* `21a6` special-cases `mon_type` `0x2c` (Sea Monster) and `0x48` (Frigate) and sends
+  anything `>= 0x78` elsewhere. Species-specific movement, which the diagonal-versus-axis
+  split in the g28 capture independently predicted.
+
+### Method note, because it is the actual lesson
+
+§ 11 was a static reading promoted past its evidence and killed by one breakpoint. This is
+the same kind of static reading — but it was **aimed by a falsifiable third-party claim that
+named two numbers**, and it independently explains three observations that had no
+explanation: the `DS:19/1A` writer, the silent breakpoint, and the 7% move rate. Third-party
+data is a hypothesis the bytes get to veto. Here the bytes agreed, and what differed from
+§ 11 is that the hypothesis named something checkable.
+
+Still to confirm, none of it load-bearing for the retreat threshold or the contact trigger:
+that `L_0052b3` is a passability/occupancy probe; that `238b -> 0x1240` is the attack and
+not another contact event; and the exact semantics of the `DS:1F` ladder.
