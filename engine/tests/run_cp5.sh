@@ -208,6 +208,33 @@ else
     sed 's/^/        /' "$WORK/ai.build"
 fi
 
+# --- 1h. the world-map site gate (towns) ------------------------------------
+# asm/3389_cmd_E's dispatch. The table is checked on its own and, when the player's
+# content is present, against every gate cell in every world sector: each must name
+# a sector file that exists. Without a content dir the data half SKIPs and the
+# table half still runs.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/site_check" \
+        tests/site_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/site.build"; then
+    SITEDATA=""
+    for d in ../original ../../original; do
+        [ -f "$d/mapx00" ] && SITEDATA="$d" && break
+    done
+    if "$WORK/site_check" $SITEDATA > "$WORK/site.out" 2>&1; then
+        n=$(sed -n 's/^site_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/site.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 site-gate run executed 0 checks — the test is not running"
+        else
+            ok "CP5 site gate: tile -> sector digit, and every gate cell resolves ($n checks, $(tail -1 "$WORK/site.out"))"
+        fi
+    else
+        bad "CP5 site-gate check failed:"
+        sed 's/^/        /' "$WORK/site.out"
+    fi
+else
+    bad "CP5 site-gate harness did not build:"
+    sed 's/^/        /' "$WORK/site.build"
+fi
+
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
     skip "C1 three independent counters DS:26B/26C/26D (0..15) — needs src/game/combat.c"

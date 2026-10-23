@@ -184,6 +184,19 @@ MANIFEST = [
     ("U2_S_SLEEP_SPELL",       "0F48_combat_sleep_spell.asm",    ("run", 0x114B, 12)),
     ("U2_S_SAVED_BY_IDOL",     "0F48_combat_sleep_spell.asm",    ("run", 0x1173, 14)),
     ("U2_S_THIEF_STOLE",       "0FCD_combat_thief_steal.asm",    ("run", 0x11F8, 24)),
+    # Site transitions (docs/sector-rulesets.md § 6). cmd_E's " WHAT?" is the
+    # second of eleven copies of that literal in the file, so every one of these is
+    # addressed by offset rather than by index; the offsets were read off the asm
+    # fragments and then confirmed against the exe on 2026-10-27.
+    ("U2_S_ENTER",             "3389_cmd_E.asm",          ("run", 0x358C, 5)),
+    ("U2_S_ENTER_WHAT",        "3399_sub_3399.asm",       ("run", 0x359C, 6)),
+    ("U2_S_ONLY_ON_FOOT",      "33AE_move_only_on_foot.asm", ("run", 0x35B1, 14)),
+    ("U2_S_DESCEND",           "334D_cmd_D.asm",          ("run", 0x3550, 7)),
+    ("U2_S_DESCEND_WHAT",      "334D_cmd_D.asm",          ("run", 0x3566, 6)),
+    ("U2_S_SITE_TOWN",         "343F_sub_343f.asm",       ("run", 0x364A, 5)),
+    ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6)),
+    ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7)),
+    ("U2_S_SITE_DUNGEON",      "34E4_sub_34e4.asm",       ("run", 0x36EF, 8)),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

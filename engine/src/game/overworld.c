@@ -74,6 +74,134 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
 }
 
 /*
+ * Site transitions — asm/33A6..33FF (the `E` dispatch) and asm/341E..3524 (the
+ * entry routines). Written up in docs/sector-rulesets.md § 6.
+ *
+ * The gate is the tile under the player, not a hidden trigger cell: cmd_E reads
+ * [DS:14] >> 1, and DS:14 is `map_byte >> 1` (CP5 ticket C7), so the site is
+ * chosen by tile >> 2. That prediction was checked against the content on
+ * 2026-10-27 and every one of the 21 gate cells in the eight world sectors names
+ * a sector file that exists — and the dungeon gate in mapx30 is the same cell the
+ * live capture walked into when it moved DS:49/4A from 3,0 to 3,5.
+ *
+ * The digit is not the same thing as the shift: 7 means a tower (digit 4) and 8
+ * means a castle (digit 3), which is why the table below is a table and not an
+ * arithmetic expression.
+ */
+static int site_for_tile(uint8_t tile, const char **label, int *ax, int *ay)
+{
+    *label = NULL;
+    *ax = 0x1f; *ay = 0x3e;            /* the street arrival cell, asm/342A */
+    switch (tile >> 2) {
+    case 5:  return 1;                                       /* village */
+    case 6:  *label = U2_S_SITE_TOWN;   return 2;            /* town    */
+    case 7:  *label = U2_S_SITE_TOWER;  *ax = 5; *ay = 5; return 4;
+    case 8:  *label = U2_S_SITE_CASTLE; return 3;            /* castle  */
+    case 9:  *label = U2_S_SITE_DUNGEON; *ax = 5; *ay = 5; return 5;
+    default: return 0;
+    }
+}
+
+int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay)
+{
+    return site_for_tile(tile, label, ax, ay);
+}
+
+/* Clear the six creature arrays before a load, so a sector that authors no
+ * monsters cannot inherit the last sector's table. */
+static void monsters_clear(u2_ctx *ctx)
+{
+    u2_state *s = &ctx->state;
+    memset(s->mon_x,    0, sizeof s->mon_x);
+    memset(s->mon_y,    0, sizeof s->mon_y);
+    memset(s->mon_hp,   0, sizeof s->mon_hp);
+    memset(s->mon_type, 0, sizeof s->mon_type);
+    memset(s->mon_kind, 0, sizeof s->mon_kind);
+    memset(s->mon_role, 0, sizeof s->mon_role);
+}
+
+/*
+ * Load the sector now named by ow->sector_hi/lo, after the pattern of the entry
+ * routines: asm/2290 for the map, asm/22D5 for the monsters, then DS:12 = 4.
+ * Returns -1 and leaves the note filled when the map file is not there.
+ */
+static int site_reload(u2_ctx *ctx, u2_overworld *ow)
+{
+    u2_sector_id id = { (uint8_t)ow->sector_hi, (uint8_t)ow->sector_lo };
+
+    const u2_world_result r = u2_world_load(ctx, &ow->world, 1, id);
+    if (r != U2_WORLD_OK) {
+        snprintf(ow->note, sizeof ow->note, "sector %d%d: %s",
+                 ow->sector_hi, ow->sector_lo, u2_world_result_text(r));
+        return -1;
+    }
+
+    monsters_clear(ctx);
+    const u2_world_result mr = u2_world_load(ctx, &ow->world, 0, id);
+    const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
+
+    /* asm/343F tail, reached by every arm: `mov $0x4,%al; mov %al,0x12`. */
+    ctx->state.tile_offsector = 4;
+    ow->off_map_tile = 4;
+    u2_status_draw(ctx);
+    /* Rewritten on success, not only on failure: the caller prints this, and a
+     * stale note from the opening load would describe the sector we left. */
+    snprintf(ow->note, sizeof ow->note,
+             "sector %d%d via %s, %d creature%s%s",
+             ow->sector_hi, ow->sector_lo,
+             ow->world.found_prefix ? ow->world.found_prefix : "?",
+             creatures, creatures == 1 ? "" : "s",
+             mr == U2_WORLD_OK ? "" : " (no monx file)");
+    /* Same reason the open path prints its note unconditionally: on a transition
+     * "sector 71 ... 32 creatures" is the difference between a silent no-op and a
+     * diagnosable one. */
+    fprintf(stderr, "site: %s\n", ow->note);
+    return 0;
+}
+
+static void site_enter(u2_ctx *ctx, u2_overworld *ow, int digit,
+                       int ax, int ay)
+{
+    /* asm/341E: the cell you pressed E on becomes the return point. */
+    ctx->state.entry_x = (uint8_t)ow->x;
+    ctx->state.entry_y = (uint8_t)ow->y;
+
+    /* asm/22FD stores the sector being left. The engine stores only what is
+     * dirty, which is the same set: the grid and the creature table are written
+     * by the stamp and the creature turn, and nothing else mutates them. */
+    u2_monsters_store(ctx, &ow->world);
+    if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
+    if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+
+    ow->sector_lo = digit;
+    ctx->state.sector_second = (uint8_t)digit;
+    ow->x = ax;
+    ow->y = ay;
+    (void)site_reload(ctx, ow);
+}
+
+/*
+ * asm/242D/2434/243E: leaving is the sector-edge test, run on the UNMASKED
+ * coordinate before the wrap. It only tests the high edge, so walking east or
+ * south out of a sector returns you to the cell you entered on, while walking
+ * west or north wraps round the torus. That asymmetry is in the bytes and is
+ * reproduced rather than tidied.
+ */
+static void site_leave(u2_ctx *ctx, u2_overworld *ow)
+{
+    ow->x = ctx->state.entry_x;
+    ow->y = ctx->state.entry_y;
+    ow->sector_lo = 0;
+    ctx->state.sector_second = 0;
+
+    u2_monsters_store(ctx, &ow->world);
+    if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
+    if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+
+    (void)site_reload(ctx, ow);
+}
+
+/*
  * One packed-decimal `sbb`/`das` step, exactly as the original writes it.
  *
  * The original's idiom is `stc; cmc; sbb $imm,al; das; cmc; mov [..],al; jb
@@ -384,6 +512,16 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
         return -1;
     }
 
+    /* The two bytes the original carries into the world and the engine never set
+     * until site entry needed them: DS:13 is the sprite stamped into the map cell
+     * (0x78 on foot, constant across every in-world capture) and DS:12 is the
+     * off-sector tile marker, 0xFF in-world and 4 inside a site. cmd_E's on-foot
+     * gate reads the first, so without this it would answer "-ONLY ON FOOT!".
+     * The overworld already carried 0xFF locally in ow->off_map_tile; now the
+     * state block agrees with it. */
+    ctx->state.player_stamp   = 0x78;
+    ctx->state.tile_offsector = ow->off_map_tile;
+
     /* CP5 W1 wiring: the creature table. asm/22D5 reads 256 bytes of monxNN into
      * DS:137 on the same sector load that reads the map, and u2_monsters_spawn
      * copies those six arrays into the state block the attack and (later) the
@@ -640,6 +778,42 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_ATTACK);
             pending_cmd = 'A';
             continue;
+        case 'E': {
+            /* asm/3389 cmd_E. Inside a site the answer is " WHAT?"; the doors
+             * only work from the world map, which is [DS:4A] == 0. */
+            seam_str_out(ctx, U2_S_ENTER);
+            if (ctx->state.sector_second != 0) {
+                seam_str_out(ctx, U2_S_ENTER_WHAT);
+                seam_char_print(ctx, '\r');
+                seam_str_out(ctx, U2_S_CMD_PROMPT);
+                continue;
+            }
+            /* asm/33A6: [DS:13] is the sprite stamped into the map cell and the
+             * test is `>= 0x78`, i.e. on foot. The engine has no vehicles yet, so
+             * the stamp is set to 0x78 at open and this arm cannot fire; it is
+             * here so a vehicle implementation finds the gate already in place. */
+            if (ctx->state.player_stamp < 0x78) {
+                seam_str_out(ctx, U2_S_ONLY_ON_FOOT);
+                seam_char_print(ctx, '\r');
+                seam_str_out(ctx, U2_S_CMD_PROMPT);
+                continue;
+            }
+            const char *label = NULL;
+            int ax = 0, ay = 0;
+            const int digit = site_for_tile(u2_world_tile_at(&ow->world, ow->x, ow->y),
+                                            &label, &ax, &ay);
+            if (digit == 0) {
+                seam_str_out(ctx, U2_S_ENTER_WHAT);
+                seam_char_print(ctx, '\r');
+                seam_str_out(ctx, U2_S_CMD_PROMPT);
+                continue;
+            }
+            if (label) seam_str_out(ctx, label);
+            seam_char_print(ctx, '\r');
+            site_enter(ctx, ow, digit, ax, ay);
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            continue;
+        }
         case 'Q':
             u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
             continue;
@@ -683,8 +857,19 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * refused out-of-range steps and cited that as faithful to the
          * original's refusal of an invalid move; that was a guess, and the
          * live capture disproved it. */
-        const int nx = (ow->x + dx) & U2_SECTOR_MASK;
-        const int ny = (ow->y + dy) & U2_SECTOR_MASK;
+        const int raw_x = ow->x + dx;
+        const int raw_y = ow->y + dy;
+
+        /* asm/242D/2434: the edge test runs on the unmasked coordinate and only
+         * checks the high edge, so east and south leave the sector while west and
+         * north wrap. See site_leave(). */
+        if (raw_x >= U2_SECTOR_EDGE || raw_y >= U2_SECTOR_EDGE) {
+            site_leave(ctx, ow);
+            continue;
+        }
+
+        const int nx = raw_x & U2_SECTOR_MASK;
+        const int ny = raw_y & U2_SECTOR_MASK;
 
         /* CP5 W4: a creature standing there blocks the step.
          *

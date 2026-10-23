@@ -124,6 +124,17 @@ int u2_overworld_dump(u2_ctx *ctx, const char *path);
 int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
 
 /*
+ * The tile -> site table from asm/33C3..33FF, exposed so it can be tested against
+ * real sector files. Returns the site digit for [DS:4A] (0 = not a gate), writes
+ * the announcement string to *label (NULL for the village, which has none) and the
+ * arrival cell to ax and ay.
+ *
+ * The gate is tile >> 2 because cmd_E dispatches on [DS:14] >> 1 and DS:14 is
+ * map_byte >> 1 (CP5 ticket C7).
+ */
+int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay);
+
+/*
  * Spend `amount` food from the packed-decimal triple DS:53/54/55 and return 1
  * if the subtraction underflowed, which is the original's death condition
  * (file 0x0B2E jumps to runtime 0x0E62 on a borrow). On that borrow it runs

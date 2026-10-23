@@ -1,0 +1,19 @@
+# CP5 towns — walk into a village and back out again.
+#
+# Run against a content dir containing mapx70/mapx71, with a save whose
+# DS:49/4A name sector 70 and whose entry pair DS:5A/5B is (31,31). That cell is
+# the one 0x14 tile in mapx70, and 0x14>>2 == 5, which asm/33C3 sends to the
+# village arm: digit 1, arrival (31,62).
+#
+#   E      -> ENTER, sector 71 loads, 32 creatures
+#   0xf1   -> SOUTH, y 62->63, wraps
+#   0xf1   -> SOUTH, y 64 -> the asm/242D edge test fires, back to sector 70
+#
+# Verified by hand on 2026-10-27 against the real content: stderr reads
+#   site: sector 71 via monx, 32 creatures
+#   site: sector 70 via monx, 0 creatures
+# NOT A GATE on its own; site_check.c is the gate, and it also cross-checks every
+# gate cell in the pack against the sector files.
+E
+0xf1
+0xf1
