@@ -35,6 +35,18 @@ void u2_turnlog(const u2_ctx *ctx, const u2_frame *frame, unsigned turn)
 
     if (!ctx->debug_cli || ctx->debug_path == NULL || frame == NULL) return;
 
+    /* The cap says so once and then goes quiet, rather than either filling the disk
+     * or stopping silently -- a silent stop would look like a hung logger. */
+    if (ctx->debug_limit != 0 && turn > ctx->debug_limit) {
+        static int said;
+        if (!said) {
+            said = 1;
+            fprintf(stderr, "u2: --debug stopped after %u turns (--debug-limit, "
+                            "0 lifts the cap)\n", ctx->debug_limit);
+        }
+        return;
+    }
+
     /* The launch directory is <base>/<timestamp>, so the base may itself be
      * missing. Create the parent first and ignore its failure: if the full path
      * still cannot be made, the error below is the one worth reporting. */

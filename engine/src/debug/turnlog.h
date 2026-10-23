@@ -33,6 +33,12 @@
 
 #define U2_TURNLOG_DEFAULT_DIR "/tmp"
 
+/* Turns written before logging stops on its own. The engine auto-PASSes while a run
+ * sits untouched, and a PASS is a turn, so an unattended session wrote 288 file pairs
+ * in 45 seconds on 2026-10-27 and would have kept going all night. The cap is the
+ * blunt fix; --debug-limit 0 lifts it deliberately. */
+#define U2_TURNLOG_DEFAULT_LIMIT 200u
+
 /* Write the pair for `turn`. Silently does nothing when logging is off. A write
  * failure is reported once on stderr and then stops being reported, because a
  * full or read-only directory must not take the game down with it. */

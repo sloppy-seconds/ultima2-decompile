@@ -63,6 +63,7 @@ typedef struct u2_ctx {
      * which no combination of the startup dump flags can do. */
     int debug_cli;
     const char *debug_path;   /* --debug-path DIR; NULL until parsed */
+    unsigned debug_limit;     /* --debug-limit N: stop after N turns. 0 = unlimited. */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
     uint32_t rng_rolls;     /* rolls served, for dumps and tests */
     unsigned seed;          /* PRNG seed byte, i.e. the 0x40:6C value (core/rng.h) */

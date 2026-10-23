@@ -59,6 +59,8 @@ static void usage(const char *argv0)
         "                  running session; the dump flags are all run-then-exit.\n"
         "  --debug-path D  directory for --debug output (default /tmp; the project\n"
         "                  overrides it because /tmp is tmpfs on its own host)\n"
+        "  --debug-limit N stop --debug after N turns (default 200; 0 = unlimited).\n"
+        "                  An idle run auto-PASSes, and a PASS is a turn.\n"
         "  --dump-screen F  (SDL build) save the first presented frame to F as\n"
         "                    PPM and exit; with SDL_VIDEODRIVER=dummy this\n"
         "                    proves the window pixel path with no display\n"
@@ -136,6 +138,8 @@ int main(int argc, char **argv)
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
+    ctx.debug_limit = U2_TURNLOG_DEFAULT_LIMIT;
+
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (strcmp(a, "--headless") == 0) {
@@ -191,6 +195,16 @@ int main(int argc, char **argv)
             ctx.debug_path = argv[++i];
             ctx.debug_cli = 1;      /* naming a directory is intent enough */
 
+        } else if (strcmp(a, "--debug-limit") == 0 && i + 1 < argc) {
+            /* 0 means unlimited, and has to be asked for by name: an unattended
+             * session auto-PASSes forever and wrote 288 file pairs in 45 s before
+             * the cap existed. */
+            char *end = NULL;
+            const unsigned long v = strtoul(argv[++i], &end, 10);
+            if (end == argv[i] || (end && *end != '\0'))
+                fprintf(stderr, "u2: --debug-limit wants a number (got '%s')\n", argv[i]);
+            else
+                ctx.debug_limit = (unsigned)v;
         } else if (strcmp(a, "--selftest") == 0) {
             ctx.selftest = 1;
         } else if (strcmp(a, "--trace") == 0) {
