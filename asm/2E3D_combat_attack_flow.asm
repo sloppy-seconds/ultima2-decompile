@@ -27,6 +27,61 @@
 #           entry executed in 2 of 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+#
+# ---------------------------------------------------------------------------
+# FLOW DECODED 2026-10-23 (CP5 W3 prep). File offsets below are the L_<hex> labels
+# in this file, i.e. runtime + 0x200 (AGENTS.md: file_offset = offset + 0x200).
+#
+# Target scan (file 0x303D..0x307A): slot index starts at 0x1F and counts DOWN
+# through [DS:1F]; a slot matches when [DI+0x137]==[DS:23] and [DI+0x157]==[DS:24]
+# and [DI+0x1B7]==[DS:25]. No match -> MISS (file 0x3164). NOTE [DS:23]/[DS:24] are
+# the same scratch the walk loop uses for the player cell, and [DS:25] is
+# reserved_25 in state.h: this routine is matching a TARGET triple, so the
+# direction handler upstream must be filling them. Not yet traced — do not assume
+# "adjacent cell" from the live behaviour without checking that path.
+#
+# HIT TEST (file 0x307E..0x3088) — proven:
+#     call L_005417          ; rand_byte
+#     clc; rcr $1,%al        ; al = rand >> 1
+#     cmp    0x4c,%al        ; DS:4C = stat_agi
+#     jb  -> HIT   else MISS
+#   so a hit needs (rand >> 1) < agility. agility 0 can never hit; 0xFF always can.
+#
+# DAMAGE (file 0x309F..0x30BA) — shape proven, magnitude NOT:
+#     al = [DS:61]; add al,al x3        ; al = 8 * [DS:61]
+#     adc [DS:4B],al                    ; + stat_str (+ CF)
+#     clc; rcr $1,al; clc; rcr $1,al    ; >> 2
+#     mov %al,[DS:20]                   ; the damage byte
+#   => damage = (strength + 8 * [DS:61]) >> 2.
+#   [DS:61] is readied_weapon in state.h, but the wield INDEX does not reproduce
+#   the observed number: at str 40 with QUICK SWORD (wield 9) the formula on the
+#   index gives 28, while two live kills each removed exactly 34 (Guard 255->221
+#   in captures/spice86/cp5-guard-aggro, Fighter 50->16 in cp5-weak-fight).
+#   34 is what the formula yields for a weapon value of 12, and three calls sit
+#   between the HIT print and the read (L_00543e, L_0060d7, L_00543e) — so [DS:61]
+#   is almost certainly a weapon DAMAGE value resolved by the undecoded L_0060d7,
+#   not the wield index. OPEN: decode L_0060d7 and the weapon table it fills.
+#
+# HP SUBTRACT AND DEATH (file 0x30BC..0x30DC) — proven, and note the branch sense:
+#     al = [DI+0x177]; stc; cmc; sbb [DS:20],al; cmc
+#     jae -> (CF clear after cmc means hp < damage) -> DEATH branch
+#     fallthrough -> store hp-damage (so hp == damage leaves a LIVE monster at 0)
+#   Death clears [DI+0x177] hp, [DI+0x197] type and [DI+0x1B7] kind — and NOT
+#   [DI+0x137]/[DI+0x157] x/y. It then copies the dead monster's x,y into
+#   [DS:23]/[DS:24] and clears the high nibble of that map cell via [DS:8], which
+#   is the monster stamp being removed.
+#
+# REWARD (file 0x3114..0x3161) — proven, and it matches live exactly:
+#   gold += (rand & 0x17) | 1   BCD adc into [DS:59] then [DS:58]
+#   exp  +=  rand & 0x07        BCD adc into [DS:57] then [DS:56]
+#   Live: `KILLED--GOLD+1--EXP.+02` on a character at 9999 in both fields, which
+#   wrapped them to 0010 and 0001 — the BCD wrap the B1 ticket predicts, seen on
+#   screen (captures/spice86/cp5-fight/screen4.png).
+#
+# What the engine still lacks to implement this: the [DS:61] weapon table, the
+# upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack, and L_0055b5 (called
+# before each BCD add — probably the numeric print, unconfirmed).
+# ---------------------------------------------------------------------------
 combat_attack_flow:
 L_00303d:
         .byte 0xb7,0x00  # forced-kept: gas re-encodes 'mov    $0x0,%bh' differently
