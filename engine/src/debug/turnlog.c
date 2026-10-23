@@ -5,8 +5,15 @@
 #include <stdio.h>
 #include <string.h>
 
-#define _POSIX_C_SOURCE 200809L   /* mkdir under -std=c11; same stated exception
-                                   * core/save.c makes for the same reason */
+#ifndef _POSIX_C_SOURCE         /* mkdir under -std=c11, same stated exception
+                                 * core/save.c makes. Guarded because the SDL build
+                                 * passes -D_GNU_SOURCE, which already pulls in a
+                                 * _POSIX_C_SOURCE from features.h and an unguarded
+                                 * define is a redefinition, and -Werror makes that
+                                 * a build failure that silently leaves the old
+                                 * binary in place. */
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "debug/dump_state.h"
