@@ -3,6 +3,24 @@
 Entry point for a fresh session. Paul is asleep. Everything below is **agent-drivable**:
 no gameplay, no opinion, no password he has to type. Ordered by what each item unblocks.
 
+> **Update, 2026-10-28 (next session, read this before the queue below).**
+> **Item 1 is closed, and the answer is not what it asked for.** There is no return
+> address to capture: at a stop inside the spawner the guest stack is empty (SS:SP exactly
+> at its initial value, `peekRet` answers `017D:0000`), because the spawner is reached by
+> fall-through, not by a call. The trigger is now static and named — every completed
+> command falls through `cmd_done` to `asm/0A38_post_command_tail`, which dispatches on the
+> sector's low decimal digit (`DS:4A`) into the creature sweep, and the sweep's last act is
+> `asm/0AA4_monster_spawn_entry`. Full write-up, measurements and the four emulator hazards
+> that cost the time: **`docs/monster-spawn.md` § 15.2**. `tools/bp_read.py` grew
+> `--state --ret --ret-type --stack --callstack` to get there.
+> **Item 2 stays blocked**, on a different unknown than the handoff assumed: the cadence is
+> proven, the *selector* is not (the `DS:60` bit chain and the `DS:4A` 1..5 arms). § 15.2
+> names the paired-sample measurement that closes it. Do not implement a spawn rule yet.
+> **Item 5 (G30) was attempted and is still open** — three unlock attempts, all refused, and
+> the aim computation in `asm/4326` is the next thing to read. Details in
+> `docs/needs-gameplay.md` G30. **Item 4 is therefore still blocked on 5.**
+> Item 3 (Z stats) was not started. Items 6-8 not started.
+
 Read first, in this order: `AGENTS.md` (rules, isolation, evidence grades), this file,
 then `docs/monster-spawn.md` § 15 / § 15.1 if you are doing item 1.
 
