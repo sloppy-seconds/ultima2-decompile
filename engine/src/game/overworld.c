@@ -464,6 +464,14 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
     seam_str_out(ctx, U2_S_CMD_PROMPT);
     if (r == 2) {
         char num[8];
+        /* asm/2E3D file 0x30F4: movb $0x80, (%bx,%si) — the dead creature's cell
+         * is stamped with the view's "do not draw" bit, not restored to the
+         * terrain underneath. That is what the bytes show, so it is what happens;
+         * whether the original ever puts terrain back is a separate unproven
+         * question and inventing a restore would be worse than the blank. */
+        const int cell = ty * U2_SECTOR_EDGE + tx;
+        if (cell >= 0 && cell < U2_SECTOR_TILES)
+            ow->world.map[cell] = 0x80;
         seam_str_out(ctx, U2_S_KILLED);
         snprintf(num, sizeof num, "%u", (unsigned)a.gold);
         seam_str_out(ctx, num);

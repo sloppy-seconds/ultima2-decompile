@@ -29,8 +29,15 @@
  * on every capture in the corpus.
  *
  * Returns the number of occupied slots, for callers that want to say so.
+ *
+ * CP5 W2: this also STAMPS each creature's type byte into the sector grid, so it
+ * takes the world non-const on purpose. The renderer draws the grid, not the
+ * monster record — docs/art-index.md proved that on the one slot in the corpus
+ * where the two disagree — and the original's spawner mutates the in-memory map
+ * the same way. The same stamped cell is what passability reads, which is why a
+ * creature blocks movement without any extra check.
  */
-int u2_monsters_spawn(u2_ctx *ctx, const u2_world *w);
+int u2_monsters_spawn(u2_ctx *ctx, u2_world *w);
 
 /*
  * Copy the live creature arrays back into the sector buffer and mark it dirty,

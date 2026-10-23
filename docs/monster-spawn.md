@@ -338,3 +338,54 @@ That table lists the dungeon `kind` column under the same record layout as the
 overworld. The layout is the same but the **meaning** is not: `0x1B7` is `slot>>1` in a
 dungeon and a kind index on the overworld. Anyone re-deriving this should read this
 section rather than infer from that table.
+
+## 10. § 2's file layout does not reproduce the live table — reopened 2026-10-23
+
+Graded **disputed**, against § 2's **measured**. Found while wiring the CP5 creature
+renderer, which needs the table to be right before anything can be drawn from it.
+
+§ 2 says `monxNN` holds six plain 32-byte arrays at file offsets 128, 160, 192, 224,
+256 and 288, copied verbatim to `DS:137`. Reading `monx31` at those offsets gives:
+
+| field | what § 2 predicts | what the file holds |
+| --- | --- | --- |
+| `hp` | 10 in the twelve live slots | **0 in all 32** |
+| `x` | 25 in the twelve live slots | **112 in several** — off a 64-wide grid |
+| `type` | `0x38` in the live slots | **0x00** |
+
+A table with `hp = 0` in every slot cannot be the source of a live table with `hp = 10`
+in twelve of them, and `x = 112` is not a coordinate in a 64-cell sector. So either the
+file is not six plain arrays, or the copy is not verbatim, or both.
+
+What `monx31` (384 bytes) actually contains:
+
+| range | bytes | reading |
+| --- | --- | --- |
+| `0x000..0x07F` | `1d 22 14 1e … 38 38 0e 0e … ff ff …` | the stamped-map slice § 2 already identified; values are grid-cell bytes, and `0x38`/`0x0e` are art-bearing |
+| `0x080..0x0FF` | `70 70 08 70 …` then `00 00 03 00 00 03 03 03 02 02 … 81 82 03 03 01 01 … 83 03 01 01 01 84 00 00` then 64 zero bytes | one 128-byte block, **not** six 32-byte arrays |
+| `0x100..0x17F` | `1a 70 08 70 …` then the same `00 00 03 00 …84 00 00` run, then zeros | a near-duplicate of the block above, starting **one byte later** |
+
+The `0x81 0x82 0x83 0x84` values are the ones `cmd_O` enumerates (`ENILNO`, `RING`,
+`SOS`), so the role information is in there somewhere — but at an offset and stride that
+§ 2 does not describe, and the near-duplicate block suggests either two record sets or a
+one-byte misalignment in how the region was sliced.
+
+**Second suspect, named so it gets checked too:** the live reads themselves. In sector 31
+every one of the twelve live creatures read as `x = 25, y = 29` — exactly the position the
+player was seeded to. Twelve creatures stacked on one cell is possible but unlikely; a
+wrong `mon_x`/`mon_y` offset is the more probable explanation, and it would mean § 2's DS
+offsets are as suspect as its file offsets.
+
+**Consequence for the engine.** `u2_monsters_spawn` copies the § 2 layout because that is
+what § 2 specified, so it finds zero creatures in every sector and CP5 W2 (draw the
+creatures) has nothing trustworthy to draw. The stamp code is written and compiled out
+behind `U2_MONSTERS_LAYOUT_PROVEN` in `engine/src/game/monsters.c` — flipping it to 1 is
+the whole change once the layout is re-derived. Stamping a wrong table would have painted
+32 cells with art 0 and presented a data-layout bug as a graphics bug.
+
+**What would settle it**, and it is an agent afternoon not a play session: read
+`DS:137..0x1FF` live in a sector whose `monxNN` is on disk, and search the file for the
+byte pattern the DS shows, at whatever stride. `docs/art-index.md` already did exactly
+this for one field and found the grid, not the record — the same method over all six
+arrays is what is missing. Until then § 2's layout is **disputed**, and anything built on
+it inherits the doubt.

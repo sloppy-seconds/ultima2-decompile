@@ -445,6 +445,26 @@ commit that records the finding adds an item here with a who/confidence verdict.
 When a session closes an item, tick it, name the harvest directory, and move the
 detail to § Closed.
 
+### G26 — the creature-table layout, file and DS `[ ]` *(agent, blocks CP5 W2 and W4)*
+**Why it exists:** `docs/monster-spawn.md` § 2 recorded `monxNN` as six plain 32-byte
+arrays at file offsets 128..383, copied verbatim to `DS:137`. That layout was cited into
+`engine/src/game/monsters.c` and then found not to reproduce the live table: at those
+offsets `monx31` has `hp = 0` in all 32 slots and `x = 112`, which is off a 64-wide grid.
+A table that cannot be right is why CP5 W2 (draw the creatures) is compiled out behind
+`U2_MONSTERS_LAYOUT_PROVEN` rather than shipped rendering art 0.
+**The trap:** the second suspect is our own live reads. In sector 31 all twelve live
+creatures read as `x = 25, y = 29` — exactly where the player was seeded. Twelve
+creatures stacked on one cell is possible; a wrong `mon_x`/`mon_y` offset is likelier, and
+if the DS offsets are wrong then § 2's whole table is wrong, not just the file slice.
+**Action:** read `DS:137..0x1FF` live in a sector whose `monxNN` exists on disk, then
+search that file for the byte pattern the DS shows, at whatever stride reproduces it.
+`docs/art-index.md` already did this for one field — the grid, not the record — and the
+same method across all six arrays is the missing step. Do both ends: the file offsets and
+the DS offsets, and say which one was wrong.
+**Why the agent can do it:** headless boot, seed state, read DS, compare to file. No
+walking, no eyes.
+**Needs owner:** no.
+
 ## Closed
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.

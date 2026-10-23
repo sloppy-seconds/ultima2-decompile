@@ -31,7 +31,7 @@
 #define MON_OFF_KIND 128
 #define MON_OFF_ROLE 160
 
-int u2_monsters_spawn(u2_ctx *ctx, const u2_world *w)
+int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
 {
     if (ctx == NULL || w == NULL || !w->mon_loaded)
         return 0;
@@ -48,6 +48,53 @@ int u2_monsters_spawn(u2_ctx *ctx, const u2_world *w)
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_x[i] || s->mon_y[i])
             occupied++;
+    }
+
+    /* CP5 W2: the stamp.
+     *
+     * The renderer does not read the monster record. docs/art-index.md settled
+     * that on the only slot in the corpus where the two fields disagree — grid
+     * 0x38 versus type 0x34 — where the drawn pixels matched 0x38>>2 at 256/256
+     * and 0x34>>2 at 171/256. So the original stamps the type byte into the
+     * in-memory sector map at spawn and the view draws the map, which is what
+     * this loop reproduces.
+     *
+     * Stamping the one grid rather than keeping a second is deliberate: the same
+     * cell is what passability reads, so a creature blocks movement the way the
+     * original does it — by not being a walkable tile — with no extra check
+     * anywhere. One grid, one truth.
+     *
+     * The empty-slot test is the module's own (x||y), not hp, so a slot the
+     * spawner left alone is never stamped. On a kill, asm/2E3D file 0x30F4 writes
+     * 0x80 over the cell, which is the view's "do not draw" bit rather than a
+     * restoration of the terrain beneath; whether the original ever puts terrain
+     * back is not established, so the kill path writes what the bytes show.
+     *
+     * INFERRED, and it is the line to suspect first if a creature ever draws in
+     * the wrong cell: that the stamp lands at y*64+x with the sector's own stride
+     * is assumed from the grid geometry, not read off the stamping site.
+     *
+     * ── HELD OFF, and deliberately so ─────────────────────────────────────────
+     * U2_MONSTERS_LAYOUT_PROVEN is 0 because the table this would stamp is not
+     * trustworthy yet. docs/monster-spawn.md § 2 claims six plain 32-byte arrays
+     * at file offsets 128..383, copied verbatim to DS:137; reading monx31 at
+     * those offsets gives hp = 0 in all 32 slots and x = 112, which is off a
+     * 64-wide grid. A table that cannot be right must not be painted over the map,
+     * because it would render 32 cells of art 0 and look like a graphics bug
+     * rather than a data-layout bug. The stamp stays here, compiled out, so the
+     * moment the layout is re-derived this is a one-character change.
+     * See docs/monster-spawn.md § 10 and docs/needs-gameplay.md. */
+#define U2_MONSTERS_LAYOUT_PROVEN 0
+    if (!U2_MONSTERS_LAYOUT_PROVEN)
+        return occupied;
+
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (!(s->mon_x[i] || s->mon_y[i]))
+            continue;
+        const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
+        if (cell < 0 || cell >= U2_SECTOR_TILES)
+            continue;
+        w->map[cell] = s->mon_type[i];
     }
     return occupied;
 }
