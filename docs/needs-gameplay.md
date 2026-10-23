@@ -572,6 +572,26 @@ Also capture in the same session: `DS:65` (keys) before and after, to confirm th
 re-entering the sector — that decides whether the write goes to the sector map or to
 a separate overlay, which is the `(%bx)` question the asm leaves open.
 
+**CAPTURED 2026-10-28 — one completed unlock, both predictions held.** Sector 32, `G23MAX`
+with 20 keys, player at (33,1) standing on forest `0x0C`, door at (34,1) = `0xA0`, and
+`DS:14 = 6` = `0x0C >> 1` exactly as the static reading predicts. Input `U` then `Right`
+**sent in one burst with a 0.05 s gap**: the cell came back **`0x0C`** and `DS:65` went
+`0x20` -> `0x19`, i.e. packed-decimal 20 -> 19. So the door really is paved with the ground
+you are standing on, and the `cmc; sbb; das; cmc` decrement is real end to end. Both halves
+of the prediction, observed.
+
+**Why every earlier attempt refused, and it was not the axis.** `cmd_U` prints
+`UNLOCK DIRECTION-` and then calls the direction reader at runtime `2370..2392`, which
+polls for a key whose **high byte is 0xFF** (a BIOS extended scancode) and matches `AL`
+against the four arrow scancodes held in `DS:0x26E..0x271`. If none arrives before its
+loop counter wraps it prints `PASS` and leaves `DS:19` at zero, and `asm/4309` then refuses.
+Sending `U`, waiting a second, and only then sending the arrow loses that race: the screen
+showed `UNLOCK DIRECTION-Pass` followed by `EAST--INVALID MOVE!`, because the arrow arrived
+after the prompt had given up and was consumed as an ordinary move instead. The fix is
+timing, not aim — `--keys U,Right --delay 0.05`. Runs `unlock1`.
+
+Still open in this item: whether an opened cell survives leaving and re-entering the sector.
+
 ### G29 — sector crossing on the west land bridge: scroll or teleport
 
 **Grade: recalled (owner, 2026-10-27) — "when I cross the land bridge west into the
