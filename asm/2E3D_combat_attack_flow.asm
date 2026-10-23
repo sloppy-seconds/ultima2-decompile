@@ -57,10 +57,21 @@
 #   the observed number: at str 40 with QUICK SWORD (wield 9) the formula on the
 #   index gives 28, while two live kills each removed exactly 34 (Guard 255->221
 #   in captures/spice86/cp5-guard-aggro, Fighter 50->16 in cp5-weak-fight).
-#   34 is what the formula yields for a weapon value of 12, and three calls sit
-#   between the HIT print and the read (L_00543e, L_0060d7, L_00543e) — so [DS:61]
-#   is almost certainly a weapon DAMAGE value resolved by the undecoded L_0060d7,
-#   not the wield index. OPEN: decode L_0060d7 and the weapon table it fills.
+#   34 is what the formula yields for a weapon value of 12.
+#   RETRACTION, same day: an earlier draft of this note claimed the intervening
+#   call L_0060d7 "resolves a weapon DAMAGE value into [DS:61]". It does not, and
+#   the claim was made without looking it up. L_0060d7 is a FILE offset; the
+#   routine is runtime 5ED7 = asm/5ED7_sub_5ed7.asm, which pushes ax/bx/cx/dx,
+#   loads ax=0x200 bx=0x3000 cx=0x20 dx=0xe00 bp=0x8 and tail-calls L_005fa9
+#   (runtime 5DA9). That is a parameterised scan, not a lookup, and nothing in it
+#   writes DS:61. The neighbouring calls L_00543e (runtime 523E) read [DS:1A] and
+#   branch on `cmp $0x1` — also not a weapon table.
+#   So the 28-vs-34 gap is UNEXPLAINED, not parked behind one missing routine.
+#   The whole span 0x3096..0x30ba needs a proper re-decode (it is bulk-wave output
+#   at confidence: low, and the `adc 0x4b,%al` operand order is easy to read the
+#   wrong way round: as `al += [DS:4B]` it gives 28, as `[DS:4B] += al` it gives
+#   18, and neither is 34). Until that is done, damage is NOT implementable and
+#   nothing in engine/ should guess at it.
 #
 # HP SUBTRACT AND DEATH (file 0x30BC..0x30DC) — proven, and note the branch sense:
 #     al = [DI+0x177]; stc; cmc; sbb [DS:20],al; cmc
@@ -78,9 +89,11 @@
 #   wrapped them to 0010 and 0001 — the BCD wrap the B1 ticket predicts, seen on
 #   screen (captures/spice86/cp5-fight/screen4.png).
 #
-# What the engine still lacks to implement this: the [DS:61] weapon table, the
-# upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack, and L_0055b5 (called
-# before each BCD add — probably the numeric print, unconfirmed).
+# What the engine still lacks to implement this: the damage magnitude (see the
+# retraction above — the span 0x3096..0x30ba needs re-decoding, it is not one
+# missing table), the upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack,
+# and L_0055b5 (called before each BCD add — probably the numeric print,
+# unconfirmed).
 # ---------------------------------------------------------------------------
 combat_attack_flow:
 L_00303d:
