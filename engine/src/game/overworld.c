@@ -682,6 +682,19 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
      * landed, and a miss never reaches it — which is exactly what § 16 measured
      * (a landed blow alerts the sector, a missed swing alerts nothing). */
     u2_ai_alarm(ctx);
+
+    /* asm/0C1F: the status counters tick on the damage path, and only inside a
+     * site. This is the caller CP5 had been calling undiscovered — the search had
+     * looked for L_000c33, which is cmd_done, when the tick's label is L_000e33.
+     * How many times one turn reaches it is NOT proven, so the engine ticks each
+     * counter exactly once per wound and says so: a per-turn decrement wired on
+     * this note alone would be a promotion past the evidence. asm/0C33 skips a
+     * counter that is already zero, which is why sleeping does not go negative. */
+    if (ctx->state.sector_second != 0) {
+        if (ctx->state.paral_legs)  ctx->state.paral_legs--;
+        if (ctx->state.paral_arms)  ctx->state.paral_arms--;
+        if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
+    }
     /* The reward lands on its OWN line, prompt and all — live frame reads
      *   CMD: ATTACK--EAST--HIT!!!
      *   CMD: KILLED--GOLD+1--EXP.+02
