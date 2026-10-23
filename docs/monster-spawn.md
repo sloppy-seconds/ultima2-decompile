@@ -820,3 +820,45 @@ One arm is not reproduced. The loop falls through into `asm/1151`, which writes 
 counter elsewhere — so which slot that names here is not established, and writing a slot
 on an unproven index is worse than not writing it. Recorded in
 `engine/src/game/ai.c:u2_ai_alarm`.
+
+## 15. Overworld wandering spawn — identification in progress (2026-10-27)
+
+Opened because the owner walked the starting map in the engine and met nothing. That is
+correct behaviour for the data and a gap in the engine at the same time: `monx20[64:96]`
+is all zeros, so sector 20 has **no placed monsters** and everything in it must arrive as
+a wandering spawn, which `u2_monsters_spawn()` does not implement — it only `memcpy`s the
+five arrays out of `monxNN`.
+
+**What is now identified, by bytes rather than by guess:**
+
+- The per-kind arms are a `cmp/je` chain on **`[DI+0x1B7]`**, the kind selector.
+  `asm/0D44_sub_0d44.asm` is `mov 0x1b7(%di),%al; cmp $0x8,%al; je <orc arm>`, so kind 8
+  is the Orc arm. Note § 9's finding that in a *dungeon* `[DI+0x1B7]` is the slot number,
+  not a kind — the same field carries different meanings per sector kind, so any engine
+  model that reads it one way everywhere will be wrong in one of the two.
+- The dispatch above the arms is a **binary search, not a linear chain**: `0D06..0D43` are
+  three-to-five-byte `jae`/`jmp` stubs fanning out to arm entries at file `0F44`, `0F64`,
+  `0F84`, `0FA4`, `0FC4`, `0FD1`, `0FD4`, `1050`. `asm/0D21_sub_0d21.asm` is a separate
+  four-way `rcr`/carry probe on `AL` with five far targets, semantics still unknown.
+- Every arm ends in the shared tail `asm/0BAF_monster_hp_epilogue.asm`, which is
+  `call L_005cb1` and nothing else. **What `0x5CB1` does is still unknown**, and it is the
+  obvious candidate for "stamp the creature into the sector grid", because the arms
+  themselves only write type and HP into the slot. It is called from at least six other
+  places (`38B0_cmd_L`, `0864`, `08E6`, `268C`, `26CC`), so it is shared machinery, not a
+  spawn-specific helper.
+
+**What is NOT identified, and is the actual blocker:**
+
+1. **The trigger.** Nothing calls the dispatch chain by label, so it is reached by
+   fallthrough or a jump table. Until the caller is found there is no evidence for *when*
+   a wandering spawn happens — per step, per sector entry, on a random roll, or on the
+   status tick. Implementing a plausible rule without this is exactly the inference the
+   project keeps getting punished for, so the engine gets no spawn logic until it is found.
+2. **The kind source.** What writes `[DI+0x1B7]` before the chain runs.
+3. **`L_005cb1`.**
+
+**How to close it, cheapest first.** A capture, not a read: break at runtime `0x0D44` in a
+headless sector-20 session, dump `DI`, `[DI+0x1B7]`, the slot index and the CS:IP return
+address, and let the run walk. The return address names the trigger directly and settles
+(1) and (2) in one shot. `tools/bp_read.py` stops the CPU at a runtime address and dumps
+memory there, which is the existing tool for this — do not hand-roll a new one.
