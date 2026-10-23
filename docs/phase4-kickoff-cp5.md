@@ -107,9 +107,24 @@ is a one-place change.
 behind one function; § 16's open question (does `0x01` cause attacking, or record it) is
 still open and this is where it gets settled.
 
-**W7 — the tick.** Decrement `paral_legs/arms/sleep` and the unnamed `DS:26A` (add the field
-to `state.h` with a `# NAME UNKNOWN:` comment, do not invent a name) on the engine's time
-base, **not** on movement. Cite `asm/0C33..0C53` and § 15/§ 17.
+**W6b — the creature's own turn, and it is usually a no-op.** Measured at pass boundaries in
+§ 18: only **7% of (creature, turn) pairs produced any movement** (21 of 288), movers shift
+**2 cells** not 1, and 26 of 32 slots never moved — including the Fighter standing adjacent
+and every Merchant. So the loop is `for each creature: take a turn`, where a turn is mostly
+nothing, **not** `for each creature: step`. Implementing the intuitive version would churn
+the world ~6x faster than the original and empty the streets of the stillness that makes the
+town look inhabited. **Both numbers come from one 10-boundary window in one sector** —
+re-measure in a wilderness sector before either is hard-coded, and say which capture the
+constant came from.
+
+**W7 — the turn timer, then the tick.** Two layers, in this order. First the **turn**: a
+~7.5 s budget that, when it expires with no action, performs a PASS (and with a half-typed
+command, prints `<CMD>--PASS`); scripted runs expire it per input so replays stay
+reproducible. Then the **status tick**: decrement `paral_legs/arms/sleep` and the unnamed
+`DS:26A` once per turn, not per second and not per move. Cite `asm/0C33..0C53`, § 15, § 17
+and § 18. The engine must also charge the turn's food the way the original does — 10 for a
+pass, 19 for a move (`tools/turn_recorder.py` `FOOD_PER_PASS` / `FOOD_PER_MOVE`) — because
+that is what makes the pass countable at all.
 
 **W8 — death.** Zero `DS:51..59`, print `<NAME> IS DEAD!` into the CMD window. Cite
 `asm/0C62`.
@@ -129,13 +144,24 @@ renderer stays as it is and is no longer the acceptance surface; the CP5 gate is
 the SDL build (see `docs/phase4-state.md` § TODO: headless podman container to play the SDL
 build over noVNC, which is how a human without a local display plays it).
 
-**Q2 — still open, and SDL makes it sharper.** What is the engine's time base? The original
-ticks on wall-clock, not on input, but `phase4-plan.md` requires a seed plus a script to
-reproduce a run exactly, and a wall-clock tick is not reproducible in a replay. Proposal:
-**a fixed tick counter advanced by the frame loop** — the SDL build runs at a bounded frame
-rate, so "N frames per status tick" is both time-like for a player and deterministic for a
-replay; headless/scripted runs advance it per input instead. That is a declared deviation
-either way and needs an explicit ruling before W7, not an implementation preference.
+**Q2 — RESOLVED by the owner, 2026-10-23: option C, and the original's mechanic is a turn
+*timeout*.** The owner's recollection — *"each turn has a timeout, so if I don't perform an
+action before that timeout it PASS, or if I only do half an action it does `ATTACK--PASS`"*
+— was tested the same day and is **right on both halves**: with no input at all the log filled
+with `CMD: PASS` lines, measured at **~7.5 s per turn** (6 passes in 45 s via the food field),
+and pressing `A` alone produced `ATTACK--PASS`. Full evidence: `docs/spice86-live-findings.md`
+§ 18, capture `captures/spice86/cp5-turn-timeout/`.
+
+That resolves the determinism conflict rather than papering over it. The original's clock is
+not a wall-clock — **it is a turn timer**, so the engine's tick unit becomes *the turn*, and a
+replay advances turns deterministically by construction. Option C then reads: a turn is a
+fixed budget in the frame loop; interactive play lets the real timer expire it, scripted and
+replay runs expire it per input. Nothing about the status counters has to be non-reproducible.
+
+**Enhanced mode (CP11) gets a ruled knob:** the timeout is configurable, and **no timeout at
+all** is a legitimate mode — a true turn-based game. That is an enhanced-mode feature by the
+owner's own framing, so `original` mode must keep the ~7.5 s behaviour and the tunable lives
+behind the CP11 rules surface, never as a default.
 
 **Also open, and it blocks nothing:** the art question under SDL. Creature art index is
 `cell >> 2` from the map cell (`docs/art-index.md`), and the engine only has cleanroom

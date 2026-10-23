@@ -1321,3 +1321,71 @@ of the boots story.
   the quiet ground for save/state experiments.
 * `SCRUBED BY MAGICAL BOOTS!` was seen live in the sector 00 crowd — the C2 boots resist
   firing, with the game's own spelling.
+
+## 18. The turn is a timeout: the game passes for you, and creatures mostly do nothing (2026-10-23)
+
+Capture: `captures/spice86/cp5-turn-timeout/` (`turn-t0.png`, `turn-t1.png`,
+`halfaction.png`, plus `timeout.py` and `per_turn.py`, the two readers that produced every
+number here). Sector 31, seeded character, **no input sent during any measurement**.
+
+The owner proposed this model from memory — *"each turn has a timeout, so if I don't perform
+an action before that timeout it PASS, or if I only do half an action it does
+`ATTACK--PASS`"* — and it is exactly right on both halves.
+
+### The auto-pass is real, and it is the clock
+
+At `t0` the CMD log was empty: one line, `CMD:`, waiting. Twenty-five seconds later, with
+nothing sent, it read:
+
+```
+CMD: PASS
+CMD: PASS
+CMD: PASS
+CMD:
+```
+
+Measured properly via the food field (`turn_recorder.py` already established a PASS costs 10
+food and a move 19, and the player did not move): **6 auto-passes in 45 s, so a turn is
+~7.5 s.** That is the missing mechanism behind § 15 and § 17 — the status counters tick on
+*something*, and the something is this turn timer.
+
+### A half action becomes a pass
+
+Pressing `A` alone and letting the timer expire printed, verbatim:
+
+```
+CMD: ATTACK--PASS
+```
+
+The command was accepted, its direction never arrived, and the turn expired into a pass with
+the half-typed command still on the line. This is why `CMD:` lines in older captures show
+`PASS` the player never typed, and why `ATTACK--PASS` had never been reproduced: nobody had
+left the timer run out on purpose.
+
+### Do creatures each get a turn? They get one, and it is usually a no-op
+
+The naive measurement — net displacement over a window — cannot answer this, because a
+random walker that leaves and returns reads as stationary. So the food field was polled fast
+and creature positions snapshotted **at each pass boundary** instead. Ten boundaries, 32
+slots, 288 (creature, turn) pairs:
+
+| result | value |
+| --- | --- |
+| creature-turns that produced movement | **21 of 288 — 7%** |
+| movement when it happened | **2 cells**, consistently |
+| the persistent mover | slot 5, a Guard (`0x60`): 2 cells on **9 of 9** boundaries |
+| the occasional movers | slot 2 (Guard) 5/9, slot 12 (`0x30`) 3/9, slots 14, 19, 6 |
+| the rest | 26 of 32 slots never moved at all, including the Fighter standing adjacent to the player and every Merchant |
+
+So the shape is **per-creature turns that mostly do nothing**, not "every creature steps each
+turn". An engine that loops `for each creature: move` per turn would churn the world roughly
+six times faster than the original, and would empty the streets of the stillness that makes
+the town look inhabited. Two further notes: the movers shift **2 cells per turn**, not 1,
+which is worth pinning before it is implemented from intuition; and an idle Guard sitting
+still is not a contradiction with § 16 — provoked guards converge, unprovoked ones largely
+stand where they were put.
+
+**Grades.** Auto-pass existing and its text: observed. The ~7.5 s figure: measured, one
+45 s window, one sector. `ATTACK--PASS`: observed. The 7% and the 2-cell step: measured, one
+sector, one 10-boundary window — **treat as a first measurement, not a constant**, and
+re-measure in a wilderness sector before the engine hard-codes either number.

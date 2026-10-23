@@ -627,6 +627,19 @@ never moved. The tick routine is `asm/0C33..0C53`, and it ticks a **fourth, unna
 at `DS:26A`** (zero throughout that fight). So in the engine the tick belongs to the main
 loop, not to `overworld` movement — which is what C3's "one movement system" needs anyway.
 
+**The turn is a timeout, not a clock and not a move (2026-10-23, owner-ruled and then
+measured).** Each turn has a ~7.5 s budget; if it expires with no action the game performs a
+PASS for you, and a half-typed command expires as `ATTACK--PASS`. Measured with no input sent
+at all — the log filled with `CMD: PASS` on its own, 6 passes in 45 s counted via the food
+cost of a pass. This is the mechanism the status tick was waiting for (§ 15, § 17), and it
+resolves the determinism problem rather than trading it away: the unit is the turn, so a
+replay that expires turns per input stays reproducible. Enhanced mode (CP11) gets the
+knob — configurable timeout, or none, which is a true turn-based game. Creature turns are
+per-creature but **mostly no-ops**: 7% of (creature, turn) pairs moved anything, movers
+shift 2 cells, and 26 of 32 slots never budged. Evidence: `docs/spice86-live-findings.md`
+§ 18, capture `captures/spice86/cp5-turn-timeout/`; build order in
+`docs/phase4-kickoff-cp5.md` W6b/W7.
+
 One design constraint that outlives the checkpoint: the original keeps **two** copies
 of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole the
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single
