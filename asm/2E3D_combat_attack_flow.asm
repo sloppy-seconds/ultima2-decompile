@@ -40,38 +40,44 @@
 # direction handler upstream must be filling them. Not yet traced — do not assume
 # "adjacent cell" from the live behaviour without checking that path.
 #
-# HIT TEST (file 0x307E..0x3088) — proven:
+# HIT TEST (file 0x307E..0x3088) — arithmetic proven, the OPERAND'S PRODUCER is not:
 #     call L_005417          ; rand_byte
 #     clc; rcr $1,%al        ; al = rand >> 1
-#     cmp    0x4c,%al        ; DS:4C = stat_agi
+#     cmp    0x4c,%al        ; al - [DS:4C]
 #     jb  -> HIT   else MISS
-#   so a hit needs (rand >> 1) < agility. agility 0 can never hit; 0xFF always can.
+#   so a hit needs (rand >> 1) < [DS:4C]. [DS:4C] is the save-record agility slot
+#   (state.h stat_agi, tools/u2_edit.py 'agi'), and agility is NOT what this can be
+#   comparing against: the weak test character (agi 5 -> byte 0x05) would then hit
+#   about 3.9% of the time, yet it landed several hits in a handful of swings
+#   (captures/spice86/cp5-weak-fight), while the maxed seed (agi 40 -> byte 0x40,
+#   predicted 50%) showed the plausible mix you would expect. One case fits and the
+#   other refutes, so the threshold is a value that happens to sit in the agility
+#   slot at that moment — most likely a computed to-hit number, since this binary
+#   reuses bytes freely (see [DS:20] scratch, and the disputed DS:6D). That is a
+#   hypothesis, not a finding. OPEN: find what writes [DS:4C] on the attack path.
 #
-# DAMAGE (file 0x309F..0x30BA) — shape proven, magnitude NOT:
-#     al = [DS:61]; add al,al x3        ; al = 8 * [DS:61]
-#     adc [DS:4B],al                    ; + stat_str (+ CF)
-#     clc; rcr $1,al; clc; rcr $1,al    ; >> 2
+# DAMAGE (file 0x309F..0x30BA) — PROVEN. The earlier "28 vs 34" puzzle was a unit
+# error in this note, not a gap in the bytes:
+#     al = [DS:61]; add al,al x3        ; al = 8 * readied_weapon
+#     adc [DS:4B],al                    ; al += the STRENGTH BYTE (+ CF)
+#     clc; rcr $1,al; clc; rcr $1,al    ; al >>= 2
 #     mov %al,[DS:20]                   ; the damage byte
-#   => damage = (strength + 8 * [DS:61]) >> 2.
-#   [DS:61] is readied_weapon in state.h, but the wield INDEX does not reproduce
-#   the observed number: at str 40 with QUICK SWORD (wield 9) the formula on the
-#   index gives 28, while two live kills each removed exactly 34 (Guard 255->221
-#   in captures/spice86/cp5-guard-aggro, Fighter 50->16 in cp5-weak-fight).
-#   34 is what the formula yields for a weapon value of 12.
-#   RETRACTION, same day: an earlier draft of this note claimed the intervening
-#   call L_0060d7 "resolves a weapon DAMAGE value into [DS:61]". It does not, and
-#   the claim was made without looking it up. L_0060d7 is a FILE offset; the
-#   routine is runtime 5ED7 = asm/5ED7_sub_5ed7.asm, which pushes ax/bx/cx/dx,
-#   loads ax=0x200 bx=0x3000 cx=0x20 dx=0xe00 bp=0x8 and tail-calls L_005fa9
-#   (runtime 5DA9). That is a parameterised scan, not a lookup, and nothing in it
-#   writes DS:61. The neighbouring calls L_00543e (runtime 523E) read [DS:1A] and
-#   branch on `cmp $0x1` — also not a weapon table.
-#   So the 28-vs-34 gap is UNEXPLAINED, not parked behind one missing routine.
-#   The whole span 0x3096..0x30ba needs a proper re-decode (it is bulk-wave output
-#   at confidence: low, and the `adc 0x4b,%al` operand order is easy to read the
-#   wrong way round: as `al += [DS:4B]` it gives 28, as `[DS:4B] += al` it gives
-#   18, and neither is 34). Until that is done, damage is NOT implementable and
-#   nothing in engine/ should guess at it.
+#   => damage = (8 * readied_weapon + [DS:4B]) >> 2, **with [DS:4B] read as the raw
+#   packed-decimal byte, not the displayed number.** That distinction is the whole
+#   trap: strength 40 is stored as 0x40 = 64, so for the maxed seed
+#   (8*9 + 0x40) >> 2 = (72 + 64) >> 2 = 136 >> 2 = **34** — and that is exactly
+#   what a clean single-hit measurement produced: one `A,Right`, one
+#   `ATTACK--EAST--HIT!!!`, Fighter hp 50 -> 16 (capture cp5-dmg, dmg1.png).
+#   The 28 came from plugging in decimal 40. Stats are packed decimal throughout
+#   this binary, so any formula touching them must state which representation it
+#   means; "strength" alone is ambiguous and this note got it wrong exactly once.
+#   The three calls before the read are NOT involved and an earlier draft blamed
+#   them: L_00543e (runtime 523E) is a mode-dependent cursor/attribute setter
+#   reading [DS:1A] — and note its declared span 523E..5245 is wrong, its `je`
+#   target L_00545e is runtime 525E, so the bulk wave cut this routine in half —
+#   and L_0060d7 is a FILE offset whose routine (runtime 5ED7,
+#   asm/5ED7_sub_5ed7.asm) loads ax=0x200 bx=0x3000 cx=0x20 dx=0xe00 bp=0x8 and
+#   tail-calls L_005fa9. Neither writes DS:61 or DS:4B.
 #
 # HP SUBTRACT AND DEATH (file 0x30BC..0x30DC) — proven, and note the branch sense:
 #     al = [DI+0x177]; stc; cmc; sbb [DS:20],al; cmc
@@ -89,11 +95,11 @@
 #   wrapped them to 0010 and 0001 — the BCD wrap the B1 ticket predicts, seen on
 #   screen (captures/spice86/cp5-fight/screen4.png).
 #
-# What the engine still lacks to implement this: the damage magnitude (see the
-# retraction above — the span 0x3096..0x30ba needs re-decoding, it is not one
-# missing table), the upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack,
-# and L_0055b5 (called before each BCD add — probably the numeric print,
-# unconfirmed).
+# What the engine still lacks to implement this: what writes [DS:4C] on the attack
+# path (the hit arithmetic is proven against an operand whose producer is unknown),
+# the upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack, and L_0055b5
+# (called before each BCD add — probably the numeric print, unconfirmed).
+# Damage is now implementable exactly as written above.
 # ---------------------------------------------------------------------------
 combat_attack_flow:
 L_00303d:
