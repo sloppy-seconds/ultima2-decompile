@@ -645,6 +645,21 @@ undiscovered, so no per-turn decrement may be wired until it is found. Evidence:
 `docs/spice86-live-findings.md` § 18 and its addendum, capture
 `captures/spice86/cp5-turn-timeout/`; build order in `docs/phase4-kickoff-cp5.md` W6b/W7.
 
+**W8 is done (2026-10-27), and the span was the finding.** `asm/0C62` had been left as
+`sub_0c62 — behavior not yet reviewed` because each of its four fragments looks like
+nothing alone. Laid end to end, `0C62..0C99` is the death handler: nine zero stores into
+`DS:51..59`, a repaint, three newlines, the name from `DS:36` via `asm/507A`, then
+` IS DEAD!` and a newline. Every site that can kill jumps into it — the food borrow-outs,
+the force field, Minax, three dungeon-event sites and `cmd_L` — which is why the engine got
+one function (`u2_death`) rather than three lines inside the food subtract. The captured
+frame `captures/spice86/cp5-weak-fight/death1.png` settled two things the bytes left open:
+all four status fields repaint (the routine itself calls only the H.P. line), and the
+announcement sits on row 22 with the bottom row bare, because its own trailing newline
+scrolls it up. `engine/tests/death_check.c` pins both, plus a control that a survivable
+food spend announces nothing; the gate was mutation-tested by removing the announcement and
+watching four checks go red. What the game does *after* the announcement is still unknown
+and is G27 on `docs/needs-gameplay.md`, marked agent-drivable.
+
 One design constraint that outlives the checkpoint: the original keeps **two** copies
 of some item counts and one goes stale. `DS:6D` still read 1 after a thief stole the
 boots, while the live gate `DS:D9` correctly went to 0. The engine needs a single

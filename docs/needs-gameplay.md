@@ -457,6 +457,27 @@ code wrong, and give every new script a positive control — is § 10 of that do
 **Cost of the false alarm:** the CP5 creature stamp was compiled out for hours, W2/W4/W5/W6
 were declared blocked, and the owner was told the reconstruction had a defect. It did not.
 
+### G27 — what the game does after the death announcement `[ ]` *(agent-drivable, ~20 min)*
+
+**Question:** `asm/0C62..0C99` zeroes `DS:51..59` and prints `<NAME> IS DEAD!`, and every
+site that can kill jumps into it. Nothing has ever recorded what happens *next*. Does the
+walk loop accept another command? Does it go back to the title, wipe the save, or sit
+there with a dead character who can still walk?
+
+**Why it matters now:** the engine prints the announcement and carries on playing, which is
+a guess by omission recorded in `engine/src/game/overworld.c:u2_death`. It is also the one
+thing between `death1.png` and a CP5 gate that ends a fight the way the original does.
+
+**Who can do it:** an agent, unattended. The recipe already exists — the capture that
+produced `captures/spice86/cp5-weak-fight/death1.png` was a seeded low-stat character
+driven headless. Seed 1 HP, stand next to something hostile until the death line prints,
+then keep sending keys and screenshot after each. `--patch-arrows` plus
+`tools/spice86_type.py`, and confirm every key landed by reading DS, never by the send
+returning ok.
+
+**Success criterion:** a named capture directory holding the frame *after* the
+announcement, plus a verdict on whether `DS:00/01` moved under a direction key.
+
 ## Closed
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.
