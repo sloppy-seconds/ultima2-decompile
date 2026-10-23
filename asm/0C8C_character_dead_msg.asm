@@ -1,4 +1,7 @@
 # character_dead_msg — announces a character death
+# part of: the death tail, asm/0C62..0C99 — see asm/0C62_death.asm. This is its
+#   last fragment; the name arrives already printed by asm/0C89, which is why the
+#   string carries its own leading space and no name of its own.
 # name-evidence: string ' IS DEAD!'
 # func 0C8C..0C99  len 000E B  evidence: seed+reko
 # strings: " IS DEAD!"
