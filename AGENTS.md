@@ -12,13 +12,16 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-cp5-2026-10-24.md` first (current entry point: CP5 W1-W4 done, the creature
-> AI region at `0x2122..0x2260`, the traps already paid for, and the one lookup blocking W6),
-> then `docs/phase4-state.md` § CP5. `docs/phase4-kickoff-cp5.md` still holds the CP5 wiring
-> build order and the work-item list, but its W2/W4/W6 sequencing is now stale — W2 and W4
-> shipped, and W6 has byte evidence rather than an inference. Superseded handoffs
-> (`docs/handoff-cp5-2026-10-23.md`, `docs/handoff-2026-10-23.md`) are historical record, not
-> entry points; older ones live under `docs/archive/`.
+> `docs/handoff-cp5-2026-10-27.md` first (current entry point: CP5 W1–W9 and towns are
+> done, what was proven today, the single mistake that caused three false blockers, and
+> the open list ranked by what each one unblocks), then `docs/phase4-state.md` § CP5.
+> `docs/phase4-kickoff-cp5.md` still holds the CP5 wiring build order and the work-item
+> list, but its sequencing is now historical — every W item on it has shipped or been
+> replaced by a byte-level finding. Superseded handoffs
+> (`docs/handoff-cp5-2026-10-24.md`, `docs/handoff-cp5-2026-10-23.md`,
+> `docs/handoff-2026-10-23.md`) are historical record, not
+> entry points; the 10-24 one is still worth reading for its traps and its working
+> recipes. Older ones live under `docs/archive/`.
 
 > **What this file is.** Rules and orientation only. It does not contain source
 > code, tool listings, or reference material — those live in the files named
