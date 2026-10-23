@@ -202,7 +202,51 @@ typedef struct u2_state {
                                         * slots inside it (0xD9 BOOTS, 0xDA CLOAK,
                                         * 0xE4 GREEN IDOL) and asm/0FCD theft deletes
                                         * from it. Name table at file 0x501D. */
-    /* 0xE6 */ uint8_t reserved_E6[0x153];
+    /* 0xE6 */ uint8_t reserved_E6[0x51];   /* 0xE6..0x136 */
+    /* ------------------------------------------------------------------------
+     * The creature table: six parallel 32-slot arrays, loaded from monxNN by
+     * asm/22D5 (CX=0x100 = 256 bytes, which covers all six arrays at 192 bytes
+     * with 64 to spare). Field order and the monx offset of each array are
+     * measured, not inferred: docs/monster-spawn.md § 6 matched them live against
+     * four sectors, `type` at 32/32 in all of them and `hp` at 31-32/32.
+     * DI is the slot index throughout the original (`mov 0x197(%di),%al`).
+     * ---------------------------------------------------------------------- */
+    /* 0x137 */ uint8_t mon_x[32];    /* monx[0..31]. Spawn x; drifts in play,
+                                       * because monsters move (observed live: a
+                                       * Guard walked (30,14)->(36,20) while idle). */
+    /* 0x157 */ uint8_t mon_y[32];    /* monx[32..63]. Spawn y. */
+    /* 0x177 */ uint8_t mon_hp[32];   /* monx[64..95]. PROVEN field: asm/2E3D
+                                       * subtracts the player's damage from it and
+                                       * clears the record on borrow. One byte, so
+                                       * 255 is the ceiling (docs/bestiary.md § 6). */
+    /* 0x197 */ uint8_t mon_type[32]; /* monx[96..127]. Sprite/type byte: 0x60 Guard,
+                                       * 0x68 Merchant, 0xF0 Fighter. asm/40CB compares
+                                       * it against 0x6c. NOT the art index — art comes
+                                       * from the map cell, docs/art-index.md. */
+    /* 0x1B7 */ uint8_t mon_kind[32]; /* monx[128..159]. Kind index; asm/0AD3 dispatches
+                                       * the special attacks on it. Does not hold across
+                                       * every sector (docs/monster-spawn.md § 6). */
+    /* 0x1D7 */ uint8_t mon_role[32]; /* monx[160..191]. Per-slot state/identity.
+                                       * 0 = empty slot (asm/102B tests it for zero);
+                                       * 0x81/0x82/0x83 = scripted recipients, enumerated
+                                       * one by one by asm/3C2E_cmd_O (ENILNO / the RING /
+                                       * a third), so bit 7 is "has a scripted response";
+                                       * and 0x01 reads as "will attack the player". It is
+                                       * BOTH a birth value and an acquired one: monx31 ships
+                                       * 0x01 on the 0xFC and 0x2C slots, while Guards (0x60)
+                                       * are born 0x03/0x00 and every guard in the sector
+                                       * flips to 0x01 the moment a blow lands on anything in
+                                       * town — a missed swing and 65 s of idle flip nothing
+                                       * (docs/spice86-live-findings.md § 16, capture
+                                       * cp5-g25-aggro; the monx31 column check is
+                                       * engine/tests/monsters_check.c). Merchants are 0x02
+                                       * and were never seen to attack.
+                                       * Whether 0x01 is read back as the cause of attacking
+                                       * is OPEN: the born-hostile kinds were out of range in
+                                       * every capture so far, so their half of the reading is
+                                       * inferred, not observed. Do not treat it as a cause
+                                       * without a test that proves it. */
+    /* 0x1F7 */ uint8_t reserved_1F7[0x42];  /* 0x1F7..0x238 */
     /* 0x239 */ uint8_t story_flag;   /* "story/poem shown"; cleared at asm/0133_sub_0133.asm,
                                          set at asm/03AC_sub_03ac.asm, branched on in the
                                          same region */
@@ -219,7 +263,15 @@ typedef struct u2_state {
                                          NB: docs/phase4-plan.md §1 called these "tick
                                          counters"; the full decode shows PRNG state, and
                                          nothing else in the binary writes them. */
-    /* 0x245 */ uint8_t reserved_245[0x26];  /* 0x245..0x26A */
+    /* 0x245 */ uint8_t reserved_245[0x25];  /* 0x245..0x269 */
+    /* 0x26A */ uint8_t counter_26A;   /* NAME UNKNOWN — do not invent one. Ticks and
+                                        * is zeroed exactly alongside the three paralysis
+                                        * counters (asm/0C33..0C53 decrements it, asm/080D
+                                        * zeroes DS:26A..26D), but it read 0x00 in every
+                                        * frame of the 3000-turn fight recording and in
+                                        * every live run since. Something sets it and no
+                                        * observation has met that something.
+                                        * docs/needs-gameplay.md G27. */
     /* 0x26B */ uint8_t paral_legs;   /* C1: legs-paralysis turns, 0..15.
                                        * Set by asm/0E70 (`and 0xf`), read live by the
                                        * movement check. Resisted by a roll on
@@ -282,6 +334,19 @@ _Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
 _Static_assert(U2_OFF(paral_legs)     == 0x26B, "paral_legs moved");
 _Static_assert(U2_OFF(paral_arms)     == 0x26C, "paral_arms moved");
 _Static_assert(U2_OFF(paral_sleep)    == 0x26D, "paral_sleep moved");
+_Static_assert(U2_OFF(counter_26A)    == 0x26A, "counter_26A moved");
+/* The creature table: six parallel arrays, each exactly 32 slots, contiguous in
+ * the order asm/22D5 lays them out in monx. Any drift here silently reassigns
+ * every monster's x/y/hp/type/kind/role, so all six are pinned. */
+_Static_assert(U2_OFF(mon_x)    == 0x137, "mon_x moved");
+_Static_assert(U2_OFF(mon_y)    == 0x157, "mon_y moved");
+_Static_assert(U2_OFF(mon_hp)   == 0x177, "mon_hp moved");
+_Static_assert(U2_OFF(mon_type) == 0x197, "mon_type moved");
+_Static_assert(U2_OFF(mon_kind) == 0x1B7, "mon_kind moved");
+_Static_assert(U2_OFF(mon_role) == 0x1D7, "mon_role moved");
+_Static_assert(sizeof(((u2_state *)0)->mon_x)    == 32, "mon_x is 32 slots");
+_Static_assert(sizeof(((u2_state *)0)->mon_role) == 32, "mon_role is 32 slots");
+_Static_assert(U2_OFF(mon_role) + 32 == 0x1F7, "mon_role must end where reserved_1F7 starts");
 _Static_assert(sizeof(((u2_state *)0)->weapons_owned) == 10,
                "weapons_owned is 10 entries");
 _Static_assert(sizeof(((u2_state *)0)->items_held) == 16,

@@ -115,6 +115,32 @@ else
     bad "CP5 zero-check self-test: faithful control binary missing, guard unproven"
 fi
 
+# --- 1d. the creature table (CP5 W1) ----------------------------------------
+# Independent of combat.c: this is the monx -> DS mapping everything else in CP5
+# reads from. Runs whether or not combat exists, and takes the real monx31 when
+# the player's content is present, because that is the only input that can
+# falsify the offset table rather than check the copy.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/monsters_check" \
+        tests/monsters_check.c src/game/monsters.c src/core/world.c src/core/state.c \
+        src/core/save.c src/core/rng.c 2>"$WORK/mon.build"; then
+    MONREAL=""
+    [ -f ../original/monx31 ] && MONREAL="../original/monx31"
+    if "$WORK/monsters_check" "$WORK" $MONREAL > "$WORK/mon.out" 2>&1; then
+        n=$(sed -n 's/^monsters_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/mon.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 creature-table run executed 0 checks — the spec is not running"
+        else
+            ok "CP5 W1 creature table: monx -> DS mapping ($n checks, $(tail -1 "$WORK/mon.out"))"
+        fi
+    else
+        bad "CP5 creature-table check failed:"
+        sed 's/^/        /' "$WORK/mon.out"
+    fi
+else
+    bad "CP5 creature-table harness did not build:"
+    sed 's/^/        /' "$WORK/mon.build"
+fi
+
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
     skip "C1 three independent counters DS:26B/26C/26D (0..15) — needs src/game/combat.c"

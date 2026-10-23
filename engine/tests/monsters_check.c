@@ -1,0 +1,184 @@
+/*
+ * tests/monsters_check.c — CP5 W1: the monx block <-> the creature arrays.
+ *
+ * Proves three things, in order of how expensive they are to get wrong:
+ *
+ *   1. the six monx columns land on the six DS arrays with no off-by-one and no
+ *      swapped pair (the offsets are measured in docs/monster-spawn.md § 6, and a
+ *      silent swap would relabel every monster in the game);
+ *   2. the lookup the movement and combat code will use finds a creature by cell
+ *      and reports empty cells as empty;
+ *   3. a store round trip writes back exactly what was changed and nothing else,
+ *      because the original rewrites the whole 256-byte block on save and the
+ *      engine only stores dirty sectors.
+ *
+ * The synthetic sector is engine-authored filler, same rule as world_check.c: no
+ * game bytes are committed here. When a real monxNN is passed as argv[2] the test
+ * additionally checks it against values read out of the live emulator, which is
+ * the only place the offset table can actually be falsified.
+ *
+ * Build and run by tests/run_cp5.sh.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "core/ctx.h"
+#include "core/world.h"
+#include "game/monsters.h"
+
+static int fails, checks;
+#define CHECK(cond, ...) do { checks++; if (!(cond)) { fails++; \
+    printf("  FAIL  " __VA_ARGS__); printf("\n"); } } while (0)
+
+#define SLOT_X   0
+#define SLOT_Y   1
+#define SLOT_HP  2
+#define SLOT_TYP 3
+#define SLOT_KIN 4
+#define SLOT_ROL 5
+
+/* Per-slot columns, deliberately all different from each other so that a swapped
+ * monx offset cannot pass: column values are slot*8 + column-index, so no two
+ * columns share a byte and none is a permutation of another. */
+static void synth(uint8_t *mon)
+{
+    memset(mon, 0, U2_MON_TILES);
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        mon[SLOT_X   * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 1);   /* never 0 */
+        mon[SLOT_Y   * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 2);
+        mon[SLOT_HP  * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 3);
+        mon[SLOT_TYP * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 4);
+        mon[SLOT_KIN * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 5);
+        mon[SLOT_ROL * U2_MON_SLOTS + i] = (uint8_t)(i * 8 + 6);
+    }
+    /* leave slot 31 unoccupied (x and y both zero) to exercise the empty path */
+    mon[SLOT_X * U2_MON_SLOTS + 31] = 0;
+    mon[SLOT_Y * U2_MON_SLOTS + 31] = 0;
+}
+
+int main(int argc, char **argv)
+{
+    const char *base = argc > 1 ? argv[1] : ".";
+    const char *real = argc > 2 ? argv[2] : NULL;
+    char dir[256], p[320];
+    uint8_t mon[U2_MON_TILES];
+    u2_ctx ctx;
+    u2_world w;
+    u2_sector_id id = { 3, 1 };
+
+    snprintf(dir, sizeof dir, "%s", base);
+    snprintf(p, sizeof p, "%s/monx31", dir);
+
+    memset(&ctx, 0, sizeof ctx);
+    ctx.data_dir = dir;
+    memset(&w, 0, sizeof w);
+    synth(mon);
+
+    FILE *f = fopen(p, "wb");
+    if (!f) { printf("  FAIL  cannot write %s\n", p); return 1; }
+    fwrite(mon, 1, U2_MON_TILES, f);
+    fclose(f);
+
+    if (u2_world_open(&ctx) != U2_WORLD_OK) {
+        printf("  FAIL  content dir did not open\n");
+        return 1;
+    }
+    if (u2_world_load(&ctx, &w, 0, id) != U2_WORLD_OK) {
+        printf("  FAIL  monx31 did not load\n");
+        return 1;
+    }
+
+    /* --- 1. the columns land where docs/monster-spawn.md § 6 says ------ */
+    int occupied = u2_monsters_spawn(&ctx, &w);
+    CHECK(occupied == 31, "31 occupied slots, the one all-zero slot reported empty (got %d)", occupied);
+
+    int col_ok = 1;
+    for (int i = 0; i < 31; i++) {
+        if (ctx.state.mon_x[i]    != (uint8_t)(i * 8 + 1) ||
+            ctx.state.mon_y[i]    != (uint8_t)(i * 8 + 2) ||
+            ctx.state.mon_hp[i]   != (uint8_t)(i * 8 + 3) ||
+            ctx.state.mon_type[i] != (uint8_t)(i * 8 + 4) ||
+            ctx.state.mon_kind[i] != (uint8_t)(i * 8 + 5) ||
+            ctx.state.mon_role[i] != (uint8_t)(i * 8 + 6))
+            col_ok = 0;
+    }
+    CHECK(col_ok, "each monx column reached its own DS array, none swapped");
+
+    /* The control that makes the assertion above mean something: if two columns
+     * shared a byte pattern, a swap would pass silently. */
+    CHECK(memcmp(ctx.state.mon_x, ctx.state.mon_y, U2_MON_SLOTS) != 0 &&
+          memcmp(ctx.state.mon_hp, ctx.state.mon_type, U2_MON_SLOTS) != 0 &&
+          memcmp(ctx.state.mon_kind, ctx.state.mon_role, U2_MON_SLOTS) != 0,
+          "control: the six columns are distinguishable, so a swap cannot pass");
+
+    /* --- 2. lookup by cell --------------------------------------------- */
+    CHECK(u2_monsters_at(&ctx, ctx.state.mon_x[7], ctx.state.mon_y[7]) == 7,
+          "a creature is found by its cell");
+    CHECK(u2_monsters_at(&ctx, 0, 0) == -1,
+          "an unoccupied cell reports none rather than slot 0");
+    CHECK(u2_monsters_nearest(&ctx, ctx.state.mon_x[12], ctx.state.mon_y[12]) == 12,
+          "nearest returns the slot standing on the queried cell");
+
+    /* --- 3. store round trip ------------------------------------------- */
+    uint8_t before[U2_MON_TILES];
+    memcpy(before, w.mon, U2_MON_TILES);
+    ctx.state.mon_hp[7] = 0;                 /* a killed monster */
+    ctx.state.mon_role[8] = 0x01;            /* the alarm (§ 16) */
+    u2_monsters_store(&ctx, &w);
+    CHECK(w.mon[SLOT_HP * U2_MON_SLOTS + 7] == 0, "a hp change reaches the sector buffer");
+    CHECK(w.mon[SLOT_ROL * U2_MON_SLOTS + 8] == 0x01, "a role change reaches the sector buffer");
+    CHECK(w.mon_dirty == 1, "storing marks the sector dirty, so the save will write it");
+
+    int untouched = 1;
+    for (int i = 0; i < U2_MON_TILES; i++) {
+        int changed = (i == SLOT_HP * U2_MON_SLOTS + 7) || (i == SLOT_ROL * U2_MON_SLOTS + 8);
+        if (!changed && w.mon[i] != before[i])
+            untouched = 0;
+    }
+    CHECK(untouched, "nothing else in the 256-byte block moved");
+
+    /* --- 4. against the real sector, if the caller supplied one -------- */
+    if (real) {
+        FILE *rf = fopen(real, "rb");
+        if (!rf) {
+            printf("  FAIL  real monx %s not readable\n", real);
+            fails++;
+        } else {
+            uint8_t rb[U2_MON_TILES];
+            size_t got = fread(rb, 1, U2_MON_TILES, rf);
+            fclose(rf);
+            CHECK(got == U2_MON_TILES, "real monx31 is 256 bytes (got %zu)", got);
+            /* Values read out of the running game seconds after loading sector 31,
+             * captures/spice86/cp5-g25-aggro/roles-at-load.txt. This is the only
+             * assertion in this file that can falsify the offset table rather than
+             * just check the copy. */
+            struct { int slot, x, y, type, role, hp; } live[] = {
+                { 18, 51, 21, 0xF0, 0x03,  50 },
+                { 19, 55, 21, 0xF0, 0x03,  60 },
+                {  8, 55, 19, 0x68, 0x02,  30 },
+                { 16, 51, 15, 0x68, 0x81,  30 },
+                { 17, 48, 26, 0x64, 0x82, 255 },
+                {  7, 43, 19, 0x60, 0x03, 255 },
+            };
+            for (unsigned k = 0; k < sizeof live / sizeof live[0]; k++) {
+                int s = live[k].slot;
+                CHECK(rb[SLOT_X * 32 + s] == live[k].x &&
+                      rb[SLOT_Y * 32 + s] == live[k].y &&
+                      rb[SLOT_TYP * 32 + s] == live[k].type &&
+                      rb[SLOT_ROL * 32 + s] == live[k].role &&
+                      rb[SLOT_HP * 32 + s] == live[k].hp,
+                      "monx31 slot %d matches the live capture (%d,%d,%02x,%02x,%d)",
+                      s, live[k].x, live[k].y, live[k].type, live[k].role, live[k].hp);
+            }
+            /* The reading that forced two corrections to § 16: 0x01 is a birth
+             * value for some kinds, not only an alarm. Pinned so nobody re-derives
+             * it wrongly a third time. */
+            CHECK(rb[SLOT_ROL * 32 + 27] == 0x01 && rb[SLOT_TYP * 32 + 27] == 0x2C,
+                  "control: slot 27 is born role 0x01, so 0x01 is not only an acquired alarm");
+        }
+    }
+
+    printf("monsters_check: %d checks, %d failures\n", checks, fails);
+    return fails ? 1 : 0;
+}

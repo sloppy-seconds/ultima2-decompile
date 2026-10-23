@@ -1214,19 +1214,30 @@ time.
 
 ### The model, graded
 
-`[DI+0x1D7] == 0x01` is an **alerted / willing-to-strike-you state**, and it is set by
-*violence that lands*, not by time, not by proximity and not by the creature being hit
-itself. Striking **any** creature in a town flips **every guard in the loaded sector** —
-the alarm is sector-wide, which also settles G26's radius question for guards: distance
-from the player did not predict which guards flipped (d1 and d46 both did).
+`[DI+0x1D7] == 0x01` reads as **"will attack the player"**, and — this is the part worth
+stating carefully — it is **both a birth value and an acquired one**. `original/monx31` ships
+`0x01` on the `0xFC` and `0x2C` slots, so those kinds start hostile; Guards (`0x60`) are born
+`0x03`/`0x00` and **every guard in the sector flips to `0x01` the moment a blow lands on
+anything in town**, while a missed swing flips nothing and 65 s of idle flips nothing.
+Merchants are `0x02` and were never seen to attack.
 
-The struck creature flips too, so `0x01` is doing double duty: "this one fought you" and,
-for the guard class, "the town is on you". A swing that misses alerts nothing.
+That is a second correction to this section while writing it up, and it goes in the order it
+happened: the first draft said guards are born `0x01` (they are not — that was the aftermath
+of the fight), and the revision said `0x01` is therefore purely an alarm (also not — the
+sector file hands some kinds to the game already set to it). The byte is a hostility flag
+that some kinds are born with and guards acquire.
+
+**What is still inferred, not observed:** that `0x01` is read back as the *cause* of
+attacking. The kinds born with it sat 25-35 tiles away in every capture, so they never got
+within range to prove it. The claim this section can make is: landed violence sets `0x01` on
+guards sector-wide, and guards carrying `0x01` then close on the player and take HP.
+Distance from the player did not predict which guards flipped (d1 and d46 both did), so the
+alarm is sector-wide for the guard class.
 
 This is the aggro marker the handoff was reaching for. It was in `DS:1D7` after all — in the
-low nibble, not bit 7, and as a state rather than a class. The owner's recollection
-("attack a guard and all the guards in town want to fight you") was right and is *wider*
-than recalled: it does not require attacking a guard, only landing on anything in town.
+low nibble, not bit 7. The owner's recollection ("attack a guard and all the guards in town
+want to fight you") was right and is *wider* than recalled: it does not require attacking a
+guard, only landing on anything in town.
 
 ### Still open
 

@@ -28,9 +28,26 @@
 
 /* Spelling candidates for the sector name. DOS names are case-insensitive, the
  * shipped pack is lowercase, and the Galaxy patch in the fan pack renames
- * mapx -> mapg (RENGAL.BAT), so both prefixes and both cases are tried before
- * declaring a sector missing. Order is the common case first. */
-static const char *const k_prefixes[] = { "mapx", "MAPX", "mapg", "MAPG" };
+ * mapx -> mapg and monx -> mong (RENGAL.BAT; `updated/` carries MAPG10.. and
+ * MONG10.. beside the lowercase originals), so both prefixes and both cases are
+ * tried before declaring a sector missing. Order is the common case first.
+ *
+ * The two lists are separate on purpose. An earlier version shared one map-only
+ * list, so `is_map == 0` read a *map* file into the monster buffer and the
+ * creature table was silently wrong rather than missing — caught by
+ * engine/tests/monsters_check.c, which could not load monx31 at all. */
+static const char *const k_map_prefixes[] = { "mapx", "MAPX", "mapg", "MAPG" };
+static const char *const k_mon_prefixes[] = { "monx", "MONX", "mong", "MONG" };
+
+static const char *const *prefix_list(int is_map, size_t *count)
+{
+    if (is_map) {
+        *count = sizeof k_map_prefixes / sizeof k_map_prefixes[0];
+        return k_map_prefixes;
+    }
+    *count = sizeof k_mon_prefixes / sizeof k_mon_prefixes[0];
+    return k_mon_prefixes;
+}
 
 const char *u2_world_result_text(u2_world_result r)
 {
@@ -53,7 +70,7 @@ void u2_world_path(char *buf, size_t bufsz, const u2_ctx *ctx,
                    const char *prefix, u2_sector_id id)
 {
     snprintf(buf, bufsz, "%s/%s%u%u", world_dir(ctx),
-             prefix ? prefix : k_prefixes[0],
+             prefix ? prefix : k_map_prefixes[0],
              (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
 }
 
@@ -104,16 +121,20 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     int found = 0;
     const char *used = NULL;
 
-    for (size_t i = 0; i < sizeof k_prefixes / sizeof k_prefixes[0] && !found; i++) {
+    const char *const *prefixes;
+    size_t nprefixes;
+    prefixes = prefix_list(is_map, &nprefixes);
+
+    for (size_t i = 0; i < nprefixes && !found; i++) {
         FILE *f;
-        u2_world_path(path, sizeof path, ctx, k_prefixes[i], id);
+        u2_world_path(path, sizeof path, ctx, prefixes[i], id);
         f = fopen(path, "rb");
         if (!f)
             continue;
         got = fread(is_map ? w->map : w->mon, 1, want, f);
         fclose(f);
         found = 1;
-        used = k_prefixes[i];
+        used = prefixes[i];
     }
 
     if (!found)
@@ -151,6 +172,7 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
     u2_sector_id id;
     char path[512], tmp[544];
     size_t want = want_bytes(is_map);
+    size_t nprefixes = 0;
     const uint8_t *buf = is_map ? w->map : w->mon;
     FILE *src, *dst;
 
@@ -160,7 +182,7 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
         return U2_WORLD_NOT_READY;
 
     u2_world_path(path, sizeof path, ctx,
-                  w->found_prefix ? w->found_prefix : k_prefixes[0], id);
+                  w->found_prefix ? w->found_prefix : prefix_list(is_map, &nprefixes)[0], id);
     snprintf(tmp, sizeof tmp, "%s.u2tmp", path);
 
     dst = fopen(tmp, "wb");
