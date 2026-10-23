@@ -21,7 +21,11 @@ set -eu
 # rebuild landed — the check that was missing when a stale binary was reported as
 # deployed. The path is /var/tmp, not the engine's /tmp default: /tmp is tmpfs on this
 # host, so a long session would take every frame out of the model's RAM.
-: "${U2_ARGS:=--sdl --play-map}"   # NOTE: --debug-path currently segfaults; see below
+# --debug-path writes turn-NNNNN.ppm and .json after every player turn, which is how
+# an agent verifies what the container is ACTUALLY showing instead of trusting that a
+# rebuild landed. Path is under /saves (host /var/tmp), not the engine's /tmp default:
+# /tmp is tmpfs on this host, so a long session would take every frame out of RAM.
+: "${U2_ARGS:=--sdl --play-map --debug-path /saves/debug}"
 
 echo "novnc-engine: Xvfb on ${DISPLAY} at ${GEOMETRY}"
 # Xvfb refuses to start on a display whose lock file survives: `Server is already

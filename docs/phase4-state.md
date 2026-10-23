@@ -1036,24 +1036,28 @@ window manager), content mounted read-only, save path mounted read-write, ports 
 5900 only if not tunneled). Keep the `Containerfile` and the run recipe in the repo; keep the
 game files out of it, per the licensing rules.
 
-## Open breakage at end of session 2026-10-27 (hand this to the next agent)
+## The `--debug-path` segfault: not a code bug, a stale build
 
-Two things are broken and neither is fixed. Both were introduced today.
+Reported and then resolved the same session, so the shape is worth keeping.
 
-1. **`--debug-path` segfaults.** `./engine/u2-sdl --sdl --play-map --debug-path DIR`
-   dumps core before printing anything, and `--debug cli` was never isolated as a
-   second case, so it is not known whether the crash is the stamping block in
-   `main.c` (`strdup` of the `<base>/<ISO8601>` path) or `u2_turnlog` itself. Start by
-   running with `--debug cli` alone and with `--debug-path` alone, and by building the
-   SDL target with `-g`. The headless `u2` target with `--script` works and writes the
-   files correctly, so the bug is SDL-path or startup-order specific.
-2. **The engine noVNC container is down.** It now exits with `overworld: tiles: no
-   executable and no cached tiles`, even with `tiles.u2tl` present in the mounted save
-   dir and `original/` mounted at `/content` with `:ro,z` — the same invocation that
-   logged `sector 20 via monx, tiles from cache` earlier today. Reproduce inside the
-   container before changing anything: the message claims *both* sources are missing,
-   which is the shape of a path or mount problem, not a cache-digest problem.
+`--debug-path` on the SDL build dumped core in `snprintf` inside `main()`. Three
+different builds disagreed with each other, which is what made it look like undefined
+behaviour. It was not. The tree had a stale `build/gen_content.h`, and the same staleness
+was separately making the container fail with `no executable and no cached tiles` — two
+symptoms, one cause, and only the second one looked like a build problem.
 
-`deploy/novnc/entrypoint.sh` has been reverted to plain `--sdl --play-map` so the
-segfault is not on the critical path. `--debug cli` is otherwise committed and works in
-headless scripted runs.
+`make clean` removed both. Clean builds at `-O0`, `-O2` and `-O2 -g` all run and write
+their turn files; the container is healthy again with the feature enabled.
+
+What is NOT explained, and is left as a fact rather than a story: the mechanism by which
+the stale generated header produced a bad pointer in a `snprintf` argument. The
+correlation is solid, the causal chain is not, and if it ever comes back the first thing
+to do is `make clean` before believing anything else.
+
+Two self-inflicted traps found on the way, both worth remembering:
+
+- `make ... | head -3` sends SIGPIPE to make and kills the build partway, leaving no
+  binary and a confusing `rc=127`. Filter make's output with `grep -v` or read the tail,
+  never truncate the pipeline that produces the artefact.
+- `gdb -batch -ex run` on an interactive engine hangs forever, because the inferior never
+  exits and gdb waits for it to. Always wrap it in `timeout`.
