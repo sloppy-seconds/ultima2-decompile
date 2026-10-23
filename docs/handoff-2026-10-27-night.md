@@ -3,6 +3,31 @@
 Entry point for a fresh session. Paul is asleep. Everything below is **agent-drivable**:
 no gameplay, no opinion, no password he has to type. Ordered by what each item unblocks.
 
+> **Update, 2026-10-28 second pass — items 1, 6, 7 and 8 are done; 2, 4 and 5 are not.**
+> Item 1: see `docs/monster-spawn.md` § 15.2 — there is no return address, the spawner is
+> the tail of the per-command creature sweep, `DS:4A` is the sector's low decimal digit and
+> `DS:60` is a rotating selector, not a counter. Item 2 stays blocked, now on the *selector*
+> rather than the caller; § 15.2 names the measurement. Item 3 got a full spec
+> (`docs/status-screen-z.md`) and no implementation: the handoff's handler guess was wrong
+> (it is `asm/4568_cmd_Z`, found via the A–Z table), the name tables are located but are not
+> in `gen_content.h` yet, and `Z` was measured to cost no food — but whether the post-command
+> sweep runs after `Z` is unmeasured and it needs live monsters. Item 4 is still blocked on
+> item 5. Item 5 (G30) was attempted three times and refused every time; see
+> `docs/needs-gameplay.md` G30 — read `asm/4326`'s aim computation before another capture.
+> Item 6: `DS:12` is a world-map/interior mode byte and `L_005cb1` is a viewport origin that
+> wraps only on the world map (§ 15.2). Item 7: **refuted in the other direction** — the
+> sector *does* change on foot, but only out of a site; `site_leave()` was firing on the
+> world map too and is now gated, with three new `site_check` checks, mutation-tested.
+> Item 8: both fixed (`--debug-limit`, `tools/vnc/up.sh` port refusal), both verified live.
+> Proof and suite green throughout: 37344 bytes identical, 93 PASS / 0 FAIL.
+>
+> One thing that bit and is not resolved: running `u2-sdl --play-map --data-dir original/`
+> from the project reports `sector 20: no such sector file` even though `original/mapx20`
+> exists and is readable, and a copied content directory loads `sector 00` instead. The
+> container path works, so this is most likely my invocation rather than an engine defect —
+> but it cost enough time to be worth a line in the engine README from someone who knows
+> what `--play-map` actually expects.
+
 > **Update, 2026-10-28 (next session, read this before the queue below).**
 > **Item 1 is closed, and the answer is not what it asked for.** There is no return
 > address to capture: at a stop inside the spawner the guest stack is empty (SS:SP exactly
