@@ -18,12 +18,22 @@ each behaviour, or says plainly that it is a guess.
 | --- | --- | --- |
 | C1/C2/C4/C5/C6 mechanics | `engine/src/game/combat.c` | implemented, spec-covered, 4066 checks green |
 | The spec and its controls | `engine/tests/combat_check.c`, `run_cp5.sh` | discriminates; controls and a zero-check self-test run every `make test` |
-| Sector I/O for **both** `mapx` and `monx` | `engine/src/core/world.h` — `u2_world.mon[]`, `mon_loaded`, `mon_dirty`, `u2_world_load(ctx,w,is_map,id)` | **already loads and stores monx**; `U2_MON_TILES 256 /* CX at asm/22D5 */` |
+| Sector I/O for `mapx` **and a buffer for** `monx` | `engine/src/core/world.h` — `u2_world.mon[]`, `mon_loaded`, `mon_dirty`, `U2_MON_TILES 256 /* CX at asm/22D5 */` | **Half there.** The buffer, the dirty flag and the store path existed; the loader did **not** work — `u2_world_load` iterated one hardcoded map-only prefix list, so `is_map == 0` read a *map* file into the monster buffer. Fixed in W1: separate `k_map_prefixes` / `k_mon_prefixes` (`monx/MONX/mong/MONG`, the Galaxy pack ships `updated/MONG10..`). Caught by `monsters_check.c`, which simply could not load `monx31`. |
 | CMD window, status band, prompt | `engine/src/game/status.c`, `overworld.c` | CP4; the fight UI is a line in this window, so rendering cost is near zero |
 | Save gates incl. the Earth gate | `u2_save_policy` in `overworld.h` | all three gates lifted already, `DS:6D` included |
 | Paralysis counters | `state.h` `paral_legs/arms/sleep` at `0x26B/26C/26D` | present, with `_Static_assert` on the offsets |
 
-**So CP5's remaining work is interpretation and wiring, not I/O and not mechanics.**
+**So CP5's remaining work is interpretation and wiring, not I/O plumbing and not
+mechanics** — with the one exception in the table above, which W1 fixed.
+
+**W1 is done (2026-10-23).** `state.h` carries the six arrays at their proven offsets, each
+pinned by `_Static_assert` (`mon_x 0x137`, `mon_y 0x157`, `mon_hp 0x177`, `mon_type 0x197`,
+`mon_kind 0x1B7`, `mon_role 0x1D7`), plus `counter_26A` carved out of the reserved block with
+a `NAME UNKNOWN` comment rather than an invented one. `engine/src/game/monsters.c` does the
+monx↔DS copy and the cell lookups; `engine/tests/monsters_check.c` runs in `run_cp5.sh` and
+checks the mapping against `original/monx31` using values read out of the live emulator —
+all six sampled slots match exactly, and a control asserts the six columns are
+distinguishable so a swapped offset cannot pass silently.
 
 ---
 
@@ -110,17 +120,28 @@ Then the owner plays one and wins.
 
 ---
 
-## 4. Two questions to settle before W2 and W7
+## 4. Renderer ruling and the one remaining decision
 
-* **Q1 (blocks W2):** in terminal mode, how does a creature appear? The original draws
-  sprites; CP4's terminal path is a character grid. Options: a glyph per creature class, or
-  creatures invisible in terminal and visible only in the SDL path (CP9). This is the owner's
-  call, not an engineering preference.
-* **Q2 (blocks W7):** what is the engine's time base? The original ticks on wall-clock, not
-  on input. Candidates: real seconds, a frame count, or a fixed ticks-per-second constant.
-  It changes determinism: `phase4-plan.md` requires a seed to reproduce a run exactly, and a
-  wall-clock tick is not reproducible in a headless replay. **This one may need an explicit
-  deviation ruling** — e.g. tick per input in replay mode, wall-clock when interactive.
+**Q1 — RESOLVED by the owner, 2026-10-23: pause terminal mode, build for SDL.** Terminal is
+explicitly deferred to its own later project, so W2 draws creatures through the framebuffer
+path only, and nothing in CP5 should grow a terminal-mode branch. The existing terminal
+renderer stays as it is and is no longer the acceptance surface; the CP5 gate is played in
+the SDL build (see `docs/phase4-state.md` § TODO: headless podman container to play the SDL
+build over noVNC, which is how a human without a local display plays it).
+
+**Q2 — still open, and SDL makes it sharper.** What is the engine's time base? The original
+ticks on wall-clock, not on input, but `phase4-plan.md` requires a seed plus a script to
+reproduce a run exactly, and a wall-clock tick is not reproducible in a replay. Proposal:
+**a fixed tick counter advanced by the frame loop** — the SDL build runs at a bounded frame
+rate, so "N frames per status tick" is both time-like for a player and deterministic for a
+replay; headless/scripted runs advance it per input instead. That is a declared deviation
+either way and needs an explicit ruling before W7, not an implementation preference.
+
+**Also open, and it blocks nothing:** the art question under SDL. Creature art index is
+`cell >> 2` from the map cell (`docs/art-index.md`), and the engine only has cleanroom
+tiles — so creatures will draw as substitute art, which is the intended arrangement, but
+whoever supplies creature art must go through the cleanroom procedure and must not read the
+U1 Unity project or the bestiary cache.
 
 ---
 

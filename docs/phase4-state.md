@@ -940,3 +940,50 @@ from the other side.
 table of claim → what they assert → whether this project's bytes agree → action taken. Empty
 is a fine outcome; the point is a recorded pass rather than an unrecorded glance. Do it as its
 own session, not as a side trip inside a checkpoint.
+
+## TODO: headless podman container to play the SDL build over noVNC (opened 2026-10-23, owner)
+
+**Wanted:** the engine's SDL build (`make sdl` -> `u2-sdl`) running headless in a podman
+container on `ai`, reachable from a browser over noVNC — the same shape as the Spice86
+watching setup, but for *playing our engine* rather than watching the original.
+
+**Do not duplicate the existing section.** `## TODO: VNC desktop container for remote
+watching` above already works out the display plumbing (Xvfb, `x11vnc -forever -shared`,
+`websockify 6080 -> 5900`, browser at `http://ai.lan:6080/vnc.html`) and the constraints that
+apply to any container on this host: `sudo podman` is required and passwordless sudo must be
+re-tested rather than assumed, quadlet edits need `systemctl daemon-reload` plus a stop /
+`podman rm -f` / start cycle, `0.0.0.0` exposure needs a password at minimum with an SSH
+tunnel as the default recipe, and **game files never go in the image** — content is mounted
+read-only and passed with `--data-dir`. Read that section first; the delta here is only
+"the thing inside the container is our SDL binary, not the emulator".
+
+**What is genuinely new in this one.**
+
+1. **The SDL path is already proven headless.** CP4 asserts
+   `headless SDL: dummy driver presents a 320x200 frame` using `SDL_VIDEODRIVER=dummy`, so
+   the binary runs with no display at all. That is the right mode for *tests and frame
+   capture*, and the wrong mode for a human — `dummy` presents nothing to capture. The
+   container therefore needs a real X server (Xvfb) and `SDL_VIDEODRIVER=x11`, with `DISPLAY`
+   pointed at it, and `x11vnc` bound to that same display.
+2. **Input has to come back.** Watching Spice86 is one-way; playing needs keyboard events
+   delivered into the container. noVNC gives that, but it must be wired to the display the
+   SDL window is on, and the engine reads keys through `src/platform/input_sdl.c`, so
+   focus-follows-mouse and any window-manager surprises inside the container are live
+   gameplay bugs, not cosmetics. Budget for that being the part that takes longest.
+3. **Audio.** The build has `audio_beep` / `audio_null` / `audio_sdl`; a container with no
+   sound server will pick `audio_null` or fail to open a device. Decide deliberately which,
+   and record it — silent-by-default is fine for a remote session but should be a choice.
+4. **It must stay out of the gates.** Nothing in `make test` or `assemble_clean.sh` may
+   depend on the container existing. The CP4 dummy-driver assertion already covers the SDL
+   path for CI; this container is a convenience for a human with a browser.
+5. **Save state lives on the host.** The engine writes the `player` record into the content
+   directory; if that is mounted read-only (as it should be for the original game files) the
+   session needs a separate writable path for its save, or `Q` will fail in a confusing way.
+   Decide the layout before building, and make the failure legible if the path is not
+   writable.
+
+**Suggested shape:** one quadlet `.container` under a project-local directory, image built
+from a committed `Containerfile` (engine binary + Xvfb + x11vnc + websockify + a minimal
+window manager), content mounted read-only, save path mounted read-write, ports 6080 (and
+5900 only if not tunneled). Keep the `Containerfile` and the run recipe in the repo; keep the
+game files out of it, per the licensing rules.
