@@ -524,3 +524,56 @@ Also capture in the same session: `DS:65` (keys) before and after, to confirm th
 `das` decrement end to end, and whether the opened cell survives leaving and
 re-entering the sector — that decides whether the write goes to the sector map or to
 a separate overlay, which is the `(%bx)` question the asm leaves open.
+
+### G29 — sector crossing on the west land bridge: scroll or teleport
+
+**Grade: recalled (owner, 2026-10-27) — "when I cross the land bridge west into the
+next sector you have me teleporting, but it should scroll seamlessly, at least in the
+overworld."**
+
+This is not only a rendering complaint. It contradicts something the project has been
+treating as byte-proven, and per the rule that an owner observation outranks an agent
+inference, the contradiction has to be resolved before anything is changed.
+
+**What the engine does now.** One resident sector (`engine/src/core/world.h`), and
+`asm/5AE1` gives the window origin as `(x-9, y-5)` — the player sits at screen cell
+(9,5) of a 20x16 viewport, not the centre. Off-sector cells take their tile from the
+single byte `DS:12` (`tile_offsector`), which is proven and is why the engine paints a
+uniform strip at the edges. Crossing is handled by `site_leave()` / the edge test.
+
+**The conflict.** `asm/242D/2434` was read as testing **only the high edge**, which
+means walking east or south leaves the sector while walking **west or north wraps
+round the torus inside the same sector**. That reading is recorded in `site_leave()`
+and in `world.h` as "the viewport never straddles a file". If it were true the owner
+could not cross west into the next sector at all in the original — and they say they
+can, routinely, and that it scrolls.
+
+So one of these is wrong, and it is probably the reading of `242D/2434`, not the
+owner. Two candidate designs, and they need different fixes:
+
+1. **The original never straddles** (current engine model). Then "seamless" means the
+   crossing must not move the player's *screen* position — the sector reload has to
+   place the player at the opposite edge so the picture is continuous, and the
+   teleport is a bug in how the engine repositions on reload, not in the viewport.
+2. **The original does straddle**, and `DS:12` is only a fallback for cells beyond the
+   world edge. Then the overworld needs two (or nine) resident sectors and the viewport
+   sampling across the boundary — a real change to `world.c`, `view.c` and the crossing
+   path.
+
+**The capture that decides it.** Headless Spice86, sector 20, `--player` +
+`tools/u2_edit.py setpos` to stand near the west edge on a land bridge. Read the
+staging grid at `DS:0x272` (256 B) and `DS:12`, then walk west one step at a time
+across the boundary, reading after each step.
+
+- If the staging grid ever contains tiles from two different `mapx` files, design 2 is
+  correct and `DS:12` is a fallback.
+- If it never does, design 1 is correct, and the question becomes what the original
+  does to the player's screen position at the moment of reload — read `DS:00/01` and
+  the window origin across the crossing step.
+- Either way, record whether the west edge actually changes sector or wraps in place,
+  because that is the `242D/2434` reading being confirmed or refuted.
+
+**Owner-only part:** whether the original's crossing is a smooth scroll or a fast
+pan. The bytes can say what the viewport contains; only a person watching can say what
+it looks like. Worth 5 minutes of the original under `tools/spice86_start.sh
+--patch-arrows` with a real window.
