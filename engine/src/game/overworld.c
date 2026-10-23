@@ -14,6 +14,7 @@
 #include "game/ai.h"           /* u2_ai_creature_turn: the monsters' turn */
 #include "game/combat.h"      /* u2_combat_attack, u2_attack */
 #include "game/monsters.h"    /* u2_monsters_at: who is standing there */
+#include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
 #include "core/font.h"
 #include "core/save.h"
@@ -50,6 +51,10 @@ static void echo_cmd(u2_ctx *ctx, const char *word)
     seam_str_out(ctx, U2_S_CMD_PROMPT);
 }
 
+/* Defined below with the food arithmetic. creature_turn needs it to apply the
+ * melee pool with the same BCD idiom rather than a second, subtly different one. */
+static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out);
+
 /*
  * One creature turn, after whatever the player just did.
  *
@@ -71,6 +76,36 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
         u2_monsters_restamp(ctx, &ow->world);
     if (rep.moved || rep.stolen)
         u2_monsters_store(ctx, &ow->world);
+
+    /* asm/0BD1/asm/0BDB: the pooled melee damage is applied ONCE after the loop,
+     * and a zero pool means no damage at all rather than a damage of 1. The amount
+     * actually taken is `((rand & pool) & 0x77) + 1`, so the pool is a mask and the
+     * blow is randomised up to it. */
+    if (rep.damage_pool == 0)
+        return;
+
+    u2_state *st = &ctx->state;
+    const unsigned dmg = ((u2_rand_byte(ctx) & rep.damage_pool) & 0x77u) + 1u;
+
+    /* The house BCD subtract: low byte DS:52, then the high byte DS:51 with the
+     * borrow, `das` after each, and the trailing `cmc` re-exposes the borrow for the
+     * `jae <death>` that follows. Underflow is death, and asm/0C62 zeroes the stats
+     * anyway, so the store is skipped in that case rather than writing a negative
+     * nibble first. */
+    unsigned lo = 0, hi = 0;
+    const int borrow1 = bcd_sbb(st->unk_52, dmg & 0xFFu, 0, &lo);
+    const int borrow2 = bcd_sbb(st->hp, 0, borrow1, &hi);
+    if (borrow2) {
+        u2_death(ctx);
+        return;
+    }
+    st->unk_52 = (uint8_t)lo;
+    st->hp     = (uint8_t)hi;
+    u2_status_draw(ctx);
+    /* Nothing is printed for a melee wound. asm/0BB2..0BCF runs a loop over the
+     * contact count calling asm/5455, asm/60AC and asm/60F2, which is almost
+     * certainly the message, and none of it has been read. Silence here is a known
+     * gap, not a decision that the original says nothing. */
 }
 
 /*

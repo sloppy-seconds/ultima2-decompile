@@ -287,12 +287,32 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
         const int cx = (st->mon_x[slot] + sx) & U2_AI_GRID_MASK;
         const int cy = (st->mon_y[slot] + sy) & U2_AI_GRID_MASK;
         if (cx == px && cy == py) {
+            /* asm/0B4D: the creature does not step onto the player. It stays where
+             * it was and takes a swing, and this is the ONLY way a plain melee
+             * creature can hurt the player — there is no separate attack action in
+             * the original. DS:20 counts the contacts and asm/0BD1 applies the
+             * pooled damage once, so a town full of converging guards hits harder
+             * than one guard. */
+            rep.contacts++;
+
             if (st->mon_type[slot] == U2_AI_TYPE_THIEF &&
                 u2_combat_thief_steal(ctx) != 0) {
                 rep.stolen++;
                 seam_str_out(ctx, U2_S_THIEF_STOLE);
                 seam_char_print(ctx, '\r');
                 seam_str_out(ctx, U2_S_CMD_PROMPT);
+            }
+
+            /* asm/0B62/0B71: two tests before a blow counts. The roll must be
+             * non-negative and its low three bits must reach the worn-armour index
+             * at DS:62 — so armour is an 1-in-8-per-point dodge: SKIN lets every
+             * blow through and the best armour stops seven of eight. */
+            const uint8_t roll = u2_rand_byte(ctx);
+            if (roll < 0x80 && (roll & 7) >= st->worn_armour) {
+                /* asm/0B79: the pool grows by a share of the creature's OWN hit
+                 * points. Counter-intuitive and straight from the bytes: a wounded
+                 * creature hits weaker, a full-health one hits harder. */
+                rep.damage_pool += (st->mon_hp[slot] >> 2) + 1;
             }
             continue;
         }

@@ -29,6 +29,12 @@ typedef struct u2_ai_report {
     int landed;     /* specials that were not resisted                          */
     int stolen;     /* successful thefts (asm/0FCD)                             */
     int retreated;  /* slots whose pursuit vector was negated (asm/0B0F)        */
+    int contacts;   /* slots that would have stepped onto the player (asm/0B4D)  */
+    /* The melee damage pool at DS:22. Each contacting creature that lands a blow
+     * adds `mon_hp >> 2 + 1` (asm/0B79) and the caller applies the pool with
+     * asm/0BDB's randomised mask. Zero means nothing landed, and asm/0BD1 is what
+     * turns a zero pool into no damage at all rather than a damage of 1. */
+    unsigned damage_pool;
 } u2_ai_report;
 
 /*

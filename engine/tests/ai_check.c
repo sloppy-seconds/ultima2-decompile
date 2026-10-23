@@ -150,8 +150,15 @@ int main(void)
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(ctx.state.mon_x[8] == 7 && ctx.state.mon_y[8] == 7,
           "asm/2201: the candidate cell is the player's, so the creature does not step");
-    CHECK(rep.moved == 0 && rep.gates == 1 && u2_rng_rolls(&ctx) == rolls_before + 1,
-          "contact rolls the special gate and nothing else — there is no melee site");
+    /* Corrected the same day it was written: the first version of this check said
+     * "and nothing else — there is no melee site". There is: asm/0B4D's contact arm
+     * also draws asm/0B62's hit roll, so two rolls per contact, and a landed blow
+     * adds mon_hp>>2 + 1 to the pool. */
+    CHECK(rep.moved == 0 && rep.gates == 1 && rep.contacts == 1 &&
+          u2_rng_rolls(&ctx) == rolls_before + 2,
+          "contact: the special gate AND asm/0B62's melee roll, and no step");
+    CHECK(rep.damage_pool == 0 || rep.damage_pool == (40 >> 2) + 1,
+          "a landed melee blow pools mon_hp>>2 + 1 (asm/0B79); a dodged one pools 0");
 
     /* --- the special gate: proximity, then 1 in 8, then the type dispatch --- */
     uint8_t seed = 0;
@@ -222,9 +229,9 @@ int main(void)
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x34);   /* a paralyser... */
     ctx.state.mon_role[13] = 2;                /* ...but alerted */
     u2_rng_seed(&ctx, seed);
-    rep = u2_ai_creature_turn(&ctx, &w, 6, 6);
-    CHECK(rep.gates == 0 && u2_rng_rolls(&ctx) == 0,
-          "role 2 goes straight to the move routine: it chases and never casts");
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);  /* far enough that it is not contact */
+    CHECK(rep.gates == 0 && rep.contacts == 0 && u2_rng_rolls(&ctx) == 0,
+          "role 2 goes straight to the move routine: it chases, never casts, rolls nothing");
 
     arm(&ctx, &w, GRASS, 13, 5, 5, 14, 0x30);
     ctx.state.mon_role[13] = 2;
@@ -237,6 +244,37 @@ int main(void)
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5,
           "role 3 is undecoded (asm/1086) and the engine under-moves rather than guess");
+
+    /* --- the melee pool and the armour dodge (asm/0B62 / asm/0B79) ----------- */
+    /* A role-2 creature in contact draws exactly one roll, the melee roll, so the
+       seed controls it directly. Find a seed whose first roll is non-negative and
+       whose low three bits are 0: with armour 0 the blow lands, with armour 1 it is
+       dodged. That is the whole of what armour does in the original, and it is the
+       only damage a plain melee creature can ever do. */
+    uint8_t mseed = 0;
+    while (mseed < 255) {
+        const uint8_t r = first_roll(mseed);
+        if (r < 0x80 && (r & 7) == 0) break;
+        mseed++;
+    }
+    const uint8_t mr = first_roll(mseed);
+    CHECK(mr < 0x80 && (mr & 7) == 0, "a seed exists whose first roll is hit-able at SKIN");
+
+    arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.mon_role[14] = 2;
+    ctx.state.worn_armour = 0;                      /* SKIN */
+    u2_rng_seed(&ctx, mseed);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.contacts == 1 && rep.damage_pool == (40 >> 2) + 1,
+          "SKIN: the blow lands and pools mon_hp>>2 + 1 = %d", (40 >> 2) + 1);
+
+    arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.mon_role[14] = 2;
+    ctx.state.worn_armour = 1;                      /* one step of armour */
+    u2_rng_seed(&ctx, mseed);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.contacts == 1 && rep.damage_pool == 0,
+          "control: the same roll against armour index 1 is dodged (asm/0B71)");
 
     /* --- the alarm (asm/113A): violence inside a site wakes slots 0..7 -------- */
     arm(&ctx, &w, GRASS, 3, 5, 5, 40, 0x30);
