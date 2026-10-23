@@ -198,6 +198,8 @@ Check it before writing anything new against a live session.
 | list what the emulator can do | `tools/spice86_type.py --list` (63 MCP tools) | no |
 | screenshot, headless | MCP `screenshot` (PNG base64) | no |
 | stop the CPU at an address and read state there | `tools/bp_read.py --ip 0CEE --cs 17D --state --ret --stack 40` | no — RSP on the gdb port |
+| **read a live byte/word/block** | `tools/spice86_type.py --peek 8be:60:1` (hex `SEG:OFF[:LEN]`) | no — HTTP |
+| **force a live value to build a scenario** | `tools/spice86_type.py --poke 8be:60=00` (hex `SEG:OFF=BYTES`, always prints the read-back) | no — MCP |
 
 `bp_read` is the only thing that speaks `monitor` for capture purposes, and the monitor
 surface is bigger than the HTTP API: `help` lists `dumpAll`, `breakCycles`, `breakCsIp`,
@@ -375,6 +377,13 @@ through the MCP endpoint at `--McpHttpPort`, using the `write_memory` tool with 
 
 This is the only reliable way to build a controlled before-and-after: write a known value,
 take an action, read the result.
+
+**Use `tools/spice86_type.py --poke` rather than speaking MCP by hand.** It wraps `write_mem`
+and reads the bytes back in the same invocation, and it exits non-zero when the read-back
+disagrees, which is the failure mode a silent write has. `--peek` is the matching read and
+needs no MCP session. Forcing an input is often the whole experiment: docs/monster-spawn.md
+§ 15.4 pinned the spawn selector in one afternoon only once `DS:60` could be poked, where
+waiting for the game to produce each value had failed twice.
 
 ## Capture pattern that actually works
 

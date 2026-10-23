@@ -25,11 +25,21 @@ write path; the HTTP API is read-only. This speaks streamable-HTTP MCP directly
 registering the server with an agent harness, so it works from any shell, any agent,
 and CI with no per-host configuration.
 
+The same MCP session is the only way to build a controlled scenario: `--poke`
+writes a byte sequence at a real-segment address and reads it straight back, and
+`--peek` reads any address without writing. Both exist so a capture can *force* a
+value instead of waiting for the game to produce one — see docs/monster-spawn.md
+§ 15.4 for the spawn selector, where the whole measurement is "set DS:60, take one
+step, see which arm ran".
+
 Usage:
     python3 tools/spice86_type.py --list                 # what does the API offer?
     python3 tools/spice86_type.py --keys Escape,p        # ESC then P (play)
     python3 tools/spice86_type.py --probe                # show buffer + CS:IP, no write
     python3 tools/spice86_type.py --keys p --delay 0.4
+    python3 tools/spice86_type.py --peek 8be:60:1        # read DS:60
+    python3 tools/spice86_type.py --poke 8be:60=00       # DS:60 = 0, read back
+    python3 tools/spice86_type.py --poke 8be:60=00 --keys Right
 """
 import argparse
 import json
@@ -178,11 +188,39 @@ def enqueue_bios(mcp, port, scan, asc):
     return tail
 
 
+def parse_addr(spec, allow_len):
+    """'8be:60:1' or '8be:60=00' -> (seg, off, n_or_bytes). Rejects silently-wrong input.
+
+    Hex throughout, because every other address in this project is hex and a
+    decimal segment here would read a different segment than the one being poked.
+    """
+    try:
+        if allow_len and '=' in spec:
+            left, data = spec.split('=', 1)
+            seg, off = (int(p, 16) for p in left.split(':', 1))
+            if not data or len(data) % 2:
+                raise ValueError('data must be whole hex bytes')
+            return seg, off, bytes.fromhex(data)
+        parts = spec.split(':')
+        seg, off = int(parts[0], 16), int(parts[1], 16)
+        n = int(parts[2], 16) if len(parts) > 2 else 1
+        return seg, off, n
+    except (ValueError, IndexError) as e:
+        raise SystemExit(f'bad address {spec!r}: use SEG:OFF[:LEN] or SEG:OFF=HEX ({e})')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--http-port', type=int, default=HTTP)
     ap.add_argument('--mcp-port', type=int, default=MCP)
+    ap.add_argument('--peek', action='append', metavar='SEG:OFF[:LEN]',
+                    help='read memory (hex addr), repeatable; works without the MCP port')
+    ap.add_argument('--poke', action='append', metavar='SEG:OFF=HEX',
+                    help='write hex bytes at a real-segment address, repeatable; '
+                         'always prints the read-back, because a write that did not '
+                         'land is the failure mode this project keeps hitting')
     ap.add_argument('--keys', help='comma/space separated: Escape,p')
+
     ap.add_argument('--delay', type=float, default=0.6,
                     help='seconds between keys (the game drains pending keys)')
     ap.add_argument('--list', action='store_true', help='list MCP tools and exit')
@@ -198,6 +236,13 @@ def main():
     if a.probe:
         return
 
+    for spec in (a.peek or []):
+        seg, off, n = parse_addr(spec, allow_len=False)
+        print('peek %04X:%04X len %d = %s'
+              % (seg, off, n, read_mem(seg, off, n, a.http_port).hex(' ')))
+    if a.peek and not a.poke and not a.keys:
+        return
+
     mcp = Mcp(a.mcp_port)
     init = mcp.open()
     if a.list:
@@ -210,8 +255,20 @@ def main():
         return
 
     names = [k for k in (a.keys or '').replace(',', ' ').split() if k]
-    if not names:
-        raise SystemExit('nothing to do (use --keys or --probe)')
+    if not names and not a.poke:
+        raise SystemExit('nothing to do (use --keys, --poke or --probe)')
+
+    for spec in (a.poke or []):
+        seg, off, data = parse_addr(spec, allow_len=True)
+        r = write_mem(mcp, seg, off, data.hex())
+        bad = (r or {}).get('error') or (r or {}).get('result', {}).get('isError')
+        back = read_mem(seg, off, len(data), a.http_port)
+        print('poke %04X:%04X = %s -> read back %s %s'
+              % (seg, off, data.hex(' '), back.hex(' '),
+                 'MISMATCH' if back != data else ('FAILED %s' % bad if bad else 'ok')))
+        if back != data:
+            raise SystemExit('poke did not land — refusing to continue on a write that lied')
+
     for name in names:
         keyname = letter(name)
         r = send_key(mcp, keyname)
