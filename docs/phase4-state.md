@@ -989,7 +989,7 @@ table of claim → what they assert → whether this project's bytes agree → a
 is a fine outcome; the point is a recorded pass rather than an unrecorded glance. Do it as its
 own session, not as a side trip inside a checkpoint.
 
-## TODO: headless podman container to play the SDL build over noVNC (opened 2026-10-23, owner)
+## TODO: headless podman container to play the SDL build over noVNC (opened 2026-10-23, owner) — **DONE 2026-10-27**
 
 **Wanted:** the engine's SDL build (`make sdl` -> `u2-sdl`) running headless in a podman
 container on `ai`, reachable from a browser over noVNC — the same shape as the Spice86

@@ -1,0 +1,76 @@
+# u2-novnc — play the engine in a browser, on `ai`
+
+The engine's SDL build running headless in a podman container, streamed over noVNC.
+This is how a person without a local display plays the reconstruction. Watching the
+original through Spice86 is a separate, already-working setup
+(`docs/phase4-state.md` § "TODO: VNC desktop container for remote watching"); this is
+the same shape pointed at our own binary.
+
+## Run it
+
+```sh
+cd /var/home/paul/Projects/decompile-u2-v2
+make -C engine sdl                                  # the binary is built on the host
+cp engine/u2-sdl deploy/novnc/u2-sdl
+sudo podman build -t u2-novnc:latest deploy/novnc/
+
+mkdir -p /var/tmp/u2/novnc-saves
+cp /var/tmp/u2/saves/PLAYER /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
+
+sudo podman run -d --name u2-novnc \
+  -p 127.0.0.1:6081:6081 \
+  -v "$PWD/original:/content:ro,z" \
+  -v /var/tmp/u2/novnc-saves:/saves:z \
+  u2-novnc:latest
+
+ssh -L 6081:ai.lan:6081 ai        # from anywhere that is not ai
+# then open  http://localhost:6081/vnc.html
+```
+
+Keyboard from the browser reaches the game, so this is play, not watching: arrow keys
+walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
+
+## Four things that cost time, in the order they bit
+
+1. **SELinux.** Without `:z` on the bind mounts the container starts, the engine
+   starts, and the only trace is `ls: cannot open directory '/content': Permission
+   denied` inside it. The failure looks like a missing file, not a denied one, and
+   the engine's own message ("no executable and no cached tiles") points at the
+   wrong thing entirely.
+2. **Xvfb must be 24-bit.** `320x200x8` — which is what you reach for when the game is
+   four colours — makes SDL2's X11 backend refuse the visual with
+   `Palettized video modes are no longer supported`, and the engine reports it as
+   `backend initialisation failed`. The display depth has nothing to do with the
+   game's palette; the engine composes a 32-bit RGBA surface and applies the CGA
+   palette itself.
+3. **The tiles cache is validated against the executable's digest**, and it lives in
+   the *save* directory (`<save-dir>/tiles.u2tl`), not the content directory. Mount
+   both, and put the cache with the save.
+4. **Ports.** 6080 and 5900 belong to the Spice86 watching container, so this one
+   defaults to 6081/5901 on display `:98`. Override with `-e NOVNC_PORT= -e
+   VNC_PORT= -e DISPLAY=` if you run a second one.
+
+Audio is deliberately silent: the container has no sound server, `audio_sdl` fails to
+load `libjack.so.0`, and the engine continues without it and says so. That is the
+choice the TODO asked for made explicitly — silent by default, not broken by default.
+
+## What is and is not in the image
+
+The image carries the engine binary, SDL2, Xvfb, x11vnc, novnc and websockify. **No
+game content.** `original/` is mounted read-only at `/content` and the save directory
+read-write at `/saves`, per the licensing rules in `AGENTS.md`. The binary is copied
+in rather than compiled in the image so that what runs is what the host's
+`make -C engine test` actually tested.
+
+## Known gaps
+
+- The engine exits when the player presses `ESC`, and the entrypoint then tears down
+  Xvfb and the container stops. Restart it to play again. A long-lived service would
+  want a quadlet `.container` with `Restart=on-failure`, and the TODO in
+  `docs/phase4-state.md` says so too; this is deliberately a run-it-when-you-want-to-
+  play thing until the game has an ending worth resuming.
+- `--play-map` skips the title and character creation. Drop `U2_ARGS` to
+  `--sdl` for the full flow.
+- Nothing here is wired into `make test`, and nothing in `make test` may come to
+  depend on it: the CP4 dummy-driver assertion already covers the SDL pixel path for
+  CI, and this container exists for a human with a browser.
