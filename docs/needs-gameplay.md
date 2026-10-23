@@ -520,6 +520,28 @@ stand adjacent, read the sector grid at `DS:0x1800` for that cell, send `U` then
 direction key, read the cell again. The before/after pair is the answer. Confirm the
 key landed by reading memory, never by the send returning ok.
 
+**Attempted 2026-10-28, still open — the recipe runs but the unlock refuses.** Sector 32
+(28 doors in the first 4096 bytes, row-major `y*64+x`, confirmed against the live grid at
+`DS:1800`), `G23MAX` with 20 keys, three placements, `--patch-arrows`:
+
+| player | target cell | byte there | input | result |
+| --- | --- | --- | --- | --- |
+| (2,14) | north (2,13) | `0xA0` | `U` then `Up` | `NORTH--INVALID MOVE!`, cell still `0xA0`, keys still 20 |
+| (8,1) | east (9,1) | `0xA0` | `U` then `Right` | `EAST--INVALID MOVE!`, unchanged |
+| (8,1) after two accepted east moves | east (9,1) | `0xA0` | `Right Right U Right` | `EAST--INVALID MOVE!`, unchanged |
+
+So the direction prompt *is* satisfied by a patched arrow (the result line names the
+direction back), the target really holds the door byte, and the unlock still refuses. Two
+things came out of the failure. **`DS:14` is not constant**: it read 6 in sector 20 and 4 in
+sector 32, and `DS:14 * 2` is what gets written into the cell -- 12 and 8, both ordinary
+walkable ground in those sectors. That is the first real evidence for what the byte under a
+door *is*, and it is an inference from two reads, not an answer. And the aim computation in
+`asm/4326` is only partly read: it sets `DS:24 = DS:01` (player y, no delta) and
+`DS:23 = DS:00 + DS:19`, then `call L_0052b3` (`asm/50B3_map_tile_ptr`, the live grid cell),
+so on its face it can only ever aim along x -- which would make a north/south unlock
+structurally unable to hit anything, and is the next thing to check. **Whoever picks this up:
+read `asm/4326..4339` end to end before another capture.** Runs were `g30`, `g30b`, `g30c`.
+
 Also capture in the same session: `DS:65` (keys) before and after, to confirm the
 `das` decrement end to end, and whether the opened cell survives leaving and
 re-entering the sector — that decides whether the write goes to the sector map or to
