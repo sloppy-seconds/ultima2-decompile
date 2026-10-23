@@ -197,6 +197,14 @@ MANIFEST = [
     ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6, "-TOWER")),
     ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7, "-CASTLE")),
     ("U2_S_SITE_DUNGEON",      "34E4_sub_34e4.asm",       ("run", 0x36EF, 8, "-DUNGEON")),
+    # The UNLOCK command (asm/42F1 cmd_U and its two refusals). The prompt's db line
+    # terminates with `,0` so the db-index locator finds it; both refusals carry a
+    # leading 0x8d line-marker byte, which puts them outside DB_RE on purpose (see the
+    # DB_RE note), so they are addressed by offset. Offsets read off the exe 2026-10-28
+    # while closing G30 -- each literal is unique in the file.
+    ("U2_S_UNLOCK_DIRECTION",  "42F1_cmd_U.asm",          0),
+    ("U2_S_NO_DOOR_THERE",     "4310_open_no_door.asm",   ("run", 0x4514, 14, "NO DOOR THERE!")),
+    ("U2_S_NO_KEYS_FIT",       "4345_open_no_key_fit.asm", ("run", 0x4549, 17, "NO KEYS THAT FIT!")),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

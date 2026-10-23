@@ -177,4 +177,16 @@ int u2_tile_walkable_byte(uint8_t map_byte);
  * See the comment on site_leave() in overworld.c. */
 int u2_site_edge_crossed(int sector_second, int raw_x, int raw_y);
 
+/* The UNLOCK rule (asm/4309..435E), split out so a test can drive every branch.
+ * Returns one of the verdicts below. */
+#define U2_UNLOCK_NO_AIM   0   /* no sideways aim: asm/4309 falls through to NO DOOR */
+#define U2_UNLOCK_NO_DOOR  1   /* target cell is not map byte 0xA0 */
+#define U2_UNLOCK_NO_KEYS  2   /* door present, DS:65 empty */
+#define U2_UNLOCK_OPENED   3   /* key spent, cell paved */
+int u2_unlock_rule(int dx, uint8_t target_tile, int keys);
+/* The byte written over the door: the ground under the player, low bit cleared. */
+uint8_t u2_unlock_replacement(uint8_t ground_tile);
+/* One packed-decimal key spent (asm/435E's stc/mov/cmc/sbb/das/cmc). */
+uint8_t u2_unlock_spend_key(uint8_t keys);
+
 #endif /* U2_OVERWORLD_H */

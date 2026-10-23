@@ -178,6 +178,38 @@ int main(int argc, char **argv)
     CHECK(!u2_site_edge_crossed(1, 63, 63) && !u2_site_edge_crossed(1, 0, 0),
           "a step that stays inside the sector is not a crossing, corner included");
 
+    /* --- UNLOCK (asm/4309..435E), item 4 ---------------------------------------
+     * The rule came out of reading the whole chain after three live attempts refused,
+     * and the load-bearing surprise is that there is no vertical aim: asm/4326 computes
+     * (x + DS:19, y) and never touches a Y delta, so north and south cannot open
+     * anything however the prompt reads. */
+    CHECK(u2_unlock_rule(0, 0xA0, 5) == U2_UNLOCK_NO_AIM,
+          "a north/south aim (dx == 0) is refused before the cell is even looked at -- "
+          "the door byte does not matter");
+    CHECK(u2_unlock_rule(-1, 0xA0, 5) == U2_UNLOCK_OPENED,
+          "west works as well as east: the gate is a sideways delta, not a direction");
+    CHECK(u2_unlock_rule(1, 0x0C, 5) == U2_UNLOCK_NO_DOOR,
+          "a non-door cell gives NO DOOR THERE!");
+    CHECK(u2_unlock_rule(1, 0xA0, 0) == U2_UNLOCK_NO_KEYS,
+          "a door with no keys gives NO KEYS THAT FIT!");
+    CHECK(u2_unlock_rule(1, 0x0C, 0) == U2_UNLOCK_NO_DOOR,
+          "no door AND no keys reports NO DOOR THERE!, because asm/433A tests the cell "
+          "before asm/433E tests the keys -- this is the case that tells the two orders apart");
+    CHECK(u2_unlock_rule(1, 0xA0, 5) == U2_UNLOCK_OPENED,
+          "door plus a key opens");
+    /* The byte written over the door: DS:14*2, and DS:14 is the tile under the player
+     * >> 1. Two live reads pinned this (sector 32 on 0x08 -> DS:14 4; sector 20 on
+     * 0x0C -> DS:14 6), so the door is paved with the ground you stand on. */
+    CHECK(u2_unlock_replacement(0x08) == 0x08, "grass under foot paves the door with grass");
+    CHECK(u2_unlock_replacement(0x0C) == 0x0C, "forest under foot paves the door with forest");
+    CHECK(u2_unlock_replacement(0x09) == 0x08,
+          "the low bit is cleared by the >>1<<1, so an odd ground byte rounds down");
+    /* asm/435E spends one key in packed decimal. The stc/cmc pair only clears carry --
+     * it is minus one, not minus two, and the BCD means 0x20 becomes 0x19 not 0x1F. */
+    CHECK(u2_unlock_spend_key(0x20) == 0x19, "20 keys (packed decimal 0x20) spends to 19");
+    CHECK(u2_unlock_spend_key(0x10) == 0x09, "10 keys spends to 09, borrowing across the nibble");
+    CHECK(u2_unlock_spend_key(0x01) == 0x00, "the last key spends to zero");
+
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");
     return fails != 0;

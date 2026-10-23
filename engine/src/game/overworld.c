@@ -639,6 +639,44 @@ int u2_tile_walkable_byte(uint8_t map_byte)
  * impassable, which is the honest half of the behaviour rather than the whole of it.
  */
 
+/* The UNLOCK verdict, as a pure function so a test can drive every branch without a
+ * world. asm/4309 -> 4310/4326 -> 433A -> 433E -> 4345/435E, in that order:
+ *   no sideways aim  -> "NO DOOR THERE!"   (DS:19 == 0 falls straight through)
+ *   cell != 0xA0     -> "NO DOOR THERE!"
+ *   keys == 0        -> "NO KEYS THAT FIT!"
+ *   otherwise        -> one key spent, cell paved
+ * The first case is not a nicety: asm/4326 computes (x + DS:19, y) and never touches a
+ * Y delta, so a north or south aim has no target to test and the original answers
+ * "NO DOOR THERE!" before looking at anything. */
+int u2_unlock_rule(int dx, uint8_t target_tile, int keys)
+{
+    if (dx == 0)
+        return U2_UNLOCK_NO_AIM;
+    if (target_tile != 0xA0)
+        return U2_UNLOCK_NO_DOOR;
+    if (keys <= 0)
+        return U2_UNLOCK_NO_KEYS;
+    return U2_UNLOCK_OPENED;
+}
+
+/* asm/435E: `mov 0x14,%al ; add %al,%al`, and DS:14 is the tile under the player >> 1
+ * (two live reads: sector 32 on 0x08 gave DS:14 = 4, sector 20 on 0x0C gave DS:14 = 6).
+ * So the door is paved with the ground the unlocker is standing on, low bit cleared. */
+uint8_t u2_unlock_replacement(uint8_t ground_tile)
+{
+    return (uint8_t)((ground_tile >> 1) << 1);
+}
+
+/* asm/435E's key spend: `stc ; mov 0x65,%al ; cmc ; sbb $0x1,%al ; das ; cmc`. The
+ * stc/cmc pair only clears carry before the subtract -- it is a BCD minus one, not a
+ * minus two, which is the reading a careless pass on those five bytes produces. */
+uint8_t u2_unlock_spend_key(uint8_t keys)
+{
+    unsigned out = 0;
+    (void)bcd_sbb(keys, 1, 0, &out);
+    return (uint8_t)out;
+}
+
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
  * drive it directly. Returns 1 when the subtraction underflowed (death), and
@@ -983,6 +1021,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_ATTACK);
             pending_cmd = 'A';
             continue;
+        case 'U':
+            /* asm/42F1 cmd_U: print "UNLOCK DIRECTION-" and fall into the aim gate.
+             * The prompt is answered by a direction key, and only a sideways one can
+             * ever work -- see u2_unlock_rule and asm/4309_unlock_aim_gate. */
+            seam_str_out(ctx, U2_S_UNLOCK_DIRECTION);
+            pending_cmd = 'U';
+            continue;
         case 'E': {
             /* asm/3389 cmd_E. Inside a site the answer is " WHAT?"; the doors
              * only work from the world map, which is [DS:4A] == 0. */
@@ -1037,6 +1082,43 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             creature_turn(ctx, ow);
             continue;
         default: continue;                                  /* not a move key */
+        }
+
+        /* A direction arriving while UNLOCK DIRECTION- is on the line answers the
+         * unlock and is not a step. asm/4310 and asm/4345 both end at jmp L_000c30 and
+         * asm/435E at jmp L_000c33, and every one of those reaches cmd_done, so the
+         * post-command sweep runs on the refusal as well as on the success -- the same
+         * consequence § 15.2 of docs/monster-spawn.md derives for the command path in
+         * general. The player does not move. */
+        if (pending_cmd == 'U' && word != NULL) {
+            pending_cmd = 0;
+            const int tx = ow->x + dx;
+            const int ty = ow->y;
+            const int off = tx < 0 || tx >= U2_SECTOR_EDGE || ty < 0 || ty >= U2_SECTOR_EDGE;
+            const uint8_t target = off ? 0 : u2_world_tile_at(&ow->world, tx, ty);
+            switch (u2_unlock_rule(dx, target, ctx->state.keys)) {
+            case U2_UNLOCK_NO_AIM:
+            case U2_UNLOCK_NO_DOOR:
+                /* One print, not two: the original has a single NO DOOR THERE! site
+                 * (asm/4310) and reaches it from both causes. */
+                seam_str_out(ctx, U2_S_NO_DOOR_THERE);
+                break;
+            case U2_UNLOCK_NO_KEYS:
+                seam_str_out(ctx, U2_S_NO_KEYS_FIT);
+                break;
+            default: {
+                /* asm/435E: spend one key, then pave the cell with the ground the
+                 * player is standing on. */
+                ctx->state.keys = u2_unlock_spend_key(ctx->state.keys);
+                const uint8_t ground = u2_world_tile_at(&ow->world, ow->x, ow->y);
+                u2_world_tile_put(&ow->world, tx, ty, u2_unlock_replacement(ground));
+                break;
+            }
+            }
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            creature_turn(ctx, ow);
+            continue;
         }
 
         /* A direction arriving while ATTACK-- is on the line is the attack's
