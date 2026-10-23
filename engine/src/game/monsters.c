@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "core/ctx.h"
+#include "core/rng.h"          /* u2_rand_byte: the spawner's two coordinate rolls */
 
 /* monx offset of each array. Kept as one table so a future re-measurement is a
  * single edit, and so the store path cannot drift from the load path. */
@@ -82,7 +83,12 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
      * same file the same day — see § 10 there before doubting these offsets. */
 
     for (int i = 0; i < U2_MON_SLOTS; i++) {
-        if (!(s->mon_x[i] || s->mon_y[i]))
+        /* type 0 is empty, which is asm/0A74's own test. The x||y pair above is
+         * kept because a monx file can carry coordinates on a slot the original
+         * never gave a type, but a type-less slot must not stamp 0 over terrain —
+         * the wandering spawner produces exactly such slots whenever its arm
+         * refuses, because asm/0CC0 writes the coordinates before the arm runs. */
+        if (!(s->mon_x[i] || s->mon_y[i]) || s->mon_type[i] == 0)
             continue;
         const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
         if (cell < 0 || cell >= U2_SECTOR_TILES)
@@ -195,4 +201,108 @@ int u2_monsters_nearest(const u2_ctx *ctx, int x, int y)
         }
     }
     return best;
+}
+
+/* ------------------------------------------------------------- the wandering spawn */
+
+/*
+ * The nine spawn arms, indexed by the lowest set bit of the selector byte, with a
+ * zero byte falling through to the last row. Every column is read off asm/, not
+ * chosen: the type and HP immediates come from asm/0D4F (Orc), asm/0D6F (Thief at
+ * 0D6F, Daemon at 0D8F), asm/0DAF (sea serpent) and asm/0DC4 (Fighter, Frigate,
+ * Devil, Wizard, Balron and the shared reject tail).
+ *
+ * want_tile is the immediate each arm's `cmp` carries against the slot's terrain
+ * byte. The two arms wanting 0x00 are the two sea creatures and the rest want
+ * 0x08, which is the strongest single piece of evidence that the compared byte is
+ * the terrain of the rolled cell rather than a monster kind — see
+ * docs/monster-spawn.md § 15.4, where all nine rows were pinned by forcing the
+ * selector and watching which arm ran.
+ */
+static const struct u2_spawn_arm kSpawnArms[9] = {
+    { 0x30, 0x10, 0x08 },   /* bit0  Orc */
+    { 0xFC, 0x20, 0x08 },   /* bit1  Thief */
+    { 0x34, 0x40, 0x08 },   /* bit2  Daemon */
+    { 0x2C, 0x40, 0x00 },   /* bit3  sea serpent — water */
+    { 0xF0, 0x80, 0x08 },   /* bit4  Fighter */
+    { 0x48, 0xA0, 0x00 },   /* bit5  Frigate — water */
+    { 0x38, 0xC0, 0x08 },   /* bit6  Devil */
+    { 0xF8, 0xE0, 0x08 },   /* bit7  Wizard */
+    { 0x3C, 0xFF, 0x08 },   /* no bits set: Balron */
+};
+
+struct u2_spawn_arm u2_spawn_arm_for(uint8_t selector)
+{
+    for (int bit = 0; bit < 8; bit++)
+        if (selector & (1u << bit))
+            return kSpawnArms[bit];
+    return kSpawnArms[8];
+}
+
+int u2_monsters_wander(u2_ctx *ctx, u2_world *w)
+{
+    if (ctx == NULL || w == NULL || !w->map_loaded)
+        return -1;
+
+    u2_state *s = &ctx->state;
+
+    /* asm/0C9C..0CB0. The scan walks 31 down to 1 and takes the first slot whose
+     * mon_type is zero — the same emptiness test asm/0A74 uses for the sweep, and
+     * slot 0 is unreachable because `dec di ; jne` stops at 1. Taking the highest
+     * free slot is what the original does and is observable: a live run filled
+     * 1f, 1e, 1d ... in that order.
+     *
+     * The bytes are `mov ah,[di+0x197] ; or ah,al ; je found`, and that AL is
+     * residue from the sweep rather than something this path sets. What it can
+     * only ever mean is a second, unexplained condition on the same test; the
+     * observed behaviour is the mon_type test alone, so that is what is
+     * implemented, and the residue is recorded rather than smoothed over. */
+    int slot = -1;
+    for (int i = U2_MON_SLOTS - 1; i >= 1; i--) {
+        if (s->mon_type[i] == 0) { slot = i; break; }
+    }
+    if (slot < 0)
+        return -1;
+
+    /* asm/0CB6..0CD4: two rolls. The first is the x and must come in under 0x3F;
+     * the second is rejected on its sign bit and then masked to 0x3F for y, which
+     * is where the overworld's wrap is enforced on the way in. */
+    const uint8_t rx = u2_rand_byte(ctx);
+    if (rx >= 0x3F)
+        return -1;
+    const uint8_t ry_raw = u2_rand_byte(ctx);
+    if (ry_raw & 0x80u)
+        return -1;
+    const uint8_t ry = (uint8_t)(ry_raw & 0x3F);
+
+    /* asm/0CC0 and asm/0CDC store the coordinates BEFORE the arm is chosen, so a
+     * refused attempt still leaves its coordinates behind. That is not a leak to
+     * paper over: live reads found exactly this residue, a slot with x, y and the
+     * terrain byte and no type at all. */
+    s->mon_x[slot] = rx;
+    s->mon_y[slot] = ry;
+
+    const int cell = (int)ry * U2_SECTOR_EDGE + (int)rx;
+    if (cell < 0 || cell >= U2_SECTOR_TILES)
+        return -1;
+
+    /* asm/0CEB calls asm/50B3_map_tile_ptr, which reads the LIVE grid — so a cell
+     * another creature is standing on reads as that creature's type byte, and the
+     * terrain test then refuses. asm/0CEE files that byte into the slot. */
+    const uint8_t tile = w->map[cell];
+    s->mon_kind[slot] = tile;
+
+    s->spawn_selector++;
+    const struct u2_spawn_arm arm = u2_spawn_arm_for(s->spawn_selector);
+    if (tile != arm.want_tile) {
+        /* asm/0DC4's head: `decb 0x60` and out. The selector is rolled back, which
+         * is the mechanism behind the measured "it creeps, it does not march". */
+        s->spawn_selector--;
+        return -1;
+    }
+
+    s->mon_type[slot] = arm.type;
+    s->mon_hp[slot]   = arm.hp;
+    w->map[cell]      = arm.type;   /* the stamp: asm/0D4F's `mov %al,(%bx,%si)` */
+    return slot;
 }

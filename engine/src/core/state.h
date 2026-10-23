@@ -189,7 +189,16 @@ typedef struct u2_state {
                                         * current sector. */
     /* 0x5B */ uint8_t entry_y;        /* spawn y: [0x5B]->[0x01] (file 0x0A2C),
                                         * creation sets 20 (file 0x5BE3) */
-    /* 0x5C */ uint8_t reserved_5C[5];
+    /* 0x5C */ uint8_t reserved_5C[4];
+    /* 0x60 */ uint8_t spawn_selector; /* NOT a spawn counter. The wandering spawner does
+                                        * `incb` here, walks the bits of the result from 0
+                                        * upward, and takes the arm belonging to the LOWEST
+                                        * set bit; an arm whose terrain test fails does
+                                        * `decb`, which is why the byte creeps instead of
+                                        * marching. Pinned at runtime for all nine arms by
+                                        * forcing this byte — docs/monster-spawn.md 15.4.
+                                        * asm/0CEE_spawn_tile_store, asm/0D4F, asm/0D6F,
+                                        * asm/0DAF, asm/0DC4. */
     /* 0x61 */ uint8_t readied_weapon; /* weapon index 0..9, 0 = HANDS. Proven by
                                         * live read/write-back, findings § 11;
                                         * name table at file 0x4F53. */
@@ -349,6 +358,7 @@ _Static_assert(U2_OFF(exp_lo)     == 0x056, "exp_lo moved");
 _Static_assert(U2_OFF(gold_lo)    == 0x058, "gold_lo moved");
 _Static_assert(U2_OFF(spell_pick) == 0x063, "spell_pick moved");
 _Static_assert(U2_OFF(readied_weapon) == 0x061, "readied_weapon moved");
+_Static_assert(U2_OFF(spawn_selector) == 0x060, "spawn_selector moved");
 _Static_assert(U2_OFF(worn_armour)    == 0x062, "worn_armour moved");
 _Static_assert(U2_OFF(torches)        == 0x064, "torches moved");
 _Static_assert(U2_OFF(keys)           == 0x065, "keys moved");

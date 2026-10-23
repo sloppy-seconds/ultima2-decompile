@@ -162,6 +162,30 @@ else
     sed 's/^/        /' "$WORK/mon.build"
 fi
 
+# --- 1f. the wandering spawn (docs/monster-spawn.md 15.4) -------------------
+# The selector table was pinned by forcing DS:60 in a live emulator; this is the
+# gate that keeps the engine's copy of it honest, plus the spawner's refusals —
+# which matter more than its successes, because a wrong refusal rate is a wrong
+# monster density and nothing else would notice.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/wander_check" \
+        tests/wander_check.c src/game/monsters.c src/core/world.c src/core/state.c \
+        src/core/save.c src/core/rng.c 2>"$WORK/wander.build"; then
+    if "$WORK/wander_check" > "$WORK/wander.out" 2>&1; then
+        n=$(sed -n 's/^wander_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/wander.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 wander run executed 0 checks — the test is not running"
+        else
+            ok "CP5 wandering spawn: selector table and spawner refusals ($n checks)"
+        fi
+    else
+        bad "CP5 wandering spawn check failed:"
+        sed 's/^/        /' "$WORK/wander.out"
+    fi
+else
+    bad "CP5 wandering spawn harness did not build:"
+    sed 's/^/        /' "$WORK/wander.build"
+fi
+
 # --- 1e. the attack (CP5 W3) ------------------------------------------------
 # Direct test of combat.c, not part of combat_check.c: the attack is implemented,
 # so it is tested against the real thing rather than specified against fixtures.

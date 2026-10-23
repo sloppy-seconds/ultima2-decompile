@@ -80,6 +80,19 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     if (rep.moved || rep.stolen)
         u2_monsters_store(ctx, &ow->world);
 
+    /* The wandering spawn, once per completed command, on the world map only.
+     *
+     * asm/0A38 gates the whole post-command sweep on the sector's second decimal
+     * digit, and asm/0CEE's own header records that the spawner is that sweep's
+     * tail rather than a separate timer — so one attempt per command here is the
+     * cadence, not a guess about one. Indoors (digit non-zero) nothing spawns, and
+     * that is the same gate that keeps the creature sweep off interiors.
+     *
+     * The frame needs no redraw: the loop composites at the top of each iteration,
+     * and the stamp this writes into the grid is what the renderer reads. */
+    if (ow->sector_lo == 0 && u2_monsters_wander(ctx, &ow->world) >= 0)
+        u2_monsters_store(ctx, &ow->world);
+
     /* asm/0BD1/asm/0BDB: the pooled melee damage is applied ONCE after the loop,
      * and a zero pool means no damage at all rather than a damage of 1. The amount
      * actually taken is `((rand & pool) & 0x77) + 1`, so the pool is a mask and the

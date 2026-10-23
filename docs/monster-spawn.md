@@ -954,7 +954,7 @@ clock tick.
 
 Renamed in the same commit, filename and header only, labels untouched: `0A38_post_command_tail`,
 `0A6D_monster_sweep_head`, `0A74_monster_sweep_slot_test`, `0AA1_monster_sweep_next`,
-`0AA4_monster_spawn_entry`, `0CEE_monster_kind_store`.
+`0AA4_monster_spawn_entry`, `0CEE_spawn_tile_store` (renamed again 2026-10-28, same rule).
 
 ### Measurements that came with it
 

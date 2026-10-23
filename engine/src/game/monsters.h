@@ -40,6 +40,32 @@
 int u2_monsters_spawn(u2_ctx *ctx, u2_world *w);
 
 /*
+ * The wandering spawn: one attempt, exactly as asm/0C9C..0D05 does it.
+ *
+ * Called once per completed command, and only in a sector whose second decimal
+ * digit is 0 (the world map), because that is the gate asm/0A38 puts on the whole
+ * post-command sweep and the spawner is that sweep's tail. Returns the slot it
+ * filled, or -1 for any of the four ways an attempt can come to nothing: no free
+ * slot, either coordinate roll failing, or the selector's arm refusing the terrain
+ * it landed on. The last of those rolls the selector byte back, which is the whole
+ * reason `spawn_selector` creeps instead of marching.
+ *
+ * docs/monster-spawn.md § 15.4 is the evidence; every constant here is read off
+ * asm/, not chosen.
+ */
+int u2_monsters_wander(u2_ctx *ctx, u2_world *w);
+
+/* The arm the selector picks: the lowest set bit of `selector`, and a zero byte
+ * falls through to the Balron arm. Exposed for the test, which asserts the table
+ * rather than trusting the loop that walks it. */
+struct u2_spawn_arm {
+    uint8_t type;      /* what goes into mon_type and is stamped into the grid */
+    uint8_t hp;        /* what goes into mon_hp */
+    uint8_t want_tile; /* the terrain byte the cell must carry, else the arm refuses */
+};
+struct u2_spawn_arm u2_spawn_arm_for(uint8_t selector);
+
+/*
  * Copy the live creature arrays back into the sector buffer and mark it dirty,
  * which is the engine's side of the original's 256-byte write from DS:137 on
  * save. Only call it when the creatures actually changed; the sector store is

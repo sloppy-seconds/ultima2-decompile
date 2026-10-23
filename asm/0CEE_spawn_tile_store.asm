@@ -1,5 +1,9 @@
-# 0CEE_monster_kind_store — store mon_kind[DI], then a bit-test dispatch on DS:60
-# After the kind store: `incb [0x60]` then a chain of `clc ; rcr al,1 ; jae …`, each bit
+# 0CEE_spawn_tile_store — store the terrain tile into the slot, then a bit-test dispatch on DS:60
+# RENAMED 2026-10-28 from 0CEE_monster_kind_store, owner-approved. The old name claimed the
+#   stored byte was a monster kind; it is the terrain tile of the rolled spawn coordinate,
+#   returned by asm/50B3_map_tile_ptr one instruction earlier. Filename and header only —
+#   sub_0cee and every L_ label are body and were not touched (CP0).
+# After the tile store: `incb [0x60]` then a chain of `clc ; rcr al,1 ; jae …`, each bit
 # selecting a species branch that sets type and HP for the slot. asm/0D4F_monster_hp_orc
 # is the Orc branch and writes type 0x30 with hp 0x10 = 16, matching the bestiary's Orc
 # HP of 16 from an unrelated third-party source — the one cross-check in this cluster
@@ -24,9 +28,13 @@
 # the arm the bit chain selected turns out to want a different kind -- DS:60 is a rotating
 # selector feeding the `rcr` chain, and its value is neither "monsters spawned" nor proof
 # of how many attempts ran.
-# NAME DISPUTED: this does not store a monster kind. The byte in AL here is the return of
-#   asm/50B3_map_tile_ptr called one instruction earlier at runtime 0CEB — the terrain byte
-#   of the cell the coordinate roll picked, staged through DS:23/DS:24. Confirmed two ways:
+# RENAMED 2026-10-28 from 0CEE_monster_kind_store, owner-approved. The old name claimed the
+#   stored byte was a monster kind; it is the terrain tile of the rolled spawn coordinate,
+#   returned by asm/50B3_map_tile_ptr one instruction earlier. Filename and header only —
+#   sub_0cee and every L_ label are body and were not touched (CP0).
+# WHAT THE STORED BYTE IS: the return of asm/50B3_map_tile_ptr, called one instruction
+#   earlier at runtime 0CEB — the terrain tile of the cell the coordinate roll picked, staged
+#   through DS:23/DS:24. Not a monster kind, not a sprite. Confirmed two ways:
 #   11/11 observed spawns carry the mapx20 byte of their own slot coordinates, and the two
 #   arms that compare against 0x00 are the two sea creatures. Proposed rename
 #   0CEE_spawn_tile_store; left alone pending an owner call, since the name is discovered
