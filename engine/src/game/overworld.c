@@ -627,15 +627,16 @@ int u2_tile_walkable_byte(uint8_t map_byte)
  *                                    ->  overwrites the map cell with a new tile,
  *                                       which is how the door stays open
  * The engine has no OPEN command yet, so nothing calls this. It is here because the
- * rule is proven and the surface is not; wiring it is a separate ticket, and the
- * written tile byte (DS:14 doubled) is still an open question — naming that is
- * better than inventing a value for it. The owner reports the door "disappears"
- * and does not recall what is underneath, so the underneath byte is a capture
- * question, not a guess: see docs/needs-gameplay.md.
- *
- * Not wired: the engine has no UNLOCK command yet. Nothing calls this and the door
- * is therefore impassable in every direction for now, which is the honest half of
- * the behaviour rather than the whole of it.
+ * rule is proven and the surface is not; wiring it is a separate ticket. The written
+ * tile byte is now NAMED, not invented: DS:14 is the tile under the player >> 1, so
+ * DS:14*2 paves the door with the ground you are standing on (two live reads agree:
+ * sector 32 on 0x08 gave DS:14=4, sector 20 on 0x0C gave DS:14=6). The write goes
+ * through the cell pointer asm/50B3_map_tile_ptr caches at DS:06, i.e. into the live
+ * sector grid. See docs/needs-gameplay.md G30 and asm/435E_open_write_tile.asm.
+ * One structural constraint the engine must reproduce: UNLOCK is horizontal-only.
+ * asm/4309 refuses when DS:19 == 0 and asm/4326 computes (x + DS:19, y) with no Y
+ * term, so a north or south aim can never open anything. Doors are currently just
+ * impassable, which is the honest half of the behaviour rather than the whole of it.
  */
 
 

@@ -542,6 +542,31 @@ so on its face it can only ever aim along x -- which would make a north/south un
 structurally unable to hit anything, and is the next thing to check. **Whoever picks this up:
 read `asm/4326..4339` end to end before another capture.** Runs were `g30`, `g30b`, `g30c`.
 
+**CLOSED 2026-10-28, statically, and the refusals were the clue.** Reading the whole U chain
+(`4309 -> 4310/4326 -> 433A -> 433E -> 4345/435E`) answers both halves:
+
+* **What is written.** `asm/435E` writes `DS:14 * 2`, and `DS:14` is the tile **under the
+  player** shifted right one — the same `DS:14 = map_byte >> 1` that `site_check.c` already
+  records for `cmd_E`. Two live reads from the failed sessions confirm it exactly: sector 32
+  with the player standing on `0x08` gave `DS:14 = 4`, and sector 20 on `0x0C` gave `DS:14 = 6`.
+  So **opening a door paves it with the ground you are standing on.** That is the named answer
+  the owner's "I don't remember what's underneath" was asking for, and it is falsifiable: an
+  unlock from forest must leave `0x0C`.
+* **Where it is written.** `asm/50B3_map_tile_ptr` leaves the cell pointer it computed in
+  `DS:06` (`mov %bx,0x6`), and `asm/435E` writes through exactly that cached pointer
+  (`mov 0x6(%di),%bx ; mov %al,(%bx)`). So the write lands in the live sector grid in DS —
+  not a separate overlay, not the file. Whether an opened door survives leaving and
+  re-entering is a question about the sector store (`asm/22FD`), not about this instruction.
+* **Why every attempt refused.** `asm/4309` requires `DS:19 != 0` and `asm/4326` computes the
+  target as `(x + DS:19, y)` with **no Y term anywhere in the chain**. UNLOCK is structurally
+  horizontal-only; a north or south aim can never reach a door, and the recipe's "send `U`
+  then a direction key" was aiming in an axis the command does not have. A working capture
+  should step east or west first (so the delta is sideways) and then press `U` — and the
+  untested part is now only whether the prompt re-reads a direction at all.
+
+Renamed with filename+header only: `4309_unlock_aim_gate`, `4326_unlock_target`,
+`435E_open_write_tile`.
+
 Also capture in the same session: `DS:65` (keys) before and after, to confirm the
 `das` decrement end to end, and whether the opened cell survives leaving and
 re-entering the sector — that decides whether the write goes to the sector map or to
