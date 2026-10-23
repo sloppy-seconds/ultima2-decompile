@@ -862,3 +862,38 @@ headless sector-20 session, dump `DI`, `[DI+0x1B7]`, the slot index and the CS:I
 address, and let the run walk. The return address names the trigger directly and settles
 (1) and (2) in one shot. `tools/bp_read.py` stops the CPU at a runtime address and dumps
 memory there, which is the existing tool for this — do not hand-roll a new one.
+
+### 15.1 Capture result — the dispatch IS reached while walking (2026-10-27)
+
+Headless sector-20 session, `tools/bp_read.py --ip 0D44 --cs 17D --dump 137:160`, owner's
+`G23MAX` at (20,20), arrow keys patched.
+
+- **13 steps: no hit.** Monster type slots all zero. So a spawn is not per-step.
+- **~100 further steps: `STOP at 017D:0D44`.** The dispatch is reached from ordinary
+  walking, which is the question § 15 left open. The trigger is in the walk/turn path, not
+  at sector entry.
+- At the stop, `DS:137..1D6` was populated: the type region held `34 30 FC 30` (Daemon,
+  Orc, Thief — exactly the kinds the named arms assign), the HP region held `40 10 20 10`,
+  and the array after type held `0C 0C 0C 08 0C`. So slots were live at the moment of the
+  break, and the arms are doing what their names say.
+- Reading `DS:197` again after the run resumed showed all zeros. Do not read that as
+  "the monsters vanished": `bp_read` continues the target by default, so the second read is
+  a different game state, not a later observation of the same one.
+
+**Two hazards hit, both worth recording because they cost the run:**
+
+1. `bp_read --selftest` **poisons the run**. Spice86 has no command to remove a breakpoint
+   (monitor list: breakCycles/breakCsIp/breakStop/callStack/peekRet/state/ramx/dumpAll),
+   so the trap armed by the selftest keeps firing on the live idle address. The tool says
+   this in its own output; the run must be restarted after a selftest, and I armed the real
+   capture on a poisoned run before noticing.
+2. `--dump` takes `OFF:LEN` with **LEN in decimal**. `--dump 137:A0` raises
+   `ValueError: invalid literal for int() with base 10`. It fails immediately and loudly,
+   which is the good shape, but it wasted a full arm/walk cycle.
+
+**Still not captured: the return address**, which is the actual prize — it names the
+trigger outright. `peekRet` and `callStack` are **GDB monitor** commands on the RSP port
+(20190), not HTTP API paths; `curl /api/peekRet` returns an empty body, which is not an
+error and is easy to misread as "no data". Next attempt: talk RSP to the gdb port and send
+`monitor peekRet` while the target is stopped at 0x0D44, or extend `bp_read.py` to do it —
+extending the existing tool is the right move, not writing a second one.
