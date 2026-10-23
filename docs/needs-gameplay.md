@@ -504,3 +504,23 @@ on whether `mode_a` is derived from the tile byte.
 ## Closed
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.
+
+### G28 — what tile is underneath an unlocked door
+
+**Grade: recalled (owner, 2026-10-27) — "when you open a door it disappears, I don't
+remember what's underneath the tile."** Named unknown, not a guess to be filled in.
+
+`asm/435E_sub_435e.asm` ends with `mov 0x14,%al; add %al,%al; ... mov %al,(%bx)` — it
+writes `DS:14 * 2` into the map cell, so the door really is replaced in the sector
+data rather than flagged elsewhere. What `DS:14` holds at that moment is not traced.
+
+**Agent-drivable, no owner needed.** Headless Spice86: pick a sector containing map
+byte `0xA0` (175 occurrences across 15 sectors), `--player` + `u2_edit.py setpos` to
+stand adjacent, read the sector grid at `DS:0x1800` for that cell, send `U` then a
+direction key, read the cell again. The before/after pair is the answer. Confirm the
+key landed by reading memory, never by the send returning ok.
+
+Also capture in the same session: `DS:65` (keys) before and after, to confirm the
+`das` decrement end to end, and whether the opened cell survives leaving and
+re-entering the sector — that decides whether the write goes to the sector map or to
+a separate overlay, which is the `(%bx)` question the asm leaves open.

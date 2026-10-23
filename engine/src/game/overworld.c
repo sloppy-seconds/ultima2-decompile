@@ -467,36 +467,97 @@ uint64_t u2_overworld_unmeasured_tiles(void)
     return g_unmeasured_tiles;
 }
 
-/* On-foot passability for the tile ids measured so far.
+/* On-foot passability, keyed on the ART INDEX of the destination cell.
  *
- * The original's routine (runtime 0x2423, asm/2423) takes a travel-mode byte
- * and returns 0 to accept or 0xFF to reject, and it has two distinct reject
- * returns (0x2538 and 0x25FF). Only the on-foot verdicts observed live are
- * encoded here.
+ * art = map_byte >> 2, established in docs/passability-findings.md F12 and used by
+ * the renderer through u2_view_index(). Keying on art rather than the raw map byte
+ * is what makes one rule cover the whole letter range: F13's letters A-Z are art
+ * 0x20..0x39, which is map bytes 0x80..0xE4, and a per-map-byte table would need
+ * 26 separate rows saying the same thing.
  *
- * evidence: runtime 0x2423; accept 0x2664; reject 0x2538 and 0x25FF.
- *           Live 2026-10-21: tile 0x00 rejected 22 times on foot; 0x08 and
- *           0x0C stood on repeatedly.
- * confidence: partial.
- * open: which tile id is mountain. It is NOT 0x10 - the player was recorded
- *       standing on 0x10, and the owner states mountains are never passable
- *       on foot, so 0x10 is some other terrain. Needs a named sample.
- * open: what the mode argument (DS:15 / DS:18) selects for boat, plane or
- *       rocket. "Mountains block on foot" implies they do not block
- *       everything, and that dispatch is not yet read.
+ * THE DEFAULT IS DENY. The previous version of this function returned 1 for anything
+ * it had not measured, and that single permissive line is why the owner could walk
+ * through building walls, shop signs, doors and standing people. It was the wrong
+ * way round: docs/passability-findings.md F13 measured that only three map bytes
+ * (0x00, 0x08, 0x0C) appear in 25 or more of the 33 sector maps, so the overwhelming
+ * majority of the 64 art entries are not ground at all — they are structures,
+ * fixtures, borders and creatures. A world where the default is "walkable" turns
+ * every one of those into a hole. Default-deny fails in the safe direction: an
+ * unclassified tile stops the player and gets reported, instead of letting them walk
+ * into a mountain and looking like a working game.
+ *
+ * Evidence grade per row is stated inline. `proven` = a blocked or accepted step
+ * observed live; `owner` = the owner's report of the original, which outranks an
+ * agent inference (AGENTS.md § 5) but is not a byte; `art-shape` = inferred from
+ * what the bitmap depicts, the weakest grade here and marked so.
  */
 static int u2_tile_passable(const u2_world *w, int x, int y)
 {
     const uint8_t t = u2_world_tile_at(w, x, y);
+    const int art = (t >> 2) & 0x7F;
 
-    if (t == 0x00) return 0;                 /* water: measured blocked */
-    if (t == 0x10) return 0;                 /* mountain: measured blocked */
-    if (t == 0x08 || t == 0x0C) return 1;    /* grass, forest: measured passable */
+    /* --- ground: the only entries proven walkable by an actual step --- */
+    if (art == 0x02) return 1;   /* map 0x08 grass    — proven: walked across, F11 */
+    if (art == 0x03) return 1;   /* map 0x0C forest   — proven: five steps, F11     */
 
-    if (t < 64)
-        g_unmeasured_tiles |= (uint64_t)1 << t;
-    return 1;
+    /* --- proven blockers --- */
+    if (art == 0x00) return 0;   /* map 0x00 water    — proven: 22 live rejects, F11 */
+    if (art == 0x04) return 0;   /* map 0x10 mountain — proven: blocked at (11,20), F11 */
+    /* asm/433A_sub_433a.asm: `cmp $0xa0,%al; jne open_no_door` — the open-door path
+     * accepts only map byte 0xA0 as a door, so 0xA0 is a door and it is solid until
+     * opened (art 0x28, the letter I). proven by bytes, not by walking. */
+    if (t == 0xA0) return 0;
+
+    /* --- owner-reported blockers, 2026-10-27 --- */
+    /* Letters A-Z: shop signs and solid fixtures. F13 records the same report and
+     * notes T (talk) still works through them, so "impassable" is not "inert" —
+     * see the note at the foot of this function. */
+    if (art >= 0x20 && art <= 0x39) return 0;
+    /* Building walls. art 0x1E is solid white, 256 of 256 px (disasm/tile-art.tsv,
+     * colour counts computed from the bytes) and map 0x78 carries it 6997 times
+     * across 16 sectors — the volume a wall needs. art 0x1D is its solid-black
+     * twin; blocked on the same reasoning, and marked art-shape grade. */
+    if (art == 0x1E || art == 0x1D) return 0;
+    /* Humanoid figures drawn from the map. The owner's report: walking through
+     * people is wrong. These are real map bytes, not stamped creatures — measured
+     * occurrence: map 0x40 (art 0x10) 878x/9 sectors, 0x60 (0x18) 126x/15,
+     * 0x68 (0x1A) 78x/15, 0x30 (0x0C) 68x/11. Stamped creatures block by a
+     * different route (monsters.c overwrites the cell), so this is additive. */
+    if (art >= 0x0C && art <= 0x11) return 0;   /* Orc, Daemon, Devil, Balron, Minax, horse */
+    if (art >= 0x18 && art <= 0x1B) return 0;   /* Guard, Jester, Merchant, King            */
+
+    /* --- structures depicted as solid: art-shape grade, the weakest rows here --- */
+    if (art == 0x06 || art == 0x07 || art == 0x0A || art == 0x09 ||
+        art == 0x0B || art == 0x13 || art == 0x14 || art == 0x15)
+        return 0;                /* masonry wall, tower, monument, cave arch,
+                                  * doorway, plane, rocket, dungeon mouth */
+
+    /* Unclassified: refuse, and record it so the gap is visible rather than felt.
+     * A stop is a bug report; a free pass is a silent wrong game. */
+    if (art < 64)
+        g_unmeasured_tiles |= (uint64_t)1 << art;
+    return 0;
 }
+
+/* Doors. asm/433E_sub_433e.asm + asm/435E_sub_435e.asm, in order:
+ *   mov 0x65,%al ; or %al,%al ; jne  ->  no keys prints "NO KEYS THAT FIT!"
+ *   stc ; sbb $0x1,%al ; das ; cmc ; mov %al,0x65
+ *                                    ->  consumes exactly one key, BCD subtract
+ *   mov 0x14,%al ; add %al,%al ; ... ; mov %al,(%bx)
+ *                                    ->  overwrites the map cell with a new tile,
+ *                                       which is how the door stays open
+ * The engine has no OPEN command yet, so nothing calls this. It is here because the
+ * rule is proven and the surface is not; wiring it is a separate ticket, and the
+ * written tile byte (DS:14 doubled) is still an open question — naming that is
+ * better than inventing a value for it. The owner reports the door "disappears"
+ * and does not recall what is underneath, so the underneath byte is a capture
+ * question, not a guess: see docs/needs-gameplay.md.
+ *
+ * Not wired: the engine has no UNLOCK command yet. Nothing calls this and the door
+ * is therefore impassable in every direction for now, which is the honest half of
+ * the behaviour rather than the whole of it.
+ */
+
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
  * drive it directly. Returns 1 when the subtraction underflowed (death), and
