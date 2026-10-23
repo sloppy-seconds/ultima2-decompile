@@ -250,8 +250,11 @@ region after `HANDS` as code, so `asm/4C50_plane_landing_site.asm` has `db "GGER
 `db "CE"`, `db "ORD"` where `DAGGER`, `MACE` and `SWORD` live. The strings are recoverable
 — `assemble_clean.sh` rebuilds those bytes exactly — but not by reading the listing.
 
-So the extractor emits the tables from the exe and **fails loudly** rather than emitting a
-partial table when the pool cannot be reconstructed. Before `u2_status_draw_full()` can land,
+So the extractor emits the tables from the exe and, when the pool cannot be
+reconstructed, **says so on stderr and emits no tables at all** rather than a partial one —
+it does not fail the build, because the 93 single strings are what the engine has always
+built against and taking them down for a table nothing consumes yet would be worse. Before
+`u2_status_draw_full()` can land,
 one of these has to be chosen, and it is an owner call because it decides what CI is allowed
 to certify:
 

@@ -486,8 +486,10 @@ def main():
         pool_anchor_check(pool, "exe" if exe is not None else POOL_FILE)
         tables = emit_tables(pool)
     except (SystemExit, FileNotFoundError, ValueError) as e:
-        if exe is None:
-            raise
+        # The single-string table is what the engine has always built against, so a pool
+        # that cannot be reconstructed must not take it down: warn loudly, emit no
+        # tables, and let whatever needs them fail at its own gate. docs/status-screen-z.md
+        # § 7 records why the asm fallback cannot supply the pool today.
         warn(f"extractor: name pool unavailable ({e}); emitting no tables")
         tables = []
 
