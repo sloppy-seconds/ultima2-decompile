@@ -190,6 +190,36 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28** — **Attaching a remote-debug client halts the emulated guest, and it stays
+  halted after the client disconnects.** The status endpoint then reports the CPU as running
+  while the cycle counter does not move, and every input sent afterwards is swallowed — so a
+  frozen run is indistinguishable from an idle one from the outside. Any harness that opens a
+  debug socket must resume the target before closing it, including on its timeout and error
+  paths, and should treat "status says running, cycles do not advance" as a named failure mode
+  rather than a mystery.
+* **2026-10-28** — **On a halted target a debugger-monitor reply can lag the command that
+  caused it, so replies must be attributed by content, not by send order.** Sending one
+  command and reading one reply produced a packet belonging to an earlier command, which
+  decoded cleanly and looked like evidence: a register dump came back labelled as a call
+  stack. The durable shape is to send the whole batch, then read until every expected reply has
+  arrived, classifying each packet by a signature of what it contains. A protocol that never
+  sends a terminator for a reply makes the wrong version look completely normal.
+* **2026-10-28** — **A probe whose answer key is a return address has no answer key on
+  jump-dispatched code, and it fails by returning a plausible zero.** Hand-written and
+  ported 8-bit-era binaries routinely reach deep regions by fall-through and computed jumps
+  rather than calls, so the guest stack is empty at the breakpoint and "who called this"
+  comes back as segment-zero — a value that parses fine. The harness should read the raw word
+  at the stack pointer alongside the emulator's own answer, print both, and say whether they
+  agree; and when neither does, fall back to static reachability (who branches into this
+  region at all) instead of repeating the capture.
+* **2026-10-28** — **An emulator that can add a breakpoint but not remove one makes
+  self-tests destructive, and "multi-shot" has to be measured, not assumed.** A trap armed by
+  a positive control stays armed for the life of the run and re-fires after every resume, so
+  any later capture on that run is stolen by it. A harness whose selftest arms on a live
+  address must either restart the run afterwards or arm on an address that can only be reached
+  once — and the one-shot-versus-multi-shot behaviour is worth a timed test, because the
+  capture workflow differs completely depending on the answer.
+
 * **2026-10-23** — **A vendored, self-contained emulator build is containerisable, but three
   of its assumptions are about the machine that built it, not the game.** Containerising the
   emulator for a browser-watched play session surfaced all three, and each failed as something

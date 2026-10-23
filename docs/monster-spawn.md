@@ -897,3 +897,129 @@ trigger outright. `peekRet` and `callStack` are **GDB monitor** commands on the 
 error and is easy to misread as "no data". Next attempt: talk RSP to the gdb port and send
 `monitor peekRet` while the target is stopped at 0x0D44, or extend `bp_read.py` to do it —
 extending the existing tool is the right move, not writing a second one.
+
+## 15.2 The caller is not a call: the spawner is the tail of the per-command creature sweep (2026-10-28)
+
+Item 1 of `docs/handoff-2026-10-27-night.md`. `tools/bp_read.py` was extended rather than
+duplicated — it now takes `--state`, `--ret`, `--ret-type`, `--stack N` and `--callstack`,
+all spoken over RSP on the gdb port while the target is stopped. The prize turned out to be
+a **null result, and the null result is the answer**: there is no return address, because
+nothing calls this code.
+
+### The stop, and why the return address does not exist
+
+Armed at runtime `0x0CEE` (the kind store, which every spawn passes through and the Orc arm
+at `0x0D44` does not), owner's `G23MAX`, sector 20, arrow keys patched:
+
+```
+STOP at 017D:0CEE
+state:  ... EAX=0x50C EBX=0x12 EDI=0x12 EBP=0x8 ESP=0x100 SS=0xBCE DS=0x8BE ...
+peekRet: 017D:0000
+stack check: SS=BCE SP=0100 -> word 0x0000, peekRet AGREES
+stack at SS=BCE:SP=0100, +00..+26: all zero
+stack below SP, 00C0..00FE: 34 nonzero bytes, stale values (0x5212, 0x0A0D, 0x171D, ...)
+```
+
+`SP` is exactly `0x100` at every stop and `SP..SP+0x40` is entirely zero, which is what an
+*empty* call stack looks like: the two independent derivations agree on "no return address
+is pending", and `peekRet` answering `017D:0000` is Spice86 reporting the same nothing, not
+a failed read. The `callStack` monitor confirms the shape from the other side — it is
+degenerate here, hundreds of repeated `unknown_017D_4FDF_067AF` frames under "From external
+interrupt", because the program is not well-behaved enough to track.
+
+So the plan in § 15.1 could not have worked, and would have kept failing quietly: a probe
+whose answer key is a return address has no answer key on code reached by `jmp`.
+
+### What reaches it instead, established statically
+
+The chain is fall-through and one `jmp`, all of it in bytes:
+
+| runtime | file | what it does |
+| --- | --- | --- |
+| `0A1F` | `0C1F` | `cmd_dispatch`: `sbb $0x41,%al; add %al,%al; mov %cs:0x730(%si),%bx; jmp *%bx` — the A–Z command jump table |
+| `0A33` | `0C33` | `cmd_done`: every command handler returns here by `jmp`; prints CR via `char_print` and **falls through**, it does not `ret` |
+| `0A38` | `0C38` | clears `DS:22/20/21`, then `mov 0x4a,%al; or %al,%al; je L_000c6d` — the gate |
+| `0A6D` | `0C6D` | sweep head: `DI = 31` (immediate, the § 11 trap again) |
+| `0A74` | `0C74` | `mov 0x197(%di),%al; or %al,%al; je L_000ca1` — free slot, skip it; live slot, run the AI |
+| `0AA1` | `0CA1` | `dec %di; jne L_000c74` — next slot down |
+| `0AA4` | `0CA4` | `jmp L_000e9c` — **the only branch in the binary into the spawner cluster**, reached when `DI` walks off the bottom |
+
+`L_000e9c` is referenced nowhere else (`grep -rn L_000e9c asm/` returns that one line), and
+the AI bodies return to the sweep rather than leaving it — `L_000ca1` is jumped to from
+`asm/0BAB`, `asm/2195` and `asm/2272` too. So **every completed command, with `DS:4A == 0`,
+ends with exactly one wandering-spawn attempt.** Not per step, not per sector entry, not per
+clock tick.
+
+Renamed in the same commit, filename and header only, labels untouched: `0A38_post_command_tail`,
+`0A6D_monster_sweep_head`, `0A74_monster_sweep_slot_test`, `0AA1_monster_sweep_next`,
+`0AA4_monster_spawn_entry`, `0CEE_monster_kind_store`.
+
+### Measurements that came with it
+
+- **`DS:4A` reads 0** in a live sector-20 overworld session, so the gate was open and the
+  sweep was running. What `DS:4A` *is* remains unknown; it is the second byte in this region
+  whose meaning is a hole (`DS:60` being the first).
+- **Cadence is not the limiter, the free slot is.** After a long walk, all 32 `mon_type`
+  slots were occupied (`30 FC 30 34 30 FC 30 F0 …`) and `DS:60` moved only 22 → 23 across
+  80 arrow steps. The spawner opens by scanning `31..1` for a zero `mon_type` and exits via
+  `L_000daf` when there is none, so an attempt on a full field is a no-op. That is also why
+  the first stops came fast on a fresh sector and then stopped coming: `bp_read` armed at
+  `0x0CEE` ran 190 s with no stop once the field was full.
+- **`DS:60` is not a spawn counter.** § 11 read `incb [0x60]` here as one and § 15's live
+  check then read 0 and downgraded it to unobserved; both were wrong in different
+  directions. It is incremented here and **decremented at `asm/0DC4`, which is the shared
+  reject tail the species arms jump to when their `cmp` on `[DI+0x1B7]` does not match**
+  (`decb 0x60 ; jmp L_000daf`). So the increment is rolled back on a mismatched arm: `DS:60`
+  is a rotating selector feeding the `clc; rcr al,1; jae` chain, not a count of anything.
+  That closes the § 11 loose end and opens a different one, which is what the chain actually
+  selects on.
+- **The A–Z table is confirmed as a by-product.** Reading the table at file `0x930`
+  (= runtime `0x730`, the `mov %cs:0x730(%si),%bx` displacement) gives 26 words whose 21st
+  is `0x42F1` — `asm/42F1_cmd_U.asm`. Index 20 = 'U'. Independent confirmation that the
+  table, the `+0x200` file/runtime mapping and the handler naming all line up.
+
+### What this does and does not license the engine to do
+
+Proven now, and therefore implementable: **the cadence** — one spawn attempt per completed
+command, gated on the sweep, requiring a free `mon_type` slot.
+
+Still not proven, and still a guess if implemented: **which kind** (the `rcr` chain over
+`DS:60` plus per-arm `cmp` on `[DI+0x1B7]` — the arms and their HP are proven, the selector
+that picks an arm is not), and **where it lands** (the coordinate roll at `L_005417` and its
+bounds exits). Per the handoff's own rule — a plausible wrong spawn rule is worse than an
+empty field — the engine keeps no wandering-spawn logic. The closing measurement is
+agent-drivable and cheap: stop at `0x0CEE` repeatedly, and at each stop log `DS:60` before
+and after, `[DI+0x1B7]`, the `L_005417` result and the arm taken. One arm per capture, so
+budget a restart per sample; twenty samples would settle the selector.
+
+### Tool findings, because they cost the most time and are not about this binary
+
+1. **An RSP attach halts the VM and it stays halted.** Opening port 20190 freezes execution;
+   closing the socket without a `continue` leaves `/api/status` reporting
+   `isCpuRunning: true, isPaused: true` with a frozen cycle count, and every key sent
+   afterwards is swallowed. A frozen run looks exactly like an idle game. `bp_read` now
+   resumes on every exit path including "no stop", and `reject_trap.RSP` gained
+   `drain_pending` for the same reason.
+2. **On a halted target the monitor reply lags the command.** Traced directly: `qRcmd,state`
+   answered nothing for 20 s; a bare `?` four seconds later produced the register dump
+   immediately; `continue` produced the answer to the `peekRet` sent before it. Sent one at
+   a time, every reply is attributed to the wrong command — which is how `callStack` came
+   back holding a register dump and looked like plausible evidence. `collect_monitors` now
+   fires all commands and files each packet by content signature, so ordering cannot lie.
+3. **`peekRet` needs a type to be interesting and still told us nothing here.** Valid types
+   are `NEAR16 NEAR32 FAR16 FAR32 INTERRUPT EXTERNAL_INTERRUPT MACHINE` (read out of
+   `Spice86.Core.dll`, `monitor help`). On this binary the honest answer is `017D:0000`
+   because there is no frame; the raw word at `SS:SP` is the number to trust, which is why
+   `--ret` prints both and says whether they agree.
+4. **`--dump` and `--stack` read while halted are fine** — the HTTP memory API answers a
+   halted target, so the register dump and the stack window describe the same instant. The
+   § 15.1 warning about a post-resume read still stands; it is the resume that changes the
+   state, not the read.
+5. **`breakCsIp` is multi-shot, now measured rather than inherited.** The handoff's hazard 5
+   said a selftest trap keeps firing, which was a belief about a tool limitation nobody had
+   timed. Test: arm once at `0x0CEE`, wait for the stop, resume, then wait again with no
+   re-arm. A second stop arrived at `0x0CEE`. So a trap is permanent for the life of the run
+   and re-arming the same address just stacks duplicates — which is what several of the
+   captures in this section accidentally did, and why a capture that must see *every* pass
+   through an address should arm once and drive the resume itself rather than relaunching
+   `bp_read`.

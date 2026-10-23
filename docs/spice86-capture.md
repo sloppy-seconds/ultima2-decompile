@@ -197,6 +197,13 @@ Check it before writing anything new against a live session.
 | enter the world unattended | `tools/spice86_start.sh --auto-play` | no |
 | list what the emulator can do | `tools/spice86_type.py --list` (63 MCP tools) | no |
 | screenshot, headless | MCP `screenshot` (PNG base64) | no |
+| stop the CPU at an address and read state there | `tools/bp_read.py --ip 0CEE --cs 17D --state --ret --stack 40` | no — RSP on the gdb port |
+
+`bp_read` is the only thing that speaks `monitor` for capture purposes, and the monitor
+surface is bigger than the HTTP API: `help` lists `dumpAll`, `breakCycles`, `breakCsIp`,
+`breakStop`, `callStack`, `peekRet`, `state` and `ramx`. `state` is the only way to get
+registers at all — the HTTP API reports `cs`/`ip` and nothing else, no `SS`, no `SP`, no
+`DI`. Full findings in `docs/monster-spawn.md` § 15.2.
 
 `deploy/spice86-novnc/` and `tools/vnc/` are the two display paths and they are not the same
 thing: `tools/vnc/` containerises only the screen and runs Spice86 on the host, while
@@ -465,6 +472,18 @@ so a loaded character is placed by the map loader rather than restored to a save
   `tools/spice86_stop.sh`, which does `monitor dumpAll` over the GDB port first.
 - **`monitor dumpAll` is camelCase.** A lowercase `dumpall` is silently ignored and
   looks like a successful call that produced no files (measured 2026-10-21).
+- **Opening the gdb/RSP port halts the VM, and it stays halted.** Measured 2026-10-28:
+  after an RSP client connects and closes without a `continue`, `/api/status` reports
+  `isCpuRunning: true, isPaused: true` with a frozen cycle count and every key sent
+  afterwards is swallowed. A frozen run looks exactly like an idle game. Always send `c`
+  before closing (which `bp_read` now does on every exit path).
+- **On a halted target the monitor reply lags the command.** `qRcmd,state` answered nothing
+  for 20 s; a bare `?` produced the register dump immediately; `continue` produced the
+  answer to the `peekRet` sent before it. Send the batch, then read and attribute each
+  packet by content, never by which command was in flight.
+- **`breakCsIp` is multi-shot and cannot be removed.** One arm produced a second stop after
+  a resume with no re-arm (measured). Re-arming the same address stacks duplicates, so a
+  capture that must see every pass should arm once and drive the resume itself.
 - **No display does not mean no capture.** An agent shell here has no
   `WAYLAND_DISPLAY`/`DISPLAY` and `Xvfb` is not installed, so keystrokes are
   unavailable — but state reads, memory writes, save seeding and the screen-as-memory
