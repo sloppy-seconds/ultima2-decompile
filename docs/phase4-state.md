@@ -645,6 +645,21 @@ undiscovered, so no per-turn decrement may be wired until it is found. Evidence:
 `docs/spice86-live-findings.md` § 18 and its addendum, capture
 `captures/spice86/cp5-turn-timeout/`; build order in `docs/phase4-kickoff-cp5.md` W6b/W7.
 
+**W5, W6, W6b and W9 are done (2026-10-27), and the CP5 bar is met in the scripted
+sense.** `engine/src/game/ai.c` is the creature turn: the `mon_role` dispatch
+(inert at 0 and at `0x81..0x85`, full pass at 1, alerted-and-moving at 2, and
+deliberately nothing at 3 because `asm/1086` is unread), the unit step from
+`asm/4F11` with its torus sign trick, the retreat at 14 HP, the per-species tile
+rule, and the four specials behind `asm/0AAA`'s proximity-plus-1-in-8 gate.
+`u2_ai_alarm()` is `asm/113A`: a landed hit inside a site sets role 1 on slots 7..0,
+which is § 16's sector-wide guard response found in the static tree eight days after
+it was measured. W9 is a gate that runs in CI with no game files at all —
+`tests/cp5_fight_seed.py` emits a synthetic mapx, monx and PLAYER, and `run_cp5.sh`
+drives `./u2` through the real input path and asserts `ATTACK--EAST--HIT!!!`,
+`KILLED--GOLD+n--EXP.+m`, and that GOLD and EXP both wrapped past 9999 instead of
+clamping. Its control empties the sector and requires MISS. Full write-ups:
+`docs/monster-spawn.md` § 13 and § 14, `docs/sector-rulesets.md` § 6.
+
 **W8 is done (2026-10-27), and the span was the finding.** `asm/0C62` had been left as
 `sub_0c62 — behavior not yet reviewed` because each of its four fragments looks like
 nothing alone. Laid end to end, `0C62..0C99` is the death handler: nine zero stores into

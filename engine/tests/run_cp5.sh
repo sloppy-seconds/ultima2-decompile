@@ -275,6 +275,65 @@ else
     sed 's/^/        /' "$WORK/combat.out"
 fi
 
+# --- 3. W9: the fight gate, end to end, with no game files ------------------
+# The owner's bar for CP5 is "a rendered fight in the game", which no unit test
+# above actually proves: they test combat.c, not the command loop that prints into
+# the CMD window. This drives ./u2 the way a player is driven — a key script into
+# the real input path, the screen read back — against a synthetic content directory
+# built by cp5_fight_seed.py. Cleanroom tiles and engine-authored mapx/monx/PLAYER
+# bytes, so it runs in CI where the game files are not present.
+# A SKIP here would be a lie, because nothing it needs is optional.
+if [ ! -x ./u2 ]; then
+    bad "CP5 fight gate: ./u2 is not built — run make before make test"
+elif ! python3 tests/cp5_fight_seed.py "$WORK/w9" 2>"$WORK/w9.seed.err"; then
+    bad "CP5 fight gate: the synthetic content did not build:"
+    sed 's/^/        /' "$WORK/w9.seed.err"
+else
+    # The save is seeded with agility 0x80, which asm/2E3D makes a guaranteed hit
+    # (the roll is rand>>1, so it maxes at 127), and EXP/GOLD at 9999 so the kill
+    # reward has to wrap. Both halves are asserted: the line and the wrap.
+    printf 'A\n0xf3\n' > "$WORK/w9.keys"
+    ./u2 --headless --play-map --cleanroom \
+         --data-dir "$WORK/w9/content" --save-dir "$WORK/w9/save" \
+         --script "$WORK/w9.keys" --dump-state > "$WORK/w9.out" 2>&1
+    W9ALL=$(cat "$WORK/w9.out")   # the whole dump: the CMD lines and the status band
+    case "$W9ALL" in
+      *"CMD: ATTACK--EAST--HIT!!!"*) ok "CP5 W9: the swing renders as ATTACK--EAST--HIT!!! in the CMD window" ;;
+      *) bad "CP5 W9: no HIT line. Screen was:"; printf '%s\n' "$W9ALL" | sed 's/^/        /' ;;
+    esac
+    case "$W9ALL" in
+      *"CMD: KILLED--GOLD+"*"--EXP.+"*) ok "CP5 W9: the kill renders as KILLED--GOLD+n--EXP.+m" ;;
+      *) bad "CP5 W9: no KILLED line with both rewards — the creature survived or the reward path is silent" ;;
+    esac
+    # The BCD wrap the kickoff listed as evidence item 9: 9999 + a reward is not a
+    # clamp and not a 16-bit overflow. GOLD and EXP are separate lines, so each is
+    # matched on its own rather than with one pattern that could borrow the other's.
+    case "$W9ALL" in
+      *"EXP.=000"*) ok "CP5 W9: EXP wrapped past 9999 instead of clamping (EXP.=000n)" ;;
+      *) bad "CP5 W9: EXP did not wrap — expected EXP.=000n after a kill at 9999" ;;
+    esac
+    case "$W9ALL" in
+      *"GOLD=000"*) ok "CP5 W9: GOLD wrapped past 9999 on the same kill (GOLD=000n)" ;;
+      *) bad "CP5 W9: GOLD did not wrap — expected GOLD=000n after a kill at 9999" ;;
+    esac
+
+    # Control: with no creature in the sector the same two keys must print MISS and
+    # must not print a kill. Without this, a gate that always claimed a hit would
+    # look identical above.
+    : > "$WORK/w9/content/monx00"
+    printf 'A\n0xf3\n' > "$WORK/w9.keys"
+    ./u2 --headless --play-map --cleanroom \
+         --data-dir "$WORK/w9/content" --save-dir "$WORK/w9/save" \
+         --script "$WORK/w9.keys" --dump-state > "$WORK/w9ctl.out" 2>&1
+    if grep -q "ATTACK--EAST--MISS" "$WORK/w9ctl.out" \
+       && ! grep -q "KILLED--" "$WORK/w9ctl.out"; then
+        ok "CP5 W9 control: an empty sector gives MISS and no reward line"
+    else
+        bad "CP5 W9 control failed: the fight gate would pass with nothing to fight"
+        sed 's/^/        /' "$WORK/w9ctl.out"
+    fi
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP5 SPEC: PASS\n'
