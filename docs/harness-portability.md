@@ -190,6 +190,26 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-27** — **A reconstruction tree that numbers fragments in one space and labels
+  them in another will generate phantom gaps, and the handoff document is where the
+  contamination hides.** The clean asm tree names files by file offset and names body
+  labels by a constant-biased second space (`label = file + 0x200`, the same bias the
+  string extractor already used). A disassembler prints jump targets in the label space,
+  so a note written from disassembly output mixes both: instruction addresses in one space,
+  their targets in the other. One such note was read as "the target sits inside another
+  fragment's span, grep-by-filename will not find it", and it became the declared blocker
+  for a whole work item. The target file had existed all along; the number was off by the
+  bias. The same slip had already propagated into a function header, where a `cmp` was
+  attributed to the wrong routine because its cited address was a label read as a file
+  offset. → Three rules. **(a)** A tree with two address spaces needs one named conversion,
+  stated once, and every derived view must apply it — if the bias lives only in a constant
+  inside one tool, it will not be applied by the next human or agent reading a note. **(b)**
+  Before declaring an address a gap, apply every known bias to it and re-look; "no file
+  begins here" is only evidence after the conversion has been tried. **(c)** Handoff and
+  summary documents are the highest-risk place for this, because they quote addresses
+  without the disassembly that produced them, and a downstream agent cannot re-derive the
+  context. A blocker written as an address should carry its space.
+
 * **2026-10-23** — **A hand-written analysis script is a derivation, not evidence, and it
   must be validated against the code it accuses before it is allowed to contradict prior
   measured work.** A script slicing a data file from the wrong base offset reported that a

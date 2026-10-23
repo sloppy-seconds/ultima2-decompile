@@ -32,6 +32,16 @@
 #   claimed here was really four agreements from one field relabelled, and they are
 #   arithmetic only -- no arm contains a shift, so >>2 is a hypothesis about the renderer,
 #   not a proven transform. See docs/needs-gameplay.md G18 and docs/bestiary.md § 7.
+# CORRECTED 2026-10-27, two claims in the RESOLVED note above.
+#   (1) "the cmp $0x40 at file 0x1244" is a label read as a file offset: L_001244 is file
+#   0x1044, which is in asm/1040, not in asm/0FCD. asm/0FCD's own cmp $0x40 is at
+#   L_0011d1 and compares a random byte, which is what CP5 ticket C6 already concluded.
+#   (2) 0x40 is NOT the empty sentinel: the slot loop head at asm/0A74 tests
+#   `or %al,%al; je next_slot` on mon_type, so an empty slot is type 0x00. asm/1040's
+#   cmp $0x40 is a real type test, and type 0x40 is Minax: the art index is type>>2
+#   (docs/art-index.md), and 0x40>>2 == 0x10, the tile asm/0F8E's own note identifies as
+#   Minax by bitmap identity. See docs/monster-spawn.md § 13. The dispatch table in this
+#   header is unaffected.
 sub_0ad3:
 L_000cd3:
         mov    0x197(%di),%al

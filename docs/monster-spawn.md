@@ -626,3 +626,133 @@ data is a hypothesis the bytes get to veto. Here the bytes agreed, and what diff
 Still to confirm, none of it load-bearing for the retreat threshold or the contact trigger:
 that `L_0052b3` is a passability/occupancy probe; that `238b -> 0x1240` is the attack and
 not another contact event; and the exact semantics of the `DS:1F` ladder.
+
+**All three are answered in § 13 (2026-10-27), and two of them were wrong.** `L_0052b3` is
+the map-tile probe, `L_001240` is a Minax proximity check and not the attack, and `DS:1F`
+is the candidate tile byte feeding a per-species passability rule, not a rate ladder. The
+sentence above is left as written because the reasoning in § 12 was sound at the time; the
+correction lives in § 13 rather than being edited backwards.
+
+## 13. The `0x1240` blocker was an address-space slip, and what the bytes actually say (2026-10-27)
+
+`docs/handoff-cp5-2026-10-24.md` § 2 named one thing to do first: "identify what
+`238b → 0x1240` is", noting that no `asm/` file begins in `0x1230..0x1250` and that the
+target must therefore sit inside another fragment's span. It does not. **The number was a
+label, not an address.**
+
+The tree has two numbering spaces and they differ by exactly `0x200`:
+
+| space | where it appears | example |
+| --- | --- | --- |
+| file / filename | the `asm/` filename and the `# func` range | `asm/1040_sub_1040.asm`, `# func 1040..1047` |
+| label | the `L_%06x` anchors in the body, and every jump target printed by a disassembler over the exe | `L_001240` |
+
+`label = file + 0x200`, which is the same `FILE_BIAS = 0x200` `engine/tools/extract/`
+already uses. So `jmp L_001240` means **file `0x1040`**, and `asm/1040_sub_1040.asm` has
+existed all along. § 12 quoted instruction addresses in file space (`2122`, `212A`, `2201`
+all match filenames exactly) and jump *targets* in label space (`L_001240`, `L_000ca1`),
+because the targets came from disassembly output. Mixing the two is what made the target
+look like it lived in a gap.
+
+The same slip is already baked into a header: `asm/0AD3_combat_special_attack_dispatch.asm`
+says "the `cmp $0x40` at file 0x1244 in `asm/0FCD_combat_thief_steal`". `L_001244` is file
+`0x1044`, which is in `asm/1040`, not in `asm/0FCD`. `asm/0FCD`'s own `cmp $0x40` is at
+`L_0011d1` and compares a **random byte** — which is what CP5 ticket C6 already concluded.
+So that header's "0x40 is the EMPTY sentinel" reading is wrong twice over, and the empty
+sentinel is not `0x40` at all: the slot loop head at `asm/0A74` tests `or %al,%al; je
+next_slot` on `mon_type`, so **an empty slot is type `0x00`**.
+
+### What the contact path actually is
+
+Read as file addresses, the chain § 12 left open is:
+
+```
+2201  al := [DS:00]; cmp al,[DS:23]; jne 2216      ; candidate x == player x?
+220a  al := [DS:01]; cmp al,[DS:24]; jne 2216      ; and candidate y == player y?
+2213  jmp 218b                                     ; contact -> 218b
+2216  ...                                          ; NOT contact -> commit the move
+218b  al := [DS:4A]; cmp al,0; je 2195
+2192  jmp L_001240   -> asm/1040                   ; sector second digit non-zero
+2195  jmp L_000ca1   -> asm/0AA1                   ; else: next slot
+```
+
+and `asm/1040` is:
+
+```
+1040  al := [di+0x197]                             ; mon_type
+1044  cmp al,0x40 ; jne <next slot>
+1048  al := [di+0x137]; sbb al,[DS:00]; call abs(50EF); cmp al,4; jae <next slot>
+1059  al := [di+0x157]; sbb al,[DS:01]; call abs(50EF); cmp al,4; jae <next slot>
+106a  call L_00118e  -> asm/0F8E_combat_minax_attack
+```
+
+**It is not the general attack. It is a Minax check.** `mon_type == 0x40`, within four
+cells on both axes, and the callee is the routine already named from its own string,
+`MINAX CRIES: DIE FOOL!`, which subtracts 1000 HP and jumps to the death handler on
+borrow. The type and the art agree without any extra hypothesis: the art index is
+`type >> 2` (W2's stamp, `docs/art-index.md`), and `0x40 >> 2 == 0x10`, which is the tile
+the bestiary note in `asm/0F8E` identifies as Minax by bitmap identity. Third-party data
+again, and again the bytes were the ones that got the veto.
+
+**Contact does not produce an attack at all.** When a creature's candidate cell is the
+player's cell, the routine skips the commit and goes to the next slot. The creature
+refuses to walk onto the player; it does not strike for standing there. That is the same
+rule W4 found from the other side — a creature blocks the tile — and it means the engine's
+occupancy test and the original's contact test are two views of one rule.
+
+### Where the creature's attack really lives
+
+The outer slot loop is `asm/0A6D..0AB5`, and per slot it does:
+
+```
+0A6D  di := 31                                     ; slot cursor, counts DOWN to 0
+0A74  al := mon_type[di]; if al == 0 -> next slot  ; empty
+0A7C  filters on [DS:13] (the vehicle byte) and [DS:26] (the torch counter):
+      on a plane, sea monsters, frigates and sleep-casters are skipped entirely
+0AA7  call L_005136  -> asm/4F36: DS:19 := player_x - mon_x ; DS:1A := player_y - mon_y
+0AAA  if abs(DS:19) >= 3 -> next ; if abs(DS:1A) >= 3 -> next
+0AC4  if rand() >= 0x20 -> next                    ; 32/256 = 12.5% per creature turn
+0AD3  dispatch on mon_type: 0x34 legs, 0x38 arms, 0xF8 missile, 0x3C sleep
+0AA1  dec di ; jne 0A74
+```
+
+So the attack is **proximity plus a 12.5% roll, not contact**, and the proximity test is
+the same `DS:19/1A` pair the move routine uses as its pursuit vector — `asm/4F36` computes
+it as a plain `sub`, `asm/152E` computes the same delta with the torus wrap through
+`asm/50D8`. `asm/0AAA` was already named and already documented as this gate, with the
+`< 3` thresholds and the `0x20` roll proven and its provenance recorded as a live castle
+fight; what was missing was that its caller is the per-slot loop and not the contact path.
+
+The move routine (`asm/2122`, reached by `jmp` from `asm/0B36`, `asm/0B4A` and `asm/107F`)
+is a **separate pass** over the same slots, and `DS:1F` is not a rate ladder:
+
+* `2122` regenerates `+1` HP per turn below 16, as § 12 found.
+* `212e` builds a candidate cell `(mon_x + DS:19, mon_y + DS:1A) & 0x3f` — the **diagonal**
+  step — probes the tile with `L_0052b3` (`asm/50B3_map_tile_ptr`), and asks `asm/2199`.
+* `asm/2199` stores the tile byte into `DS:1F` and **refuses outright unless `DS:26A == 0`**
+  — the fourth unnamed counter, which is therefore a global creature freeze, not a
+  cosmetic tick.
+* On refusal it retries `(mon_x, mon_y + dy)` and then `(mon_x + dx, mon_y)`. Three
+  candidates, diagonal first. That is where the measured 2-cell steps come from: a
+  diagonal is two cells of Manhattan distance in one turn.
+* The accept test is a **per-species passability rule on the tile byte**, not a rate:
+  sea monster (`0x2c`) and frigate (`0x48`) accept only tile `0x00`; everything else
+  refuses `0x10` (mountain), `0x04` and `0x00`, accepts anything below `0x14`, and accepts
+  `0x5c` and `0x70` specially. Tile `0x5c` is `92`, and `92` is one of the four town
+  second-digits in `docs/sector-rulesets.md` § 1 — worth a look, but not claimed here.
+* `218b` is reached both by fallthrough (all three candidates refused) and by the contact
+  jump, which is why the contact path leads to a Minax check and a `next slot`: a creature
+  that cannot move and a creature that would stand on the player take the same exit.
+
+### What this changes for CP5
+
+* **W6 is no longer blocked.** The trigger is `|dx| < 3 && |dy| < 3` and a 12.5% roll per
+  creature turn, dispatching the four specials that `engine/src/game/combat.c` already
+  implements (C1/C2/C4/C6). No new mechanics, and no inferred "strike on adjacency" rule.
+* **W6b's 7% is explained rather than needing to be encoded.** Most turns are no-ops
+  because the candidate tile fails the species passability test or `DS:26A != 0`. The
+  engine should implement the rule, not the measured percentage.
+* **Melee damage is still not located.** The dispatch covers the four specials; the types
+  `asm/0AD3` calls plain melee attackers (`0x30`, `0xF4`, `0xFC`) have no damage site in
+  this region. The measured `9999 -> 9796` is unexplained by anything in this section, and
+  saying "creatures hurt you" is not a substitute for finding where.
