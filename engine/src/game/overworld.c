@@ -499,6 +499,14 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
     /* --- ground: the only entries proven walkable by an actual step --- */
     if (art == 0x02) return 1;   /* map 0x08 grass    — proven: walked across, F11 */
     if (art == 0x03) return 1;   /* map 0x0C forest   — proven: five steps, F11     */
+    /* Town paving. Owner report 2026-10-27, standing in a town: "the terrain I'm not
+     * standing on (cobblestone) should be passable". The tile is art 0x1C, map byte
+     * 0x70, and the census makes the case better than the description does: 12889
+     * cells across 15 of 33 sectors, the second most common byte in the entire pack,
+     * and inside a town sector it is what the ground between the buildings IS
+     * (mapx22: 873 cells, mapx92: 1118). A default-deny table that blocks the second
+     * most common tile in the world is blocking ground, not scenery. Grade: owner. */
+    if (art == 0x1C) return 1;
 
     /* --- proven blockers --- */
     if (art == 0x00) return 0;   /* map 0x00 water    — proven: 22 live rejects, F11 */

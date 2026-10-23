@@ -142,6 +142,11 @@ int main(int argc, char **argv)
     CHECK(!u2_tile_walkable_byte(0xA0), "door 0xA0 stays impassable until unlocked");
     CHECK(!u2_tile_walkable_byte(0x78), "solid-white wall 0x78 stays impassable");
     CHECK(!u2_tile_walkable_byte(0x80), "letter A 0x80 stays impassable");
+    /* Town paving (art 0x1C). Blocked by default-deny until the owner, standing in
+     * a town, reported the cobblestone around them should be walkable. */
+    CHECK(u2_tile_walkable_byte(0x70),
+          "town paving 0x70 is passable: it is the ground between the buildings, "
+          "12889 cells across 15 sectors");
 
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");

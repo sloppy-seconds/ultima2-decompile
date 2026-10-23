@@ -65,7 +65,9 @@ src/platform/   renderer_{term,null} input_{term,script} audio_{beep,null} time_
 src/debug/      --trace seam log, --dump-state screen + JSON
 tests/          scripted playthroughs and the checkpoint test runners
 tools/extract/  extractor.py — the user's copy -> build/gen_content.h
-tools/u2_mcp/   MCP play-API (CP2)
+docs/playing.md CLI contract — CP2 replaced the planned MCP play-API with
+                this; there is no server and no tools/u2_mcp/ (the line that
+                used to sit here described a directory that never existed)
 ```
 
 ## The seam rule
