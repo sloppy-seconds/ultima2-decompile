@@ -45,6 +45,27 @@ summary_checks() { sed -n 's/^combat_check: \([0-9]\{1,\}\) checks, [0-9]\{1,\} 
 
 printf 'engine CP5 spec\n'
 
+# --- 0. the strings this spec asserts on must actually exist -----------------
+# Every message below is compared as text, and `strstr(line, "")` always matches:
+# an empty literal does not make an assertion fail, it makes it pass while nothing
+# is printed. That is not hypothetical — CI has no original/ultimaii.exe, the
+# extractor's `run` locators resolved to "" there, and the first death-check run in
+# CI failed only because the row-22 assertion happened to be strict enough to
+# notice. So the dependency is now stated where it can be checked.
+EMPTY_STRINGS=""
+for sym in U2_S_IS_DEAD U2_S_KILLED U2_S_EXP_PLUS U2_S_HIT U2_S_MISS \
+           U2_S_LEGS_PARALYZED U2_S_ARMS_PARALYZED U2_S_SLEEP_SPELL \
+           U2_S_MAGIC_MISSILE U2_S_THIEF_STOLE U2_S_SITE_TOWN U2_S_ENTER; do
+    if grep -q "^#define ${sym} \"\"" build/gen_content.h 2>/dev/null; then
+        EMPTY_STRINGS="${EMPTY_STRINGS} ${sym}"
+    fi
+done
+if [ -n "$EMPTY_STRINGS" ]; then
+    bad "CP5 generated strings are empty — the message assertions below would pass vacuously:${EMPTY_STRINGS}"
+else
+    ok "CP5 generated strings are non-empty (no assertion can pass on an empty literal)"
+fi
+
 # --- 1. the spec is well-formed C (always runs, guards the contract) --------
 cc -std=c11 -Wall -Wextra -Werror -Wshadow -Wstrict-prototypes -Wmissing-prototypes \
    -Isrc -fsyntax-only tests/combat_check.c 2>"$WORK/syn.err"

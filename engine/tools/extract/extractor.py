@@ -163,40 +163,40 @@ MANIFEST = [
     ("U2_S_PARALYZED",         "2BAD_sub_2bad.asm", 0),
     # `db 0x8d,"KILLED--GOLD+"` — the leading glyph byte puts it outside the asm
     # fallback, so it is exe-only, like the title strings above.
-    ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13)),
+    ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13, "KILLED--GOLD+")),
     ("U2_S_EXP_PLUS",          "2E3D_combat_attack_flow.asm", 1),
     # CP5 W8 — the death tail. asm/0C8C writes `db " IS DEAD!",0x8d,0x00`, and the
     # trailing 0x8d (the game's newline glyph, which char_print masks to CR) puts the
     # line outside DB_RE, so this is exe-only. Offset verified against the exe on
     # 2026-10-27: file 0x0E8F is `20 49 53 20 44 45 41 44 21` followed by `8d 00`.
     # Length 9 stops before the 8d because the engine emits the newline itself.
-    ("U2_S_IS_DEAD",           "0C8C_character_dead_msg.asm", ("run", 0x0E8F, 9)),
+    ("U2_S_IS_DEAD",           "0C8C_character_dead_msg.asm", ("run", 0x0E8F, 9, " IS DEAD!")),
     # CP5 W6 — the creature special's own words. Every one of these is exe-only for
     # the same reason as U2_S_IS_DEAD: the db line carries a trailing glyph byte
     # (0x0d or 0x8d, both of which char_print masks to CR) between the text and the
     # terminator, which puts it outside DB_RE. Offsets and lengths verified against
     # the exe on 2026-10-27; each is unique in the file, so no locator ambiguity.
-    ("U2_S_LEGS_PARALYZED",    "0E70_combat_paralyzed_legs.asm", ("run", 0x1073, 15)),
-    ("U2_S_SAVED_BY_BOOTS",    "0E70_combat_paralyzed_legs.asm", ("run", 0x109E, 23)),
-    ("U2_S_ARMS_PARALYZED",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10C5, 15)),
-    ("U2_S_SAVED_BY_CLOAK",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10F0, 22)),
-    ("U2_S_MAGIC_MISSILE",     "0F12_combat_magic_missile.asm",  ("run", 0x1115, 14)),
-    ("U2_S_SLEEP_SPELL",       "0F48_combat_sleep_spell.asm",    ("run", 0x114B, 12)),
-    ("U2_S_SAVED_BY_IDOL",     "0F48_combat_sleep_spell.asm",    ("run", 0x1173, 14)),
-    ("U2_S_THIEF_STOLE",       "0FCD_combat_thief_steal.asm",    ("run", 0x11F8, 24)),
+    ("U2_S_LEGS_PARALYZED",    "0E70_combat_paralyzed_legs.asm", ("run", 0x1073, 15, "LEGS PARALIZED!")),
+    ("U2_S_SAVED_BY_BOOTS",    "0E70_combat_paralyzed_legs.asm", ("run", 0x109E, 23, "SAVED BY MAGICAL BOOTS!")),
+    ("U2_S_ARMS_PARALYZED",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10C5, 15, "ARMS PARALIZED!")),
+    ("U2_S_SAVED_BY_CLOAK",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10F0, 22, "SAVED BY MAGICAL CLOAK")),
+    ("U2_S_MAGIC_MISSILE",     "0F12_combat_magic_missile.asm",  ("run", 0x1115, 14, "MAGIC MISSILE!")),
+    ("U2_S_SLEEP_SPELL",       "0F48_combat_sleep_spell.asm",    ("run", 0x114B, 12, "SLEEP SPELL!")),
+    ("U2_S_SAVED_BY_IDOL",     "0F48_combat_sleep_spell.asm",    ("run", 0x1173, 14, "SAVED BY IDOL!")),
+    ("U2_S_THIEF_STOLE",       "0FCD_combat_thief_steal.asm",    ("run", 0x11F8, 24, "A THIEF STOLE SOMETHING!")),
     # Site transitions (docs/sector-rulesets.md § 6). cmd_E's " WHAT?" is the
     # second of eleven copies of that literal in the file, so every one of these is
     # addressed by offset rather than by index; the offsets were read off the asm
     # fragments and then confirmed against the exe on 2026-10-27.
-    ("U2_S_ENTER",             "3389_cmd_E.asm",          ("run", 0x358C, 5)),
-    ("U2_S_ENTER_WHAT",        "3399_sub_3399.asm",       ("run", 0x359C, 6)),
-    ("U2_S_ONLY_ON_FOOT",      "33AE_move_only_on_foot.asm", ("run", 0x35B1, 14)),
-    ("U2_S_DESCEND",           "334D_cmd_D.asm",          ("run", 0x3550, 7)),
-    ("U2_S_DESCEND_WHAT",      "334D_cmd_D.asm",          ("run", 0x3566, 6)),
-    ("U2_S_SITE_TOWN",         "343F_sub_343f.asm",       ("run", 0x364A, 5)),
-    ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6)),
-    ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7)),
-    ("U2_S_SITE_DUNGEON",      "34E4_sub_34e4.asm",       ("run", 0x36EF, 8)),
+    ("U2_S_ENTER",             "3389_cmd_E.asm",          ("run", 0x358C, 5, "ENTER")),
+    ("U2_S_ENTER_WHAT",        "3399_sub_3399.asm",       ("run", 0x359C, 6, " WHAT?")),
+    ("U2_S_ONLY_ON_FOOT",      "33AE_move_only_on_foot.asm", ("run", 0x35B1, 14, "-ONLY ON FOOT!")),
+    ("U2_S_DESCEND",           "334D_cmd_D.asm",          ("run", 0x3550, 7, "DESCEND")),
+    ("U2_S_DESCEND_WHAT",      "334D_cmd_D.asm",          ("run", 0x3566, 6, "-WHAT?")),
+    ("U2_S_SITE_TOWN",         "343F_sub_343f.asm",       ("run", 0x364A, 5, "-TOWN")),
+    ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6, "-TOWER")),
+    ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7, "-CASTLE")),
+    ("U2_S_SITE_DUNGEON",      "34E4_sub_34e4.asm",       ("run", 0x36EF, 8, "-DUNGEON")),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
@@ -302,6 +302,23 @@ def collect(source, exe, exe_path, warn):
                 else:
                     val = exe[off:exe.index(b"\x00", off)]
                 rows.append((sym, val, f"exe@0x{off:04X}"))
+            elif len(loc) >= 4:
+                # The fourth element is the same string as it appears in the asm
+                # tree, so the fallback can find it by content. Without it a `run`
+                # locator has nothing to resolve against when the exe is absent and
+                # the emitted literal was silently empty — which CI could not see
+                # until a test started asserting on the text.
+                #
+                # This deliberately searches the file's raw text and NOT the parsed
+                # db-string list: those lines carry a trailing glyph byte
+                # (`db " IS DEAD!",0x8d,0x00`) and widening DB_RE to match them
+                # would renumber the string indices of every file that has one,
+                # which is the exact hazard the DB_RE comment above documents.
+                want = loc[3].encode("latin-1")
+                if ('"%s"' % loc[3]) not in open(path, encoding="utf-8").read():
+                    sys.exit(f"extractor: {sym}: asm fallback cannot find "
+                             f"{loc[3]!r} as a quoted literal in {fname}")
+                rows.append((sym, want, f"asm:{fname}"))
             else:
                 rows.append((sym, b"", "unavailable without the user's copy"))
             continue
