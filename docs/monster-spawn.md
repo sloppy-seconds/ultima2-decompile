@@ -404,3 +404,99 @@ confirmed as written.
 closed as not-a-question. The engine now reports `sector 31 via monx, tiles from cache,
 32 creatures` and a scripted attack against a real creature from `monx31` lands:
 `CMD: ATTACK--EAST--HIT!!!`.
+
+## 11. The overworld spawner is `0C9A..0E00` — found by reading, not sampling (2026-10-23)
+
+Graded **observed** for the instruction sequence (bytes are CP0-proven) and
+**inferred** for the routine's name and for `DS:60`'s role. Opened because CP5 needed
+the creature *AI* and went looking for the code that writes `mon_x`/`mon_y` — and found
+this instead, which is a placement dispatcher, not a decision maker. Recording the
+negative is the point: it moves the AI hunt off this region.
+
+### Why this was invisible before
+
+The bulk clean wave cut the region into 4-to-8 byte fragments (`0C9A`, `0C9B`, `0C9C`,
+`0CA2`, `0CAA`, `0CAD`, `0CB0`, `0CB9`, `0CBD`, `0CC0`, `0CD2`, `0CD4`, `0CD9`, `0CDC`,
+`0CEE`, `0D06`, `0D09`, ... `0D4F`), each headered `behavior not yet reviewed`, each
+carrying a `jmp` into a neighbour. Read one at a time they are meaningless. Concatenated
+in address order they are one routine. **This is the concrete cost of fragment-scoped
+reading**, and it is the same failure mode that produced the truncated read behind the
+retracted § 10.
+
+### The routine, reassembled
+
+Runtime address = file address + `0x200`.
+
+| runtime | instruction | reading |
+| --- | --- | --- |
+| `0E9C` | `mov bh,0` / `mov bl,0x1f` / `mov di,bx` | `DI = 31`. **The operand is the immediate `0x1f`, not a read of `DS:1F`** — see the trap below |
+| `0EA2` | `mov al,[di+0x197]` / `or al,al` / `je 0EB0` | read `mon_type[slot]`; a zero means the slot is free |
+| `0EAA` | `dec di` / `jne 0EA2` | walk slots **31 down to 1** looking for a free one |
+| `0EB0` | `mov bx,di` / `mov [0x1f],bl` | **`DS:1F` = the free slot just found** — this is the writer of the slot cursor |
+| `0EB9` | `cmp al,0x3f` / `jb 0EC0` | x bounds check: store only if `al < 64`, else exit via `0DAF` |
+| `0EC0` | `mov bl,[0x1f]` / `mov di,bx` / `mov [di+0x137],al` / `mov [0x23],al` | **store `mon_x[slot]`**, mirror to staging `DS:23` |
+| `0CD2` | `js 0ED9` | negative y exits via `0DAF` |
+| `0CD4` | `and al,0x3f` | **wrap y into 0..63** — the sector is a torus, and this is where that is enforced |
+| `0EDC` | `mov [di+0x157],al` / `mov [0x24],al` | **store `mon_y[slot]`**, mirror to `DS:24` |
+| `0EEE` | `mov [di+0x1b7],al` | **store `mon_kind[slot]`** |
+| `0EFA` | `incb [0x60]` | bump a per-spawn counter |
+| `0F01..0F21` | `clc` / `rcr al,1` / `jae …` chain | **bit-test dispatch on `DS:60`** — each bit selects a species branch |
+| `0F4F` | `mov [di+0x197],0x30` / `mov [di+0x177],0x10` | the Orc branch: `type=0x30`, **`hp=16`** |
+| `0DAF` | (common exit) | every bounds failure and every species branch ends here |
+
+The Orc HP of `0x10` = 16 is an independent cross-check on the whole reading: the
+bestiary lists Orc HP as 16 from a third-party source, and this branch writes 16. Two
+different kinds of evidence agreeing on a number that neither was derived from.
+
+### The trap that had to be stepped in first
+
+`0E9E` is `mov $0x1f,%bl`. Read as `mov 0x1f,%bl` it becomes "load the slot cursor", and
+the whole cluster then looks like a per-entity accessor API driven from outside — which is
+exactly what I wrote in the same breath as calling it "the AI's accessors". It is an
+immediate. The cluster does not *read* a slot cursor on entry; it **searches for a free
+slot and then writes the cursor**, which makes it a spawner. One `$` character, and the
+search target changes completely.
+
+### What this rules out
+
+* **This is not the creature movement AI.** Nothing here computes a new coordinate; every
+  store takes `AL` from a caller or a species branch. The AI is whoever feeds it.
+* **`asm/152E` is not an overworld pursuit primitive.** Its only caller is
+  `asm/1151_dungeon_darkness`. It was flagged as "a vector from a creature to the player"
+  and that is true, but it is dungeon code. The lead was wrong.
+* **No `call` reaches this cluster** — `grep 'call L_000ec0'` and friends return nothing,
+  because entry is by fall-through from `0E9A` (itself a split artefact: `jmp 0xe9a`).
+  A caller search that only looks for `call` will conclude the region is dead code. It is
+  not; it is spawn traffic, and § 2's stamps come from here.
+
+### Consequence for the breakpoint experiment
+
+A `MEMORY_WRITE` breakpoint on a **fixed** slot offset was the wrong instrument, which
+explains a result that looked like tooling failure: during a live session 16 creatures
+moved, including slot 26 (`x` 48 → 52), and a write-breakpoint on `mon_x[26]` never
+fired. If those writes came through `0EC0`, the address written is
+`DS:137 + DS:1F` where `DS:1F` is whatever the free-slot scan returned — a moving target,
+not slot 26. The correct instrument is an **execution breakpoint on `0EC0`/`0EDC`**
+(runtime `0EC0` → linear `0x8BE0 + 0xEC0 - 0x200`), reading `DS:1F` and the return address
+off the stack at each hit.
+
+That also demystifies the "11-cell jump" flagged as a data-quality problem: slot 4 going
+`(29,40) → (40,29)` between two snapshots is consistent with spawn traffic writing a
+different slot's coordinates, not a creature teleporting. Still to confirm, but it has
+moved from *suspect measurement* to *expected behaviour*.
+
+### Still open, named so it does not get lost
+
+* **Who calls the spawner, and how often.** No static caller is known. The `DS:60` bit
+  chain implies it is invoked repeatedly with a counter, not once per sector load —
+  § 2's captures show live tables differing from the authored file, which is consistent
+  with ongoing spawn activity, but that is inference.
+* **What `DS:60` actually is.** Read as "spawn counter" from `incb` plus the bit dispatch.
+  Could equally be a bitmask of remaining spawns, or a seed. Not established.
+* **Why the free-slot scan stops at 1.** `dec di ; jne` never examines slot 0, so slot 0
+  cannot be allocated here — the same off-by-one already noted in
+  `asm/23E6_find_creature_at_cursor.asm`. Two routines, same blind spot, which is
+  probably deliberate in a game that uses slot 0 as "none".
+* **The AI itself.** Still unfound. The search now has a positive shape to look for: code
+  that reads a creature coordinate, adds a delta, and calls `0EC0`/`0EDC` — or writes
+  `mon_x` directly without this cluster at all.
