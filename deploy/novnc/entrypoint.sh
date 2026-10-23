@@ -19,6 +19,13 @@ set -eu
 : "${U2_ARGS:=--sdl --play-map}"
 
 echo "novnc-engine: Xvfb on ${DISPLAY} at ${GEOMETRY}"
+# Xvfb refuses to start on a display whose lock file survives: `Server is already
+# active for display 98`, fatal, and the container looks merely quiet rather than
+# broken. `podman restart` reuses the container's writable layer, so the lock from
+# the previous run is still there. This is the container's own ephemeral /tmp, the
+# lock belongs to the X server this script is about to start, and nothing else in
+# this image uses display :98 — so removing it is correct, not cleanup.
+rm -f "/tmp/.X${DISPLAY#*:}-lock" "/tmp/.X11-unix/X${DISPLAY#:}"
 Xvfb "${DISPLAY}" -screen 0 "${GEOMETRY}" -nolisten tcp &
 XVFB_PID=$!
 

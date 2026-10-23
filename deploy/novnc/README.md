@@ -15,7 +15,10 @@ cp engine/u2-sdl deploy/novnc/u2-sdl
 sudo podman build -t u2-novnc:latest deploy/novnc/
 
 mkdir -p /var/tmp/u2/novnc-saves
-cp /var/tmp/u2/saves/PLAYER /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
+cp /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
+cp original/player /var/tmp/u2/novnc-saves/PLAYER
+tools/u2_edit.py set /var/tmp/u2/novnc-saves/PLAYER sector 20
+tools/u2_edit.py setpos /var/tmp/u2/novnc-saves/PLAYER 20 20
 
 sudo podman run -d --name u2-novnc \
   -p 6081:6081 \
@@ -49,6 +52,17 @@ walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
 4. **Ports.** 6080 and 5900 belong to the Spice86 watching container, so this one
    defaults to 6081/5901 on display `:98`. Override with `-e NOVNC_PORT= -e
    VNC_PORT= -e DISPLAY=` if you run a second one.
+6. **`podman restart` needs the X lock gone.** A restart reuses the container's
+   writable layer, `/tmp/.X98-lock` survives, and Xvfb dies with the fatal
+   `Server is already active for display 98` — the container looks quiet, not broken.
+   `entrypoint.sh` removes its own display's lock before starting Xvfb.
+
+**Where you start.** Sector 20 at (20,20) is the game's own starting map:
+`engine/src/game/creation.c` sets `entry_x = entry_y = 20`, `sector_first = 2` citing
+bytes `0x5BDC..0x5BE8`, and `DS:4A` is never written by creation so the second digit
+stays 0. The container's `PLAYER` is built from the pristine `original/player` plus
+those two edits rather than from a test character parked in a town.
+
 5. **Xvfb must be at least as big as the SDL window**, which is `U2_SCREEN_W/H *
    SDL_SCALE` = **640x400**, not the 320x200 the game draws into. Setting the display
    to the native resolution — which is what you would guess — shows the top-left
