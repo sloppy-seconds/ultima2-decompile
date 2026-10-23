@@ -114,6 +114,35 @@ int main(int argc, char **argv)
                             "file that exists (%d gates checked)", gates);
     }
 
+    /* --- gates must admit the player, or `E` can never fire -----------------
+     * `E` dispatches on the tile the player is STANDING on, so a gate that refuses
+     * entry is a town that cannot be entered. The default-deny passability rewrite
+     * of 2026-10-27 blocked arts 0x06/0x07/0x09 as "solid structures" on art-shape
+     * reasoning and sealed every town in the game; the suite stayed green because
+     * nothing asserted the walkability half of the gate rule. These checks are the
+     * reason that cannot happen quietly again. */
+    static const struct { int kind; const char *name; } gatek[] = {
+        { 5, "village" }, { 6, "town" }, { 7, "tower" },
+        { 8, "castle" },  { 9, "dungeon" }
+    };
+    for (size_t i = 0; i < sizeof gatek / sizeof gatek[0]; i++) {
+        const uint8_t mb = (uint8_t)(gatek[i].kind << 2);
+        CHECK(u2_tile_walkable_byte(mb),
+              "%s gate (tile >> 2 == %d, map byte 0x%02X) is walkable, so E can fire "
+              "on it", gatek[i].name, gatek[i].kind, mb);
+    }
+
+    /* The four verdicts that were proven by actually walking, kept as a fence around
+     * the permissive side of the table: if someone re-widens the default, these go
+     * red instead of the world quietly becoming walkable. */
+    CHECK(!u2_tile_walkable_byte(0x00), "water 0x00 stays impassable on foot");
+    CHECK(!u2_tile_walkable_byte(0x10), "mountain 0x10 stays impassable on foot");
+    CHECK(u2_tile_walkable_byte(0x08),  "grass 0x08 stays passable");
+    CHECK(u2_tile_walkable_byte(0x0C),  "forest 0x0C stays passable");
+    CHECK(!u2_tile_walkable_byte(0xA0), "door 0xA0 stays impassable until unlocked");
+    CHECK(!u2_tile_walkable_byte(0x78), "solid-white wall 0x78 stays impassable");
+    CHECK(!u2_tile_walkable_byte(0x80), "letter A 0x80 stays impassable");
+
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");
     return fails != 0;

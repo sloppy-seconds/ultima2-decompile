@@ -158,4 +158,9 @@ void u2_death(u2_ctx *ctx);
  * Tests assert on this so a permissive default can never pass unnoticed. */
 uint64_t u2_overworld_unmeasured_tiles(void);
 
+/* Passability verdict for a raw map byte, exposed for tests only. See the comment
+ * at its definition: the gate rule regressed once precisely because nothing could
+ * assert on it. */
+int u2_tile_walkable_byte(uint8_t map_byte);
+
 #endif /* U2_OVERWORLD_H */

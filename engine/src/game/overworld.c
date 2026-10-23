@@ -526,17 +526,49 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
     if (art >= 0x0C && art <= 0x11) return 0;   /* Orc, Daemon, Devil, Balron, Minax, horse */
     if (art >= 0x18 && art <= 0x1B) return 0;   /* Guard, Jester, Merchant, King            */
 
+    /* --- site gates: you must STAND ON these to enter, so they walk through ---
+     * `E` dispatches on the tile under the player (`site_kind`, tile >> 2: 5
+     * village, 6 town, 7 tower, 8 castle, 9 dungeon), so a gate that does not
+     * admit the player is a town that cannot be entered at all. Blocking these
+     * was a regression introduced on 2026-10-27 by the default-deny rewrite, which
+     * filed art 0x06/0x07/0x09 under "structures depicted as solid" on art-shape
+     * reasoning — the weakest grade in that function — and it took the owner walking
+     * into Linde's gate to disprove it. Census across the pack: 7 village, 4 town,
+     * 2 tower, 121 castle, 4 dungeon cells. The 121 for castle is art 0x08, the gate
+     * frame, and it matches the map-byte 0x20 count exactly, which is the one
+     * cross-check that should have made me suspicious of blocking any of them. */
+    if (art >= 0x05 && art <= 0x09) return 1;
+
     /* --- structures depicted as solid: art-shape grade, the weakest rows here --- */
-    if (art == 0x06 || art == 0x07 || art == 0x0A || art == 0x09 ||
-        art == 0x0B || art == 0x13 || art == 0x14 || art == 0x15)
-        return 0;                /* masonry wall, tower, monument, cave arch,
-                                  * doorway, plane, rocket, dungeon mouth */
+    if (art == 0x0A || art == 0x0B ||
+        art == 0x13 || art == 0x14 || art == 0x15)
+        return 0;                /* monument, doorway, plane, rocket, dungeon mouth */
 
     /* Unclassified: refuse, and record it so the gap is visible rather than felt.
      * A stop is a bug report; a free pass is a silent wrong game. */
     if (art < 64)
         g_unmeasured_tiles |= (uint64_t)1 << art;
     return 0;
+}
+
+/* Public test surface for the passability verdict on a raw map byte.
+ *
+ * u2_tile_passable() is static because nothing outside this file should decide
+ * movement — but the gate rule regressed on 2026-10-27 (the default-deny rewrite
+ * blocked arts 0x06/0x07/0x09, sealing every town in the game) and nothing in the
+ * suite could see it, because the verdict was unreachable from a test. A rule that
+ * broke by being argued in a comment needs a probe that can actually be asserted.
+ */
+int u2_tile_walkable_byte(uint8_t map_byte)
+{
+    /* The static helper reads the world grid, so drive it through a one-cell world
+     * rather than duplicating its logic here — a copy would drift, which is the
+     * whole failure mode this project keeps recording. */
+    static u2_world w;
+    w.map_loaded = 1;
+    memset(w.map, 0, sizeof w.map);
+    w.map[0] = map_byte;
+    return u2_tile_passable(&w, 0, 0);
 }
 
 /* Doors. asm/433E_sub_433e.asm + asm/435E_sub_435e.asm, in order:
