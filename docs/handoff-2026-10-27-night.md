@@ -1,5 +1,14 @@
 # Handover — 2026-10-27 evening: work an agent can do alone
 
+> **SUPERSEDED 2026-10-28 — read `docs/handoff-2026-10-28.md` instead.** This file is kept as
+> the record of what was asked and what was found, not as the entry point. Of the queue below:
+> items 1, 6, 7 and 8 are done (7 twice — the followup refuted the asymmetry this file left
+> open), item 5 (G30) is closed statically and item 4 is wired on the strength of it, item 3
+> is spec'd in `docs/status-screen-z.md` but not built, and item 2 is still blocked, now on
+> the selector rather than the caller. The "one thing to do first" below — capture the return
+> address — turned out to be impossible in principle, not just awkward: the spawner is reached
+> by fall-through and has no caller frame. See `docs/monster-spawn.md` § 15.2.
+
 Entry point for a fresh session. Paul is asleep. Everything below is **agent-drivable**:
 no gameplay, no opinion, no password he has to type. Ordered by what each item unblocks.
 
