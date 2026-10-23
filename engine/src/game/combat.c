@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "game/combat.h"
+#include "game/monsters.h"   /* U2_MON_SLOTS: the attack takes a creature slot */
 #include "core/rng.h"
 #include "core/state.h"
 
@@ -187,4 +188,119 @@ int u2_combat_force_field(u2_ctx *ctx)
      * subtracting 0x10 from the byte is already the das-adjusted result. */
     ctx->state.hp = (uint8_t)(hp - 0x10);
     return 1;                                          /* FIELD_DAMAGED */
+}
+
+/* ---------------------------------------------------------------------------
+ * W3 — the player's attack. asm/2E3D_combat_attack_flow (arithmetic) reached
+ * through the cmd_A chain asm/2B8F -> 2B9B -> 2BA5 -> 2BD7 -> 2BDA.
+ * ------------------------------------------------------------------------- */
+
+/* DAA for the ADD case: the caller has already done the binary add and passes
+ * the raw 16-bit result plus the carry and auxiliary-carry it produced. Kept
+ * separate from overworld.c's bcd_sbb (the `das` half) so the pair reads as the
+ * deliberate mirror the B1 ticket asks for. */
+static uint8_t daa_add(unsigned raw, int cf, int af, int *carry_out)
+{
+    unsigned v = raw & 0xFFu;
+    if ((v & 0x0Fu) > 9u || af) v += 6u;
+    if (v > 0x9Fu || cf)        v += 0x60u;
+    *carry_out = (v > 0xFFu) ? 1 : 0;
+    return (uint8_t)(v & 0xFFu);
+}
+
+/*
+ * Add a small amount to a two-byte packed-decimal field, low byte first, with
+ * the carry out of the pair DISCARDED. asm/2DC1 (gold) and asm/2DEE (exp):
+ *   al = [lo]; adc amount,al ; daa ; [lo] = al
+ *   al = [hi]; adc $0,al     ; daa ; [hi] = al
+ * No carry escapes the pair, which is why 9999 + 15 lands on 14 instead of
+ * faulting or saturating — the B1 ticket's measured value, and the same wrap
+ * seen live when a +2 exp on a 9999 character displayed 0001.
+ */
+static void bcd_adc2(uint8_t *hi, uint8_t *lo, uint8_t amount)
+{
+    int c = 0, af = 0;
+    unsigned raw = (unsigned)(*lo) + amount;
+    af = (((*lo & 0x0Fu) + (amount & 0x0Fu)) > 9u) ? 1 : 0;
+    *lo = daa_add(raw, raw > 0xFFu, af, &c);
+
+    raw = (unsigned)(*hi) + (unsigned)c;
+    af = (((*hi & 0x0Fu) + (unsigned)c) > 9u) ? 1 : 0;
+    *hi = daa_add(raw, raw > 0xFFu, af, &c);   /* this carry is dropped on purpose */
+}
+
+/*
+ * The attack itself. Returns 0 = MISS, 1 = hit and the creature survived,
+ * 2 = killed, and fills *out when given one.
+ *
+ * Every step below is a byte, cited to file offset in asm/2E3D's header. What
+ * is NOT modelled here, and deliberately so:
+ *   - the arms-paralysis gate: asm/2BA5_attack_arms_gate refuses the attack and
+ *     prints PARALIZED! before any roll, so it belongs to the command layer;
+ *   - the site-kind gate at asm/2B9B ([DS:4A] vs 4), same reason;
+ *   - the map-cell stamp clear on a kill (asm/2E3D file 0x30F4), which needs the
+ *     sector writer and is wired at the caller.
+ */
+int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
+{
+    u2_attack r;
+    memset(&r, 0, sizeof r);
+
+    if (slot < 0 || slot >= U2_MON_SLOTS) {
+        if (out) *out = r;
+        return 0;
+    }
+
+    /* asm/2E3D file 0x307E / asm/2BDA file 0x2DDA:
+     *   call rand ; clc ; rcr $1,%al ; cmp 0x4c,%al ; jb hit
+     * rcr through a cleared carry is a shift, so a hit needs (rand >> 1) < the
+     * agility BYTE. Chance is agi_byte/128: agi 40 (byte 0x40 = 64) hits 50%,
+     * agi 5 hits 3.9%. Measured both ways — 12 swings at agi 5 landed exactly
+     * one hit (capture cp5-hit), which is what agility predicts and rules out
+     * strength as the operand. */
+    if ((u2_rand_byte(ctx) >> 1) >= ctx->state.stat_agi) {
+        if (out) *out = r;
+        return 0;
+    }
+
+    /* asm/2E3D file 0x309F: al = [DS:61]; add x3; adc [DS:4B],al; rcr; rcr
+     * => (8 * readied_weapon + strength) >> 2, **on the raw packed-decimal
+     * bytes**. Strength 40 is stored 0x40 = 64, so the maxed seed gives
+     * (72 + 64) >> 2 = 34 — exactly what one clean hit removed (Fighter 50->16,
+     * capture cp5-dmg). Plugging in the decimal 40 gives 28 and is the mistake
+     * this comment exists to prevent. */
+    unsigned dmg = (((unsigned)ctx->state.readied_weapon * 8u)
+                    + (unsigned)ctx->state.stat_str) >> 2;
+    r.damage = (uint8_t)dmg;
+
+    /* asm/2E3D file 0x30BC: stc; cmc (clear CF); sbb [DS:20],al; cmc; jae -> the
+     * DEATH branch. Note the inverted sense, and that hp == damage falls through
+     * and stores 0, leaving a live creature at zero hp. */
+    unsigned hp = ctx->state.mon_hp[slot];
+    if (dmg > hp) {
+        /* Death clears hp, type and kind — and NOT x/y (file 0x30D2..0x30DC). */
+        ctx->state.mon_hp[slot]   = 0;
+        ctx->state.mon_type[slot] = 0;
+        ctx->state.mon_kind[slot] = 0;
+
+        /* asm/2E3D file 0x3114 / 0x3141: gold += (rand & 0x17) | 1, exp += rand & 7.
+         * Reproduces the live `KILLED--GOLD+1--EXP.+02` shape exactly. */
+        r.gold = (uint8_t)((u2_rand_byte(ctx) & 0x17u) | 1u);
+        r.exp  = (uint8_t)(u2_rand_byte(ctx) & 0x07u);
+
+        /* WARNING, and it is a trap in state.h rather than here: the field NAMES
+         * are inverted relative to significance. gold_lo is DS:58 and gold_hi is
+         * DS:59, but asm/2DC1 adds into DS:59 FIRST and carries into DS:58, so
+         * DS:59 is the LOW byte. Same inversion for exp (low is DS:57 = exp_hi).
+         * Reading the names at face value swaps the bytes and corrupts every
+         * reward. Flagged in state.h; fix both sides together or neither. */
+        bcd_adc2(&ctx->state.gold_lo, &ctx->state.gold_hi, r.gold);  /* hi=58 lo=59 */
+        bcd_adc2(&ctx->state.exp_lo,  &ctx->state.exp_hi,  r.exp);   /* hi=56 lo=57 */
+        if (out) *out = r;
+        return 2;
+    }
+
+    ctx->state.mon_hp[slot] = (uint8_t)(hp - dmg);
+    if (out) *out = r;
+    return 1;
 }

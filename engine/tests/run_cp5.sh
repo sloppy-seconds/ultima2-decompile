@@ -141,6 +141,28 @@ else
     sed 's/^/        /' "$WORK/mon.build"
 fi
 
+# --- 1e. the attack (CP5 W3) ------------------------------------------------
+# Direct test of combat.c, not part of combat_check.c: the attack is implemented,
+# so it is tested against the real thing rather than specified against fixtures.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/attack_check" \
+        tests/attack_check.c src/game/combat.c src/game/monsters.c \
+        src/core/rng.c src/core/state.c 2>"$WORK/atk.build"; then
+    if "$WORK/attack_check" > "$WORK/atk.out" 2>&1; then
+        n=$(sed -n 's/^attack_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/atk.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 attack run executed 0 checks — the test is not running"
+        else
+            ok "CP5 W3 attack: hit roll, damage, kill, BCD rewards ($n checks, $(tail -1 "$WORK/atk.out"))"
+        fi
+    else
+        bad "CP5 attack check failed:"
+        sed 's/^/        /' "$WORK/atk.out"
+    fi
+else
+    bad "CP5 attack harness did not build:"
+    sed 's/^/        /' "$WORK/atk.build"
+fi
+
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
     skip "C1 three independent counters DS:26B/26C/26D (0..15) — needs src/game/combat.c"

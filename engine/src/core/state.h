@@ -152,10 +152,25 @@ typedef struct u2_state {
                                          (jb to runtime 0x0E62, which zeroes
                                          0x51..0x59). */
     /* 0x56 */ uint8_t exp_lo;        /* EXP.= display loads [0x56],[0x57] — note
-                                         it is NOT 0x55; file 0x5367 */
+                                         it is NOT 0x55; file 0x5367.
+                                         * NAMING WART, do not fix one side alone:
+                                         * exp_lo is the HIGH byte and exp_hi the
+                                         * LOW one. asm/2DEE adds into DS:57 first
+                                         * and carries into DS:56, so 57 is least
+                                         * significant. asm/2E3D and attack_check.c
+                                         * both depend on that reading. */
     /* 0x57 */ uint8_t exp_hi;
     /* 0x58 */ uint8_t gold_lo;       /* BCD pair, hundreds byte first; display site
-                                         asm/5175_sub_5175.asm (string at file 0x5382) */
+                                         asm/5175_sub_5175.asm (string at file 0x5382).
+                                         * NAMING WART, same as exp_lo/exp_hi:
+                                         * gold_lo (DS:58) is the HIGH byte and
+                                         * gold_hi (DS:59) the LOW one — asm/2DC1
+                                         * adds into DS:59 first and carries into
+                                         * DS:58. Read at face value the reward adds
+                                         * are byte-swapped and every payout is
+                                         * corrupted silently. Rename both pairs
+                                         * together, with their _Static_asserts and
+                                         * every call site, or leave them alone. */
     /* 0x59 */ uint8_t gold_hi;
     /* 0x5A */ uint8_t entry_x;        /* spawn x: the P path copies [0x5A]->[0x00]
                                         * (file 0x0A26); creation sets 20 (file 0x5BDE);

@@ -35,4 +35,23 @@ int u2_combat_magic_missile(u2_ctx *ctx);
  * Mutates state.hp (DS:51, the high BCD byte). spec: asm/24B5 */
 int u2_combat_force_field(u2_ctx *ctx);
 
+/*
+ * W3: the player's attack on a creature slot.
+ *   0 = MISS, 1 = hit and it survived, 2 = killed.
+ * Mutates the creature arrays (mon_hp always; mon_type and mon_kind on a kill,
+ * which is what the original clears — NOT the x/y pair) and, on a kill, the gold
+ * and exp BCD fields. spec: asm/2E3D arithmetic via the asm/2B8F cmd_A chain.
+ *
+ * The arms-paralysis gate (asm/2BA5_attack_arms_gate) and the site-kind gate
+ * (asm/2B9B) are NOT here: they refuse the attack before any roll is taken and
+ * print their own message, so they belong to the command layer.
+ */
+typedef struct u2_attack {
+    uint8_t damage;   /* proven formula; 0 when the swing missed */
+    uint8_t gold;     /* BCD amount added to gold on a kill, else 0 */
+    uint8_t exp;      /* BCD amount added to exp on a kill, else 0 */
+} u2_attack;
+
+int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out);
+
 #endif /* U2_GAME_COMBAT_H */
