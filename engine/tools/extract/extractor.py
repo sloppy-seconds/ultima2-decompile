@@ -344,6 +344,104 @@ def collect(source, exe, exe_path, warn):
     return rows
 
 
+# ---------------------------------------------------------------------------
+# The indexed name pool
+#
+# One contiguous run of NUL-separated entries in the data segment. asm/508C takes the
+# entry index in AL, and the Z-screen print sites add a constant to reach each group,
+# read off asm/45D2 (weapons, +0x13), asm/4618 (armour, +0x1d), file 0x4A1D (spells,
+# +0x24), file 0x4A75 (items, +0x2e), the six stat literals 0x3E..0x43, asm/45A3
+# (races, +0x44) and asm/45B1 (classes, +0x48).
+#
+# The base is anchored on HANDS at index 19, which is what the +0x13 sites require:
+# readied_weapon 9 must print QUICK SWORD, and the WEAPONS: list starts its loop at
+# index 1 and prints DAGGER first. Entry 0 is not a display string — it is the tail of
+# a compressed picture that happens to be NUL-terminated before the pool begins — and
+# it is counted because the code counts it. POOL_ANCHOR makes that explicit instead of
+# leaving it to a lucky split.
+POOL_FILE = "4C50_plane_landing_site.asm"
+POOL_ANCHOR_STRING = "IN THE WATER."   # pool index 1
+POOL_ANCHOR_INDEX = 1
+# The pool sits on ONE db line with every entry quoted and separated by ,0x00,, which
+# DB_RE deliberately does not match (it wants a single string per line). This reads the
+# whole operand instead, so a build with no exe still gets the same table the exe does.
+POOL_DB_RE = re.compile(r'^\s*db\s+(.*?)\s*#\s*string\s*$')
+POOL_ITEM_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+NAME_TABLES = [
+    ("U2_T_WEAPONS", 0x13, 10),
+    ("U2_T_ARMOUR",  0x1d, 8),
+    ("U2_T_SPELLS",  0x24, 10),
+    ("U2_T_ITEMS",   0x2e, 16),
+    ("U2_T_STATS",   0x3e, 6),
+    ("U2_T_RACES",   0x44, 4),
+    ("U2_T_CLASSES", 0x48, 4),
+]
+
+
+def pool_from_exe(exe):
+    """Split the pool region and return entries indexed the way the code indexes them.
+
+    The split starts at the first display string, "IN THE WATER.", and one placeholder
+    is prepended: the byte before it in the image is a second NUL, so the code's index
+    base counts one entry that carries no text at all. That is what makes HANDS index 19,
+    and pool_anchor_check asserts it rather than trusting the split.
+    """
+    first = exe.index(POOL_ANCHOR_STRING.encode("latin-1") + b"\0")
+    ents = [b""] * POOL_ANCHOR_INDEX
+    i = first
+    while i < len(exe) and len(ents) < 96:
+        if exe[i] == 0:
+            i += 1
+            continue
+        j = exe.index(b"\0", i)
+        ents.append(exe[i:j])
+        i = j + 1
+    return ents
+
+def pool_from_asm(asm_dir):
+    """The same pool from the db line of asm/POOL_FILE, for a build with no exe.
+
+    The db list begins at pool index 1, so index 0 is filled with a placeholder: it is
+    never displayed, and pool_anchor_check is what stops a drift here from becoming a
+    wrong name on screen.
+    """
+    items = []
+    with open(os.path.join(asm_dir, POOL_FILE), encoding="utf-8") as f:
+        for line in f:
+            m = POOL_DB_RE.match(line.rstrip("\n"))
+            if not m:
+                continue
+            items = [decode_gas_string(q) for q in POOL_ITEM_RE.findall(m.group(1))]
+            break
+    anchor = POOL_ANCHOR_STRING.encode("latin-1")
+    try:
+        k = items.index(anchor)
+    except ValueError:
+        raise SystemExit(f"extractor: {POOL_FILE} has no {POOL_ANCHOR_STRING!r} db entry")
+    return [b""] * POOL_ANCHOR_INDEX + items[k:]
+
+
+def pool_anchor_check(ents, source):
+    """Fail loudly rather than emit a table that puts PHASER where QUICK SWORD belongs."""
+    if len(ents) <= 75 or ents[19] != b"HANDS" or ents[28] != b"QUICK SWORD":
+        raise SystemExit(f"extractor: name pool anchor broken from {source} "
+                         f"— HANDS is not index 19")
+
+
+def emit_tables(ents):
+    """C declarations for the seven groups, or [] when the pool is unavailable."""
+    out = []
+    for sym, base, count in NAME_TABLES:
+        items = ents[base:base + count]
+        if len(items) != count:
+            raise SystemExit(f"extractor: pool too short for {sym}")
+        out.append(f"#define {sym}_N {count}")
+        out.append(f"static const char *const {sym}[{sym}_N] = {{")
+        out.append("    " + ", ".join(c_escape(v) for v in items))
+        out.append("};")
+    return out
+
+
 def c_escape(data):
     out = []
     for b in data:
@@ -382,6 +480,17 @@ def main():
 
     rows = collect("exe" if exe is not None else "asm", exe, args.exe, warn)
 
+    asm_dir = os.path.join(REPO, "asm")
+    try:
+        pool = pool_from_exe(exe) if exe is not None else pool_from_asm(asm_dir)
+        pool_anchor_check(pool, "exe" if exe is not None else POOL_FILE)
+        tables = emit_tables(pool)
+    except (SystemExit, FileNotFoundError, ValueError) as e:
+        if exe is None:
+            raise
+        warn(f"extractor: name pool unavailable ({e}); emitting no tables")
+        tables = []
+
     if args.emit == "text":
         for sym, val, _ in rows:
             print(f"{sym}\t{val.decode('latin-1')}")
@@ -404,6 +513,10 @@ def main():
     for sym, val, origin in rows:
         body.append(f"/* {origin} */")
         body.append(f"#define {sym} {c_escape(val)}")
+    if tables:
+        body += ["", "/* Indexed name pool, file 0x4F53.. — see the extractor's NAME_TABLES "
+                 "comment for\n * how the Z screen's group offsets pin each base. */"]
+        body += tables
     body += ["", "#endif /* U2_GEN_CONTENT_H */", ""]
     text = "\n".join(body)
 

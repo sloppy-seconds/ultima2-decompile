@@ -166,3 +166,99 @@ monsters on the field: read `mon_x`, press `Z`, read again.
 4. `engine/tests/status_check.c`: assert the rendered page against the transcription, and
    assert the measured no-cost properties (food, position, HP unchanged across `Z`).
    **Demonstrate it failing first** — flip one expected byte, watch it go red, restore.
+
+## 7. The layout, derived from the bytes (2026-10-28)
+
+§ 5 open question 1 is closed. The region was re-read with `objdump -D -b binary -mi8086`
+synchronised on every `call str_out` site — the bulk wave's fragments could not be trusted
+here because the inline strings are data being disassembled as code, and one misaligned byte
+shifts everything after it. Runtime = file − 0x200 throughout; `fXXXX` is a file offset.
+
+**The cursor pair is the other way round from § 1.** `asm/51EB_str_out_at` stores **DI into
+`DS:2E` and SI into `DS:2F`**, so `DS:2E` is the **column** and `DS:2F` the **row**. `cmd_Z`
+opening with `mov byte [0x2e],1` is "column 1", which is where the name line starts. Every
+position below comes from a `mov bh,0 ; mov bl,N ; mov di,bx` / `mov si,bx` pair, so none of
+it is eyeballed.
+
+| what | col | row | site |
+| --- | --- | --- | --- |
+| name, then `A LEVEL ` + `DS:56` + sex + race + class | 1 | (inherited) | `f4770`, `f4780` |
+| `  WEAPON-` + pool[19 + `DS:61`] | (flows) | | `f47c4`, `f47d1` |
+| `TORCHES-` + BCD(`DS:64`) | 29 | 3 | `f47da`, `f47e9` |
+| `  ARMOUR-` + pool[29 + `DS:62`] | 1 | 4 | `f47fb`, `f480a` |
+| `KEYS-` + BCD(`DS:65`) | 32 | 4 | `f4820`, `f482f` |
+| `SPELL-` + pool[36 + `DS:63`] | 4 | 5 | `f483c`, `f484d` |
+| `TOOLS-` + BCD(`DS:66`) | 31 | 5 | `f4860`, `f486f` |
+| `STRENGTH-` + BCD(`DS:4B`) | 1 | 6 | `f487f`, `f488e` |
+| `AGILITY-` + BCD(`DS:4C`) | 2 | 7 | `f489e`, `f48ad` |
+| `STAMINA-` + BCD(`DS:4D`) | 16 | 6 | `f48bd`, `f48cc` |
+| `CHARISMA-` + BCD(`DS:4E`) | 15 | 7 | `f48dc`, `f48eb` |
+| `WISDOM-` + BCD(`DS:4F`) | 30 | 6 | `f48fb`, `f490a` |
+| `INTELL.-` + BCD(`DS:50`) | 29 | 7 | `f491a`, `f4929` |
+| `WEAPONS: ` list | 1 | 9 | `f4939`, `f4948` |
+| `ARMOUR: ` list | 1 | 12 | `f4993`, `f49a2` |
+| `SPELLS: ` list | 1 | 14 | `f49eb`, `f49fa` |
+| `ITEMS: ` list | 1 | 18 | `f4a44`, `f4a53` |
+
+The transcription in § 2 is wrong in three places this table fixes: `TORCHES-` is column 29
+not 26, the stat columns are 1/16/30 on row 6 and 2/15/29 on row 7 rather than the even
+spacing the screenshot suggests, and the four list headers sit on rows 9, 12, 14 and 18.
+
+### The four list loops, and what each one actually iterates
+
+Every loop has the same shape: `DI` starts at **1**, the body reads a count byte, skips the
+entry when it is zero, prints `pool[base + DI]`, then a separator, then the count as two
+packed-decimal digits, then a space; `inc di` and loop while `DI < bound`.
+
+| list | base | bound | count array | separator |
+| --- | --- | --- | --- | --- |
+| `WEAPONS:` | 19 | 10 | `DS:76 + DI` (`weapons_owned`) | `"S-"` |
+| `ARMOUR:` | 29 | 7 | `DS:80 + DI` | `"S-"` |
+| `SPELLS:` | 36 | 10 | `DS:B6 + DI` | `"S-"` |
+| `ITEMS:` | 46 | 16 | `DS:D6 + DI` (`items_held`) | `"S"` then `"-"`, with the `"S"` skipped when `DI == 3` |
+
+Three things fall out of that table which the screenshot alone did not say.
+
+* **Index 0 is never listed.** Every loop starts at 1, so `HANDS` cannot appear in the weapon
+  list and `SKIN` cannot appear in the armour list. That is why the transcription's weapon
+  list begins at `DAGGERS-01` even for a character holding one of everything.
+* **The plural is a literal `S`, and `BOOTS` is the one exception** (`f4a7a: cmp byte
+  [0x1f],3 ; je`), because the entry already ends in S. So `RINGS-01`, `TRI-LITHIUMS-01` and
+  `BOOTS-01` all come out of one rule, and the stats get no plural at all because they print
+  a bare `'-'`.
+* **`ARMOUR:` reads `DS:80`, which `state.h` still calls `reserved_80`.** § 5 open question 2
+  is answered: the owned-armour counts really are at `DS:80..0x86`, seven entries, and the
+  list printed empty for `G23MAX` because that character's counts are zero — not because the
+  array is elsewhere. The `CANDIDATE, NOT PROVEN` note in `state.h` can now be retired with a
+  citation, and the `SPELLS:` count array at `DS:B6` is a new finding with no owner yet.
+
+### The pool base, and why `HANDS` is index 19
+
+`asm/508C` takes the entry index in `AL`, and the print sites add a constant: `+0x13` for
+weapons, `+0x1d` for armour, `+0x24` for spells, `+0x2e` for items, `+0x44` for races,
+`+0x48` for classes, and the six stat names come as literals `0x3E..0x43`. Anchoring on
+`HANDS == 19` is what makes `readied_weapon 9` print `QUICK SWORD` and the weapon list start
+at `DAGGER`; the byte before `IN THE WATER.` in the image is a second NUL, so the code's
+index base counts one entry that carries no text. `engine/tools/extract/extractor.py` now
+splits the pool and **asserts** that anchor instead of trusting the split.
+
+### What still blocks shipping the screen, stated plainly
+
+The engine builds in CI with no `original/ultimaii.exe`, from the `db` lines of `asm/`. The
+pool is the one piece of text the asm tree cannot supply: the bulk wave disassembled the
+region after `HANDS` as code, so `asm/4C50_plane_landing_site.asm` has `db "GGER"`,
+`db "CE"`, `db "ORD"` where `DAGGER`, `MACE` and `SWORD` live. The strings are recoverable
+— `assemble_clean.sh` rebuilds those bytes exactly — but not by reading the listing.
+
+So the extractor emits the tables from the exe and **fails loudly** rather than emitting a
+partial table when the pool cannot be reconstructed. Before `u2_status_draw_full()` can land,
+one of these has to be chosen, and it is an owner call because it decides what CI is allowed
+to certify:
+
+1. give the engine-tests workflow a content fixture the way the emulator runs do, and the
+   Z screen is testable there;
+2. let the Z command and its test skip when `U2_T_*` is absent, so CI proves the layout and
+   nothing about the names;
+3. add a generated, committed pool artefact derived from the exe, which is the only option
+   that makes the names available with no content — and it needs a licensing read, because it
+   is game text copied into our tree outside `asm/`.
