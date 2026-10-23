@@ -978,6 +978,32 @@ Renamed in the same commit, filename and header only, labels untouched: `0A38_po
   is `0x42F1` — `asm/42F1_cmd_U.asm`. Index 20 = 'U'. Independent confirmation that the
   table, the `+0x200` file/runtime mapping and the handler naming all line up.
 
+### The selector, as far as the bytes allow (inferred, untested)
+
+Reading the chain at `0D01..0D43` against the arms gives a model, and it is a prediction
+rather than a finding:
+
+```asm
+0CFE: mov 0x60,%al
+0D01: clc ; rcr $1,%al ; jae 0D09                    ; CF = bit0 of DS:60
+0D06: jmp L_000f44                                   ; bit0 set -> Orc arm
+0D09: clc ; rcr $1,%al ; jae 0D11                    ; tests original bit1
+0D0E: jmp L_000f64
+0D11: clc ; rcr $1,%al ; jae 0D19                    ; tests original bit2
+      ...
+```
+
+`jae` is `jnc`, so each step branches when the bit it just rotated out is **clear**, and
+falls through to an arm when it is **set**. The chain therefore walks the bits of `DS:60`
+from bit0 upward and takes the arm belonging to the lowest set bit — and each arm opens
+with `mov 0x1b7(%di),%al ; cmp $K,%al ; je <stamp> ; jmp L_000fc4`, where `L_000fc4` is the
+`decb 0x60 ; jmp L_000daf` reject. So the counter picks **which species is allowed to spawn
+this time**, the kind drawn from `L_005417` has to agree, and a disagreement rolls the counter
+back and leaves the field untouched. That is a coherent reason for the measured rarity, and
+it is exactly the kind of elegant-but-unverified story this project has been burned by, so it
+stays labelled inferred until paired `(DS:60, [DI+0x1B7], arm taken)` samples either confirm
+it or kill it.
+
 ### What this does and does not license the engine to do
 
 Proven now, and therefore implementable: **the cadence** — one spawn attempt per completed
