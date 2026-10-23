@@ -577,3 +577,37 @@ across the boundary, reading after each step.
 pan. The bytes can say what the viewport contains; only a person watching can say what
 it looks like. Worth 5 minutes of the original under `tools/spice86_start.sh
 --patch-arrows` with a real window.
+
+#### G29 progress — capture 2026-10-27, the framing was wrong
+
+Live capture against the containerised original (`deploy/spice86-novnc`, owner walking).
+
+**Settled, by bytes:**
+
+- The owner walked east from `x=57`; position became `x=7`, and the resident sector was
+  still **20**. Decided mechanically, not by interpretation: `mapx20` and `mapx30` differ
+  on 8 of 64 rows, and over those 512 discriminating cells the live map buffer at
+  `[DS:0472]` (which reads `0x1800`) matched `mapx20` on **511** and `mapx30` on 496.
+- Therefore **crossing an edge does not load a neighbouring sector.** The overworld is a
+  torus *within* one 64x64 sector, and the tens digit of the sector name is not an
+  east/west coordinate the way the engine's `site_leave()` assumes.
+- `DS:12` reads `0xFF` in a live overworld session. The engine sets `tile_offsector = 4`.
+  One of those is wrong and it is probably the engine's.
+
+**What this does to the ticket.** The two candidate designs as written are both wrong:
+there is no second sector to straddle, so design 2 is dead. The seamlessness the owner
+describes has to come from the **viewport wrapping its coordinates inside the sector** —
+origin `(x-9, y-5)` masked to 0..63 — instead of painting off-sector cells from `DS:12`.
+That is a much smaller change than design 2, and it is in `view.c`, not `world.c`.
+
+**Still open, and the capture that was supposed to close it failed.** The wrap-versus-fill
+test compared the staging row against both hypotheses and got **4/20 either way**, which
+discriminates nothing. The row read back as uniform `0x84` — a staging byte with bit 7
+(the do-not-draw flag) set — so the assumed grid geometry is wrong: either `DS:272` is
+not the grid base in this build, or it is not 20 columns wide, or row 5 is not the
+player's row. `U2_VIEW_TILES` in the engine is the thing to re-derive, not to trust.
+
+Re-run: stand at a small `x` (say 2) on a row whose map tiles are visually distinctive at
+both ends, dump `DS:272..DS:3B0` raw, and find the grid by matching the *known* tiles
+around the player rather than assuming the layout. Once the grid is located, the
+wrap-versus-fill question answers itself in one sample.
