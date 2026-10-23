@@ -41,6 +41,12 @@ typedef struct u2_overworld {
     int      x, y;                 /* position inside the sector, DS:00/01 */
     uint8_t  off_map_tile;         /* the DS:12 analogue */
     int      sector_hi, sector_lo;
+    /* Turn counter for --debug cli. `turns` advances once per resolved player
+     * turn (it is bumped inside creature_turn, the one place every turn passes);
+     * `logged_turn` remembers which turn was last written, so the dump happens
+     * once per turn from the draw path and not once per frame at 60 Hz. */
+    unsigned turns;
+    unsigned logged_turn;
     char     note[160];            /* what happened on load, for the caller */
 } u2_overworld;
 

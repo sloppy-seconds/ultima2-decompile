@@ -58,6 +58,11 @@ typedef struct u2_ctx {
                              * With SDL_VIDEODRIVER=dummy this makes the whole
                              * cell->font->upload path testable with no display. */
     int dump_screen_done;   /* set by the renderer after the dump */
+    /* --debug cli: per-turn frame + state files. See debug/turnlog.h — this is the
+     * answer to "how does an agent look at a game a person is playing right now",
+     * which no combination of the startup dump flags can do. */
+    int debug_cli;
+    const char *debug_path;   /* --debug-path DIR; NULL until parsed */
     int selftest;           /* --selftest: draw the seam probe screen and stop */
     uint32_t rng_rolls;     /* rolls served, for dumps and tests */
     unsigned seed;          /* PRNG seed byte, i.e. the 0x40:6C value (core/rng.h) */

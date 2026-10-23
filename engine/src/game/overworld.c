@@ -24,6 +24,7 @@
 #include "core/view.h"
 #include "core/world.h"
 #include "gen_content.h"
+#include "debug/turnlog.h"
 
 /*
  * The underlay buffer (the DS:0x372 analogue) has no identified producer in the
@@ -71,6 +72,8 @@ static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out);
  */
 static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
 {
+    ow->turns++;   /* one resolved turn; --debug cli keys off this */
+
     const u2_ai_report rep = u2_ai_creature_turn(ctx, &ow->world, ow->x, ow->y);
     if (rep.moved)
         u2_monsters_restamp(ctx, &ow->world);
@@ -746,6 +749,15 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
      * and message history. The grid is the same storage the terminal renderer
      * paints, so both backends show identical text with no second model. */
     u2_font_draw_vram_rows(&ow->frame, &ctx->vram, U2_MSG_TOP, U2_ROWS - 1);
+
+    /* Dumped here rather than at the command sites because this is the one place
+     * the frame is known to be composed: a log written before the draw would show
+     * the state *before* the turn it is labelled with, which is an off-by-one that
+     * looks exactly like working output. */
+    if (ow->turns != ow->logged_turn) {
+        ow->logged_turn = ow->turns;
+        u2_turnlog(ctx, &ow->frame, ow->turns);
+    }
 }
 
 int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)

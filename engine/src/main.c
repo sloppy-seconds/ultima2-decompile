@@ -11,7 +11,12 @@
  *   ./u2 --headless --script k.keys --dump-state
  *   ./u2 --trace trace.log                seam log with asm citations
  */
+#define _POSIX_C_SOURCE 200809L   /* gmtime_r, strdup under -std=c11;
+                                  * stated rather than assumed, as in core/save.c */
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include "core/ctx.h"
@@ -23,6 +28,7 @@
 #include "core/replay.h"
 #include "debug/trace.h"
 #include "debug/dump_state.h"
+#include "debug/turnlog.h"
 #include "game/game.h"
 #include "game/overworld.h"
 static void usage(const char *argv0)
@@ -48,6 +54,11 @@ static void usage(const char *argv0)
         "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
         "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
+        "  --debug cli     write turn-NNNNN.ppm and .json into --debug-path after\n"
+        "                  every player turn. This is the only way to observe a\n"
+        "                  running session; the dump flags are all run-then-exit.\n"
+        "  --debug-path D  directory for --debug output (default /tmp; the project\n"
+        "                  overrides it because /tmp is tmpfs on its own host)\n"
         "  --dump-screen F  (SDL build) save the first presented frame to F as\n"
         "                    PPM and exit; with SDL_VIDEODRIVER=dummy this\n"
         "                    proves the window pixel path with no display\n"
@@ -165,6 +176,21 @@ int main(int argc, char **argv)
             ctx.dump_each = 1;
         } else if (strcmp(a, "--dump-screen") == 0 && i + 1 < argc) {
             ctx.dump_screen = argv[++i];
+        } else if (strcmp(a, "--debug") == 0) {
+            /* `--debug cli`, matching the existing `--trace[=FILE]` shape: the mode
+             * is an argument rather than a separate flag so a bare --debug can be
+             * rejected instead of silently guessing. */
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                if (strcmp(argv[i + 1], "cli") != 0)
+                    fprintf(stderr, "u2: --debug takes 'cli' (got '%s')\n", argv[i + 1]);
+                else { ctx.debug_cli = 1; ++i; }
+            } else {
+                fprintf(stderr, "u2: --debug needs a mode; today that is only 'cli'\n");
+            }
+        } else if (strcmp(a, "--debug-path") == 0 && i + 1 < argc) {
+            ctx.debug_path = argv[++i];
+            ctx.debug_cli = 1;      /* naming a directory is intent enough */
+
         } else if (strcmp(a, "--selftest") == 0) {
             ctx.selftest = 1;
         } else if (strcmp(a, "--trace") == 0) {
@@ -239,6 +265,23 @@ int main(int argc, char **argv)
         release_backends(&ctx);
         u2_trace_close(&ctx);
         return 1;
+    }
+
+    /* One directory per launch, named by its launch time in ISO 8601, always —
+     * whether the base came from --debug or --debug-path. A fixed directory is a
+     * trap: turn-00001.ppm from yesterday sits next to today's and an agent
+     * reading "the newest file" cannot tell which game it came from, which is the
+     * stale-evidence class this feature exists to close. */
+    if (ctx.debug_cli) {
+        char stamp[40], full[600];
+        time_t now = time(NULL);
+        struct tm gm;
+        gmtime_r(&now, &gm);
+        strftime(stamp, sizeof stamp, "%Y-%m-%dT%H:%M:%SZ", &gm);
+        snprintf(full, sizeof full, "%s/%s",
+                 ctx.debug_path ? ctx.debug_path : U2_TURNLOG_DEFAULT_DIR, stamp);
+        ctx.debug_path = strdup(full);
+        fprintf(stderr, "u2: --debug cli writing to %s\n", full);
     }
 
     if (ctx.play_map) {
