@@ -49,6 +49,12 @@ exact byte-for-byte fidelity.
 * `references/ultima2/` is a **pristine, read-only backup** of the original game files, kept inside this project in case the working copy in `original/` is ever damaged.
 * It is part of this project, so reading it is allowed — but it is a **fallback, not a workspace**. Treat it as immutable: **never write to, edit, rename, or delete anything under `references/`.**
 * The working copy is `original/`. Use `references/ultima2/` only to restore a damaged file from `original/`, and only with the user's approval.
+* **One exception lives beside it, and it is not game content.** `references/ultima3/` is a
+  third-party clone the owner added on 2026-10-24: a MIT-licensed Ultima III remake, a
+  different game, kept here as a reference implementation. It is read-only for the same
+  reason (nobody edits a reference), it is gitignored, and it is *not* a source of truth about
+  this binary. Read `docs/external-ultima3-remake.md` before using it — that file carries the
+  licence line (MIT code, not-ours art) and the two quarantines.
 
 ### External tool binaries (allowed)
 
@@ -273,7 +279,7 @@ Verification, in two independent layers:
 | `bestiary/` | third-party creature data joined to our tile table by bitmap identity. `bestiary.tsv` and `matches.md` are our own derived facts; `cache/` and `view.html` hold copyrighted art rips in seven platform variants. Read `docs/bestiary.md` before using it, and note the cleanroom entries. | `cache/` and `view.html` **gitignored** |
 | `captures/` | runtime captures and screenshots | **gitignored** |
 | `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |
-| `references/` | pristine read-only backup | **gitignored** |
+| `references/` | `ultima2/` is the pristine read-only backup; `ultima3/` is an owner-added third-party MIT remake clone (see `docs/external-ultima3-remake.md`) | **gitignored** |
 | `decompiled/` | bulk decompiler output, regenerable | **gitignored** |
 | `tmp/` | per-launch game copies | **gitignored** |
 | `build/` | build output | **gitignored** |

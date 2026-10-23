@@ -9,6 +9,13 @@
 original/
 references/
 
+# references/ultima3/ is a third-party clone (MIT code, Lairware art/sound),
+# added by the owner on 2026-10-24 as a reference implementation only. It is
+# covered by the `references/` rule above, but it is NOT part of the pristine
+# game backup and must not be treated as one — see docs/external-ultima3-remake.md.
+# Listed here so a future gitignore tidy-up cannot accidentally un-ignore it.
+references/ultima3/
+
 # Raw runtime dumps of the copyrighted binary (regenerable, derived, bulky).
 # The top-level patterns predate tools/spice86_stop.sh, which harvests into one
 # subdirectory per labelled run (captures/spice86/<label>/); those subdirs were
