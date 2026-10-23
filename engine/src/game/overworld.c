@@ -676,6 +676,12 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
     }
 
     seam_str_out(ctx, U2_S_HIT);
+
+    /* asm/2BE9 is three bytes: `call L_00133a`, then it falls into the "--HIT!!!"
+     * printer at asm/2BEC. So the alarm rings before the player is told they
+     * landed, and a miss never reaches it — which is exactly what § 16 measured
+     * (a landed blow alerts the sector, a missed swing alerts nothing). */
+    u2_ai_alarm(ctx);
     /* The reward lands on its OWN line, prompt and all — live frame reads
      *   CMD: ATTACK--EAST--HIT!!!
      *   CMD: KILLED--GOLD+1--EXP.+02

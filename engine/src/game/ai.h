@@ -45,4 +45,25 @@ typedef struct u2_ai_report {
  */
 u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py);
 
+/*
+ * The alarm — asm/113A, reached from asm/2BE9 on a landed hit and from
+ * asm/3F5D_steal_attempt.
+ *
+ *     113a  if [DS:4A] == 0 -> ret            ; the world map has no guards
+ *     1142  di := 7 ; al := 1
+ *     114a  mon_role[di] := al ; dec di ; jns 114a
+ *
+ * So violence inside a site sets role 1 on slots 0..7, and role 1 is the pass that
+ * casts and chases while role 0 does nothing at all. That is the whole of the
+ * sector-wide guard response measured in docs/spice86-live-findings.md § 16, and
+ * it explains why a missed swing flips nothing: asm/2BE9 sits on the hit path,
+ * before the "--HIT!!!" printer, and the miss path never reaches it.
+ *
+ * One arm is deliberately not reproduced. The loop falls through into asm/1151,
+ * which writes the same 1 into mon_role[DS:20] — and DS:20 is the damage byte on
+ * the attack path and a poll counter elsewhere, so what slot it names here is not
+ * established. Writing a slot on an unproven index is worse than not writing it.
+ */
+void u2_ai_alarm(u2_ctx *ctx);
+
 #endif /* U2_GAME_AI_H */

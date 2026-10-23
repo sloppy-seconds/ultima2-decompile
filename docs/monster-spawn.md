@@ -756,3 +756,67 @@ is a **separate pass** over the same slots, and `DS:1F` is not a rate ladder:
   `asm/0AD3` calls plain melee attackers (`0x30`, `0xF4`, `0xFC`) have no damage site in
   this region. The measured `9999 -> 9796` is unexplained by anything in this section, and
   saying "creatures hurt you" is not a substitute for finding where.
+
+## 14. `mon_role` is a behaviour selector, and the alarm is eight slots (2026-10-27)
+
+§ 13 left the per-slot loop described as "pursuit, gate, special, move for every
+non-empty slot". That is the role-1 path only, and the gate that decides which path a
+slot takes is the array this project has been calling `mon_role` since W1 without ever
+saying what the values mean. They mean this, and it is all in one fragment chain at
+`asm/101C..0x1082`:
+
+```
+101C  if mon_type[di] == 0 -> next slot
+102B  al := mon_role[di] ; if al == 0 -> next slot
+1033  if sign(al) -> next slot                 ; bit 7 set: excluded
+1035  if al >= 3  -> L_001286 (asm/1086, the wander)
+1039  if al == 2  -> L_00127b: call asm/4F11 ; jmp asm/2122   ; move, nothing else
+103D  else        -> L_001282: jmp L_000ca7 (asm/0AA7)        ; the full pass
+```
+
+| role | what the slot does | what the sector files actually ship |
+| --- | --- | --- |
+| `0x00` | nothing at all | 6–11 slots in a town, and **every slot** in `monx00` |
+| `0x01` | the full pass: proximity gate, special, unit step, retreat, move | 7–11 slots |
+| `0x02` | the unit step toward the player and the move routine. No gate, no special, **no retreat test** | 4–6 slots |
+| `0x03` | `asm/1086`, a wander off a per-slot pair at `DS:1F7`/`DS:217` — **not decoded** | 10–24 slots, usually the majority |
+| `0x81..0x85` | excluded by the `js` at `asm/1033`; these are the scripted townsfolk `asm/3C2E_cmd_O` enumerates one by one | exactly 4–5 slots, always the same low values |
+
+Three things follow, and all three were previously assumed the other way.
+
+**Role 2 is the alerted state and it is not a caster.** It walks in and does not cast,
+and because `asm/107B` jumps straight to the move routine it also skips the retreat test
+at `asm/0B07`. An alerted creature at 1 HP keeps coming. The guard that chases you is
+therefore not the guard that paralyses you, and a single "hostile" boolean cannot express
+that.
+
+**The stillness in the 7% measurement was mostly the role byte, not the tile rule.**
+§ 13 attributed it to tile refusals and the `DS:26A` freeze. Both are real, but in
+`monx21` twenty-four of thirty-two slots are role 3 and four are `0x81..0x84`, so before
+any tile is consulted, twenty-eight slots have already been told to stand still. The
+engine now reproduces `0`, `1` and `2` and deliberately does **nothing** for role 3:
+`asm/1086` is unread, and inventing a gait for the majority of the population is the
+exact failure mode AGENTS.md § 5 warns about. Decoding `asm/1086` is the open item, and
+it is the reason the engine currently under-moves rather than over-moves.
+
+### The alarm, which was W5 and is now bytes
+
+`asm/113A`, reached from `asm/2BE9` and from `asm/3F5D_steal_attempt`:
+
+```
+113a  if [DS:4A] == 0 -> ret              ; the world map has no guards
+1142  di := 7 ; al := 1
+114a  mon_role[di] := al ; dec di ; jns 114a
+```
+
+Eight slots, fixed indices, one value. And `asm/2BE9` is three bytes — `call L_00133a`
+— sitting immediately before the `--HIT!!!` printer at `asm/2BEC`, which is why a landed
+blow alerts the sector and a missed swing alerts nothing. That is § 16's live measurement
+of 2026-10-23 reproduced from the static tree eight days later, with the mechanism: the
+towns ship `0x00` in exactly those slots so this write has something to switch on.
+
+One arm is not reproduced. The loop falls through into `asm/1151`, which writes the same
+`1` into `mon_role[DS:20]`, and `DS:20` is the damage byte on the attack path and a poll
+counter elsewhere — so which slot that names here is not established, and writing a slot
+on an unproven index is worse than not writing it. Recorded in
+`engine/src/game/ai.c:u2_ai_alarm`.

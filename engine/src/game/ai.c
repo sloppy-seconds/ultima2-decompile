@@ -218,6 +218,38 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
         if (st->mon_type[slot] == 0) continue;
         rep.examined++;
 
+        /* asm/102B and asm/1033: the role byte gates the whole turn.
+         *
+         *   role == 0    -> next slot. Inert. monx00 ships 0 in every slot, and
+         *                   eight of the thirty-two in a town do nothing until
+         *                   violence wakes them (see u2_ai_alarm).
+         *   role & 0x80  -> next slot. asm/1033 is `js <next>`, so bit 7 excludes
+         *                   0x81..0x85, which are the scripted townsfolk that
+         *                   asm/3C2E_cmd_O enumerates one by one.
+         *   role == 1    -> asm/1082 -> asm/0AA7: the full pass. Raw pursuit
+         *                   vector, the proximity gate and the special, the unit
+         *                   step, the retreat test, then the move.
+         *   role == 2    -> asm/1039 -> asm/107B: recompute the unit pursuit vector
+         *                   and jump straight to the move routine. No gate, no
+         *                   special, and no retreat test either — an alerted
+         *                   creature walks in on you and neither casts nor runs.
+         *                   This is the state the alarm produces, so the guard that
+         *                   chases you is not the guard that paralyses you.
+         *   role >= 3    -> asm/1086, a wander driven by the per-slot pair at
+         *                   DS:1F7/DS:217 that this project has not decoded yet.
+         *                   The engine does NOTHING for these, which under-moves
+         *                   rather than invents a gait: monx21 has 24 of 32 slots at
+         *                   role 3, and guessing their step would be exactly the
+         *                   "plausible reading promoted past its evidence" failure
+         *                   AGENTS.md § 5 names. Decoding asm/1086 is the open item.
+         */
+        const uint8_t role = st->mon_role[slot];
+        if (role == 0 || (role & 0x80)) continue;
+        if (role > 3) continue;
+        const int casts   = (role == 1);   /* asm/0AAA is only on the role-1 path */
+        const int retreat = (role == 1);   /* asm/0B07 likewise                   */
+        const int moves   = (role == 1 || role == 2);
+
         /* asm/4F36: the raw pursuit vector, player minus creature, signed byte.
          * This is what the proximity gate measures, and it is a distance, not a
          * step. asm/4F11 recomputes the same pair as a unit step below. */
@@ -228,18 +260,23 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
          * bytes call DS:13 == 0x22. The engine has no vehicles yet, so the
          * filter cannot fire; it is named here rather than silently omitted. */
 
-        /* asm/0AAA..0AD3: the special, before any movement. */
-        if (special_gate(ctx, st->mon_type[slot], dx, dy, &rep))
+        /* asm/0AAA..0AD3: the special, before any movement. Only the role-1 pass
+         * reaches the gate (asm/102B sends role 2 to asm/107B, which is the move
+         * routine with no gate in front of it). */
+        if (casts && special_gate(ctx, st->mon_type[slot], dx, dy, &rep))
             seam_str_out(ctx, U2_S_CMD_PROMPT);
 
         /* asm/0AFC: `call L_005111` overwrites DS:19/1A with the unit step, so
-         * everything from here on moves one cell, not the distance. */
+         * everything from here on moves one cell, not the distance. asm/107B makes
+         * the same call on the role-2 path. */
         int sx = step_toward(px, st->mon_x[slot]);
         int sy = step_toward(py, st->mon_y[slot]);
 
-        /* asm/0B07/0B0F: at 14 HP or less the vector is negated in place, which
-         * is the retreat. The wiki claim that started this search is now bytes. */
-        if (st->mon_hp[slot] < U2_AI_RETREAT_HP) {
+        /* asm/0B07/0B0F: at 14 HP or less the vector is negated in place, which is
+         * the retreat. The wiki claim that started this search is now bytes — and
+         * it only holds on the role-1 path: an alerted (role 2) creature walks in
+         * on you at 1 HP and does not run. */
+        if (retreat && st->mon_hp[slot] < U2_AI_RETREAT_HP) {
             sx = -sx; sy = -sy;
             rep.retreated++;
         }
@@ -260,9 +297,23 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
             continue;
         }
 
-        if (creature_step(ctx, w, slot, sx, sy, px, py))
+        if (moves && creature_step(ctx, w, slot, sx, sy, px, py))
             rep.moved++;
     }
 
     return rep;
+}
+
+void u2_ai_alarm(u2_ctx *ctx)
+{
+    /* asm/113A: on the world map there is nobody to alert. */
+    if (ctx->state.sector_second == 0)
+        return;
+
+    /* asm/1142/114A: slots 7 down to 0, role 1. Fixed slots, not "the guards" as a
+     * class — the sector file decides which slots are the guard slots by what it
+     * ships there, and monxNN puts 0x00 in eight of them in a town precisely so
+     * this write has something to switch on. */
+    for (int slot = 7; slot >= 0; slot--)
+        ctx->state.mon_role[slot] = 1;
 }
