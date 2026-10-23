@@ -1090,3 +1090,52 @@ budget a restart per sample; twenty samples would settle the selector.
    captures in this section accidentally did, and why a capture that must see *every* pass
    through an address should arm once and drive the resume itself rather than relaunching
    `bp_read`.
+
+## 15.3 The selector, sampled — what it confirmed and what it did not (2026-10-28)
+
+`tools/bp_read.py` gained `--samples N` and `--post-dump` for this, on the strength of the
+multi-shot finding above: one arm plus a resume loop replaces a restart per sample, and 20
+samples came off one run in 90 seconds.
+
+**The chain is now fully enumerated statically**, which is the part that was missing. Reading
+`0D01..0D21` end to end (the last of it was already cleaned in `asm/0D21_sub_0d21.asm` with
+local labels, which is why it had resisted the fragment-scoped view):
+
+| lowest set bit of the chain value | arm | kind it wants | type | HP |
+| --- | --- | --- | --- | --- |
+| bit0 | `0F44` | `0x08` | `0x30` | `0x10` Orc |
+| bit1 | `0F64` | `0x08` | `0xFC` | `0x20` Thief/Daemon |
+| bit2 | `0F84` | — | | |
+| bit3 | `0FA4` | `0x00` | | |
+| bit4 | `0FD4` | `0x08` | `0xF0` | `0x80` Fighter |
+| bit5 | `0FCB -> 0FF3` | `0x00` | `0x48` | `0xA0` Frigate |
+| bit6 | `0FCE -> 1012` | `0x08` | `0x38` | `0xC0` Devil |
+| bit7 | `0FD1 -> 1031` | `0x08` | `0xF8` | `0xE0` Wizard |
+| none (chain value 0) | `1050` | `0x08` | `0x3C` | `0xFF` Balron |
+
+Two arms want kind `0x08` and stamp different creatures, so the kind alone cannot pick the
+arm — the bit chain must, which is the model's whole point and is now visible in the bytes
+rather than inferred. Note the chain runs on `DS:60` **after** the `incb`, so a stop at
+`0x0CEE` reads one less than the chain sees.
+
+**What the samples confirmed.** Over 20 stops at `0x0CEE` in a fresh sector, `DS:60` stayed at
+2 then 3, and later 9 — it creeps, it does not march, which is what increment-plus-rollback
+looks like and not what a spawn counter looks like. The kind drawn into `AL` was `0x00` or
+`0x08`, exactly the two values the arms compare against. And the arm actually taken tracks
+`DS:60`: with `DS:60 = 9` the chain sees `10 = 0b1010`, bit1, the Thief/Daemon arm — and a
+trap on the Orc stamp site `0x0D4F` then sat out 80 seconds without firing. That last one is
+a prediction of the table holding, not a measurement of the mapping.
+
+**What it did not confirm, and a method warning.** The per-sample `--post-dump` reads are
+**not** attributable to the stop they follow: half a second of game time contains other spawn
+attempts, so a stamped slot in the post window may belong to a different command entirely.
+Two apparent Orc stamps in the first sample set dissolved once the pre-increment offset was
+accounted for. Anyone re-testing this must stop **inside the arm** (e.g. `0x0D4F`) and read
+`DS:60` there, not infer the arm from a post-resume dump. `--post-dump` is still fine for
+anything a busy main loop does not touch in half a second; it is wrong for exactly the thing
+it was added for here.
+
+So the engine still gets no wandering spawn. The cadence is proven, the arm table is proven,
+the bit-to-arm mapping is enumerated statically and consistent with every sample but not yet
+pinned at runtime, and the coordinate roll is unread. The remaining measurement is narrow and
+cheap now: trap each stamp site in turn and read `DS:60` at it.

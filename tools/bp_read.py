@@ -359,11 +359,26 @@ def main() -> int:
                          'useless, which it is on this binary: Spice86 call tracking '
                          'answers 017D:0000 because the program is not well-behaved '
                          'enough to track (jmp-based dispatch).')
+    ap.add_argument('--samples', type=int, default=1, metavar='N',
+                    help='collect N stops instead of one. breakCsIp is multi-shot and '
+                         'cannot be removed, so one arm plus a resume loop is the cheap '
+                         'way to sample a rare event -- a restart per sample was the old '
+                         'assumption and it is wrong. Between samples the target runs, so '
+                         'whatever drives the game (keys, a walk loop) has to be running '
+                         'separately.')
+    ap.add_argument('--post-dump', action='append', default=[],
+                    help='DS range as OFF:LEN, read AFTER resuming rather than at the '
+                         'stop. This is how you see what the stopped code went on to do: '
+                         'the value at the break is the input, the post value is the '
+                         'result. Repeatable.')
+    ap.add_argument('--post-delay', type=float, default=0.6,
+                    help='seconds after resume before --post-dump reads (default 0.6)')
     ap.add_argument('--selftest', action='store_true',
                     help='positive and negative control against a live run')
     a = ap.parse_args()
 
     ranges = parse_ranges(a.dump)
+    post_ranges = parse_ranges(a.post_dump)
 
     if a.selftest:
         st = status(a.http_port)
@@ -418,25 +433,45 @@ def main() -> int:
 
     print(f'STOP at {st["cs"]:04X}:{st["ip"]:04X} '
           f'(decimal {st["cs"]}:{st["ip"]}, paused={st["paused"]})')
-    for off, n in ranges:
-        raw = read_ds(a.http_port, off, n)
-        print(f'  DS:{off:02X}..{off + n - 1:02X} = ' +
-              ' '.join(f'{b:02X}' for b in raw) +
-              f'   (as BCD pairs: ' +
-              ' '.join(f'{raw[i]:02d}' for i in range(0, len(raw), 2)) + ')')
-    if a.ret or a.state or a.stack:
-        report_caller(conn, a, want_state=a.state, want_ret=a.ret, want_stack=a.stack)
-    if a.callstack:
-        # Spice86's tracked stack is degenerate on this binary (hundreds of repeated
-        # `unknown_017D_4FDF_067AF` frames), so it is context, not evidence. Cap it.
-        lines = collect_monitors(conn, ['callStack'], timeout=20.0) \
-            .get('callStack', '').splitlines()
-        print(f'  callStack ({len(lines)} lines):')
-        for line in lines[:40]:
-            print(f'    {line}')
-        if len(lines) > 40:
-            print(f'    ... {len(lines) - 40} more')
-    conn.continue_()
+
+    def dump_all(tag: str, specs):
+        for off, n in specs:
+            raw = read_ds(a.http_port, off, n)
+            print(f'  {tag} DS:{off:02X}..{off + n - 1:02X} = ' +
+                  ' '.join(f'{b:02X}' for b in raw) +
+                  f'   (as BCD pairs: ' +
+                  ' '.join(f'{raw[i]:02d}' for i in range(0, len(raw), 2)) + ')')
+
+    for sample in range(1, max(1, a.samples) + 1):
+        if sample > 1:
+            st = wait_for_pause(a.http_port, int(ip_hex, 16), a.timeout)
+            if st is None:
+                print(f'NO STOP within {a.timeout:.0f}s (after {sample - 1} sample(s))')
+                break
+            print(f'STOP {sample} at {st["cs"]:04X}:{st["ip"]:04X}')
+        dump_all('at-stop', ranges)
+        if a.ret or a.state or a.stack:
+            # Registers per sample: the selector analysis needs AL and EDI at every stop,
+            # not just the first. peekRet is useless on this binary, so ask it once.
+            report_caller(conn, a, want_state=a.state,
+                          want_ret=(a.ret and sample == 1), want_stack=a.stack)
+        if a.callstack and sample == 1:
+            # Spice86's tracked stack is degenerate on this binary (hundreds of repeated
+            # `unknown_017D_4FDF_067AF` frames), so it is context, not evidence. Cap it.
+            lines = collect_monitors(conn, ['callStack'], timeout=20.0) \
+                .get('callStack', '').splitlines()
+            print(f'  callStack ({len(lines)} lines):')
+            for line in lines[:40]:
+                print(f'    {line}')
+            if len(lines) > 40:
+                print(f'    ... {len(lines) - 40} more')
+        conn.continue_()
+        if post_ranges:
+            time.sleep(a.post_delay)
+            dump_all('post  ', post_ranges)
+        if sample < a.samples:
+            time.sleep(a.post_delay)
+
     conn.close()
     return 0
 
