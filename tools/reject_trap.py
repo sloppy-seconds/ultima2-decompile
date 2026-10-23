@@ -46,6 +46,7 @@ project depends on.
 """
 from __future__ import annotations
 
+import re
 import socket
 import time
 
@@ -108,8 +109,33 @@ class RSP:
         except socket.timeout:
             return None
 
+    def drain_pending(self, quiet: float = 1.0, max_packets: int = 64) -> list[str]:
+        """Read and discard whatever is already in flight on the socket.
+
+        A caller that learns about a stop from /api/status instead of the RSP stream
+        never consumes the `T...` stop reply, and it sits in the socket buffer. Send a
+        monitor command straight after that and `monitor()` returns the stale stop
+        packet as if it were the reply — which decodes to garbage, not to an error.
+        Draining first is what makes a monitor reply trustworthy after an HTTP-detected
+        stop.
+
+        `quiet` is how long to wait for a packet before deciding nothing is pending.
+        """
+        out: list[str] = []
+        self.s.settimeout(quiet)
+        while len(out) < max_packets:
+            p = self._recv_packet(quiet)
+            if p is None:
+                break
+            out.append(p)
+        return out
+
     def monitor(self, cmd: str, drain: float = 2.0) -> str:
-        """Send `monitor <cmd>`. Spice86 returns monitor text hex-encoded."""
+        """Send `monitor <cmd>`. Spice86 returns monitor text hex-encoded.
+
+        Fine while the target is RUNNING and only a short ack is expected (that is how
+        breakCsIp is armed). Do not use it on a halted target — see monitor_collect.
+        """
         self._send("qRcmd," + cmd.encode().hex())
         out = []
         t0 = time.time()
@@ -121,6 +147,59 @@ class RSP:
             if p.startswith(("OK", "T", "S", "E")):
                 break
         return " | ".join(out)
+
+    def monitor_collect(self, cmd: str, timeout: float = 8.0, quiet: float = 1.2,
+                        nudge: bool = True) -> list[str]:
+        """Send `monitor <cmd>` against a HALTED target and collect the whole reply.
+
+        `monitor()` is wrong once the VM is stopped at a breakpoint, and the wrongness is
+        silent: the halt emits stop notifications (`T05`, `S05`) which `monitor()` reads
+        as its terminator, so the real monitor text arrives after the call returns and is
+        attributed to the *next* command. Measured 2026-10-28: `state` answered `S05` and
+        `callStack` came back holding the register dump. A hex-encoded payload can also
+        begin with `E`, which `monitor()` treats as an error reply.
+
+        **Spice86 only writes monitor output when it next reads from the link.** Traced
+        2026-10-28 on a VM halted at 17D:0CEE: `qRcmd,state` produced nothing for 20 s;
+        a bare `?` packet 4 s later produced the register dump immediately; `c` produced
+        the reply to the `peekRet` sent before it. So every reply is one packet late, and
+        the fix is to send a nudge packet after the command and read until quiet.
+        (`?` is safe only because the target is already halted; while running it would
+        pause the VM, hence the flag.)
+        """
+        self._send("qRcmd," + cmd.encode().hex())
+        out: list[str] = []
+        t0 = time.time()
+        last = t0
+        nudged = False
+        while time.time() - t0 < timeout:
+            p = self._recv_packet(0.2)
+            if p is None:
+                if nudge and not nudged and time.time() - last > 1.0:
+                    self._send("?")
+                    nudged = True
+                    continue
+                if out and time.time() - last > quiet:
+                    break
+                continue
+            last = time.time()
+            if p == "OK":
+                break
+            if re.fullmatch(r"[TS][0-9A-Fa-f]{2}", p):
+                continue
+            out.append(p)
+        return out
+
+    @staticmethod
+    def decode_packets(packets: list[str]) -> str:
+        """Decode a monitor reply: Spice86 sends the text hex-encoded, one packet per line."""
+        text = []
+        for p in packets:
+            try:
+                text.append(bytes.fromhex(p).decode("utf-8", "replace"))
+            except ValueError:
+                text.append(p)
+        return "\n".join(text).strip()
 
     @staticmethod
     def decode_monitor(reply: str) -> str:

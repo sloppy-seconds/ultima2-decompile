@@ -19,6 +19,31 @@ Two facts inherited from reject_trap.py and not renegotiated here:
   * The trap is read-only with respect to guest memory: it never patches guest
     bytes, so it cannot damage the byte-exact comparison the project depends on.
 
+Caller identification
+---------------------
+`--state`, `--ret` and `--callstack` ask the emulator, while the target is stopped,
+who called us. They are **monitor commands on the GDB/RSP port** (20190); the HTTP
+API has no equivalent — `GET /api/peekRet` answers an empty 200, which is not an
+error and reads exactly like "no data".
+
+  * `state`     -> registers, including SS:SP and DI
+  * `peekRet`   -> the return address Spice86 finds on the emulated stack
+  * `callStack` -> Spice86's whole tracked call stack (noisy, and its function
+                   names are `unknown_CS_IP_linear`, so treat it as context only)
+
+`--ret` also decodes the stack word at SS:SP itself and prints the two side by
+side. They can disagree — `peekRet` reports what Spice86's call tracking believes,
+the raw word reports what is in RAM — and a single number printed alone would hide
+that. The offset is also converted to a **file offset** (`file = runtime + 0x200`,
+see `tools/check_func.py` BIAS), because `asm/` files are named by runtime offset
+and the two spaces have caused several false blockers.
+
+**An RSP attach halts the VM.** Opening the gdb port pauses execution and it stays
+paused when the socket closes without a `continue` — `/api/status` then reports
+`isCpuRunning: true, isPaused: true` with a frozen cycle count, and every key sent
+afterwards is swallowed. So this tool resumes on *every* exit path, including "no
+stop within timeout", unless `--no-continue` was asked for.
+
 Controls
 --------
 `--selftest` proves the mechanism against a live run in BOTH directions:
@@ -32,6 +57,9 @@ Usage
     # arm, resume, and dump DS:27..2C when the tavern price print is reached
     python3 tools/bp_read.py --ip 17B7 --dump 27:6 --dump 4E:4 --timeout 90
 
+    # who reaches the monster-spawn dispatch: registers, return address, call stack
+    python3 tools/bp_read.py --ip 0D44 --cs 17D --state --ret --callstack --timeout 150
+
     # prove the tool can fail
     python3 tools/bp_read.py --selftest
 """
@@ -39,6 +67,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 import urllib.request
@@ -47,6 +77,7 @@ sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from reject_trap import RSP, DS_SEG, cs_ip_from_status  # noqa: E402
 
 CS_DEFAULT = 0x017D          # the code segment the runtime CFG reports
+FILE_BIAS = 0x200            # file offset = runtime offset + 0x200 (check_func.py BIAS)
 
 
 def http_json(port: int, path: str):
@@ -54,8 +85,8 @@ def http_json(port: int, path: str):
         return json.load(r)
 
 
-def read_ds(port: int, off: int, n: int) -> bytes:
-    url = f"/api/memory/{DS_SEG * 16 + off}/range/{n}"
+def read_phys(port: int, phys: int, n: int) -> bytes:
+    url = f"/api/memory/{phys}/range/{n}"
     data = http_json(port, url)
     if isinstance(data, dict):
         # the endpoint answers {"values": [...]}; older notes say "bytes"/"data".
@@ -67,6 +98,10 @@ def read_ds(port: int, off: int, n: int) -> bytes:
         else:
             raise SystemExit(f'unrecognised memory response keys: {list(data)}')
     return bytes(data)
+
+
+def read_ds(port: int, off: int, n: int) -> bytes:
+    return read_phys(port, DS_SEG * 16 + off, n)
 
 
 def status(port: int):
@@ -113,6 +148,188 @@ def arm(conn: RSP, cs_hex: str, ip_hex: str) -> bool:
     return "Breakpoint added" in conn.decode_monitor(reply)
 
 
+def monitor(conn: RSP, cmd: str, drain: float = 8.0) -> str:
+    """Send one monitor command against the halted target and return its text.
+
+    Drains the socket first, then uses `monitor_collect`: the halt itself puts stop
+    notifications on the link, and reading them as the reply is how the first version
+    of this printed `state: S05` and then a call stack that was really a register dump.
+    An empty reply is reported as such rather than passed on as a value.
+    """
+    stale = conn.drain_pending()
+    if stale:
+        print(f'  (discarded {len(stale)} unread RSP packet(s) before {cmd})')
+    text = conn.decode_packets(conn.monitor_collect(cmd, timeout=drain))
+    if not text:
+        print(f'  {cmd}: NO REPLY (empty monitor response)')
+    return text
+
+
+# 'Cycles=... SS=0xBCE DS=0x8BE ...' -- the register dump is one flat line.
+STATE_RE = re.compile(r'\b([A-Z]S|E[AXBCD]X|E[SIP][PI])=0x([0-9A-Fa-f]+)')
+
+
+def parse_state(text: str) -> dict:
+    return {k: int(v, 16) for k, v in STATE_RE.findall(text)}
+
+
+# How to recognise each monitor reply by what it contains, because on a halted target
+# the reply cannot be attributed to the command that is in flight (see collect_monitors).
+MONITOR_SIGNATURES = {
+    'state': re.compile(r'Cycles='),
+    'peekRet': re.compile(r'^\s*[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}\s*$'),
+    'callStack': re.compile(r'expected to return|From external interrupt'),
+}
+
+
+def collect_monitors(conn: RSP, cmds: list[str], timeout: float = 25.0) -> dict:
+    """Send several monitor commands, then read until every one has answered.
+
+    Why not send-then-read one at a time: **on a halted target Spice86's replies lag the
+    command that produced them.** Traced 2026-10-28 at 17D:0CEE -- `qRcmd,state` answered
+    nothing for 20 s; the register dump arrived only once a further packet was on the
+    wire, and `peekRet`'s answer arrived after the `continue`. Read one at a time, every
+    reply is attributed to the wrong command, which is how `callStack` came back holding
+    a register dump and looked like plausible evidence.
+
+    So: fire all the commands, then pump the link, nudging once a second (a halted target
+    needs a reason to write), and file each packet under the first signature it matches.
+    Attribution is by content, so the ordering cannot lie.
+    """
+    out: dict[str, str] = {}
+    conn.drain_pending()
+    for cmd in cmds:
+        conn._send('qRcmd,' + cmd.encode().hex())
+    t0 = time.time()
+    last_nudge = t0
+    while time.time() - t0 < timeout and len(out) < len({c.split()[0] for c in cmds}):
+        p = conn._recv_packet(0.3)
+        if p is None:
+            if time.time() - last_nudge > 1.0:
+                conn._send('?')
+                conn._send('qRcmd,' + b'state'.hex())
+                last_nudge = time.time()
+            continue
+        if re.fullmatch(r'[TS][0-9A-Fa-f]{2}', p) or p == 'OK':
+            continue
+        text = conn.decode_packets([p])
+        for cmd in cmds:
+            key = cmd.split()[0]
+            sig = MONITOR_SIGNATURES.get(key)
+            if sig and sig.search(text):
+                out.setdefault(key, text)
+    missing = [c for c in cmds if c.split()[0] not in out]
+    if missing:
+        print(f'  MONITOR NO REPLY for: {", ".join(missing)} '
+              f'(got {len(out)} of {len(set(c.split()[0] for c in cmds))} in '
+              f'{timeout:.0f}s)')
+    return out
+
+
+def report_caller(conn: RSP, a, want_state: bool, want_ret: bool, want_stack: int = 0):
+    """Print registers / return address / raw stack, cross-checking each other.
+
+    Every monitor command goes through `collect_monitors` in one batch: replies arrive
+    out of order on a halted target, and a report that labels them by send order is
+    worse than no report.
+    """
+    cmds = ['state']
+    if want_ret:
+        cmds.append('peekRet' + (f' {a.ret_type}' if a.ret_type else ''))
+    got = collect_monitors(conn, cmds)
+    text = got.get('state', '')
+    if want_state:
+        print(f'  state: {text}')
+    regs = parse_state(text)
+    if want_ret:
+        rtext = got.get('peekRet', '').strip()
+        print(f'  peekRet: {rtext or "(no reply)"}')
+        m = re.fullmatch(r'\s*([0-9A-Fa-f]{1,4}):([0-9A-Fa-f]{1,4})\s*', rtext)
+        if not m:
+            print('  RET UNPARSED: peekRet did not answer with a single CS:IP pair')
+        else:
+            cs, ip = int(m.group(1), 16), int(m.group(2), 16)
+            print(f'  peekRet -> file offset {ip + FILE_BIAS:04X} '
+                  f'(runtime {cs:03X}:{ip:04X}; asm/ files are named by runtime offset)')
+            # Independent derivation: a near call pushed the return IP on top of the
+            # stack. If the enclosing routine pushed anything first this word is a
+            # saved register and not the return address -- which is exactly why the two
+            # numbers are printed side by side instead of one being trusted.
+            if 'SS' in regs and 'ESP' in regs:
+                sp = regs['ESP'] & 0xFFFF
+                raw = read_phys(a.http_port, regs['SS'] * 16 + sp, 2)
+                word = raw[0] | (raw[1] << 8)
+                agree = 'AGREES' if word == ip else 'DISAGREES'
+                print(f'  stack check: SS={regs["SS"]:03X} SP={sp:04X} -> word '
+                      f'0x{word:04X}, peekRet {agree}')
+            else:
+                print('  stack check: skipped, no SS/ESP in the state dump')
+    if want_stack:
+        report_stack(conn, a, want_stack, regs)
+
+
+def asm_index(root: str = '') -> list:
+    """[(runtime_start, filename)] for every `asm/NNNN_name.asm`, sorted.
+
+    Derived from the tree on demand, never cached by hand — `asm/` is the one lookup
+    table (AGENTS.md § 3) and a second hand-maintained copy would drift and lie.
+    """
+    if not root:
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'asm')
+    out = []
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return out
+    for n in names:
+        stem = n.split('_')[0]
+        if len(stem) == 4:
+            try:
+                out.append((int(stem, 16), n))
+            except ValueError:
+                pass
+    out.sort()
+    return out
+
+
+def asm_owner(idx: list, runtime: int):
+    """The asm file whose start is the greatest one <= runtime, or None.
+
+    A start match is not proof the address belongs to that routine — the fragments in
+    this region are 3-8 bytes and the real function is far larger — so callers get the
+    name as a lead, not as a verdict.
+    """
+    best = None
+    for start, name in idx:
+        if start <= runtime:
+            best = (start, name)
+        else:
+            break
+    return best
+
+
+def report_stack(conn: RSP, a, depth: int, regs: dict):
+    """Dump the guest stack at SS:SP and show which offsets look like return addresses."""
+    if not regs:
+        regs = parse_state(monitor(conn, 'state'))
+    if 'SS' not in regs or 'ESP' not in regs:
+        print('  stack: skipped, no SS/ESP in the state dump')
+        return
+    sp = regs['ESP'] & 0xFFFF
+    ss = regs['SS']
+    raw = read_phys(a.http_port, ss * 16 + sp, depth)
+    idx = asm_index()
+    print(f'  stack at SS={ss:03X}:SP={sp:04X} ({depth} bytes, low address first):')
+    for i in range(0, len(raw) - 1, 2):
+        w = raw[i] | (raw[i + 1] << 8)
+        note = ''
+        if idx:
+            own = asm_owner(idx, w)
+            if own and w - own[0] < 0x40:
+                note = f'  <- inside {own[1]} (+{w - own[0]:02X})'
+        print(f'    +{i:02X}: {w:04X}   (file {w + FILE_BIAS:04X}){note}')
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--http-port', type=int, default=20180)
@@ -125,6 +342,23 @@ def main() -> int:
     ap.add_argument('--timeout', type=float, default=60.0)
     ap.add_argument('--no-continue', action='store_true',
                     help='arm but leave the target stopped (caller resumes)')
+    ap.add_argument('--state', action='store_true',
+                    help='while stopped, dump monitor state (registers, SS:SP, DI)')
+    ap.add_argument('--ret', action='store_true',
+                    help='while stopped, dump monitor peekRet (the return address) '
+                         'and cross-check it against the word at SS:SP')
+    ap.add_argument('--ret-type', default=None,
+                    help='peekRet type: NEAR16 NEAR32 FAR16 FAR32 INTERRUPT '
+                         'EXTERNAL_INTERRUPT MACHINE (default: emulator default)')
+    ap.add_argument('--callstack', action='store_true',
+                    help='while stopped, dump monitor callStack')
+    ap.add_argument('--stack', type=int, default=0, metavar='N',
+                    help='while stopped, dump N bytes of the guest stack at SS:SP as '
+                         'words, each annotated with the asm/ routine that owns the '
+                         'offset if one does. This is the fallback when peekRet is '
+                         'useless, which it is on this binary: Spice86 call tracking '
+                         'answers 017D:0000 because the program is not well-behaved '
+                         'enough to track (jmp-based dispatch).')
     ap.add_argument('--selftest', action='store_true',
                     help='positive and negative control against a live run')
     a = ap.parse_args()
@@ -165,6 +399,7 @@ def main() -> int:
     conn = RSP(a.gdb_port)
     if not arm(conn, cs_hex, ip_hex):
         print(f'FAIL: could not arm breakCsIp {cs_hex} {ip_hex}', file=sys.stderr)
+        conn.continue_()
         conn.close()
         return 1
     print(f'armed on {cs_hex}:{ip_hex}')
@@ -175,6 +410,9 @@ def main() -> int:
     st = wait_for_pause(a.http_port, int(ip_hex, 16), a.timeout)
     if st is None:
         print(f'NO STOP within {a.timeout:.0f}s at {cs_hex}:{ip_hex}')
+        # Leaving the socket open after an attach freezes the run (see the docstring),
+        # and a frozen run looks exactly like a game that is simply idle.
+        conn.continue_()
         conn.close()
         return 3
 
@@ -186,6 +424,18 @@ def main() -> int:
               ' '.join(f'{b:02X}' for b in raw) +
               f'   (as BCD pairs: ' +
               ' '.join(f'{raw[i]:02d}' for i in range(0, len(raw), 2)) + ')')
+    if a.ret or a.state or a.stack:
+        report_caller(conn, a, want_state=a.state, want_ret=a.ret, want_stack=a.stack)
+    if a.callstack:
+        # Spice86's tracked stack is degenerate on this binary (hundreds of repeated
+        # `unknown_017D_4FDF_067AF` frames), so it is context, not evidence. Cap it.
+        lines = collect_monitors(conn, ['callStack'], timeout=20.0) \
+            .get('callStack', '').splitlines()
+        print(f'  callStack ({len(lines)} lines):')
+        for line in lines[:40]:
+            print(f'    {line}')
+        if len(lines) > 40:
+            print(f'    ... {len(lines) - 40} more')
     conn.continue_()
     conn.close()
     return 0
