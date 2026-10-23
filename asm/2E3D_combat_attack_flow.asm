@@ -40,21 +40,40 @@
 # direction handler upstream must be filling them. Not yet traced — do not assume
 # "adjacent cell" from the live behaviour without checking that path.
 #
-# HIT TEST (file 0x307E..0x3088) — arithmetic proven, the OPERAND'S PRODUCER is not:
+# HIT TEST (file 0x307E..0x3088) — PROVEN, and the operand really is agility:
 #     call L_005417          ; rand_byte
-#     clc; rcr $1,%al        ; al = rand >> 1
+#     clc; rcr $1,%al        ; al = rand >> 1   (rcr through a cleared carry = shift)
 #     cmp    0x4c,%al        ; al - [DS:4C]
 #     jb  -> HIT   else MISS
-#   so a hit needs (rand >> 1) < [DS:4C]. [DS:4C] is the save-record agility slot
-#   (state.h stat_agi, tools/u2_edit.py 'agi'), and agility is NOT what this can be
-#   comparing against: the weak test character (agi 5 -> byte 0x05) would then hit
-#   about 3.9% of the time, yet it landed several hits in a handful of swings
-#   (captures/spice86/cp5-weak-fight), while the maxed seed (agi 40 -> byte 0x40,
-#   predicted 50%) showed the plausible mix you would expect. One case fits and the
-#   other refutes, so the threshold is a value that happens to sit in the agility
-#   slot at that moment — most likely a computed to-hit number, since this binary
-#   reuses bytes freely (see [DS:20] scratch, and the disputed DS:6D). That is a
-#   hypothesis, not a finding. OPEN: find what writes [DS:4C] on the attack path.
+#   hit iff (rand >> 1) < [DS:4C], and [DS:4C] is the agility BYTE (packed decimal,
+#   state.h stat_agi). So hit chance = agi_byte / 128: agi 40 -> byte 0x40 = 64 ->
+#   50%; agi 5 -> byte 0x05 -> 3.9%.
+#   Measured, not assumed: a character with **str 40 / agi 5** took 12 swings at an
+#   adjacent Fighter and landed exactly ONE hit (Fighter 50 -> 16 -> 16, one 34-damage
+#   blow across twelve `A,Right`s; capture cp5-hit). Agility predicts 0.47 expected
+#   hits and P(>=1) ~ 38% — a clean fit. Strength-as-operand predicts 6 expected hits
+#   and P(<=1) ~ 0.3% — ruled out. The same run also re-showed retaliation: the player
+#   took 9999 -> 9686 from the monster it had struck.
+#   Why this needed re-measuring: an earlier draft of this note declared the agility
+#   reading REFUTED, on the strength of a weak character landing 2 hits in 3 swings.
+#   That sample came from reading monster HP once after a burst of injected keys and
+#   inferring the hit count from the HP delta — which silently conflated swings with
+#   hits. Counted properly, the outlier disappeared and the bytes were right all
+#   along. Lesson: a hit rate needs per-swing evidence, not one HP delta over a burst.
+#
+# THE cmd_A CHAIN (asm/2B8F -> 2B9B -> 2BA5 -> 2BD7 -> 2BDA -> 2BEC/2E09) — decoded
+# 2026-10-23, and it is a DIFFERENT routine from this one. What the on-screen
+# `ATTACK--EAST--HIT!!!` actually runs is this chain, and its hit test at asm/2BDA
+# (file 0x2DDA..0x2DE1) is the same `clc; rcr $1,%al; cmp 0x4c,%al; jb` idiom, so the
+# two agree. The chain also contains, in order:
+#   2B9B  al = [DS:4A]; cmp $4; jb 2BA5      — a site-kind gate on attacking
+#   2BA5  al = [DS:26C]; or al,al; je 2DBE   — **the ARMS PARALYSIS GATE**
+#   2BAD  print "PARALIZED!"; return
+# i.e. with paral_arms non-zero the attack is refused outright and prints PARALIZED!,
+# which is the byte proof of the owner's recollection that arms paralysis stops you
+# fighting while legs paralysis stops you moving (C1/C3). See asm/2BA5_sub_2ba5.asm.
+# Note the strings differ: this routine prints "HIT!" and the chain prints "--HIT!!!"
+# (asm/2BEC_combat_hit_msg); the on-screen line uses the chain's.
 #
 # DAMAGE (file 0x309F..0x30BA) — PROVEN. The earlier "28 vs 34" puzzle was a unit
 # error in this note, not a gap in the bytes:
@@ -95,11 +114,10 @@
 #   wrapped them to 0010 and 0001 — the BCD wrap the B1 ticket predicts, seen on
 #   screen (captures/spice86/cp5-fight/screen4.png).
 #
-# What the engine still lacks to implement this: what writes [DS:4C] on the attack
-# path (the hit arithmetic is proven against an operand whose producer is unknown),
-# the upstream that fills [DS:23]/[DS:24]/[DS:25] for an attack, and L_0055b5
-# (called before each BCD add — probably the numeric print, unconfirmed).
-# Damage is now implementable exactly as written above.
+# What the engine still lacks to implement this: the upstream that fills
+# [DS:23]/[DS:24]/[DS:25] for the target triple, and L_0055b5 (called before each
+# BCD add — probably the numeric print, unconfirmed). Damage and the hit test are
+# both proven now, so W3 is unblocked on the arithmetic.
 # ---------------------------------------------------------------------------
 combat_attack_flow:
 L_00303d:
