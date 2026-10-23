@@ -1,0 +1,95 @@
+# Run the ORIGINAL game (Ultima II under Spice86) headless in a container, streamed
+# over noVNC. One container: Xvfb + Spice86 + x11vnc + websockify.
+#
+# This is the emulator-and-display half only. Neither the GPL emulator build nor the
+# copyrighted game files are ever baked into the image — both are bind-mounted at run
+# time, per AGENTS.md "Licensing & Commit Policy":
+#
+#   /opt/spice86        <- tools/spice86        (GPL build, ro)
+#   /content            <- references/ultima2   (pristine game files, ro)
+#   /project/tmp/runs   <- a host dir           (writable: run copies + CFG dumps)
+#
+# Build from the PROJECT ROOT (patch_arrows.py is copied out of tools/):
+#
+#   sudo podman build -t u2-spice86-novnc -f deploy/spice86-novnc/Containerfile .
+#
+# Use deploy/spice86-novnc/up.sh, which does that plus the mounts and the port picks.
+
+FROM quay.io/fedora/fedora:44
+
+# Fedora 44 to match the host (Bazzite 44, glibc 2.43). The vendored apphost and the
+# bundled CoreCLR want GLIBC_2.38 / GLIBCXX_3.4.32; an older base fails to exec with an
+# error that reads like a broken build rather than a missing symbol.
+#
+# No dotnet package: tools/spice86 is a *self-contained* linux-x64 publish (it carries
+# libcoreclr.so, libhostfxr.so and libhostpolicy.so), so the apphost runs standalone.
+# Verified on the host: ./tools/spice86/Spice86 --help exits 0 with no dotnet involved.
+#
+# The X11 client libraries are here because the SDL2 that Spice86 bundles is Silk.NET's
+# NuGet copy, which dlopens X11 at runtime instead of linking it — `ldd` on it shows only
+# libc/libm/libdl/libpthread and tells you nothing about what it will go looking for when
+# the X11 video driver is selected. Missing ones fail as "couldn't find matching GLX
+# visual" or a bare SDL init failure, not as a loader error.
+#
+# libicu is not optional either: the self-contained publish does not carry ICU, and without
+# it the process FailFast()s — an abort with a core dump, no window, and the reason only in
+# stdout ("Couldn't find a valid ICU package installed on the system"), reached from
+# Spectre.Console's parser via ToUpperInvariant. Measured on the first run of this image.
+RUN dnf -y install \
+        xorg-x11-server-Xvfb \
+        x11vnc \
+        novnc \
+        python3-websockify \
+        python3 \
+        xdotool \
+        curl \
+        libstdc++ \
+        libX11 libXext libXcursor libXi libXrandr libXinerama libXScrnSaver \
+        libXxf86vm libXfixes libXrender libXcomposite libXdamage \
+        libxkbcommon libxkbcommon-x11 \
+        mesa-libGL mesa-dri-drivers \
+        alsa-lib \
+        libicu \
+        fontconfig dejavu-sans-fonts \
+    && dnf clean all
+
+# The vendored apphost was built under linuxbrew, so its PT_INTERP is
+# /home/linuxbrew/.linuxbrew/lib/ld.so. That path does not exist in this image, and the
+# exec failure it causes is the confusing kind: "No such file or directory" for a file
+# that plainly exists, because the kernel is reporting the missing *interpreter*.
+# Symlinking it to the real loader is the whole fix, and it leaves the GPL binary
+# unmodified (no patchelf, no rebuild).
+RUN mkdir -p /home/linuxbrew/.linuxbrew/lib \
+    && ln -sf /lib64/ld-linux-x86-64.so.2 /home/linuxbrew/.linuxbrew/lib/ld.so
+
+# Our own Apache-2.0 tool, copied from tools/ at build time (the build context is the
+# project root; .dockerignore keeps tools/spice86 and the game files out of it).
+# The image needs it because the run copy is made inside the container, where the host's
+# tools/ tree is not mounted.
+#
+# It lands at /project/tools/ and the run dirs live under /project/tmp/ on purpose, not
+# for tidiness: patch_arrows.py refuses any target outside its own project root
+# (dirname(__file__)/..), which is a guard worth keeping rather than working around. The
+# container therefore mirrors the project layout instead of disabling the check.
+COPY tools/patch_arrows.py /project/tools/patch_arrows.py
+COPY deploy/spice86-novnc/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Display :99 so it cannot collide with the engine container's :98 or the host's :0.
+ENV DISPLAY=:99 \
+    DISPLAY_NUM=99 \
+    GEOMETRY=1440x900x24 \
+    VNC_PORT=5905 \
+    NOVNC_PORT=6085 \
+    HTTP_PORT=20180 \
+    MCP_PORT=20181 \
+    GDB_PORT=20190 \
+    CYCLES=3000 \
+    PATCH_ARROWS=1 \
+    CONTENT_DIR=/content \
+    SPICE86_DIR=/opt/spice86 \
+    RUNS_DIR=/project/tmp/runs
+
+EXPOSE 6085 5905 20180 20181 20190
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
