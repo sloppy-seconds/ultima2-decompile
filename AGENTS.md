@@ -13,10 +13,11 @@ exact byte-for-byte fidelity.
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
 > `docs/handoff-2026-10-28.md` first (current entry point: what got settled since the night
-> queue and where each item landed, the open queue ordered by what it unblocks — pinning the
-> spawn selector, one confirming unlock, the Z screen, CP5 C3 — the owner decisions that need
-> a person, the working recipes including how to push from an agent shell, and the ten hazards
-> that cost time). The work it supersedes is in
+> queue and where each item landed — the spawn selector is now pinned at runtime and the
+> confirming unlock is on record, so what is left is the Z screen, CP5 C3, implementing the
+> wandering spawn, and the owner decisions that need a person — the working recipes including
+> how to push from an agent shell and how to force a live value, and the twelve hazards that
+> cost the last two sessions time). The work it supersedes is in
 > `docs/handoff-2026-10-27-night.md` (its item queue is now resolved: 1, 6, 7, 8 done, 4 wired,
 > 5 closed statically, 2 re-blocked on the selector, 3 spec'd not built; plus the nine hazards
 > from that session), then `docs/handoff-cp5-2026-10-27.md` (CP5 W1–W9 and towns are done,
