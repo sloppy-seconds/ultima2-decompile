@@ -163,6 +163,29 @@ else
     sed 's/^/        /' "$WORK/atk.build"
 fi
 
+# --- 1f. the death tail (CP5 W8) -------------------------------------------
+# asm/0C62..0C99 as one span, checked against the captured frame in
+# captures/spice86/cp5-weak-fight/death1.png. It links the whole game core rather
+# than one file because the tail prints through the seam and repaints the status
+# band, and a stub of either would let the test pass on a half-implemented death.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/death_check" \
+        tests/death_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/death.build"; then
+    if "$WORK/death_check" > "$WORK/death.out" 2>&1; then
+        n=$(sed -n 's/^death_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/death.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 death run executed 0 checks — the test is not running"
+        else
+            ok "CP5 W8 death: zero DS:51..59, repaint, '<NAME> IS DEAD!' ($n checks, $(tail -1 "$WORK/death.out"))"
+        fi
+    else
+        bad "CP5 death check failed:"
+        sed 's/^/        /' "$WORK/death.out"
+    fi
+else
+    bad "CP5 death harness did not build:"
+    sed 's/^/        /' "$WORK/death.build"
+fi
+
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
     skip "C1 three independent counters DS:26B/26C/26D (0..15) — needs src/game/combat.c"

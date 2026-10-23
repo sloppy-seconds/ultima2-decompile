@@ -165,6 +165,12 @@ MANIFEST = [
     # fallback, so it is exe-only, like the title strings above.
     ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13)),
     ("U2_S_EXP_PLUS",          "2E3D_combat_attack_flow.asm", 1),
+    # CP5 W8 — the death tail. asm/0C8C writes `db " IS DEAD!",0x8d,0x00`, and the
+    # trailing 0x8d (the game's newline glyph, which char_print masks to CR) puts the
+    # line outside DB_RE, so this is exe-only. Offset verified against the exe on
+    # 2026-10-27: file 0x0E8F is `20 49 53 20 44 45 41 44 21` followed by `8d 00`.
+    # Length 9 stops before the 8d because the engine emits the newline itself.
+    ("U2_S_IS_DEAD",           "0C8C_character_dead_msg.asm", ("run", 0x0E8F, 9)),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

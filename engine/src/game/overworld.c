@@ -82,6 +82,72 @@ static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out)
 }
 
 /*
+ * Death — asm/0C62..0C99, and it only reads as one routine when the four
+ * bulk-wave fragments are laid end to end. Each alone looks like nothing; in
+ * address order they are the only death announcement in the binary:
+ *
+ *   0C62  al := 0 ; DS:51..DS:59 := al ; call L_0052f9
+ *   0C82  call str_out  db 0x8d,0x8d,0x8d,0        (three newlines)
+ *   0C89  call L_00527a   -> asm/507A: bx := 0, then print DS:36+bx until a NUL
+ *   0C8C  call str_out  db " IS DEAD!",0x8d,0
+ *
+ * Every site that can kill jumps here rather than calling, which is why this is
+ * one function and not three lines inside food_spend: the food borrow-outs
+ * (`jae` at asm/0BDB and asm/0C09), the force field (asm/24B5), Minax's attack
+ * (asm/0F8E), dungeon events (asm/12DB, three sites), asm/228D, asm/2495,
+ * asm/277B and cmd_L (asm/38B0).
+ *
+ * The on-screen result is on record, so none of this is inferred:
+ * `captures/spice86/cp5-weak-fight/death1.png` reads `G23MAX IS DEAD!` on the
+ * bottom row with H.P., FOOD, EXP and GOLD all at 0000.
+ *
+ * Two deliberate widths, named rather than hidden:
+ *
+ *   - asm/0C62 calls only L_0052f9, which is the H.P. line (asm/50F9). The
+ *     captured frame has all four fields repainted, so the whole band is redrawn
+ *     here. The frame is the observation; the narrower call is what the bytes
+ *     show. If a later capture ever shows FOOD still at its old value at the
+ *     moment of death, this line is the one to revisit.
+ *   - No `CMD: ` prompt follows. The prompt is not printed before a read; it
+ *     travels with the previous command's compound echo ("NORTH\rCMD: ",
+ *     asm/38B0), and the death tail has no prompt of its own. The capture agrees:
+ *     the announcement is the last thing on the log and the bottom row is bare.
+ *
+ * What the original does next is NOT proven. The capture ends at the frame
+ * above, and the engine currently returns to the walk loop with a dead
+ * character that can still walk and still be charged food. That is a guess by
+ * omission, and it is on docs/needs-gameplay.md as an agent-drivable capture:
+ * seed a weak character, get killed, keep sending keys, and see whether the
+ * game accepts anything at all afterwards.
+ */
+void u2_death(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+
+    /* asm/0C62: nine stores, DS:51..DS:59. DS:55 is food_lo, the third byte of
+     * the FOOD triple (see the food comment below), not a tenth field. */
+    st->hp = 0; st->unk_52 = 0;
+    st->food = 0; st->food_hi = 0; st->food_lo = 0;
+    st->exp_lo = 0; st->exp_hi = 0;
+    st->gold_lo = 0; st->gold_hi = 0;
+    u2_status_draw(ctx);
+
+    /* asm/0C82: three newlines, so the announcement owns the bottom of the log
+     * whatever was on it. */
+    for (int i = 0; i < 3; i++)
+        seam_char_print(ctx, '\r');
+
+    /* asm/0C89 -> asm/507A: the name, from DS:36, up to its NUL. No prompt and
+     * no leading space: the space is inside the next string (" IS DEAD!"). */
+    for (unsigned i = 0; i < sizeof st->name && st->name[i] != 0; i++)
+        seam_char_print(ctx, (char)st->name[i]);
+
+    /* asm/0C8C: " IS DEAD!" then the game's newline (the 0x8d in its db). */
+    seam_str_out(ctx, U2_S_IS_DEAD);
+    seam_char_print(ctx, '\r');
+}
+
+/*
  * Time passes: one action, one BCD subtraction from the food triple.
  *
  * Proven shape (file 0x0B0D..0x0B33, the PASS arm of the walk loop): the
@@ -96,13 +162,13 @@ static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out)
  * away.
  *
  * The borrow-out target is the whole of the "starvation" rule the bytes
- * support: 0x0E62 (asm/0C62) zeroes DS:51..DS:59 — HP, FOOD, EXP and GOLD
- * together — and calls the redraw. There is no separate "food at zero drains
- * HP a little at a time" step anywhere in the tree; the owner's model said
- * there would be, and the bytes disagree, so the bytes win and the
- * disagreement is recorded rather than implemented.
+ * support: it jumps to 0x0E62 (asm/0C62), which is `u2_death` below. There is
+ * no separate "food at zero drains HP a little at a time" step anywhere in the
+ * tree; the owner's model said there would be, and the bytes disagree, so the
+ * bytes win and the disagreement is recorded rather than implemented.
  *
- * Returns 1 when the subtraction underflowed (the character just died).
+ * Returns 1 when the subtraction underflowed (the character just died). The
+ * caller's job is to hand that to u2_death; this function only subtracts.
  */
 static int food_spend(u2_ctx *ctx, unsigned amount)
 {
@@ -118,15 +184,7 @@ static int food_spend(u2_ctx *ctx, unsigned amount)
     st->food_hi = (uint8_t)mid;
     st->food    = (uint8_t)hi;
 
-    if (borrow) {
-        /* asm/0C62, runtime 0x0E62: every stat byte to zero, then redraw. */
-        st->hp = 0; st->unk_52 = 0;
-        st->food = 0; st->food_hi = 0; st->food_lo = 0;
-        st->exp_lo = 0; st->exp_hi = 0;
-        st->gold_lo = 0; st->gold_hi = 0;
-        return 1;
-    }
-    return 0;
+    return borrow;
 }
 
 int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
@@ -254,10 +312,14 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
 }
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
- * drive it directly. Returns 1 when the subtraction underflowed (death). */
+ * drive it directly. Returns 1 when the subtraction underflowed (death), and
+ * runs the death tail in that case, because that is what the borrow-out does. */
 int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount)
 {
-    return food_spend(ctx, amount);
+    if (!food_spend(ctx, amount))
+        return 0;
+    u2_death(ctx);
+    return 1;
 }
 
 /* Shared loader: everything after the spawn fields are set. */
@@ -524,7 +586,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                     pending_cmd = 0;
                     echo_cmd(ctx, U2_S_PASS);
                     if (food_spend(ctx, U2_FOOD_PER_PASS))
-                        u2_status_draw(ctx);
+                        u2_death(ctx);
                     /* Not modelled: the original also steps every monster on
                      * this tick, observed live as one cell per auto-PASS while
                      * the player stood still. Monsters do not exist in the
@@ -566,7 +628,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
              * auto-PASS above reaches the same cost through the same print site. */
             echo_cmd(ctx, U2_S_PASS);
             if (food_spend(ctx, U2_FOOD_PER_PASS))
-                u2_status_draw(ctx);
+                u2_death(ctx);
             continue;
         default: continue;                                  /* not a move key */
         }
@@ -635,8 +697,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 
         ow->x = nx;
         ow->y = ny;
-        if (food_spend(ctx, U2_FOOD_PER_MOVE))
-            u2_status_draw(ctx);
 
         /* The echo, reproduced as the original prints it: one compound string
          * "NORTH\rCMD: " (asm/38B0, file 0x3ce5 — direction word, CR, prompt).
@@ -646,6 +706,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * blank bottom row. That is the owner's model of the block: bottom
          * row always current, completed commands stacked above it. */
         echo_cmd(ctx, word);
+
+        /* The food charge comes after the echo, and that ordering is a choice,
+         * not a byte. Nothing observable moves unless the subtraction kills: the
+         * death tail prints three newlines precisely so the announcement is the
+         * last line on the log, and `death1.png` shows it there. Charging first
+         * would print `CMD: NORTH` underneath a dead character's name. */
+        if (food_spend(ctx, U2_FOOD_PER_MOVE))
+            u2_death(ctx);
     }
     ctx->frame = NULL;
     return 0;

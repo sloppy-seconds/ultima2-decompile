@@ -126,11 +126,20 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
 /*
  * Spend `amount` food from the packed-decimal triple DS:53/54/55 and return 1
  * if the subtraction underflowed, which is the original's death condition
- * (file 0x0B2E jumps to runtime 0x0E62 on a borrow, and asm/0C62 zeroes
- * DS:51..DS:59). Exposed for tests; the PASS arm of the loop is its only
- * in-game caller tonight.
+ * (file 0x0B2E jumps to runtime 0x0E62 on a borrow). On that borrow it runs
+ * u2_death, because the borrow-out is a jump into the death tail, not a flag.
+ * Exposed for tests; the PASS and move arms of the loop are its in-game callers.
  */
 int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount);
+
+/*
+ * The death tail: asm/0C62..0C99 as one span. Zeroes DS:51..DS:59, repaints the
+ * status band, scrolls the log and prints `<NAME> IS DEAD!` with no `CMD: `
+ * prompt after it. Every kill site in the binary jumps here — the food
+ * borrow-outs, the force field, Minax, dungeon events and cmd_L — so anything
+ * new that can kill calls this rather than zeroing HP on its own.
+ */
+void u2_death(u2_ctx *ctx);
 
 /* Bitmask over tile ids 0..63 that the engine stepped onto without a measured
  * passability verdict. Zero means every tile the player entered had evidence
