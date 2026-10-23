@@ -74,16 +74,25 @@ int main(void)
     CHECK(all, "every one of the 200 cells matches map[(y-5+r)*64 + (x-9+c)]");
     CHECK(v.drawn == U2_VIEW_TILES, "with no suppression all 200 cells are drawable");
 
-    /* --- off-sector cells come from DS:12, with 8-bit wrap semantics ----- */
+    /* --- the viewport WRAPS at the sector edge ---------------------------
+     * This check used to assert the opposite — "take the off-map tile, not a
+     * wrap" — and it passed, because it was written from a reading of asm/5AE1
+     * rather than from the running game. A test that encodes a wrong belief is
+     * worse than no test: it made the seam unfixable without going red first.
+     * Replaced by live capture 2026-10-27 (owner at (0,11), sector 20): staging
+     * row 5 held the map's own columns 55..63 on the left of the screen. */
     synth_world();
     u2_view_fill(&v, &world, 3, 3, 0x2A, no_underlay, 0);
-    /* x-9 = -6 which the original computes as 0xFA, so columns 0..8 are off-map. */
-    int off_ok = 1;
+    /* x-9 = -6 and y-5 = -2, both of which the original masks back into range. */
+    int wrap_ok = 1;
     for (int c = 0; c < 9; c++)
-        if (u2_view_at(&v, c, 0) != u2_view_index(0x2A)) off_ok = 0;
-    CHECK(off_ok, "columns left of the sector edge take the off-map tile, not a wrap");
-    CHECK(u2_view_at(&v, 9, 0) == u2_view_index(0x2A),
-          "the player's own row is still off-map in y at the top edge");
+        if (u2_view_at(&v, c, 0) !=
+            u2_view_index(u2_world_tile_at(&world, (3 - 9 + c) & 63, (3 - 5) & 63)))
+            wrap_ok = 0;
+    CHECK(wrap_ok, "columns left of the west edge show the wrapped map columns, not filler");
+    CHECK(u2_view_at(&v, 9, 0) ==
+              u2_view_index(u2_world_tile_at(&world, 3, (3 - 5) & 63)),
+          "the top row wraps in y as well as x");
     CHECK(u2_view_at(&v, 19, 9) == u2_view_index(u2_world_tile_at(&world, 13, 7)),
           "cells that are inside the sector still come from the map");
 

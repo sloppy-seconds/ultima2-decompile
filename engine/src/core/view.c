@@ -33,17 +33,33 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
     const uint8_t oy = (uint8_t)(py - U2_VIEW_PLAYER_ROW);
 
     for (int row = 0; row < U2_VIEW_ROWS; row++) {
-        const uint8_t my = (uint8_t)(row + oy);
-        const int y_out = (my >= U2_SECTOR_EDGE);
+        const int my = (row + oy) & (U2_SECTOR_EDGE - 1);
 
         for (int col = 0; col < U2_VIEW_COLS; col++) {
-            const uint8_t mx = (uint8_t)(col + ox);
-            const int x_out = (mx >= U2_SECTOR_EDGE);
+            const int mx = (col + ox) & (U2_SECTOR_EDGE - 1);
 
-            /* asm/5AE1: an off-sector cell takes its tile from DS:12, and does
-             * not consult the map at all. */
+            /* The viewport WRAPS. The sector is a torus and the fill loop reads it
+             * as one, so terrain continues past every edge instead of stopping at a
+             * strip of filler. Measured, not inferred: live capture 2026-10-27, the
+             * owner standing at (0,11) in sector 20 of the original, origin (-9,6).
+             * Staging row 5 read
+             *   84 84 84 84 84 84 84 84 84 78 84 84 84 84 84 84 84 84 86 86
+             * and map row 11 wrapped from column 55 produced exactly those values
+             * with bit 7 set (0x08 grass -> 0x04 -> 0x84, 0x0C forest -> 0x06 ->
+             * 0x86). Column 9 is 0x78, the player stamp, not a tile.
+             *
+             * The previous behaviour substituted DS:12 for off-sector cells and cited
+             * asm/5AE1 for it. That is the seam the owner reported as a teleport:
+             * approach the west edge and the left of the screen fills with a
+             * constant, then at the boundary the real terrain arrives all at once.
+             * The original never blanks, so it reads as a scroll.
+             *
+             * off_map is no longer consulted while a sector is resident. DS:12 still
+             * exists and still reads 0xFF live — the engine's tile_offsector = 4 was
+             * never right either — but whatever feeds it is not this loop, and that
+             * is its own ticket. */
             uint8_t map_byte = off_map;
-            if (!x_out && !y_out && w && w->map_loaded)
+            if (w && w->map_loaded)
                 map_byte = u2_world_tile_at(w, mx, my);
 
             uint8_t idx = u2_view_index(map_byte);
