@@ -505,7 +505,7 @@ on whether `mode_a` is derived from the tile byte.
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.
 
-### G28 — what tile is underneath an unlocked door
+### G30 — what tile is underneath an unlocked door
 
 **Grade: recalled (owner, 2026-10-27) — "when you open a door it disappears, I don't
 remember what's underneath the tile."** Named unknown, not a guess to be filled in.
@@ -611,3 +611,20 @@ Re-run: stand at a small `x` (say 2) on a row whose map tiles are visually disti
 both ends, dump `DS:272..DS:3B0` raw, and find the grid by matching the *known* tiles
 around the player rather than assuming the layout. Once the grid is located, the
 wrap-versus-fill question answers itself in one sample.
+
+#### G29 RESOLVED 2026-10-27 — it was neither design. The viewport wraps.
+
+Closed by capture, not by argument. The original does not load a neighbouring sector at
+an edge (proven 511/512 against the discriminating rows of `mapx20` vs `mapx30`), and it
+does not blank off-sector cells either. At player `(0,11)` with origin `(-9,6)`, staging
+row 5 held the map's own columns 55..63 with bit 7 set:
+
+    84 84 84 84 84 84 84 84 84 78 84 84 84 84 84 84 84 84 86 86
+
+`0x08` grass -> `0x04` -> `0x84`; `0x0C` forest -> `0x06` -> `0x86`; column 9 is `0x78`,
+the player stamp. The fill loop masks its coordinates into the sector and reads the torus
+straight through. `u2_view_fill` now does the same. `DS:12` is not consulted by the
+viewport at all, which leaves its real purpose open as **G31**.
+
+A CP4 test had been asserting the opposite behaviour by name and passing; it is replaced
+and the replacement says why.

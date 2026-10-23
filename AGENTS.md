@@ -12,9 +12,12 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-cp5-2026-10-27.md` first (current entry point: CP5 W1–W9 and towns are
-> done, what was proven today, the single mistake that caused three false blockers, and
-> the open list ranked by what each one unblocks), then `docs/phase4-state.md` § CP5.
+> `docs/handoff-2026-10-27-night.md` first (current entry point: an ordered queue of work
+> an agent can do alone with no owner input — the spawn-trigger capture, Z stats, the
+> proven-but-unwired Unlock rule — plus the nine hazards that cost time today and the
+> passability decisions that a green test suite did not catch). The work it supersedes is
+> in `docs/handoff-cp5-2026-10-27.md` (CP5 W1–W9 and towns are done, what was proven, the
+> single mistake that caused three false blockers), then `docs/phase4-state.md` § CP5.
 > `docs/phase4-kickoff-cp5.md` still holds the CP5 wiring build order and the work-item
 > list, but its sequencing is now historical — every W item on it has shipped or been
 > replaced by a byte-level finding. Superseded handoffs
