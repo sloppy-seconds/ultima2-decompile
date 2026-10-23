@@ -18,13 +18,13 @@ mkdir -p /var/tmp/u2/novnc-saves
 cp /var/tmp/u2/saves/PLAYER /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
 
 sudo podman run -d --name u2-novnc \
-  -p 127.0.0.1:6081:6081 \
+  -p 6081:6081 \
   -v "$PWD/original:/content:ro,z" \
   -v /var/tmp/u2/novnc-saves:/saves:z \
   u2-novnc:latest
 
-ssh -L 6081:ai.lan:6081 ai        # from anywhere that is not ai
-# then open  http://localhost:6081/vnc.html
+# then, from anything on the LAN:
+#   http://ai.lan:6081/vnc.html
 ```
 
 Keyboard from the browser reaches the game, so this is play, not watching: arrow keys
@@ -49,6 +49,20 @@ walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
 4. **Ports.** 6080 and 5900 belong to the Spice86 watching container, so this one
    defaults to 6081/5901 on display `:98`. Override with `-e NOVNC_PORT= -e
    VNC_PORT= -e DISPLAY=` if you run a second one.
+
+## Exposure, and why it is the way it is
+
+Published on `0.0.0.0:6081` with **no VNC password**. That is the owner's call, made
+on 2026-10-27 — *"it's just our LAN, it's secure, no need for a password"* — and it is
+recorded here so nobody re-litigates it or, worse, half-applies it: the earlier
+draft of this file bound loopback and required an SSH tunnel, and the difference
+matters if this host ever stops being on a trusted network.
+
+One layer is still there and is not just decoration: `x11vnc` runs with `-localhost`,
+so the raw VNC port (5901) is reachable only from inside the container's network
+namespace and never from the LAN. What is exposed is the noVNC web socket on 6081,
+which is the same thing either way, but it means adding a password later is a
+one-flag change in `entrypoint.sh` and not a re-plumb.
 
 Audio is deliberately silent: the container has no sound server, `audio_sdl` fails to
 load `libjack.so.0`, and the engine continues without it and says so. That is the
