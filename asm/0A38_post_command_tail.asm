@@ -1,17 +1,21 @@
 # 0A38_post_command_tail — the tail every completed command falls through to
 # name-evidence: reached only by fall-through from asm/0A33_cmd_done (no branch names
 #           L_000c38 anywhere in the tree); clears DS:22/20/21, then `mov 0x4a,%al;
-#           or %al,%al; je L_000c6d` -- the only two in-binary entries to the creature
-#           sweep head are this `je` and the `jne` in asm/0A5F_sub_0a5f.asm.
+#           or %al,%al; je L_000c6d`.
 # This is the answer to "what triggers a wandering spawn": not a step and not a clock
 # tick, but the end of a command. See docs/monster-spawn.md § 15.2.
-# NOT ESTABLISHED: what DS:4A is. It is the gate -- measured 0 in a live sector-20
-#           overworld session, so the sweep was running there, but 0's meaning is unknown.
+# DS:4A IS THE SECTOR'S SECOND DECIMAL DIGIT, not an unknown flag. docs/map-format.md and
+# engine/src/core/state.h say DS:49/4A are the two digits patched into the MAPXFF filename,
+# and a live read in sector 20 gave DS:49=0x02 DS:4A=0x00, which is 2 and 0. So this is not
+# a gate, it is a dispatch on the low sector digit: digit 0 takes the sweep here, digits
+# 1..5 branch away (asm/0A4A..0A5F jump to L_001213/L_001214/L_001215/L_00135f/L_00135e),
+# and digits 6..9 fall through to the sweep at asm/0A6D from the last compare.
+# NOT ESTABLISHED: what the 1..5 branches do, or why the sector digit selects on them.
 # label: kept as sub_0a38 on purpose (CP3 cross-reference anchor).
 # func 0A38..0A49  len 0012 B  evidence: seed+reko
 # provenance: static reassembly 2026-10-28 (docs/monster-spawn.md § 15.2), corroborated
 #           by a stop at 17D:0CEE reached during an arrow-key walk in the same session
-# confidence: high for the flow and the gate byte's behaviour; none for DS:4A's meaning
+# confidence: high for the flow and for DS:49/4A's identity; none for the 1..5 arms
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_0a38:
 L_000c38:

@@ -938,7 +938,7 @@ The chain is fall-through and one `jmp`, all of it in bytes:
 | --- | --- | --- |
 | `0A1F` | `0C1F` | `cmd_dispatch`: `sbb $0x41,%al; add %al,%al; mov %cs:0x730(%si),%bx; jmp *%bx` — the A–Z command jump table |
 | `0A33` | `0C33` | `cmd_done`: every command handler returns here by `jmp`; prints CR via `char_print` and **falls through**, it does not `ret` |
-| `0A38` | `0C38` | clears `DS:22/20/21`, then `mov 0x4a,%al; or %al,%al; je L_000c6d` — the gate |
+| `0A38` | `0C38` | clears `DS:22/20/21`, then `mov 0x4a,%al; or %al,%al; je L_000c6d` — dispatches on the sector's low digit, see below |
 | `0A6D` | `0C6D` | sweep head: `DI = 31` (immediate, the § 11 trap again) |
 | `0A74` | `0C74` | `mov 0x197(%di),%al; or %al,%al; je L_000ca1` — free slot, skip it; live slot, run the AI |
 | `0AA1` | `0CA1` | `dec %di; jne L_000c74` — next slot down |
@@ -956,9 +956,15 @@ Renamed in the same commit, filename and header only, labels untouched: `0A38_po
 
 ### Measurements that came with it
 
-- **`DS:4A` reads 0** in a live sector-20 overworld session, so the gate was open and the
-  sweep was running. What `DS:4A` *is* remains unknown; it is the second byte in this region
-  whose meaning is a hole (`DS:60` being the first).
+- **`DS:4A` is the sector's second decimal digit, and that turns "the gate" into a
+  dispatch.** `docs/map-format.md` and `engine/src/core/state.h` record `DS:49/4A` as the two
+  digits patched into the `MAPXFF` filename, and a live read in sector 20 gave `DS:49=0x02
+  DS:4A=0x00` — 2 and 0, matching. So `or %al,%al; je L_000c6d` is not a flag test: digit 0
+  takes the sweep, digits 1..5 branch away (`asm/0A4A..0A5F` jump to `L_001213`, `L_001214`,
+  `L_001215`, `L_00135f`, `L_00135e`), and digits 6..9 fall through to the same sweep from the
+  last compare. Sector 20 measured 0, which is why the sweep ran in every capture here. What
+  the 1..5 arms do, and why a sector digit selects on them, is not established — and it is now
+  the load-bearing unknown for the cadence, not the RNG.
 - **Cadence is not the limiter, the free slot is.** After a long walk, all 32 `mon_type`
   slots were occupied (`30 FC 30 34 30 FC 30 F0 …`) and `DS:60` moved only 22 → 23 across
   80 arrow steps. The spawner opens by scanning `31..1` for a zero `mon_type` and exits via
@@ -1007,7 +1013,7 @@ it or kill it.
 ### What this does and does not license the engine to do
 
 Proven now, and therefore implementable: **the cadence** — one spawn attempt per completed
-command, gated on the sweep, requiring a free `mon_type` slot.
+command in a sector whose second digit is 0 (or above 5), requiring a free `mon_type` slot.
 
 Still not proven, and still a guess if implemented: **which kind** (the `rcr` chain over
 `DS:60` plus per-arm `cmp` on `[DI+0x1B7]` — the arms and their HP are proven, the selector

@@ -6,7 +6,8 @@
 # that holds up independently.
 # REACHABILITY, established 2026-10-28: this block is inside the spawner cluster, and the
 # only entry to that cluster is asm/0AA4_monster_spawn_entry, the fall-through end of the
-# per-command creature sweep. So one spawn *attempt* per completed command, and reaching
+# per-command creature sweep (which asm/0A38_post_command_tail reaches on the sector's low
+# decimal digit). So one spawn *attempt* per completed command, and reaching
 # this instruction additionally requires a free slot and a passing coordinate roll --
 # measured DS:60 = 22 -> 23 across 80 arrow steps with all 32 mon_type slots occupied,
 # i.e. the free-slot scan is what refuses, not the cadence. docs/monster-spawn.md § 15.2.
