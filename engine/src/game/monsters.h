@@ -47,6 +47,14 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w);
  */
 void u2_monsters_store(u2_ctx *ctx, u2_world *w);
 
+/*
+ * Re-stamp the sector grid from the creature arrays, restoring the terrain under
+ * any cell a creature has left. Call it whenever the arrays move (a creature
+ * turn, a kill) and before anything reads the grid for passability or drawing.
+ * Rebuilds from `world.map_base`, so it is idempotent.
+ */
+void u2_monsters_restamp(u2_ctx *ctx, u2_world *w);
+
 /* The slot occupying sector cell (x,y), or -1 for none. A creature occupies a
  * cell the same way a mountain does: the step is rejected, not fatal. Observed
  * live 2026-10-23 — stepping onto an adjacent creature printed

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "game/overworld.h"
+#include "game/ai.h"           /* u2_ai_creature_turn: the monsters' turn */
 #include "game/combat.h"      /* u2_combat_attack, u2_attack */
 #include "game/monsters.h"    /* u2_monsters_at: who is standing there */
 #include "game/status.h"
@@ -47,6 +48,29 @@ static void echo_cmd(u2_ctx *ctx, const char *word)
     seam_str_out(ctx, word);
     seam_char_print(ctx, '\r');
     seam_str_out(ctx, U2_S_CMD_PROMPT);
+}
+
+/*
+ * One creature turn, after whatever the player just did.
+ *
+ * The original advances the monsters once per elapsed turn, and a turn is any
+ * accepted action or an expiry — which is why this sits behind the move, the
+ * PASS, the auto-PASS and the attack rather than behind a timer of its own.
+ * asm/0A6D..0AB5 and asm/2122..2260 are the two passes; ai.c owns them.
+ *
+ * The grid is re-stamped whenever anything moved, because the renderer and the
+ * passability test both read the stamped grid (CP5 W2), and a creature that
+ * walked but left its type byte behind would become a wall on its old cell.
+ * The frame itself needs no redraw here: the loop composites at the top of each
+ * iteration.
+ */
+static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
+{
+    const u2_ai_report rep = u2_ai_creature_turn(ctx, &ow->world, ow->x, ow->y);
+    if (rep.moved)
+        u2_monsters_restamp(ctx, &ow->world);
+    if (rep.moved || rep.stolen)
+        u2_monsters_store(ctx, &ow->world);
 }
 
 /*
@@ -587,10 +611,12 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                     echo_cmd(ctx, U2_S_PASS);
                     if (food_spend(ctx, U2_FOOD_PER_PASS))
                         u2_death(ctx);
+                    creature_turn(ctx, ow);
                     /* Not modelled: the original also steps every monster on
                      * this tick, observed live as one cell per auto-PASS while
-                     * the player stood still. Monsters do not exist in the
-                     * engine yet, so there is nothing to advance. */
+                     * the player stood still. That is now what creature_turn
+                     * does — the observed one cell is the diagonal step at
+                     * asm/212e, two cells of Manhattan distance in one turn. */
                     continue;
                 }
             }
@@ -629,6 +655,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             echo_cmd(ctx, U2_S_PASS);
             if (food_spend(ctx, U2_FOOD_PER_PASS))
                 u2_death(ctx);
+            creature_turn(ctx, ow);
             continue;
         default: continue;                                  /* not a move key */
         }
@@ -640,6 +667,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         if (pending_cmd == 'A' && word != NULL) {
             pending_cmd = 0;
             attack_dir(ctx, ow, word, dx, dy);
+            /* The swing is the turn: the original's monsters advance on the
+             * expiry of a half-typed `A` too (`ATTACK--PASS`), so an attack that
+             * was actually completed cannot sensibly advance nothing. Whether the
+             * arms-paralysis refusal inside attack_dir costs a turn is NOT
+             * proven; the engine advances on both the miss and the hit and not on
+             * the refusal. */
+            if (ctx->state.paral_arms == 0)
+                creature_turn(ctx, ow);
             continue;
         }
 
@@ -714,6 +749,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * would print `CMD: NORTH` underneath a dead character's name. */
         if (food_spend(ctx, U2_FOOD_PER_MOVE))
             u2_death(ctx);
+        creature_turn(ctx, ow);
     }
     ctx->frame = NULL;
     return 0;

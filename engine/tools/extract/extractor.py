@@ -171,6 +171,19 @@ MANIFEST = [
     # 2026-10-27: file 0x0E8F is `20 49 53 20 44 45 41 44 21` followed by `8d 00`.
     # Length 9 stops before the 8d because the engine emits the newline itself.
     ("U2_S_IS_DEAD",           "0C8C_character_dead_msg.asm", ("run", 0x0E8F, 9)),
+    # CP5 W6 — the creature special's own words. Every one of these is exe-only for
+    # the same reason as U2_S_IS_DEAD: the db line carries a trailing glyph byte
+    # (0x0d or 0x8d, both of which char_print masks to CR) between the text and the
+    # terminator, which puts it outside DB_RE. Offsets and lengths verified against
+    # the exe on 2026-10-27; each is unique in the file, so no locator ambiguity.
+    ("U2_S_LEGS_PARALYZED",    "0E70_combat_paralyzed_legs.asm", ("run", 0x1073, 15)),
+    ("U2_S_SAVED_BY_BOOTS",    "0E70_combat_paralyzed_legs.asm", ("run", 0x109E, 23)),
+    ("U2_S_ARMS_PARALYZED",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10C5, 15)),
+    ("U2_S_SAVED_BY_CLOAK",    "0EC2_combat_paralyzed_arms.asm", ("run", 0x10F0, 22)),
+    ("U2_S_MAGIC_MISSILE",     "0F12_combat_magic_missile.asm",  ("run", 0x1115, 14)),
+    ("U2_S_SLEEP_SPELL",       "0F48_combat_sleep_spell.asm",    ("run", 0x114B, 12)),
+    ("U2_S_SAVED_BY_IDOL",     "0F48_combat_sleep_spell.asm",    ("run", 0x1173, 14)),
+    ("U2_S_THIEF_STOLE",       "0FCD_combat_thief_steal.asm",    ("run", 0x11F8, 24)),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

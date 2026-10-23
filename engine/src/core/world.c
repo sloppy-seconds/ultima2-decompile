@@ -148,6 +148,9 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
         w->map_id = id;
         w->map_loaded = 1;
         w->map_dirty = 0;
+        /* The pristine copy the creature stamp is drawn over. Set here and only
+         * here, so a stamped grid can always be rebuilt (see world.h). */
+        memcpy(w->map_base, w->map, U2_SECTOR_TILES);
     } else {
         w->mon_id = id;
         w->mon_loaded = 1;

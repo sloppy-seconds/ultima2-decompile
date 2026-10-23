@@ -92,6 +92,43 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
     return occupied;
 }
 
+/*
+ * Re-stamp the grid after the creature arrays changed — a walk, a kill, a spawn.
+ *
+ * The grid is rebuilt from `w->map_base` rather than patched cell by cell, so a
+ * creature leaving a cell puts the terrain back instead of leaving its own type
+ * byte behind forever. asm/2233 commits a move by writing the new coordinates
+ * and the kind byte, and the cell bookkeeping around it (the `and 0xf0` then
+ * `or [di+0x197]` pair at asm/1151's tail) is only partly read, so the exact
+ * nibble arithmetic of the original's stamp is NOT reproduced here — what is
+ * reproduced is the observable property: one creature per cell, and the cell
+ * under it survives its departure.
+ *
+ * One cell is left alone on purpose: a cell carrying 0x80. That is the stamp
+ * asm/2E3D file 0x30F4 writes over a killed creature, and restoring terrain
+ * there would undo a proven byte with an unproven one. A creature walking onto
+ * such a cell stamps it normally, because the loop below runs after the skip.
+ */
+void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
+{
+    if (ctx == NULL || w == NULL || !w->map_loaded)
+        return;
+
+    for (int i = 0; i < U2_SECTOR_TILES; i++)
+        if (w->map[i] != 0x80)
+            w->map[i] = w->map_base[i];
+
+    const u2_state *s = &ctx->state;
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (s->mon_type[i] == 0)
+            continue;                       /* asm/0A74: an empty slot is type 0 */
+        const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
+        if (cell < 0 || cell >= U2_SECTOR_TILES)
+            continue;
+        w->map[cell] = s->mon_type[i];
+    }
+}
+
 void u2_monsters_store(u2_ctx *ctx, u2_world *w)
 {
     if (ctx == NULL || w == NULL || !w->mon_loaded)

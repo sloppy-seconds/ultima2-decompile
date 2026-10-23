@@ -186,6 +186,28 @@ else
     sed 's/^/        /' "$WORK/death.build"
 fi
 
+# --- 1g. the creature turn (CP5 W6/W6b) -------------------------------------
+# asm/0A6D..0AB5 and asm/2122..2260. Links the whole game core for the same
+# reason the death check does: the turn prints, rolls, and moves bytes that the
+# renderer and the passability test both read.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/ai_check" \
+        tests/ai_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/ai.build"; then
+    if "$WORK/ai_check" > "$WORK/ai.out" 2>&1; then
+        n=$(sed -n 's/^ai_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/ai.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 creature-turn run executed 0 checks — the test is not running"
+        else
+            ok "CP5 W6/W6b creature turn: pursue, flee, species gate, specials ($n checks, $(tail -1 "$WORK/ai.out"))"
+        fi
+    else
+        bad "CP5 creature-turn check failed:"
+        sed 's/^/        /' "$WORK/ai.out"
+    fi
+else
+    bad "CP5 creature-turn harness did not build:"
+    sed 's/^/        /' "$WORK/ai.build"
+fi
+
 # --- 2. the behavioural run, only when the combat hook exists ---------------
 if [ ! -f src/game/combat.c ]; then
     skip "C1 three independent counters DS:26B/26C/26D (0..15) — needs src/game/combat.c"

@@ -78,6 +78,16 @@ typedef struct u2_sector_id {
  */
 typedef struct u2_world {
     uint8_t      map[U2_SECTOR_TILES];
+    /*
+     * The sector as the file had it, before anything stamped creatures into
+     * `map`. CP5 W2 stamps each creature's type byte into the grid because that
+     * is what the renderer draws (docs/art-index.md), and once creatures can
+     * walk, the cell they leave has to become terrain again — so the terrain has
+     * to be kept somewhere. This is that somewhere, and it is never written by
+     * anything except the loader. It is not a second truth about the world: it
+     * is the one truth, and `map` is the truth plus the creatures on it.
+     */
+    uint8_t      map_base[U2_SECTOR_TILES];
     uint8_t      mon[U2_MON_TILES];
     u2_sector_id map_id;
     u2_sector_id mon_id;
