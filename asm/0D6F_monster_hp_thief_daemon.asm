@@ -11,6 +11,12 @@
 # provenance: static, 2026-10-22; extracted by tools/monster_hp_dispatch.py
 # confidence: high for the fields and values (bytes); creature names remain third-party
 # label: kept as sub_0d6f on purpose — labels are body (CP0)
+# GUARD BYTE: [DI+0x1B7] is the terrain tile of the rolled spawn coordinate, stored by
+#   asm/0CEE. Both arms here want 0x08 (land). See asm/0D4F and docs/monster-spawn.md 15.4.
+# RUNTIME CONFIRMED 2026-10-28: the Thief stamp executed with DS:60 forced so the chain saw
+#   0x02 (AL=08, slot 1a came back type 0xFC hp 0x20), and again with the chain at 0x12, where
+#   bits 1 and 4 are both set — the lower bit won. The Daemon arm entry executed with the
+#   chain at 0x04 but AL=00, so it took the reject tail and rolled DS:60 back.
 # func 0D6F..0DA3  len 0035 B  evidence: seed+reko
 # calls: L_000daf, L_000fc4
 # confidence: low (bytes proven by check_func.py)

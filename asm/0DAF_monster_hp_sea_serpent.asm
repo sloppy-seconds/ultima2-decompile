@@ -9,6 +9,11 @@
 # provenance: static, 2026-10-22; extracted by tools/monster_hp_dispatch.py
 # confidence: high for the field and the value (bytes)
 # label: kept as sub_0daf on purpose — labels are body (CP0)
+# GUARD BYTE: this arm wants terrain 0x00 — water. It and the Frigate arm in
+#   asm/0DC4 are the only two that do, and they are the only two sea creatures, which is the
+#   strongest single corroboration that [DI+0x1B7] is the tile and not an index.
+#   RUNTIME CONFIRMED 2026-10-28: with DS:60 forced so the chain saw 0x08, three sea serpents
+#   appeared at mapx20 cells that all read 0x00. docs/monster-spawn.md 15.4.
 # func 0DAF..0DC3  len 0015 B  evidence: seed+reko
 # calls: L_000daf
 # confidence: low (bytes proven by check_func.py)

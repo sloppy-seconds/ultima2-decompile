@@ -190,6 +190,31 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28** — **If the input of the thing you are measuring can be written, write it;
+  waiting for the program to produce the value is the expensive way to sample a rare branch.**
+  A selector that had resisted two sessions of passive trapping resolved in one afternoon once
+  the harness could poke the counter and drive one command per sample. The generic shape is
+  force input, trigger one iteration, observe. It also converts "we never saw it happen" into
+  a real refutation, because the value under test is no longer left to chance.
+* **2026-10-28** — **Break inside the branch you are testing, not at the end of it.** Stopping
+  at the point where a routine's side effects are already visible means the stop only happens
+  when every later guard also passes, so the sample rate collapses and a null result is
+  ambiguous between "the branch never ran" and "the branch ran and bailed out". Stopping at
+  the branch entry fires regardless, and the registers there usually still carry the value the
+  guard is about to test — strictly more information per stop.
+* **2026-10-28** — **A breakpoint that cannot be removed and outlives its client is a hazard,
+  not a feature.** A multi-shot trap left armed by a finished probe keeps firing, and with no
+  listener to resume it the guest halts silently mid-experiment; re-arming the same address
+  stacks duplicates and later arming calls start failing outright. A harness should either
+  own the trap set for the life of the run or restart the emulator between probe groups,
+  and should treat "arm failed" as a state problem rather than retrying the same command.
+* **2026-10-28** — **A prompt that reads a key with a bounded poll is a race the driver can
+  lose invisibly.** Text adventures of this era print a prompt, poll the keyboard until a
+  counter wraps, and then emit a fallback message and leave the state at zero — so a driver
+  that sends the prompt key and the answer key as two separate operations with a human-scale
+  gap gets the fallback and an error message that blames something else entirely. Send
+  prompt-and-answer as one timed burst, and read state, not the screen, to decide whether the
+  interaction took.
 * **2026-10-28** — **Attaching a remote-debug client halts the emulated guest, and it stays
   halted after the client disconnects.** The status endpoint then reports the CPU as running
   while the cycle counter does not move, and every input sent afterwards is swallowed — so a

@@ -24,9 +24,21 @@
 # the arm the bit chain selected turns out to want a different kind -- DS:60 is a rotating
 # selector feeding the `rcr` chain, and its value is neither "monsters spawned" nor proof
 # of how many attempts ran.
-# provenance: static reassembly 2026-10-23, live-disproved same day, re-lived 2026-10-28
-# confidence: high for the bytes, the dispatch shape and the reachability; LOW for what
-#           DS:60 means
+# NAME DISPUTED: this does not store a monster kind. The byte in AL here is the return of
+#   asm/50B3_map_tile_ptr called one instruction earlier at runtime 0CEB — the terrain byte
+#   of the cell the coordinate roll picked, staged through DS:23/DS:24. Confirmed two ways:
+#   11/11 observed spawns carry the mapx20 byte of their own slot coordinates, and the two
+#   arms that compare against 0x00 are the two sea creatures. Proposed rename
+#   0CEE_spawn_tile_store; left alone pending an owner call, since the name is discovered
+#   rather than mechanical. docs/monster-spawn.md section 15.4.
+# DS:60 MEANING, settled 2026-10-28 by forcing it: it is the selector input, and the arm the
+#   chain takes is the one belonging to the LOWEST set bit of its value after this incb, with
+#   a zero byte falling through to the Balron arm. Pinned at runtime for all nine arms by
+#   poking DS:60 = N-1 and trapping the arm entries; the discriminating case is chain value
+#   0x12, where bits 1 and 4 are both set and the Thief arm runs, not the Fighter arm.
+# provenance: static reassembly 2026-10-23, live-disproved same day, re-lived 2026-10-28,
+#           selector pinned by forced-value capture 2026-10-28 (runs sel-pin, sel-pin2)
+# confidence: high for the bytes, the dispatch shape, the reachability and what DS:60 means
 # func 0CEE..0D05  len 0018 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

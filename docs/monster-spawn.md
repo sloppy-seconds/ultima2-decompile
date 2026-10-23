@@ -1139,3 +1139,90 @@ So the engine still gets no wandering spawn. The cadence is proven, the arm tabl
 the bit-to-arm mapping is enumerated statically and consistent with every sample but not yet
 pinned at runtime, and the coordinate roll is unread. The remaining measurement is narrow and
 cheap now: trap each stamp site in turn and read `DS:60` at it.
+
+## 15.4 The selector is pinned at runtime, and the byte the arms compare is terrain (2026-10-28)
+
+§ 15.3 left one gap: the bit-to-arm mapping was read off the bytes but never observed. It is
+observed now, and the measurement was cheap because the input is pokable. `DS:60` has exactly
+two writers in this cluster (`incb` at runtime `0CFA`, `decb` on the reject tail), so forcing
+it is forcing the selector. `tools/spice86_type.py` grew `--poke`/`--peek` for it, since that
+tool already owns the only write path (the MCP endpoint).
+
+**Trap the arm entry, not the stamp site.** The stamp site is reached only when the arm's
+comparison also passes, which is the rare half; the arm entry is reached whenever the chain
+selects that arm, whatever the comparison decides. One arm-entry trap plus a resume loop
+samples three to four times as often, and the register dump at the stop carries the compared
+byte in `AL`, so the arm entry gives strictly more information than the stamp site did.
+
+Forced `DS:60` (the chain reads it *after* the `incb`, so poke `N-1`), one command per attempt:
+
+| forced chain value | arm entered (runtime) | `DS:60` at the stop | verdict |
+| --- | --- | --- | --- |
+| `0x01` | `0D44` Orc | `01` | as predicted |
+| `0x04` | `0D84` Daemon | `04` | as predicted; `AL=00` so the arm rejected |
+| `0x10` | `0DD4` Fighter | `10` | as predicted; `AL=00` so the arm rejected |
+| `0x00` | `0E50` Balron (no bits set) | `00` | as predicted |
+
+and at the stamp sites, where the comparison also passed:
+
+| forced chain value | stamp site | `DS:60` at the stop | `AL` | spawned |
+| --- | --- | --- | --- | --- |
+| `0x01` | `0D4F` | `01` | `08` | Orc |
+| `0x02` | `0D6F` | `02` | `08` | Thief |
+
+and by outcome census (diff the type array `DS:197` before and after a forced-value run,
+counting only slots that were empty at the baseline):
+
+| chain value | bits | predicted arm | creature that appeared |
+| --- | --- | --- | --- |
+| `0x08` | bit3 | Sea serpent | `0x2C` sea serpent x3 |
+| `0x20` | bit5 | Frigate | `0x48` frigate x2 |
+| `0x40` | bit6 | Devil | `0x38` devil |
+| `0x80` | bit7 | Wizard | `0xf8` wizard |
+| `0x12` | bits 1 **and** 4 | Thief, because bit1 is lower | Thief x2 at slots `18`,`19` |
+
+That last row is the one that makes the model a model rather than a reading: with two bits
+set the chain took the **lowest**, not the highest and not either. **The selector is the
+lowest set bit of `DS:60` after the increment, and a zero byte falls through to the Balron
+arm.** Nine arms, all accounted for.
+
+### The compared byte is the terrain tile at the rolled coordinate, not a drawn kind
+
+§ 15.3 called it "the kind drawn from `L_005417`". It is not drawn. Walking the bytes in
+address order: `0CEB` is `call L_0052b3`, which is `asm/50B3_map_tile_ptr` — it computes
+`y*64 + x + [DS:0472]` from the staging bytes `DS:23`/`DS:24`, leaves the cell pointer in
+`DS:06` and returns the **tile byte** in `AL`. Nothing between there and the store touches
+`AL`, so `mov %al,0x1b7(%di)` at runtime `0CF6` files the terrain byte of the cell the
+coordinate roll picked. The arms then compare that byte, and the coordinate roll's staging
+bytes are the same `DS:23`/`DS:24` the tile lookup reads.
+
+Two independent confirmations:
+
+* **11/11.** Every spawn this session and the last has a slot record whose compared byte equals
+  the original `mapx20` byte at the coordinates stored in that slot's `x`/`y` — sea serpents
+  at (4,16), (19,25), (6,18) all `0x00`; frigates at (22,28), (23,26) all `0x00`; orcs,
+  thieves, the devil and the wizard all on `0x08`. Checked in code, not by eye.
+* **the two arms that want `0x00` are the two sea creatures.** Sea serpent (bit3) and Frigate
+  (bit5) compare against `0x00`, which is water and is 2770 of the 4096 cells of sector 20.
+  Every other arm compares against `0x08`. A random index would not sort that way.
+
+So the spawner is: find a free slot, roll a coordinate, look up its terrain, then let the
+selector decide *which species is allowed this tick* and refuse unless the terrain it wants
+is the terrain that was rolled. That is why the observed rate is low — the gates multiply:
+`rand < 0x3F` (~25%), a second roll whose sign bit must be clear (~50%), the tile lookup,
+and then the terrain/selector agreement. Roughly one spawn per few hundred commands, which
+matches what the walk loops produced.
+
+The slot's tile byte also mutates after the spawn (Orc slots were seen going `08` -> `0c`
+between reads), so **a census must diff against a baseline and count only slots that were
+empty in it**. Comparing whole slot records flags a moving monster as a new spawn, and that
+false positive cost a re-run of the Daemon row.
+
+### What this licenses the engine to do
+
+The § 15.2 sentence "still not proven, and still a guess if implemented: which kind" is now
+withdrawn. Proven and implementable: the cadence, the free-slot scan (31 down to 1), both
+coordinate rolls and their bounds, the terrain lookup, the nine-arm table, the
+lowest-set-bit selector, and the `decb` rollback on a mismatch. Not proven, and still a
+guess if implemented: nothing structural — the remaining unknowns are the exact distribution
+of `rand_byte` and whether a door opened in a sector survives a reload.

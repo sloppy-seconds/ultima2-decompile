@@ -10,15 +10,17 @@
 # confidence: high for the field and the value (bytes). The creature NAME remains
 #           third-party and is not promoted by this file.
 # label: kept as sub_0d4f on purpose — labels are body (CP0)
-# CORRECTION 2026-10-22 about the guard key: the value this family tests at
-#   [DI+0x1B7] is a small KIND INDEX, not a sprite. A live read of all 32 monster
-#   slots found [DI+0x1B7] holding only 0x08 and 0x0C, which is exactly what the
-#   guards compare against (`cmp $0x8,%al`). The arms write the type to [DI+0x197]
-#   and stamp the same value into the map cell via [bx+si]; they never write
-#   [DI+0x1B7]. docs/spice86-live-findings.md describes [DI+0x1B7] as "monster
-#   sprite stamped into the map cell" and that is wrong — it conflated the two
-#   fields, which is why the type->art transform briefly looked corroborated by two
-#   fields when only one is involved. See docs/needs-gameplay.md G18.
+# WHAT THE GUARD TESTS, settled 2026-10-28: the byte at [DI+0x1B7] is the TERRAIN TILE of the
+#   rolled spawn coordinate, filed into the slot by asm/0CEE one instruction before this arm
+#   is reached. Not a sprite (docs/spice86-live-findings.md called it "monster sprite stamped
+#   into the map cell" and conflated two fields), and not a drawn kind index either, which is
+#   what this header said until the store site was walked in address order. This arm wants
+#   0x08; the two arms that want 0x00 are the sea creatures. The arms write the type to
+#   [DI+0x197] and stamp the same value into the map cell via [bx+si]; they never write
+#   [DI+0x1B7]. Evidence, the 11/11 cell check and the mutation caveat are in
+#   docs/monster-spawn.md 15.4. See docs/needs-gameplay.md G18.
+# RUNTIME CONFIRMED 2026-10-28: with DS:60 forced so the chain sees 0x01, this stamp site
+#   executed with DS:60 = 01 and AL = 08, and slot 1d came back type 0x30 hp 0x10.
 # func 0D4F..0D63  len 0015 B  evidence: seed+reko
 # calls: L_000daf
 # confidence: low (bytes proven by check_func.py)

@@ -15,6 +15,15 @@
 # provenance: static, 2026-10-22; extracted by tools/monster_hp_dispatch.py
 # confidence: high for the fields and values (bytes); creature names remain third-party
 # label: kept as sub_0dc4 on purpose — labels are body (CP0)
+# GUARD BYTE: [DI+0x1B7] is the terrain tile of the rolled spawn coordinate, stored by
+#   asm/0CEE one instruction before the chain runs. Fighter, Devil, Wizard and Balron want
+#   0x08 (land); Frigate wants 0x00 (water). The `decb 0x60` at the head of this file is the
+#   shared reject tail the arms jump to when the terrain does not match, and it is what makes
+#   DS:60 creep instead of march.
+# RUNTIME CONFIRMED 2026-10-28, by forcing DS:60 and trapping arm entries as well as by
+#   outcome census: Fighter arm entry ran with the chain at 0x10 (AL=00, rejected); Devil
+#   appeared with the chain at 0x40; Wizard with the chain at 0x80; the Balron arm entry ran
+#   with the chain at 0x00, i.e. no bits set falls through to it. docs/monster-spawn.md 15.4.
 # func 0DC4..0E6F  len 00AC B  evidence: seed+reko
 # calls: L_000daf, L_000fc4, L_000ff3, L_001012, L_001031
 # confidence: low (bytes proven by check_func.py)
