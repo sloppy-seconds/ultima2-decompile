@@ -4,6 +4,11 @@
 # those stay on the host under tmp/ because the game rewrites its own `player` file.
 # The host runs Spice86 with DISPLAY pointed at this container's X server.
 #
+# SUPERSEDED for playing the original by deploy/spice86-novnc/, which runs the emulator
+# inside the container as well and publishes the API ports on the host network. This one
+# stays useful when the emulator must run on the host (a locally rebuilt Spice86.dll under
+# A/B test, or X forwarding to a real display). Read deploy/spice86-novnc/README.md first.
+#
 # Build and run via ./up.sh (it knows about `sudo podman` on ai).
 
 FROM docker.io/library/ubuntu:24.04

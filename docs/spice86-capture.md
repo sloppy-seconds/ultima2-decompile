@@ -192,10 +192,17 @@ Check it before writing anything new against a live session.
 | job | tool | needs a display? |
 | --- | --- | --- |
 | launch / label / seed a run | `tools/spice86_start.sh` (`-h` for options) | no (`--headless`) |
+| **play the original in a browser** | **`deploy/spice86-novnc/up.sh`** | **no** — brings its own Xvfb + noVNC on :6085 |
 | **send keys to a headless run** | **`tools/spice86_type.py --keys Escape,p`** | **no** — MCP |
 | enter the world unattended | `tools/spice86_start.sh --auto-play` | no |
 | list what the emulator can do | `tools/spice86_type.py --list` (63 MCP tools) | no |
 | screenshot, headless | MCP `screenshot` (PNG base64) | no |
+
+`deploy/spice86-novnc/` and `tools/vnc/` are the two display paths and they are not the same
+thing: `tools/vnc/` containerises only the screen and runs Spice86 on the host, while
+`deploy/spice86-novnc/` runs the emulator inside the container too, publishes the HTTP/MCP/GDB
+APIs on the host network, and leaves its CFG dump in `/var/tmp/u2/spice86-runs/<stamp>/dump`
+instead of in a container. Read `deploy/spice86-novnc/README.md` before using either.
 
 ### Reading the screen headless — the recipe that works
 

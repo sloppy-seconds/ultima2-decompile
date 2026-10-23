@@ -190,6 +190,35 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — **A vendored, self-contained emulator build is containerisable, but three
+  of its assumptions are about the machine that built it, not the game.** Containerising the
+  emulator for a browser-watched play session surfaced all three, and each failed as something
+  else: (1) the apphost's `PT_INTERP` is the build machine's loader path, so the exec error is
+  `No such file or directory` for a binary that plainly exists, and the fix is a symlink for the
+  missing interpreter rather than a rebuild or a patchelf; (2) "self-contained" covers the
+  runtime and not the system ICU, and without it the process aborts at argument parsing with
+  the reason only on stdout, so a container that stays up looks merely idle; (3) the bundled
+  SDL2 dlopens its X11 dependencies at runtime, so `ldd` on it lists nothing useful and the
+  X client libraries have to be declared by hand. A harness that vendors a tool build should
+  record which of these three it has to satisfy, because none of them appear in the tool's own
+  documentation as container concerns.
+* **2026-10-23** — **A headless display is not a keyboard, and input has to be proven against
+  emulator memory rather than against a screenshot.** In a container with no window manager,
+  the usual way to focus a window fails outright, and with no focus set an injected key is
+  swallowed silently: the send returns success and nothing moves. The durable rule is the
+  verification, not the flag: confirm a key landed by reading a value the game is obliged to
+  change (position, hit points) over the emulator's own API. A picture that did not change
+  distinguishes nothing between a dead input path, a blocked move, and a screen that ignores
+  input by design. This is the same trap the capture runbook already records for key
+  injection, reached from the display side.
+* **2026-10-23** — **Reference data that is a template rather than an instance makes a working
+  container look broken, and the symptom points at the wrong component.** A pristine game
+  backup includes the blank save the game uses for *creation*, which is not a loadable
+  character; a container that mounts it unchanged boots, renders, accepts input, and then
+  refuses to start a game. Any harness that mounts pristine reference material read-only should
+  say explicitly which files are templates needing a seeded instance, and seed them from a
+  writable location outside the reference tree.
+
 * **2026-10-27** — **A reconstruction tree that numbers fragments in one space and labels
   them in another will generate phantom gaps, and the handoff document is where the
   contamination hides.** The clean asm tree names files by file offset and names body
