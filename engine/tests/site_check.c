@@ -148,22 +148,35 @@ int main(int argc, char **argv)
           "town paving 0x70 is passable: it is the ground between the buildings, "
           "12889 cells across 15 sectors");
 
-    /* --- the sector edge: a site leaves, the world map wraps -----------------
-     * Measured 2026-10-28 by walking east off x=63 with the save's entry point set
-     * away from the edge, so "returned to the entry cell" and "wrapped to x=0"
-     * could be told apart:
-     *   sector 31 (digit 1) -> digits 3,0, player back at the entry point, DS:12 4->0xFF
-     *   sector 23 (digit 3) -> digits 2,0, player back at the entry point, DS:12 4->0xFF
-     *   sector 20 (digit 0) -> wraps, sector unchanged (the 511/512 mapx20/mapx30 result)
-     * Before this the walk loop called site_leave() on ANY high-edge crossing, which
-     * turned the overworld's torus wrap into a teleport back to the entry cell. */
-    CHECK(u2_site_edge_leaves(0) == 0,
+    /* --- the sector edge: a site leaves on ANY edge, the world map wraps ---------
+     * Measured 2026-10-28 by walking off an edge with the save's entry point set
+     * away from that edge, so "returned to the entry cell" and "wrapped to x=0"
+     * could be told apart. Every edge tested left:
+     *   sector 31 east  (digit 1) -> digits 3,0, player at the entry, DS:12 4->0xFF
+     *   sector 31 west  (digit 1) -> digits 3,0, player back at the entry from x=0
+     *   sector 31 south (digit 1) -> digits 3,0, player at the entry
+     *   sector 23 east  (digit 3) -> digits 2,0, player at the entry
+     *   sector 20 (digit 0)       -> wraps, sector unchanged (the 511/512 result)
+     * Two defects lived here before: the walk loop called site_leave() on any high-edge
+     * crossing (so the overworld's torus wrap became a teleport), and the edge test only
+     * looked at the high side, so a west or north crossing in a site wrapped instead of
+     * leaving. The north edge is the one case that could not be reached by walking in
+     * sector 31 and so is inferred from the other three, not measured.
+     */
+    CHECK(!u2_site_edge_crossed(0, 64, 30) && !u2_site_edge_crossed(0, -1, 30),
           "a world sector (second digit 0) WRAPS at the edge, it does not leave");
-    CHECK(u2_site_edge_leaves(1) != 0,
+    CHECK(u2_site_edge_crossed(1, 64, 35),
           "sector 31 leaves across the east edge, into sector 30");
-    CHECK(u2_site_edge_leaves(3) != 0,
+    CHECK(u2_site_edge_crossed(1, -1, 35),
+          "sector 31 leaves across the WEST edge too -- the old high-edge-only test "
+          "wrapped instead, and that was wrong");
+    CHECK(u2_site_edge_crossed(1, 0, 64),
+          "sector 31 leaves across the south edge");
+    CHECK(u2_site_edge_crossed(3, 64, 2),
           "sector 23 leaves across the east edge, into sector 20 -- so the digit is a "
           "site index, not a compass axis: 3 goes to 0, not to 2");
+    CHECK(!u2_site_edge_crossed(1, 63, 63) && !u2_site_edge_crossed(1, 0, 0),
+          "a step that stays inside the sector is not a crossing, corner included");
 
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");

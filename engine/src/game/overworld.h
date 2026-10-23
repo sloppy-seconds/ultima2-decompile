@@ -171,9 +171,10 @@ int u2_tile_walkable_byte(uint8_t map_byte);
 
 /* Public test surface for the sector-edge rule, same reasoning as
  * u2_tile_walkable_byte above: the rule lives in the walk loop and was argued in a
- * comment for as long as it was wrong. Given a sector's second decimal digit, says
- * whether crossing the high edge leaves the sector (a site) or wraps (the world
- * map). Measured 2026-10-28; see the comment on site_leave() in overworld.c. */
-int u2_site_edge_leaves(int sector_second);
+ * comment for as long as it was wrong. Says whether a step to the UNMASKED
+ * (raw_x, raw_y) leaves the sector. It leaves only from a site (second digit non-zero)
+ * and on any edge, not just the high one -- measured east, west and south 2026-10-28.
+ * See the comment on site_leave() in overworld.c. */
+int u2_site_edge_crossed(int sector_second, int raw_x, int raw_y);
 
 #endif /* U2_OVERWORLD_H */

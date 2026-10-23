@@ -222,32 +222,44 @@ static void site_enter(u2_ctx *ctx, u2_overworld *ow, int digit,
  * asm/242D/2434/243E: leaving is the sector-edge test, run on the UNMASKED
  * coordinate before the wrap -- and it only applies inside a site.
  *
- * Measured 2026-10-28, three sectors, walking east off x=63 with the save's entry
- * point set by tools/u2_edit.py setpos so the two hypotheses could be told apart:
+ * Measured 2026-10-28, walking off an edge with the save's entry point set by
+ * tools/u2_edit.py setpos away from that edge, so "returned to the entry cell" and
+ * "wrapped to the far side" could be told apart:
  *
- *   sector 31 (second digit 1), entry (63,35): one step past the edge -> digits
- *           3,1 -> 3,0, position back at the entry point, DS:12 4 -> 0xFF.
- *   sector 23 (second digit 3), entry (62,2):  one step past the edge -> digits
- *           2,3 -> 2,0, position back at (62,2), DS:12 4 -> 0xFF.
- *   sector 20 (second digit 0): the edge WRAPS and the sector does not change --
- *           the 511/512 result against the discriminating rows of mapx20/mapx30.
+ *   sector 31 (digit 1), east,  entry (63,35): digits 3,1 -> 3,0, player at the entry,
+ *           DS:12 4 -> 0xFF.
+ *   sector 31 (digit 1), west,  entry (1,35):  digits 3,1 -> 3,0, player back at
+ *           (1,35) from x=0, DS:12 4 -> 0xFF. The next Left then wrapped normally.
+ *   sector 31 (digit 1), south, entry (0,63):  digits 3,1 -> 3,0, player at the entry,
+ *           DS:12 4 -> 0xFF.
+ *   sector 23 (digit 3), east,  entry (62,2):  digits 2,3 -> 2,0, player at (62,2).
+ *   sector 20 (digit 0): the edge WRAPS and the sector does not change -- the
+ *           511/512 result against the discriminating rows of mapx20/mapx30.
  *
  * So the second digit is not a compass axis and the edge is not a sector border in
  * the overworld: crossing it leaves the SITE and returns you to the cell you
  * entered on, in the sector whose second digit is 0. That is what site_leave()
- * does, and it is why the call is gated on u2_site_edge_leaves() rather than run
+ * does, and it is why the call is gated on u2_site_edge_crossed() rather than run
  * unconditionally. The earlier engine behaviour -- leaving on any edge crossing --
  * turned the overworld's torus wrap into a teleport to the entry cell, which is a
  * defect that looked like the seam work being wrong rather than this.
  *
- * What is NOT established: whether the high-edge-only asymmetry (east and south
- * leave, west and north wrap) survives as its own rule or was an artefact of the
- * same misreading. Only the east edge was re-measured here.
+ * What is NOT established: the NORTH edge. Sector 31 has no column where both the top
+ * and bottom cells are walkable, so it could not be reached by walking, and the three
+ * edges that were measured (east, west, south) all behaved identically -- which is the
+ * reason the old "only the high edge leaves, west and north wrap" claim in this comment
+ * was replaced rather than refined. If the north edge turns out to differ, it differs
+ * from three measurements and not from one.
  */
-int u2_site_edge_leaves(int sector_second)
+int u2_site_edge_crossed(int sector_second, int raw_x, int raw_y)
 {
     /* A sector whose second digit is 0 is the world map: the edge wraps there. */
-    return sector_second != 0;
+    if (sector_second == 0)
+        return 0;
+    /* Both directions, not the high edge alone: east, west and south were each
+     * measured leaving, and the engine previously tested only the high side. */
+    return raw_x < 0 || raw_x >= U2_SECTOR_EDGE ||
+           raw_y < 0 || raw_y >= U2_SECTOR_EDGE;
 }
 
 static void site_leave(u2_ctx *ctx, u2_overworld *ow)
@@ -1054,9 +1066,10 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 
         /* asm/242D/2434: the edge test runs on the unmasked coordinate, and it
          * only leaves anywhere when the sector is a site. On the world map the
-         * same crossing is the torus wrap below. See site_leave(). */
-        if (u2_site_edge_leaves(ow->sector_lo) &&
-            (raw_x >= U2_SECTOR_EDGE || raw_y >= U2_SECTOR_EDGE)) {
+         * same crossing is the torus wrap below. Measured east, west and south:
+         * every one of them leaves, so the out-of-range test is both directions,
+         * not the high edge alone. See site_leave(). */
+        if (u2_site_edge_crossed(ow->sector_lo, raw_x, raw_y)) {
             site_leave(ctx, ow);
             continue;
         }
