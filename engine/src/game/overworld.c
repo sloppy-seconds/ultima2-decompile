@@ -11,6 +11,8 @@
 #include <string.h>
 
 #include "game/overworld.h"
+#include "game/combat.h"      /* u2_combat_attack, u2_attack */
+#include "game/monsters.h"    /* u2_monsters_at: who is standing there */
 #include "game/status.h"
 #include "core/font.h"
 #include "core/save.h"
@@ -296,6 +298,18 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
         return -1;
     }
 
+    /* CP5 W1 wiring: the creature table. asm/22D5 reads 256 bytes of monxNN into
+     * DS:137 on the same sector load that reads the map, and u2_monsters_spawn
+     * copies those six arrays into the state block the attack and (later) the
+     * alarm read from.
+     *
+     * A missing monx is NOT fatal and says so in the note rather than emptying the
+     * world silently: 17 of the 33 sectors author no monsters at all
+     * (docs/monster-spawn.md § 6), and the original's own FCB open would simply
+     * find nothing there. */
+    const u2_world_result mr = u2_world_load(ctx, &ow->world, 0, id);
+    const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
+
     /* The status band and the command prompt, printed once on entering the
      * world (CP4b task 1). The four value lines go through the proven status
      * sites (asm/50F9..5175, packed BCD); the prompt is asm/087D's "CMD: "
@@ -306,14 +320,16 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
     seam_str_out(ctx, U2_S_CMD_PROMPT);
 
     snprintf(ow->note, sizeof ow->note,
-             "sector %d%d via %s, %s%s",
+             "sector %d%d via %s, %s%s, %d creature%s%s",
              ow->sector_hi, ow->sector_lo,
              ow->world.found_prefix ? ow->world.found_prefix : "?",
              strncmp(ow->tiles.source, "builtin:", 8) == 0
                  ? "cleanroom tiles"          /* substitute art, named as such */
                  : (ow->tiles.from_cache ? "tiles from cache" : "tiles extracted"),
              ow->tiles.unverified && strncmp(ow->tiles.source, "builtin:", 8) != 0
-                 ? " (unverified)" : "");
+                 ? " (unverified)" : "",
+             creatures, creatures == 1 ? "" : "s",
+             mr == U2_WORLD_OK ? "" : " (no monx file)");
     return 0;
 }
 
@@ -381,11 +397,91 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
     return u2_overworld_loop(ctx, ow);
 }
 
+/*
+ * The ATTACK command, once its direction has arrived. Order follows the original's
+ * chain: asm/2B8F_cmd_A prints "ATTACK--" and falls into asm/2B9B (a site-kind
+ * gate), then asm/2BA5_attack_arms_gate, then the roll at asm/2BD7/2BDA, then
+ * asm/2BEC ("--HIT!!!") or asm/2E09 ("--MISS"); a kill adds asm/2E3D's reward
+ * line. The direction word is printed WITHOUT a CR because "ATTACK--" is already
+ * sitting on the line — the live frame reads `CMD: ATTACK--EAST--HIT!!!`.
+ *
+ * Not modelled, and said out loud rather than guessed:
+ *   - the site-kind gate (asm/2B9B tests [DS:4A] against 4). The engine has
+ *     u2_site_kind but the branch's two destinations are unreviewed, so no
+ *     refusal is invented here;
+ *   - any food cost for swinging. The proven action costs are $0A for PASS and
+ *     $19 for a move (asm/2599, asm/2626); neither is shown to cover ATTACK;
+ *   - the map-cell stamp clear on a kill (asm/2E3D file 0x30F4). The engine
+ *     draws creatures from the arrays rather than stamping them into the map, so
+ *     there is no stamp to remove.
+ */
+static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, int dy)
+{
+    seam_str_out(ctx, word);                  /* continues the ATTACK-- line */
+
+    /* asm/2BA5_attack_arms_gate: [DS:26C] non-zero refuses the swing before any
+     * roll, and says so. This is the byte proof that arms paralysis stops you
+     * fighting while legs paralysis stops you moving — two counters, two gates,
+     * two commands, which no single boolean flag can express. */
+    if (ctx->state.paral_arms != 0) {
+        seam_str_out(ctx, U2_S_PARALYZED);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+
+    const int tx = (ow->x + dx) & U2_SECTOR_MASK;
+    const int ty = (ow->y + dy) & U2_SECTOR_MASK;
+    const int slot = u2_monsters_at(ctx, tx, ty);
+
+    u2_attack a;
+    memset(&a, 0, sizeof a);
+    const int r = (slot >= 0) ? u2_combat_attack(ctx, slot, &a) : 0;
+
+    /* An empty cell is a miss, not a refusal: the original's target scan walks all
+     * 32 slots and falls through to the MISS printer when nothing matches
+     * (asm/2E3D file 0x307A -> 0x3164). INFERRED, not proven: that scan compares
+     * [DS:23]/[DS:24]/[DS:25] and the code filling them for an attack is untraced,
+     * so "the adjacent cell in the direction" is what the captures show rather
+     * than what the bytes have yet said. */
+    if (r == 0) {
+        seam_str_out(ctx, U2_S_MISS);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+
+    seam_str_out(ctx, U2_S_HIT);
+    /* The reward lands on its OWN line, prompt and all — live frame reads
+     *   CMD: ATTACK--EAST--HIT!!!
+     *   CMD: KILLED--GOLD+1--EXP.+02
+     * so the HIT line is closed before the reward line opens. asm/2E3D prints
+     * "HIT!" and the reward strings from one routine, and the line breaks come
+     * from the same str_out/CR compound the rest of the CMD window uses.
+     * The gains are printed, not the totals, and the two fields print
+     * differently: gold unpadded, exp two digits. */
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_CMD_PROMPT);
+    if (r == 2) {
+        char num[8];
+        seam_str_out(ctx, U2_S_KILLED);
+        snprintf(num, sizeof num, "%u", (unsigned)a.gold);
+        seam_str_out(ctx, num);
+        seam_str_out(ctx, U2_S_EXP_PLUS);
+        snprintf(num, sizeof num, "%02u", (unsigned)a.exp);
+        seam_str_out(ctx, num);
+        u2_status_draw(ctx);          /* gold and exp moved */
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+    }
+}
+
 int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 {
     ctx->frame = &ow->frame;
 
     int idle_polls = 0;     /* polls since the last key, for the auto-PASS */
+    int pending_cmd = 0;    /* 'A' printed ATTACK-- and is awaiting a direction */
 
     for (;;) {
         u2_overworld_draw(ctx, ow);
@@ -415,6 +511,9 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                                 : ctx->auto_pass_polls;
                 if (limit > 0 && ++idle_polls >= limit) {
                     idle_polls = 0;
+                    /* If a command is half-typed, the PASS closes that same line:
+                     * `CMD: ATTACK--PASS`, exactly as the live capture shows. */
+                    pending_cmd = 0;
                     echo_cmd(ctx, U2_S_PASS);
                     if (food_spend(ctx, U2_FOOD_PER_PASS))
                         u2_status_draw(ctx);
@@ -437,6 +536,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case U2_KEY_DOWN:  dy =  1; word = U2_S_DIR_SOUTH; break;
         case U2_KEY_RIGHT: dx =  1; word = U2_S_DIR_EAST;  break;
         case U2_KEY_LEFT:  dx = -1; word = U2_S_DIR_WEST;  break;
+        case 'A':
+            /* asm/2B8F_cmd_A: print "ATTACK--" with no CR and fall into the gate
+             * chain, whose last step reads a direction. If the turn expires first
+             * the waiting PASS lands on this same line, which is exactly the live
+             * `CMD: ATTACK--PASS` (docs/spice86-live-findings.md § 18). */
+            seam_str_out(ctx, U2_S_ATTACK);
+            pending_cmd = 'A';
+            continue;
         case 'Q':
             u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
             continue;
@@ -454,6 +561,16 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 u2_status_draw(ctx);
             continue;
         default: continue;                                  /* not a move key */
+        }
+
+        /* A direction arriving while ATTACK-- is on the line is the attack's
+         * direction, not a step: the original consumed it inside the cmd_A chain
+         * and never moved the player. Live: `ATTACK--EAST--HIT!!!` with the
+         * player standing still. */
+        if (pending_cmd == 'A' && word != NULL) {
+            pending_cmd = 0;
+            attack_dir(ctx, ow, word, dx, dy);
+            continue;
         }
 
         /* The original does not refuse the edge, it wraps: the accept path

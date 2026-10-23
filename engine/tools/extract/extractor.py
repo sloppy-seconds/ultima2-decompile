@@ -154,9 +154,28 @@ MANIFEST = [
     # taken from the binary itself.
     ("U2_S_TO_PLAY",           "5400_sub_5400.asm", ("run", 0x5C1F, 17)),
     ("U2_S_INSERT_PROGRAM",    "5400_sub_5400.asm", ("run", 0x5C43, 21)),
+    # CP5 W3 — the attack command's own words. Offsets verified against the exe on
+    # 2026-10-23; each also names the asm file that documents it, so the provenance
+    # is readable even where the fallback cannot reach (see the DB_RE note).
+    ("U2_S_ATTACK",            "2B8F_cmd_A.asm", 0),
+    ("U2_S_HIT",               "2BEC_combat_hit_msg.asm", 0),
+    ("U2_S_MISS",              "2E09_combat_miss_msg.asm", 0),
+    ("U2_S_PARALYZED",         "2BAD_sub_2bad.asm", 0),
+    # `db 0x8d,"KILLED--GOLD+"` — the leading glyph byte puts it outside the asm
+    # fallback, so it is exe-only, like the title strings above.
+    ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13)),
+    ("U2_S_EXP_PLUS",          "2E3D_combat_attack_flow.asm", 1),
 ]
 
-DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",0x00\s*#\s*string')
+# The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
+# asm/2B8F_cmd_A writes `db "ATTACK--",0` while the bulk wave writes `,0x00`.
+# Narrowing this to one form silently drops a string from the fallback path, which
+# is worse than a build error because the engine then prints an empty word.
+# A leading `0xNN,` glyph byte (asm/2E3D's `db 0x8d,"KILLED--GOLD+"`) is NOT
+# matched on purpose: accepting it would renumber the string indices of every file
+# that has one, silently pointing existing manifest entries at the wrong string.
+# That string is addressed by offset instead.
+DB_RE = re.compile(r'^\s*db "((?:[^"\\]|\\.)*)",(?:0x00|0)\s*#\s*string')
 FUNC_RE = re.compile(r'^#\s*func\s+([0-9A-Fa-f]{4})\.\.([0-9A-Fa-f]{4})')
 
 

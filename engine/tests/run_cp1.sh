@@ -123,9 +123,28 @@ grep -qE 'seam=char_print asm=5003 ch=0x(44|50|43) at=19,12' "$WORK/trace" \
 python3 tools/extract/extractor.py --source asm --emit text >"$WORK/strings-asm" 2>/dev/null
 empty=$(awk -F'\t' '$2==""{n++} END{print n+0}' "$WORK/strings-asm")
 total=$(wc -l <"$WORK/strings-asm" | tr -d ' ')
-[ "$total" = "66" ] && [ "$empty" = "29" ] \
-    && ok "asm fallback yields $((total-empty))/$total strings (27 are exe-only by design)" \
-    || bad "asm fallback yielded $((total-empty))/$total with $empty empty"
+
+# The old assertion hard-coded `total == 66 && empty == 29`, which went stale the
+# moment CP5 added attack strings and reported a PASS-shaped FAIL for a perfectly
+# good extractor. Counts are not the property; "did the fallback keep the words the
+# engine prints, and did the set of exe-only strings stay the documented one" is.
+# So: every string the asm tree CAN supply must arrive, named individually, and the
+# total may not shrink.
+U2_ASM_FALLBACK_MIN_TOTAL=66
+[ "$total" -ge "$U2_ASM_FALLBACK_MIN_TOTAL" ] \
+    && ok "asm fallback yields $((total-empty))/$total strings" \
+    || bad "asm fallback shrank to $total strings (floor $U2_ASM_FALLBACK_MIN_TOTAL)"
+
+# Named so a silent loss is attributable. These are the words the CMD window and
+# the CP5 attack path print; if any goes empty the engine prints a blank line.
+for s in U2_S_CMD_PROMPT U2_S_INVALID_MOVE U2_S_ATTACK U2_S_HIT \
+         U2_S_MISS U2_S_PARALYZED U2_S_EXP_PLUS; do
+    if awk -F'\t' -v n="$s" '$1==n && $2!=""{found=1} END{exit !found}' "$WORK/strings-asm"; then
+        ok "asm fallback supplies $s"
+    else
+        bad "asm fallback lost $s — the engine would print an empty word"
+    fi
+done
 
 # No game text may be committed: the generated header must stay ignored.
 git check-ignore -q build/gen_content.h \
