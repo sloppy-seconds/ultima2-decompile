@@ -7,7 +7,11 @@
 set -eu
 
 : "${DISPLAY:=:98}"
-: "${GEOMETRY:=320x200x24}"
+# Must be at least the SDL window, which is U2_SCREEN_W/H * SDL_SCALE = 640x400
+# (renderer_sdl.c). A display smaller than the window does not clip or scroll — X
+# places the window anyway and you see the top-left quarter of the game, with no
+# error anywhere to say so. If SDL_SCALE changes, this changes with it.
+: "${GEOMETRY:=640x400x24}"
 : "${VNC_PORT:=5901}"
 : "${NOVNC_PORT:=6081}"
 : "${DATA_DIR:=/content}"

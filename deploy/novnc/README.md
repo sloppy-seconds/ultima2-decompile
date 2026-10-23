@@ -30,7 +30,7 @@ sudo podman run -d --name u2-novnc \
 Keyboard from the browser reaches the game, so this is play, not watching: arrow keys
 walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
 
-## Four things that cost time, in the order they bit
+## Five things that cost time, in the order they bit
 
 1. **SELinux.** Without `:z` on the bind mounts the container starts, the engine
    starts, and the only trace is `ls: cannot open directory '/content': Permission
@@ -49,6 +49,12 @@ walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
 4. **Ports.** 6080 and 5900 belong to the Spice86 watching container, so this one
    defaults to 6081/5901 on display `:98`. Override with `-e NOVNC_PORT= -e
    VNC_PORT= -e DISPLAY=` if you run a second one.
+5. **Xvfb must be at least as big as the SDL window**, which is `U2_SCREEN_W/H *
+   SDL_SCALE` = **640x400**, not the 320x200 the game draws into. Setting the display
+   to the native resolution — which is what you would guess — shows the top-left
+   quarter of the game and nothing anywhere reports it: no error, no warning, just a
+   cropped picture. If `SDL_SCALE` in `renderer_sdl.c` changes, `GEOMETRY` changes
+   with it.
 
 ## Exposure, and why it is the way it is
 
