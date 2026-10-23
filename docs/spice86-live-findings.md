@@ -1389,3 +1389,39 @@ stand where they were put.
 45 s window, one sector. `ATTACK--PASS`: observed. The 7% and the 2-cell step: measured, one
 sector, one 10-boundary window — **treat as a first measurement, not a constant**, and
 re-measure in a wilderness sector before the engine hard-codes either number.
+
+### Addendum, same day: the timeout is a poll counter, and the counters do not tick per turn
+
+Two corrections to this section, both found by reading the engine before changing it.
+
+**1. The turn budget is not a clock.** `engine/src/game/overworld.c` already implements the
+auto-PASS, and its comment block cites the bytes: the overworld wait loop polls the keyboard
+(runtime `0x08CE`), tests `cmp $0xff,%ah` for "no key" (`0x08D1`), and advances a **byte
+counter** with `incb DS:21; jne <loop>` (`0x08D6`). `incb`/`jne` is iterate-until-wrap, so
+the original's timeout is a **poll count**, not a timer — there is no `INT 1Ah` anywhere in
+the corpus, and the only read of the BIOS tick at `0x40:6C` is the startup RNG seed. That
+earlier note also records a measured **~7.6 s at `--Cycles 3000`** and deliberately declines
+to encode it, because the wall-clock figure is an artifact of the emulator's cycle setting.
+The ~7.5 s measured above reproduces that number independently, which is corroboration of
+the *observation*, not a licence to hard-code it: a machine that polls faster gets a shorter
+turn in the original, and an engine that budgets milliseconds would be **less** faithful
+than the poll count it would replace. An agent about to "fix" this by switching to a
+wall-clock deadline should read that comment first; the knob for the owner's enhanced-mode
+request already exists as `--auto-pass-polls` (`-1` disables it for pure turn-based play).
+
+**2. The status counters do not tick once per turn.** Poking `DS:26A..26D = 0f 0f 0f 0f` and
+sampling at 0.7 s intervals with the player idle:
+
+| t | counters | food |
+| --- | --- | --- |
+| 0.0 s – 4.2 s | `0f 0f 0f 0f` | 999931 |
+| 4.9 s | `0a 0a 0a 0a` | 999921 (**one** pass) |
+| 5.6 s | `00 00 00 00` | 999921 |
+
+Fifteen decrements across roughly one turn, in two bursts, while the food field recorded
+exactly **one** PASS. So the "time, not moves" conclusion of § 15 still stands — they decay
+with the player at rest — but the cadence is **not** one-per-turn and is currently
+unexplained. `asm/0C33..0C53` is the decrement site and its **caller is still undiscovered**,
+which is consistent with a fast internal loop rather than the turn boundary. The engine must
+**not** grow a per-turn decrement on the strength of § 15; finding the caller of `0C33` is
+the prerequisite, and it is now the open item.

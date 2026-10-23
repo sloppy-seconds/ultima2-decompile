@@ -117,14 +117,24 @@ town look inhabited. **Both numbers come from one 10-boundary window in one sect
 re-measure in a wilderness sector before either is hard-coded, and say which capture the
 constant came from.
 
-**W7 — the turn timer, then the tick.** Two layers, in this order. First the **turn**: a
-~7.5 s budget that, when it expires with no action, performs a PASS (and with a half-typed
-command, prints `<CMD>--PASS`); scripted runs expire it per input so replays stay
-reproducible. Then the **status tick**: decrement `paral_legs/arms/sleep` and the unnamed
-`DS:26A` once per turn, not per second and not per move. Cite `asm/0C33..0C53`, § 15, § 17
-and § 18. The engine must also charge the turn's food the way the original does — 10 for a
-pass, 19 for a move (`tools/turn_recorder.py` `FOOD_PER_PASS` / `FOOD_PER_MOVE`) — because
-that is what makes the pass countable at all.
+**W7 — the turn timer: already implemented, do not rebuild it.** `overworld.c` performs the
+idle auto-PASS today: it echoes `PASS`, charges `U2_FOOD_PER_PASS`, and its threshold is
+`U2_AUTO_PASS_POLLS 256` — a **poll count**, because the bytes say so (`incb DS:21; jne
+<loop>` at runtime `0x08D6`; no `INT 1Ah` in the corpus, and the only BIOS-tick read is the
+startup RNG seed). The enhanced-mode knob the owner asked for also exists:
+`--auto-pass-polls`, with `-1` = pure turn-based. **Do not replace this with a millisecond
+budget** — the original's turn length varies with machine speed, and a wall-clock deadline
+would be a faithfulness regression dressed up as a fix. See `docs/spice86-live-findings.md`
+§ 18 addendum.
+
+What is genuinely left in W7, and both are blocked:
+
+* **The half-action expiry** (`ATTACK--PASS`) needs a command that can be half-typed, so it
+  lands with W3, not before it.
+* **The status tick is parked.** The counters do **not** tick once per turn — measured: 15
+  decrements in ~0.7 s while exactly one PASS elapsed. `asm/0C33..0C53`'s caller is still
+  undiscovered, so the cadence is unknown and no decrement may be wired until it is found.
+  That search is now a CP5 prerequisite item, not an implementation detail.
 
 **W8 — death.** Zero `DS:51..59`, print `<NAME> IS DEAD!` into the CMD window. Cite
 `asm/0C62`.
@@ -144,24 +154,23 @@ renderer stays as it is and is no longer the acceptance surface; the CP5 gate is
 the SDL build (see `docs/phase4-state.md` § TODO: headless podman container to play the SDL
 build over noVNC, which is how a human without a local display plays it).
 
-**Q2 — RESOLVED by the owner, 2026-10-23: option C, and the original's mechanic is a turn
-*timeout*.** The owner's recollection — *"each turn has a timeout, so if I don't perform an
-action before that timeout it PASS, or if I only do half an action it does `ATTACK--PASS`"*
-— was tested the same day and is **right on both halves**: with no input at all the log filled
-with `CMD: PASS` lines, measured at **~7.5 s per turn** (6 passes in 45 s via the food field),
-and pressing `A` alone produced `ATTACK--PASS`. Full evidence: `docs/spice86-live-findings.md`
-§ 18, capture `captures/spice86/cp5-turn-timeout/`.
+**Q2 — RESOLVED, and the resolution is better than the proposal.** The owner's model — *"each
+turn has a timeout, so if I don't perform an action before that timeout it PASS, or if I only
+do half an action it does `ATTACK--PASS`"* — was tested the same day and is **right on both
+halves**: with no input at all the log filled with `CMD: PASS`, and pressing `A` alone
+produced `ATTACK--PASS`. Evidence: `docs/spice86-live-findings.md` § 18, capture
+`captures/spice86/cp5-turn-timeout/`.
 
-That resolves the determinism conflict rather than papering over it. The original's clock is
-not a wall-clock — **it is a turn timer**, so the engine's tick unit becomes *the turn*, and a
-replay advances turns deterministically by construction. Option C then reads: a turn is a
-fixed budget in the frame loop; interactive play lets the real timer expire it, scripted and
-replay runs expire it per input. Nothing about the status counters has to be non-reproducible.
+**But the mechanism is a poll counter, not a clock** (`incb DS:21; jne` at runtime `0x08D6`),
+and the engine already models it that way — so the determinism worry dissolves instead of
+being traded away: a turn is a loop count, which is reproducible by construction, and the
+~7.5 s figure is what that count happens to cost at `--Cycles 3000`. A prior session measured
+~7.6 s at the same setting and deliberately refused to encode it; § 18 reproduces the number
+and upholds that refusal.
 
-**Enhanced mode (CP11) gets a ruled knob:** the timeout is configurable, and **no timeout at
-all** is a legitimate mode — a true turn-based game. That is an enhanced-mode feature by the
-owner's own framing, so `original` mode must keep the ~7.5 s behaviour and the tunable lives
-behind the CP11 rules surface, never as a default.
+**Enhanced mode (CP11) keeps the knob the owner asked for**, and it already exists:
+`--auto-pass-polls`, where `-1` is "no timeout", i.e. a true turn-based game. It stays an
+enhanced-mode surface, never a default.
 
 **Also open, and it blocks nothing:** the art question under SDL. Creature art index is
 `cell >> 2` from the map cell (`docs/art-index.md`), and the engine only has cleanroom
