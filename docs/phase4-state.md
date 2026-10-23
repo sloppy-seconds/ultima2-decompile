@@ -1035,3 +1035,25 @@ from a committed `Containerfile` (engine binary + Xvfb + x11vnc + websockify + a
 window manager), content mounted read-only, save path mounted read-write, ports 6080 (and
 5900 only if not tunneled). Keep the `Containerfile` and the run recipe in the repo; keep the
 game files out of it, per the licensing rules.
+
+## Open breakage at end of session 2026-10-27 (hand this to the next agent)
+
+Two things are broken and neither is fixed. Both were introduced today.
+
+1. **`--debug-path` segfaults.** `./engine/u2-sdl --sdl --play-map --debug-path DIR`
+   dumps core before printing anything, and `--debug cli` was never isolated as a
+   second case, so it is not known whether the crash is the stamping block in
+   `main.c` (`strdup` of the `<base>/<ISO8601>` path) or `u2_turnlog` itself. Start by
+   running with `--debug cli` alone and with `--debug-path` alone, and by building the
+   SDL target with `-g`. The headless `u2` target with `--script` works and writes the
+   files correctly, so the bug is SDL-path or startup-order specific.
+2. **The engine noVNC container is down.** It now exits with `overworld: tiles: no
+   executable and no cached tiles`, even with `tiles.u2tl` present in the mounted save
+   dir and `original/` mounted at `/content` with `:ro,z` — the same invocation that
+   logged `sector 20 via monx, tiles from cache` earlier today. Reproduce inside the
+   container before changing anything: the message claims *both* sources are missing,
+   which is the shape of a path or mount problem, not a cache-digest problem.
+
+`deploy/novnc/entrypoint.sh` has been reverted to plain `--sdl --play-map` so the
+segfault is not on the critical path. `--debug cli` is otherwise committed and works in
+headless scripted runs.

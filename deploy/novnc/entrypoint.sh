@@ -21,7 +21,7 @@ set -eu
 # rebuild landed — the check that was missing when a stale binary was reported as
 # deployed. The path is /var/tmp, not the engine's /tmp default: /tmp is tmpfs on this
 # host, so a long session would take every frame out of the model's RAM.
-: "${U2_ARGS:=--sdl --play-map --debug-path /saves/debug}"
+: "${U2_ARGS:=--sdl --play-map}"   # NOTE: --debug-path currently segfaults; see below
 
 echo "novnc-engine: Xvfb on ${DISPLAY} at ${GEOMETRY}"
 # Xvfb refuses to start on a display whose lock file survives: `Server is already
