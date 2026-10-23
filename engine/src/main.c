@@ -18,6 +18,7 @@
 #include "core/seam.h"
 #include "core/timer.h"
 #include "core/state.h"
+#include "core/save.h"
 #include "core/rng.h"
 #include "core/replay.h"
 #include "debug/trace.h"
@@ -227,6 +228,17 @@ int main(int argc, char **argv)
     }
 
     if (ctx.play_map) {
+        /* CP5: the development entry used to run straight into the world on a
+         * zeroed state, which made a scripted fight impossible to show — agi 0
+         * never hits, and the sector was whatever the zero bytes said. The
+         * title's own P path does this (title.c run_play): load the PLAYER
+         * record, then enter the world from it. So --play-map now plays the save
+         * that is actually on disk, and the two entries cannot drift.
+         *
+         * A blank or missing record is NOT an error here and the zeroed state
+         * stands: that is the original's own "no character yet" condition, and
+         * the CP4 development scripts rely on it. */
+        (void)u2_save_load(&ctx);
         u2_overworld ow;
         u2_overworld_run(&ctx, &ow);
     } else {

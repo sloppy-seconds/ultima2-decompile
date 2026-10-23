@@ -365,10 +365,33 @@ What `monx31` (384 bytes) actually contains:
 | `0x080..0x0FF` | `70 70 08 70 …` then `00 00 03 00 00 03 03 03 02 02 … 81 82 03 03 01 01 … 83 03 01 01 01 84 00 00` then 64 zero bytes | one 128-byte block, **not** six 32-byte arrays |
 | `0x100..0x17F` | `1a 70 08 70 …` then the same `00 00 03 00 …84 00 00` run, then zeros | a near-duplicate of the block above, starting **one byte later** |
 
+**The structural point, and it is enough to sink § 2 on its own.** Split at the
+array boundaries § 2 claims, the 256-byte region is:
+
+| § 2 calls it | file range | first four bytes |
+| --- | --- | --- |
+| `x` | `0x080..0x09F` | `70 70 08 70` |
+| `y` | `0x0A0..0x0BF` | `00 00 03 00` |
+| `hp` | `0x0C0..0x0DF` | `00 00 00 00` |
+| `type` | `0x0E0..0x0FF` | `00 00 00 00` |
+| `kind` | `0x100..0x11F` | `1a 70 08 70` |
+| `role` | `0x120..0x13F` | `00 00 03 00` |
+
+`kind` is `x` shifted by one byte and `role` is `y` shifted by one byte, and `hp`
+and `type` are entirely zero. Two fields cannot be shifted copies of two other
+fields, so the region is not six independent arrays. It reads as **one 128-byte
+block stored twice with a one-byte skew** — `0x101..0x17F` equals `0x080..0x0FE`
+exactly — which is a shape no six-array layout produces.
+
+Ruled out, because it was the obvious explanation: **the game did not rewrite the
+file.** There are 107 copies of `monx31` under `tmp/` from sessions that saved and
+reloaded, and every one is byte-identical to `original/monx31`. So this is the
+authored layout, not a save-time reformat, and § 2 was measuring the same bytes we
+are.
+
 The `0x81 0x82 0x83 0x84` values are the ones `cmd_O` enumerates (`ENILNO`, `RING`,
-`SOS`), so the role information is in there somewhere — but at an offset and stride that
-§ 2 does not describe, and the near-duplicate block suggests either two record sets or a
-one-byte misalignment in how the region was sliced.
+`SOS`), so the role information is in there somewhere — but at an offset and stride
+that § 2 does not describe.
 
 **Second suspect, named so it gets checked too:** the live reads themselves. In sector 31
 every one of the twelve live creatures read as `x = 25, y = 29` — exactly the position the

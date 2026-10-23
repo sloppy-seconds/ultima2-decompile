@@ -180,3 +180,34 @@ this file called that 80, having read the byte as an integer. Stats are BCD.
   every run uses a per-launch copy under `tmp/`.
 * Edits are verified by reading the file back and re-parsing, not by trusting the
   write.
+
+## What a new game is — there is no default game state
+
+Asked directly on 2026-10-23, because CP5 wanted a character to fight with and the
+engine's `--play-map` entry was running on a zeroed state. The assumption worth
+testing was that the original keeps a stock starting character somewhere.
+
+It does not. **`DS:36` is the first byte of the character name**, and that single
+byte is the whole "is there a game yet?" test:
+
+| evidence | grade |
+| --- | --- |
+| `asm/5400`: `cmp byte [0x36],0` gates the character-creation flow | observed |
+| `state.h` declares `/* 0x36 */ uint8_t name[16]` | observed |
+| across 107 `player` files harvested from `tmp/` run dirs, `file[0]` equals the first byte of the name in every one: `TEST`→`0x54`, `AIRTEST`→`0x41`, `STRANGER`→`0x53`, `SHOPTEST`→`0x53`, `G23MAX`→`0x47`, `AGENT34`→`0x41`, `ARTTEST`→`0x41`, and `0x00` wherever the name is empty | measured |
+
+The record is the file's first 256 bytes, so `file[0] == DS:36`. The blank `player`
+file shipped on the disk is all zeros, which means an empty name, which means
+"generate a character". So:
+
+* **a new game is not a state, it is the absence of one** — the creation flow is the
+  starting state, and it is reached by the same test on every boot;
+* the engine needs no stock character and must not invent one. `u2_save_ensure`
+  seeds a missing `PLAYER` from the pristine blank template, which is byte-identical
+  to the shipped disk image, and `DS:36 == 0` then routes to creation exactly as the
+  original does. Being faithful and being pragmatic are the same code path here,
+  which is the sign that the mapping is right;
+* `--play-map` now loads the record first, as the title's own `P` path already did
+  (`title.c` `run_play`). Before this it entered the world on zeros, so a scripted
+  fight could not be shown at all: `agi` 0 never lands a hit, and the sector was
+  whatever the zero bytes happened to say.
