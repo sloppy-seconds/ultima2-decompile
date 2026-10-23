@@ -331,6 +331,15 @@ silently.
 * Read a whole function before describing it. `asm/2423` declares a 10-byte range
   for a routine running to about `0x2680`; the truncated read produced a
   retracted finding.
+* A script's output is a hypothesis, not a measurement. A hand-written analysis
+  script that slices a file from the wrong base offset produces a confident table of
+  impossibilities, and it looks exactly like real evidence. When a new derivation
+  contradicts a prior *measured* finding, assume the new one is wrong first and
+  re-read the code that consumes the same bytes: on 2026-10-23 a script slice claimed
+  a proven record layout was impossible for hours, blocked four work items and
+  compiled out working code, while the engine reading those bytes correctly sat one
+  file away. Push a known-true case through the same slicing before believing a
+  known-false one.
 * List the existing corpus before harvesting runtime data. Paralysis, theft and
   combat functions were already named on disk while a capture was run to look for
   them.

@@ -207,6 +207,20 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* CP5: both development entries -- --play-map and --dump-map -- used to run on
+     * a zeroed state, which made a scripted fight unshowable (agi 0 never lands a
+     * hit) and put the player in whatever sector the zero bytes named. The title's
+     * own P path loads the PLAYER record first (title.c run_play); do the same
+     * here, once, so the dev entries play the save actually on disk and cannot
+     * drift from the real one.
+     *
+     * A blank or missing record is NOT an error and the zeroed state stands: that
+     * is the original's own "no character yet" condition -- DS:36 is the first byte
+     * of the name, and asm/5400 tests it for zero -- and the CP4 development
+     * scripts depend on it. See docs/save-format.md. */
+    if (ctx.play_map || map_dump_path)
+        (void)u2_save_load(&ctx);
+
     if (map_dump_path) {
         /* No backends, no display: this path exists so the real extracted tiles
          * can be seen, and diffed, on a machine with no screen at all. */
@@ -228,19 +242,16 @@ int main(int argc, char **argv)
     }
 
     if (ctx.play_map) {
-        /* CP5: the development entry used to run straight into the world on a
-         * zeroed state, which made a scripted fight impossible to show — agi 0
-         * never hits, and the sector was whatever the zero bytes said. The
-         * title's own P path does this (title.c run_play): load the PLAYER
-         * record, then enter the world from it. So --play-map now plays the save
-         * that is actually on disk, and the two entries cannot drift.
-         *
-         * A blank or missing record is NOT an error here and the zeroed state
-         * stands: that is the original's own "no character yet" condition, and
-         * the CP4 development scripts rely on it. */
-        (void)u2_save_load(&ctx);
+        /* The record is already loaded (above), so this enters the world as the
+         * character on disk rather than as a blank state. The note goes to stderr
+         * unconditionally: on this development entry "sector 31 ... 32 creatures"
+         * is the difference between a silent no-op and a diagnosable one, and the
+         * CP5 fight scripts are driven entirely by reading it back. */
         u2_overworld ow;
-        u2_overworld_run(&ctx, &ow);
+        const int rc = u2_overworld_init_state(&ctx, &ow);
+        fprintf(stderr, "overworld: %s\n", ow.note);
+        if (rc == 0)
+            u2_overworld_loop(&ctx, &ow);
     } else {
         u2_game_run(&ctx);
     }

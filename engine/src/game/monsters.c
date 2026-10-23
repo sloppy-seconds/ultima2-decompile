@@ -74,19 +74,12 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
      * the wrong cell: that the stamp lands at y*64+x with the sector's own stride
      * is assumed from the grid geometry, not read off the stamping site.
      *
-     * ── HELD OFF, and deliberately so ─────────────────────────────────────────
-     * U2_MONSTERS_LAYOUT_PROVEN is 0 because the table this would stamp is not
-     * trustworthy yet. docs/monster-spawn.md § 2 claims six plain 32-byte arrays
-     * at file offsets 128..383, copied verbatim to DS:137; reading monx31 at
-     * those offsets gives hp = 0 in all 32 slots and x = 112, which is off a
-     * 64-wide grid. A table that cannot be right must not be painted over the map,
-     * because it would render 32 cells of art 0 and look like a graphics bug
-     * rather than a data-layout bug. The stamp stays here, compiled out, so the
-     * moment the layout is re-derived this is a one-character change.
-     * See docs/monster-spawn.md § 10 and docs/needs-gameplay.md. */
-#define U2_MONSTERS_LAYOUT_PROVEN 0
-    if (!U2_MONSTERS_LAYOUT_PROVEN)
-        return occupied;
+     * The layout this stamps was re-confirmed live on 2026-10-23 against sector 31
+     * with G23MAX loaded: mon_hp, mon_type and mon_role matched monx31 at 32/32
+     * each, mon_kind 30/32, and x/y under-matched only because creatures walk.
+     * That is a fourth independent capture agreeing with docs/monster-spawn.md § 2,
+     * which is also the capture that disproved a false alarm raised against this
+     * same file the same day — see § 10 there before doubting these offsets. */
 
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (!(s->mon_x[i] || s->mon_y[i]))

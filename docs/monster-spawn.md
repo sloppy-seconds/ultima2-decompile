@@ -339,76 +339,68 @@ overworld. The layout is the same but the **meaning** is not: `0x1B7` is `slot>>
 dungeon and a kind index on the overworld. Anyone re-deriving this should read this
 section rather than infer from that table.
 
-## 10. § 2's file layout does not reproduce the live table — reopened 2026-10-23
+## 10. A false alarm against § 2, raised and retracted the same day (2026-10-23)
 
-Graded **disputed**, against § 2's **measured**. Found while wiring the CP5 creature
-renderer, which needs the table to be right before anything can be drawn from it.
+Graded **retracted**. § 2 stands. This section exists because the error was made, was
+committed, was reported to the owner as a defect in the reconstruction, and is the most
+expensive kind of mistake this project can make: **a confident wrong finding that stops
+correct work.**
 
-§ 2 says `monxNN` holds six plain 32-byte arrays at file offsets 128, 160, 192, 224,
-256 and 288, copied verbatim to `DS:137`. Reading `monx31` at those offsets gives:
+### What was claimed
 
-| field | what § 2 predicts | what the file holds |
-| --- | --- | --- |
-| `hp` | 10 in the twelve live slots | **0 in all 32** |
-| `x` | 25 in the twelve live slots | **112 in several** — off a 64-wide grid |
-| `type` | `0x38` in the live slots | **0x00** |
+That `monxNN`'s six arrays were not at the offsets § 2 gives, that the file held
+`hp = 0` in all 32 slots and `x = 112` (off a 64-wide grid), that the region was "one
+128-byte block stored twice with a one-byte skew", and that `engine/src/game/monsters.c`
+therefore found zero creatures in every sector. The CP5 creature stamp was compiled out
+behind a `U2_MONSTERS_LAYOUT_PROVEN` guard on the strength of it, `docs/needs-gameplay.md`
+gained item **G26** to re-derive a layout that had never been wrong, and W2, W4, W5 and W6
+were declared blocked.
 
-A table with `hp = 0` in every slot cannot be the source of a live table with `hp = 10`
-in twelve of them, and `x = 112` is not a coordinate in a 64-cell sector. So either the
-file is not six plain arrays, or the copy is not verbatim, or both.
+### What was actually wrong
 
-What `monx31` (384 bytes) actually contains:
+**The analysis script, in one place.** The evidence was gathered as
+`blk = b[128:128+256]` — slicing the file from offset 128 — because § 2's *table* lists
+`128..159` as a row and the prose was read as "the arrays start at 128". § 2 says, in the
+first row of that same table, `0..31 | x | DS:0x137+i`. The arrays start at **0**.
 
-| range | bytes | reading |
-| --- | --- | --- |
-| `0x000..0x07F` | `1d 22 14 1e … 38 38 0e 0e … ff ff …` | the stamped-map slice § 2 already identified; values are grid-cell bytes, and `0x38`/`0x0e` are art-bearing |
-| `0x080..0x0FF` | `70 70 08 70 …` then `00 00 03 00 00 03 03 03 02 02 … 81 82 03 03 01 01 … 83 03 01 01 01 84 00 00` then 64 zero bytes | one 128-byte block, **not** six 32-byte arrays |
-| `0x100..0x17F` | `1a 70 08 70 …` then the same `00 00 03 00 …84 00 00` run, then zeros | a near-duplicate of the block above, starting **one byte later** |
+Sliced from 128, the six fields land four rows out of position, which is exactly why
+`hp` and `type` read as all zeros (they were reading the file's zero tail) and why `kind`
+looked like `x` shifted by one. Every "structural impossibility" in the original version
+of this section was an artefact of that one constant.
 
-**The structural point, and it is enough to sink § 2 on its own.** Split at the
-array boundaries § 2 claims, the 256-byte region is:
+The engine was never wrong. `world.c` reads `monxNN` from offset 0 with no seek, and
+`monsters.c` uses `MON_OFF_X 0`, `Y 32`, `HP 64`, `TYPE 96`, `KIND 128`, `ROLE 160` —
+which is § 2, correctly transcribed.
 
-| § 2 calls it | file range | first four bytes |
-| --- | --- | --- |
-| `x` | `0x080..0x09F` | `70 70 08 70` |
-| `y` | `0x0A0..0x0BF` | `00 00 03 00` |
-| `hp` | `0x0C0..0x0DF` | `00 00 00 00` |
-| `type` | `0x0E0..0x0FF` | `00 00 00 00` |
-| `kind` | `0x100..0x11F` | `1a 70 08 70` |
-| `role` | `0x120..0x13F` | `00 00 03 00` |
+### How it should have been caught, and the two rules that came out of it
 
-`kind` is `x` shifted by one byte and `role` is `y` shifted by one byte, and `hp`
-and `type` are entirely zero. Two fields cannot be shifted copies of two other
-fields, so the region is not six independent arrays. It reads as **one 128-byte
-block stored twice with a one-byte skew** — `0x101..0x17F` equals `0x080..0x0FE`
-exactly — which is a shape no six-array layout produces.
+**1. Check what the code reads before declaring the code wrong.** The claim was "the
+engine finds zero creatures in every sector", and that is a one-line check against
+`world.c`'s `fread`, which was sitting in the same working tree. Instead the claim was
+built entirely from a hand-written script whose slicing was itself an unverified
+transcription of the prose. A derived number is only as good as the derivation, and a
+script is a derivation — it does not get a pass because it produced a table.
 
-Ruled out, because it was the obvious explanation: **the game did not rewrite the
-file.** There are 107 copies of `monx31` under `tmp/` from sessions that saved and
-reloaded, and every one is byte-identical to `original/monx31`. So this is the
-authored layout, not a save-time reformat, and § 2 was measuring the same bytes we
-are.
+**2. A negative result from a new script needs a positive control run the same way.**
+The script never printed anything known to be true. Re-running it with the correct slice
+reproduced § 2 exactly on the first try: against a live capture of sector 31 with `G23MAX`
+loaded, `mon_hp`, `mon_type` and `mon_role` each match `monx31` at **32/32**, `mon_kind`
+at 30/32, and `x`/`y` under-match only because creatures walk after spawn. That is a
+fourth independent capture agreeing with § 2, and it is what should have been the first
+thing run.
 
-The `0x81 0x82 0x83 0x84` values are the ones `cmd_O` enumerates (`ENILNO`, `RING`,
-`SOS`), so the role information is in there somewhere — but at an offset and stride
-that § 2 does not describe.
+### Corrected on the way through
 
-**Second suspect, named so it gets checked too:** the live reads themselves. In sector 31
-every one of the twelve live creatures read as `x = 25, y = 29` — exactly the position the
-player was seeded to. Twelve creatures stacked on one cell is possible but unlikely; a
-wrong `mon_x`/`mon_y` offset is the more probable explanation, and it would mean § 2's DS
-offsets are as suspect as its file offsets.
+The original version of this section also asserted that the live reads were suspect,
+because an earlier session had seen all twelve sector-31 creatures at `x = 25, y = 29`.
+That read was taken before the world had loaded, not from a wrong offset. The live table
+is scattered and sane: player at `(50, 21)`, `mon_x` spanning `0x06..0x3d`, `mon_y`
+`0x06..0x38`, `mon_hp` a mix of `0xff` and smaller values. The DS offsets in § 2 are
+confirmed as written.
 
-**Consequence for the engine.** `u2_monsters_spawn` copies the § 2 layout because that is
-what § 2 specified, so it finds zero creatures in every sector and CP5 W2 (draw the
-creatures) has nothing trustworthy to draw. The stamp code is written and compiled out
-behind `U2_MONSTERS_LAYOUT_PROVEN` in `engine/src/game/monsters.c` — flipping it to 1 is
-the whole change once the layout is re-derived. Stamping a wrong table would have painted
-32 cells with art 0 and presented a data-layout bug as a graphics bug.
+### Status
 
-**What would settle it**, and it is an agent afternoon not a play session: read
-`DS:137..0x1FF` live in a sector whose `monxNN` is on disk, and search the file for the
-byte pattern the DS shows, at whatever stride. `docs/art-index.md` already did exactly
-this for one field and found the grid, not the record — the same method over all six
-arrays is what is missing. Until then § 2's layout is **disputed**, and anything built on
-it inherits the doubt.
+`U2_MONSTERS_LAYOUT_PROVEN` is gone; the stamp is live. `docs/needs-gameplay.md` G26 is
+closed as not-a-question. The engine now reports `sector 31 via monx, tiles from cache,
+32 creatures` and a scripted attack against a real creature from `monx31` lands:
+`CMD: ATTACK--EAST--HIT!!!`.

@@ -190,6 +190,24 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-23** — **A hand-written analysis script is a derivation, not evidence, and it
+  must be validated against the code it accuses before it is allowed to contradict prior
+  measured work.** A script slicing a data file from the wrong base offset reported that a
+  previously-measured record layout was impossible — "`hp` is zero in all 32 slots", "a
+  field cannot be a shifted copy of another" — and every one of those structural
+  impossibilities was an artefact of one constant in the script. The committed engine read
+  the file correctly; the finding was fiction. It was committed, reported as a defect in the
+  reconstruction, and used to block four downstream work items and compile out working code
+  behind a guard, none of which was warranted. The engine's own `fread` was one file away
+  and would have settled it in ten seconds. → Two rules. **(a)** When a new measurement
+  contradicts a prior *measured* finding, the default hypothesis is the new one is wrong,
+  and the cheapest test is to re-read the code path that consumes the same bytes. **(b)** A
+  script producing a negative result needs a positive control pushed through the same code
+  path in the same run — print something known-true with the same slicing, and if it does
+  not come out true, the script is the bug. A table of numbers from an unvalidated
+  derivation is the most dangerous artefact in a reverse-engineering pipeline, because it
+  looks exactly like the real kind.
+
 * **2026-10-23** — **A gate can report a metric that is structurally constant and still be
   green.** An acceptance runner printed its check count by grepping the child's output for a
   per-check success line — but the child's assertion macro prints only on failure, so the
