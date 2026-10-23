@@ -589,7 +589,32 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         const int nx = (ow->x + dx) & U2_SECTOR_MASK;
         const int ny = (ow->y + dy) & U2_SECTOR_MASK;
 
-        if (!u2_tile_passable(&ow->world, nx, ny)) {
+        /* CP5 W4: a creature standing there blocks the step.
+         *
+         * Observed, not inferred: in captures/spice86/cp5-fight/ stepping into an
+         * occupied cell printed the same `--INVALID MOVE!` as a mountain and the
+         * player stayed put. The engine did not do this until measured against: with
+         * a patched monx31 placing a creature at (1,0), EAST was ACCEPTED while
+         * ATTACK--EAST hit that same creature in the same build. Stamping the type
+         * byte into the grid does not block anything on its own, because
+         * u2_tile_passable defaults every unmeasured tile id to passable — the
+         * "one grid, one truth" hope for W2 and W4 sharing a mechanism was wrong.
+         *
+         * The mechanism is still open, and this is deliberately the weaker claim.
+         * asm/2423 has two distinct reject returns (0x2538 and 0x25FF), so the
+         * original may block an occupied cell through the tile table — the stamped
+         * type byte simply not being a walkable tile — or through a separate
+         * occupancy test. The discriminator is cheap and is worth running: put a
+         * creature on terrain already measured passable in a live run and see which
+         * return fires. Until then the behaviour matches what was seen and the code
+         * path is ours, which is the honest state of this branch.
+         *
+         * Food cost of a creature-blocked step is unknown — G2 covers blocked steps
+         * generally and is still open — so nothing is charged, same as the terrain
+         * reject. */
+        const int blocked_by_creature = u2_monsters_at(ctx, nx, ny) >= 0;
+
+        if (blocked_by_creature || !u2_tile_passable(&ow->world, nx, ny)) {
             /* Blocked. The direction word and the complaint share a line:
              * "CMD: WEST--INVALID MOVE!" then a fresh prompt below.
              *

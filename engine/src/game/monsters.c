@@ -112,6 +112,26 @@ int u2_monsters_at(const u2_ctx *ctx, int x, int y)
     if (ctx == NULL)
         return -1;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
+        /* hp != 0 is load-bearing, not tidiness. Observed live in
+         * captures/spice86/cp5-fight/: two creatures shared one cell, the front one
+         * was killed, and the very next attack hit the SECOND one at the same
+         * coordinates rather than the corpse. So the original's scan walks past
+         * slots with no hit points, and without this test a dead slot stays both
+         * attackable and, once W4 landed, a permanent wall.
+         *
+         * The x||y test is the module's occupancy convention (docs/monster-spawn.md
+         * § 2's own note: a slot at (0,0) is unused), kept alongside hp rather than
+         * replaced by it because a slot can be occupied and wounded but never
+         * occupied with hp unset.
+         *
+         * Ordering note for anyone re-deriving this: the scan returns the LOWEST
+         * slot index at the cell, which is what the live capture showed only if the
+         * front creature happened to be the lower slot. Whether the original scans
+         * in slot order or in some other order is not established; slot order is the
+         * assumption, and it is the one to revisit if a fight ever picks the wrong
+         * target among stacked creatures. */
+        if (ctx->state.mon_hp[i] == 0)
+            continue;
         if ((ctx->state.mon_x[i] || ctx->state.mon_y[i]) &&
             ctx->state.mon_x[i] == (uint8_t)x &&
             ctx->state.mon_y[i] == (uint8_t)y)
