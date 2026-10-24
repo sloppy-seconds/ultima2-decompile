@@ -152,7 +152,7 @@ seeded with `--player`, so character creation is not an obstacle either.
 | --- | --- | --- | --- | --- |
 | G1 | ~~art index: `(map_byte>>1)&0xFE` vs `map_byte>>2`~~ **CLOSED 2026-10-23 by `captures/spice86/art-index/`.** The transform was never the live question -- `view.h`'s two-step composes to `>>2` for all 256 byte values. The live question was **which field**, and the answer is **the sector grid cell, not the monster `type`**: on the only disagreeing sample in the corpus (sector 00 slot 6, type `0x34`, cell `0x38`) the drawn tile matches art `0x0E` = `cell>>2` at **256/256 pixels** and art `0x0D` = `type>>2` at 171/256. Geometry independently confirmed on 18 further slots at 256/256. Full write-up: `docs/art-index.md` | agent | **done** | renderer correctness |
 | G2 | does a blocked step cost 19 food | agent | **high** | turn economy |
-| G3 | attribute the indirect writers of `DS:2CB`/`DS:2DE` | agent | **med-high** | C5, F3 |
+| G3 | ~~attribute the indirect writers of `DS:2CB`/`DS:2DE`~~ **CLOSED 2026-10-28d as a DOS-port artefact, not by capture.** The reason this item existed was C5/F3: the tile-dependence of passability had to enter through those four bytes, because nothing else wrote them. That premise is gone — `0x5C >> 1 == 0x2e` and `0x5C` is the force field (`captures/spice86/g29-field`), so the mode is explained without them. And the cross-ISA check came back silent: the Apple build has no equivalent indirection at all (no copy-block shape, no tile-indexed shift-and-read, and its step bytes are written only by the routines that compute them) — see `asm/5B71_mode_table_copy`. **What is NOT answered:** who actually writes those four bytes on the DOS side. Nobody knows, and nobody needs to for the contract. Reopen only if a mode discrepancy appears that the `>>1` rule cannot explain. | agent | **closed, unanswered** | was C5, F3 |
 | G4 | what sets mode byte `0x2e`; step onto a force field | agent | **medium** | C5, T8 |
 | G5 | which tile is the mountain (rejection test) | agent + 30 s owner look | **medium** | CP4/CP6 passability |
 | G6 | single-byte counter underflow: is it reachable | agent | **medium** | census claim |
@@ -208,8 +208,17 @@ into it; read `DS:53..55` before and after.
 depend on settling the mountain first — that dependency was assumed and is wrong.
 **Needs owner:** no.
 
-### G3 — who writes `DS:2CB`/`DS:2DE` `[ ]`
-**Action:** capture both bytes before and after each of: sector entry, boundary
+### G3 — who writes `DS:2CB`/`DS:2DE` `[x]` — closed 2026-10-28d as a DOS-port artefact, unanswered
+**Closed without a capture, and that needs saying plainly because the item's own rule is "only a
+named capture closes an item".** The rule exists to stop beliefs closing questions. Here the
+question itself dissolved: the item was load-bearing only for C5/F3, and `0x5C >> 1 == 0x2e`
+explains the mode with no help from those bytes. The crosswalk was then asked whether the Apple
+build has the same indirection — the one static tiebreaker available — and it does not, on three
+shape scans (`asm/5B71_mode_table_copy` carries the detail). So there is no second witness to
+find, and an afternoon of watchpoints would buy a fact nobody needs.
+**Still true:** the writers are unknown. If a mode discrepancy ever shows up that `>>1` cannot
+explain, this reopens and the action below is the right one.
+**Action (if reopened):** capture both bytes before and after each of: sector entry, boundary
 crossing, boarding, alighting, stepping onto a field. Boarding is stageable —
 `mapx03` has the four-vehicle depot at (36–39, 24), so `--seed-map`/`--player` can
 put the character next to it.
