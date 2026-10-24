@@ -28,8 +28,11 @@ THE RULE
 Row B, immediately following row A in address order, is **glued** to A when all of:
 
   1. nothing `call`s any address in B (B has no entry point of its own);
-  2. every jump landing inside B comes from A or from inside B -- no third party
-     branches into B, which is what would make B a real shared target;
+  2. every jump landing inside B comes from A, from inside B, or from code the run can
+     already reach — no unrelated third party branches into B, which is what would make B a
+     real shared target. The reachability clause is not cosmetic: read literally, this rule
+     rejects **loops**, because a loop is a later fragment branching back to an earlier one.
+     It used to split asm/06AC_clock_tick_wait into two runs for exactly that reason.
   3. A does not terminate on its own: A's last instruction is not `ret` and not an
      unconditional `jmp` to somewhere outside the A+B span.
 
@@ -53,10 +56,16 @@ CONTROLS -- run these before believing any output
 
   POSITIVE  50F9 and 4A3E must come back as candidates. Both are still unmerged; 50F9
             was spot-checked on 2026-10-23 (25 fragments over 172 bytes, one ret).
+            06AC..06EC and 2199..21FB must come back as ONE run each, not two: both were
+            proved by hand first, and both are loop-shaped, so they are the controls for the
+            reachability clause.
   NEGATIVE  15E1 (tavern menu) is a standalone routine, and 1799 is a zero-`ret`
             tail-chain, not a split. And 2028 / 2052 / 20AB / 51A5 / 53B5, all merged
             on 2026-10-23, must no longer be flagged -- if they come back, the detector
-            is keying on something other than the merge it already did.
+            is keying on something other than the merge it already did. And 50B3
+            (map_tile_ptr, 26 inbound calls) must never be absorbed into a neighbour: it is
+            the control that says the reachability clause has not become a licence to glue
+            anything downstream.
 
 Positive controls must be re-pointed whenever a candidate is merged, or the test rots.
 That already happened once: 51A5 and 53B5 were the original positives and silently
@@ -199,19 +208,75 @@ def glue(a, b):
     return True
 
 
-def find_runs(rows):
-    runs, cur = [], [rows[0]]
-    for prev, nxt in zip(rows, rows[1:]):
-        if glue(prev, nxt):
-            cur.append(nxt)
+def reach_rows(rows, jumps, start_idx):
+    """Indices of rows reachable from start_idx by fallthrough and jumps.
+
+    This is what makes the third rule of the glue test honest. Read literally — "no jump into
+    B from outside A or B" — it rejects the commonest shape of all: a loop, where a later
+    fragment branches back to an earlier one. That is exactly how asm/06AC_clock_tick_wait
+    got reported as two runs (06A8..06AB and 06CC..06EC) when the bytes are one routine with
+    three backward branches. So a jumper counts as third-party only if it is NOT reachable
+    from the run's own entry.
+
+    Expansion stops at a row containing a `ret`, which is what keeps this from swallowing the
+    whole segment by fallthrough.
+    """
+    seen, stack = set(), [start_idx]
+    while stack:
+        i = stack.pop()
+        if i in seen or i >= len(rows):
+            continue
+        seen.add(i)
+        r = rows[i]
+        if r['n_rets']:
+            continue
+        tos = [t for frm, ts in jumps.items() if r['start'] <= frm <= r['end'] for t in ts]
+        if i + 1 < len(rows) and rows[i + 1]['start'] == r['end'] + 1:
+            stack.append(i + 1)
+        for t in tos:
+            for j, o in enumerate(rows):
+                if o['start'] <= t <= o['end'] and j not in seen:
+                    stack.append(j)
+    return seen
+
+
+def glue_run(rows, jumps, run_idx, b_idx):
+    """Like glue(), but 'third party' is judged against everything the run can reach.
+
+    Returns True when row b_idx should join the run starting at run_idx[0].
+    """
+    a, b = rows[run_idx[-1]], rows[b_idx]
+    if b['start'] != a['end'] + 1 or b['n_calls']:
+        return False
+    if a['last_mnem'] == 'ret':
+        return False
+    if a['tail']:
+        addr, tos = a['tail']
+        if a['last_mnem'] in UNCOND and all(not (b['start'] <= t <= b['end']) for t in tos):
+            return False
+    reach = reach_rows(rows, jumps, run_idx[0])
+    for frm, to in b['inbound_external_jumps']:
+        inside = any(frm >= rows[j]['start'] and frm <= rows[j]['end'] for j in reach)
+        if not inside:
+            return False
+    return True
+
+
+def find_runs(rows, jumps):
+    runs, cur = [], [0]
+    for idx in range(1, len(rows)):
+        prev, nxt = rows[idx - 1], rows[idx]
+        if glue(prev, nxt) or glue_run(rows, jumps, cur, idx):
+            cur.append(idx)
         else:
             if len(cur) > 1:
                 runs.append(cur)
-            cur = [nxt]
+            cur = [idx]
     if len(cur) > 1:
         runs.append(cur)
     out = []
-    for run in runs:
+    for idxs in runs:
+        run = [rows[i] for i in idxs]
         total_rets = sum(r['n_rets'] for r in run)
         last_rets = run[-1]['n_rets']
         if total_rets == 1 and last_rets == 1:
@@ -233,7 +298,7 @@ def main():
     calls, jumps, rets, mnem_at = parse_asm_dir()
     rows = load_rows()
     analyse(rows, calls, jumps, rets, mnem_at)
-    runs = find_runs(rows)
+    runs = find_runs(rows, jumps)
 
     if a.selftest:
         return selftest(runs, rows)
@@ -280,11 +345,27 @@ def selftest(runs, rows):
     # everyone to ignore it.
     # 50F9..51A4 was spot-checked the same day: 25 fragments over 172 bytes, mostly
     # 1- and 2-byte basic blocks, single ret at the end. 4A3E..4A73 is 7 fragments.
-    must = {'50F9': ('50F9',), '4A3E': ('4A3E',)}
+    must = {'50F9': ('50F9',), '4A3E': ('4A3E',),
+            # asm/06AC_clock_tick_wait: proved one routine by hand on 2026-10-28d, byte by
+            # byte, BEFORE the reachability rule existed. The pairwise rule split it in two
+            # because three of its branches point backwards. If this goes missing, the
+            # loop-shaped case has regressed.
+            '06AC clock wait': ('06AC', '06EC'),
+            # asm/2199_creature_step_gate declares its own real span in its header (the clean
+            # wave cut it and the header has carried the correction since 2026-10-28). The
+            # detector now has to agree with the hand reading — up to a point: the gate has
+            # TWO returns (accept at 21F7, refuse at 21FC), and the one-`ret` rule stops the
+            # run at the first. 21F7 is the last row the detector claims, not the last row of
+            # the routine.
+            '2199 step gate': ('2199', '21F7')}
     must_not = {'15E1 tavern_menu': 0x15E1, '1799 food_price': 0x1799,
                 '2028 (merged)': 0x2028, '2052 (merged)': 0x2052,
                 '20AB (merged)': 0x20AB,
-                '51A5 (merged)': 0x51A5, '53B5 (merged)': 0x53B5}
+                '51A5 (merged)': 0x51A5, '53B5 (merged)': 0x53B5,
+                # asm/50B3_map_tile_ptr has 26 inbound calls: the most-shared helper in the
+                # tree. It is the case the reachability relaxation must NOT swallow — a routine
+                # everyone jumps into is not a fragment of whoever jumps in.
+                '50B3 map_tile_ptr': 0x50B3}
     fail = 0
     for label, addrs in must.items():
         r = run_of(int(addrs[0], 16))

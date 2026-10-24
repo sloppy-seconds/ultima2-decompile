@@ -26,13 +26,45 @@ trip over.
 ## The rule
 
 Row B, immediately after row A, is **glued** to A when: nothing `call`s any address in B;
-every jump landing in B comes from A or from inside B; and A does not terminate on its own
-(no `ret`, and no unconditional `jmp` out of the A+B span).
+every jump landing in B comes from A, from inside B, **or from code the run can already
+reach**; and A does not terminate on its own (no `ret`, and no unconditional `jmp` out of
+the A+B span).
 
 A glued run is a **candidate** only with **exactly one `ret`, in the last row**. `strong`
 if the first row has an inbound `call`, `probable` if not — the entry may be a jump-table
 slot, and this game reaches its command handlers with `jmp *%bx`, which is invisible
 statically (`AGENTS.md` § 4).
+
+## The clause that earns its keep (2026-10-28d): loops
+
+The reachability clause in the second bullet is not a refinement, it was a bug shaped like a
+definition. Read literally — "every jump landing in B comes from A or from inside B" — the
+rule **rejects loops**, because a loop is precisely a later fragment branching back to an
+earlier one, and that jumper is neither A nor inside B.
+
+The case that proved it: `asm/06AC_clock_tick_wait`, decoded by hand on 2026-10-28 byte by
+byte as one 65-byte routine with three backward branches. The detector, on the literal rule,
+reported it as **two** runs (`06A8..06AB` and `06CC..06EC`) and missed the middle entirely.
+A hand reading that the tool contradicted is the shape of failure this project keeps hitting,
+and here the tool was the wrong one.
+
+Fix: a jumper counts as third-party only if it is not reachable from the run's own entry,
+where reachability follows fallthrough and jumps and **stops at a `ret`** — that stop is what
+keeps it from swallowing the whole segment. Effect: **26 strong / 17 probable became 36 strong
+/ 10 probable**, eight of the new strong candidates being loop-shaped routines the literal
+rule could never have found, including the clock wait and the step gate below.
+
+Two of those are now positive controls, and one is a negative:
+
+* `06AC..06EC` must come back as **one** run of 11 fragments.
+* `2199..21F7` must come back as one run of 18. Its own header has carried the hand reading
+  since 2026-10-28, so the detector agreeing is independent confirmation — and where it
+  disagrees is instructive: the step gate has **two** returns (accept at `21F7`, refuse at
+  `21FC`), so the one-`ret` rule cuts the run at the first. The detector's span is not wrong,
+  it is narrower than the routine. Anyone merging from this TSV has to notice that.
+* `50B3` (`map_tile_ptr`, 26 inbound calls, the most-shared helper in the tree) must **never**
+  be absorbed into a neighbour. It is the control that says the relaxation did not become a
+  licence to glue anything downstream.
 
 ## The condition that earns its keep
 
@@ -55,13 +87,20 @@ draft.
 
 | | case | why |
 | --- | --- | --- |
-| positive | `51A5/51A9` | decoded by hand 2026-10-23, certainly one routine |
-| positive | `53B5/53C5` | same |
+| positive | `50F9` | spot-checked 2026-10-23, 25 fragments one ret, still unmerged |
+| positive | `4A3E` | 7 fragments, still unmerged |
+| positive | `06AC..06EC` | the clock wait — proved one routine by hand first; the loop control |
+| positive | `2199..21F7` | the step gate — header carries the hand reading; the two-return case |
 | negative | `15E1` tavern menu | standalone routine |
-| negative | `1799` food price | a tail-chain, not a split — the case above |
+| negative | `1799` food price | a tail-chain, not a split |
 | negative | `2028`, `2052`, `20AB` | merged 2026-10-23; if these come back the detector is keying on something other than the split it already fixed |
+| negative | `51A5`, `53B5` | merged 2026-10-23, same |
+| negative | `50B3` map_tile_ptr | 26 inbound calls; the reachability relaxation must not absorb a shared helper |
 
-All seven pass.
+All eleven pass. The `2199` control was written wrong on the first attempt — it asked for
+`21FB`, which is a row *end*, not a row *start* — and the selftest went red on my own bad
+control before it ever went green. That is the intended behaviour of a control list, and it
+is worth recording precisely because it was the tool catching me, not the other way round.
 
 ## Reading the output
 
@@ -95,7 +134,8 @@ and `make -C engine test`:
 | `53B5..53CF` | 3 fragments | `print_byte_bcd` — two-digit emitter |
 
 `asm/` is now 1271 files, down from 1300 at the start of the day. Candidates remaining:
-**26 strong, 17 probable**.
+**36 strong, 10 probable** (was 26/17 before the loop clause — the extra strong candidates
+are not new damage, they are the loops the old rule could not see).
 
 **The controls had to be re-pointed, and that is the lesson.** `51A5` and `53B5` were the
 positive controls. Merging them made the selftest fail — correctly, because they were no
