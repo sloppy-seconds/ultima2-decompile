@@ -162,6 +162,21 @@ has three distinct symbols and a future merge never collides. That is a change t
 is *generated*, which is allowed; rewriting the tree that was already generated is the part that
 needs the owner.
 
+**Correction, same day: that forward fix already exists, and its existence improves the proposal.**
+`clean_wave.seams_and_facts()` has always numbered repeated seams within a function — feed it two
+`int $0x1a` sites and it emits `clock_int1a:` and `clock_int1a_2:`. The counter is per call, and
+`clean_wave` is called once per function, so the labels collide only **across** fragments of a
+routine the Phase 2 map happened to cut into pieces. The generator is not the bug; the
+fragmentation is.
+
+That reframes the ruling, and makes it smaller. The change required in a merged file is not
+"delete two label lines", it is `clock_int1a:` -> `clock_int1a_2:` — **exactly what the project's
+own generator would have emitted had the routine been one function to begin with.** So the
+proposal is not "permit removing body lines", it is "permit applying the existing per-site seam
+numbering when fragments are joined", which is a convention already in the tree rather than a new
+door in the guard. The zero-byte property still holds and `assemble_clean.sh` still proves it:
+the merged `06AC..06EC` rebuilds the whole binary byte-identical either way.
+
 Two things to check on any candidate before proposing it:
 
 1. **Run length.** `50F9..51A4` is 25 fragments over 172 bytes, mostly 1- and 2-byte basic
