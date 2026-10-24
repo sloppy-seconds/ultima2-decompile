@@ -12,10 +12,11 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-2026-10-28.md` first (current entry point: what got settled since the night
-> queue and where each item landed — the spawn selector is now pinned at runtime and the
-> confirming unlock is on record, so what is left is the Z screen, CP5 C3, implementing the
-> wandering spawn, and the owner decisions that need a person — the working recipes including
+> `docs/handoff-2026-10-28b.md` first (the live entry point: two owner-approved renames, fully
+> specified and not yet done, plus what remains for a person), then
+> `docs/handoff-2026-10-28.md` for the recipes and the hazard list (its own queue is now
+> closed: the spawn selector is pinned at runtime, the confirming unlock is on record, the Z
+> screen and CP5 C3 are shipped — what survives in that file is the working recipes, including
 > how to push from an agent shell and how to force a live value, and the twelve hazards that
 > cost the last two sessions time). The work it supersedes is in
 > `docs/handoff-2026-10-27-night.md` (its item queue is now resolved: 1, 6, 7, 8 done, 4 wired,
