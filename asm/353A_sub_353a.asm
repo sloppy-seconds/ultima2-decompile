@@ -1,4 +1,24 @@
-# sub_353a — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_353a — MIS-DECODED: this fragment and asm/353D are one four-byte instruction cut in half
+# NAME DISPUTED — not of a name but of the slice, and the bytes are unambiguous.
+#           The clean wave emitted `.byte 0x8a` here as a forced-keep because gas re-encoded the
+#           instruction differently. The real instruction starts at runtime 353C and is four
+#           bytes, file 0x373C = `8a 1e 49 00`:
+#               mov 0x49,%bl        ; BL = DS:49 = the sector TENS digit
+#           The wave consumed only the opcode `8a`, then asm/353D re-read the ModRM byte `1e` as
+#           `push %ds` and the displacement `49 00` as `dec %cx` plus the start of the next
+#           instruction. Verified directly against original/ultimaii.exe with objdump -mi8086
+#           -Mintel,data16,addr16 at --adjust-vma 0x353a, which decodes 353A..3545 cleanly as
+#           `mov $0x0,%bh ; mov 0x49,%bl ; mov %bx,%di ; or %di,%di ; je 3565`.
+# WHY IT MATTERS: this is the DS:49 read that G14 spent a week looking for. It is the single
+#           writer of the era index handed to asm/3546_time_index_message, and it was hiding in a
+#           forced-keep byte rather than being absent. See that file's header for the full era
+#           table.
+# cannot be fixed here: the corrected instruction means changing body lines, and labels and
+#           instructions are both body — engine/tests/asm_body_guard.py freezes them and CP0 md5s
+#           them. The correct decode is recorded in prose and in disasm/defects.md instead.
+# provenance: static, re-decoded 2026-10-28d from original/ultimaii.exe file 0x373A..0x3745
+# confidence: high for the corrected decode; the committed body below is known-wrong and stays
+#           because the guard says so, not because it is believed
 # func 353A..353C  len 0003 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

@@ -12,6 +12,9 @@
 #   "ANOS: LEGENDS!" is at file 0x3765 (asm/3565_sub_3565.asm, a stop-trunc
 #   one-byte call) and is NOT targeted by this chain; it is reached from a branch
 #   before 3546, outside this range.
+#   CORRECTION 2026-10-28d on that last line: the branch before 3546 is now identified — it is
+#   `or %di,%di ; je 3565` at runtime 3544, i.e. LEGENDS is the %di == 0 arm of the same era
+#   dispatch, one instruction upstream. The five arms are 0/1/2/3/>=4, not 1/2/3/4-plus-default.
 # notes: "ANOS" is the literal text, not a truncation - the byte before it is the
 #        high half of the preceding call operand (0x1A), so the string begins at
 #        the A. Whether it is intended as pseudo-Latin for "year" is not provable
@@ -36,17 +39,46 @@
 #           tools/u2_edit.py records DS:49/4A as the sector's two decimal digits patched into
 #           the mapx filename, so DS:49 is the TENS digit, and the mapping the ticket guessed
 #           is the mapping the ancestor implements: tens 0-9, >>1, into five eras.
-#           GRADE: inferred, and specifically NOT observed — nobody has dumped DS:49 next to the
-#           value in %di at this entry. But it is inferred from two independent sides agreeing
-#           on adjacency, on the shift, and on five-against-ten, which is a long way from a
-#           guess. The DOS writer of the index is still unidentified: the reads of DS:49 that do
-#           exist (asm/2290, 22D5, 2305, 26B7, 26CC, 2708, 3C2E_cmd_O; written by asm/26C6) are
-#           filename and sector-loading sites, not this one.
+#           GRADE — RESOLVED 2026-10-28d, statically, no capture needed. The writer of %di was
+#           found two instructions earlier, and it had been hidden by a mis-decode rather than
+#           by absence. Runtime 353A..3545, decoded from original/ultimaii.exe file 0x373A:
+#               353A  mov $0x0,%bh
+#               353C  mov 0x49,%bl        ; BL = DS:49 = the sector TENS digit
+#               3540  mov %bx,%di         ; DI = the tens digit, zero-extended via BH=0
+#               3542  or %di,%di
+#               3544  je 3565             ; tens == 0 -> "ANOS: LEGENDS!"
+#               3546  <this dispatch>
+#           So the index is the sector tens digit used DIRECTLY, not shifted. The ticket's
+#           hypothesis was right about which byte and wrong about the arithmetic; the Apple side
+#           is right about the arithmetic and its world is partitioned differently. Both halves
+#           of the guess were load-bearing and only one survived, which is why this is recorded as
+#           a resolution and not a confirmation.
+# THE FULL ERA TABLE, now complete and each arm byte-verified:
+#           DS:49 == 0  ->  runtime 3565  "ANOS: LEGENDS!"
+#           DS:49 == 1  ->  runtime 357A  "ANOS: 9,000,000 B.C."
+#           DS:49 == 2  ->  runtime 3595  "ANOS: 1423 B.C."
+#           DS:49 == 3  ->  runtime 35AB  "ANOS: 1990 A.D."
+#           DS:49 >= 4  ->  runtime 354F  "ANOS: 2112 A.D."   (dec/je fall-through)
+#           The world is 5x5 sectors, so the tens digit runs 0..4 and yields exactly five eras.
+#           That is why DOS needs no shift: five sectors, five digits, one-to-one. The Apple
+#           build's `>>1 then +1` is the arithmetic of a ten-column world folded into five, and
+#           the two builds therefore partition the same map differently — a real divergence, not
+#           a decoding gap on either side.
+# WHY THE WRITER WAS MISSED FOR SO LONG: asm/353A ends at 353C with `.byte 0x8a` marked
+#           forced-kept, and asm/353D opens with `push %ds`. Both are wrong in the same way: the
+#           instruction at 353C is the four bytes `8a 1e 49 00` = `mov 0x49,%bl`, and the clean
+#           wave stopped after the opcode, then re-read the ModRM byte 0x1e as `push %ds` and the
+#           displacement 0x49 as `dec %cx`. A four-byte instruction was sliced into three, and the
+#           DS:49 read — the single byte G14 was hunting — sat inside the wreckage as a `push`.
+#           The mis-decode is documented in asm/353A and asm/353D and in disasm/defects.md; the
+#           body lines cannot be corrected here because a label and an instruction are both body
+#           and CP0 md5s them.
 # provenance: static
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: medium (strings and dispatch proven by bytes; the code that
-#           initialises %di is not identified, and no static caller of 3546 was
-#           found, so the index's source is inferred, not observed)
+# confidence: high for the dispatch and for the index's source (DS:49, read at runtime 353C and
+#           moved to %di at 3540, both byte-verified from the original); medium for the era-to-
+#           sector mapping in play, since no harvest has ever executed this entry and the world
+#           is 5x5 by inference from the shipped mapx set rather than by a walk
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 set_year_2112:
 L_003746:

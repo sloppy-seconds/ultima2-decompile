@@ -97,3 +97,33 @@ The reverse direction (a `db` blob that is really code) is still only covered by
 reading the five blob files, and the known instance there is the opposite sign: `redecode.py`
 mis-decodes 21 bytes of real code at file `0x27D2` as a printable string. That one is still
 open and still needs a length-decoder-based check, not a string heuristic.
+
+## 2026-10-28d — a forced-keep byte swallowed a four-byte instruction, and it cost a week
+
+`asm/353A` ends with `.byte 0x8a` marked forced-keep; `asm/353D` opens with `push %ds`. Both are
+artefacts of one abandoned decode. The bytes at runtime `353C..353F` are `8a 1e 49 00`, a single
+instruction `mov 0x49,%bl` — the sector tens digit. The wave took the opcode, gave up, and the
+next fragment re-read the ModRM byte `1e` as `push %ds` and the displacement `49 00` as `dec %cx`.
+
+The cost was concrete: `DS:49` is the era index G14 had been asking "who writes `%di`" about since
+the ticket was filed, and the answer was sitting inside the mis-decoded instruction the whole time.
+It was found by dumping six bytes and running `objdump` over them, not by a capture.
+
+Two general lessons, both of the "a tool that lies is worse than no tool" family:
+
+* **A forced-keep followed by an implausible instruction stream is one instruction, not two
+  facts.** `push %ds` then `dec %cx` then a three-displacement `add` with no matching pop is not a
+  shape anyone writes. When gas refuses to re-encode an instruction, the bytes immediately after
+  it are the rest of *that* instruction, and the next fragment's opening instruction is the tell.
+* **A mis-decode can hide a read rather than erase it.** Every search for `DS:49` reads kept
+  finding the seven legitimate sites in `asm/2290`, `22D5`, `2305`, `26B7`, `26CC`, `2708` and
+  `cmd_O`, and none of them was this one. The grep was correct and the corpus was wrong, so the
+  negative result looked earned. When a byte is *known* to be read somewhere and the sites found
+  are all explainable otherwise, suspect the decode before concluding there is no site.
+
+Not fixed in `asm/`, and cannot be: instructions and labels are body, `asm_body_guard` freezes it
+and CP0 md5s it. The correct decode is recorded in the two file headers and in
+`asm/3546_time_index_message`, which now carries the complete era table. Whether to reopen the
+body-freeze for known-wrong decodes is an owner question, and it is a different question from the
+seam-label one in `docs/fragment-splits.md` — that one is about merging, this one is about
+leaving a known falsehood in the tree.
