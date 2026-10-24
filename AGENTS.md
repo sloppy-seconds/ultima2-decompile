@@ -12,7 +12,11 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-2026-10-28b.md` first (the live entry point: the two owner-approved renames and
+> `docs/handoff-apple2-reference.md` first (the live entry point: branch `apple2-reference`, the
+> Apple II path is open and extracted, two behavioural contracts exist and one of them needed
+> correcting, and there is a five-item unattended queue that is entirely static — plus the two
+> Step 0 failures that explain why lookup comes before analysis), then
+> `docs/handoff-2026-10-28b.md` (the two owner-approved renames and
 > three owner-reported creature bugs are done, `mon_role` gates the town sweep only, and what is
 > left there is for a person), then
 > `docs/handoff-2026-10-28.md` for the recipes and the hazard list (its own queue is now
