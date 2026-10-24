@@ -157,7 +157,7 @@ spells (magic missile/sleep), paralysis events, Minax guard text.
 **Gate:** owner wins a fight.
 
 ### CP6 — Towns + full command set
-All 26 `cmd_*` handlers + street NPCs (`street_*`), shops (`shop_header_*`),
+All 26 `cmd_*` handlers + street NPCs (`street_*`), shops (`list_header_*`, renamed from `shop_header_*`),
 tavern (`tavern_*`), cleric (`cleric_*`), `cast_spell_flow`, `offer_*`,
 `steal_attempt`, `illegal_command_msg`.
 **Gate:** owner plays a full town session.

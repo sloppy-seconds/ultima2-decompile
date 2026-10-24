@@ -147,9 +147,9 @@ MANIFEST = [
     ("U2_S_INVALID_MOVE",      "0A02_invalid_move_msg.asm", 0),
     # The Z status screen's labels (docs/status-screen-z.md § 7). Each is the inline string
     # of a str_out call inside the handler, so the offsets are the call site plus three.
-    # Four of these sit in files the bulk wave named "shop_header_*"; the Z screen is the
-    # only caller actually identified, so those file names are disputed and are left alone
-    # rather than renamed on one reading. The three run locators are the strings whose db
+    # Four of these files were named "shop_header_*" by the bulk wave on a caller that was
+    # never found; they are now list_header_* (see the headers). The Z screen is the only
+    # consumer demonstrated anywhere. The three run locators are the strings whose db
     # lines DB_RE cannot see: "A LEVEL " carries a leading 0x8d newline glyph, and the
     # SPELL- / bare-dash labels sit on multi-string db lines.
     ("U2_S_Z_A_LEVEL",         "4580_level_gain_msg.asm", ("run", 0x4784, 8, "A LEVEL ")),
@@ -159,10 +159,10 @@ MANIFEST = [
     ("U2_S_Z_KEYS",            "462F_status_keys.asm", 0),
     ("U2_S_Z_SPELL",           "464D_sub_464d.asm",       ("exe_only", 0x4850, 6, "SPELL-")),
     ("U2_S_Z_TOOLS",           "466F_status_tools.asm", 0),
-    ("U2_S_Z_WEAPONS_LIST",    "4748_shop_header_weapons.asm", 0),
-    ("U2_S_Z_ARMOUR_LIST",     "47A2_shop_header_armour.asm", 0),
-    ("U2_S_Z_SPELLS_LIST",     "47FA_shop_header_spells.asm", 0),
-    ("U2_S_Z_ITEMS_LIST",      "4853_shop_header_items.asm", 0),
+    ("U2_S_Z_WEAPONS_LIST",    "4748_list_header_weapons.asm", 0),
+    ("U2_S_Z_ARMOUR_LIST",     "47A2_list_header_armour.asm", 0),
+    ("U2_S_Z_SPELLS_LIST",     "47FA_list_header_spells.asm", 0),
+    ("U2_S_Z_ITEMS_LIST",      "4853_list_header_items.asm", 0),
     # The list separators. The plural is a literal S and the dash is separate, because the
     # item loop prints the S for everything except index 3 (BOOTS) and the dash always.
     ("U2_S_Z_PLURAL_DASH",     "4771_sub_4771.asm", 0),

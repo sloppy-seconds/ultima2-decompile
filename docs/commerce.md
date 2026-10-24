@@ -10,11 +10,12 @@ described rather than reproduced.
 **measured negative, with a stated limit.** Every shop catalogue in the executable is an
 **inline string** printed via the string-output routine (call target `L_0051df`; the
 routines are `asm/4FDF_str_out`, `asm/51EB_str_out_at`, `asm/51FD_str_out_core`), not a
-record in a table. The four `shop_header_*` routines are 13-byte label printers that fall
-through to whatever follows:
+record in a table. The four `list_header_*` routines (renamed 2026-10-28 from `shop_header_*`: no caller
+was ever found for that attribution, and the catalogues in § 2 live elsewhere) are 13-byte
+label printers that fall through to whatever follows:
 
 ```
-shop_header_weapons:
+list_header_weapons:
         call L_0051df
         db "WEAPONS: ",0x00
 ```
