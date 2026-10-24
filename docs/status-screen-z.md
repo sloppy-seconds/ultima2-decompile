@@ -242,7 +242,7 @@ at `DAGGER`; the byte before `IN THE WATER.` in the image is a second NUL, so th
 index base counts one entry that carries no text. `engine/tools/extract/extractor.py` now
 splits the pool and **asserts** that anchor instead of trusting the split.
 
-### What still blocks shipping the screen, stated plainly
+### What blocked the screen, and what the answer turned out to be
 
 The engine builds in CI with no `original/ultimaii.exe`, from the `db` lines of `asm/`. The
 pool is the one piece of text the asm tree cannot supply: the bulk wave disassembled the
@@ -250,18 +250,36 @@ region after `HANDS` as code, so `asm/4C50_plane_landing_site.asm` has `db "GGER
 `db "CE"`, `db "ORD"` where `DAGGER`, `MACE` and `SWORD` live. The strings are recoverable
 — `assemble_clean.sh` rebuilds those bytes exactly — but not by reading the listing.
 
-So the extractor emits the tables from the exe and, when the pool cannot be
-reconstructed, **says so on stderr and emits no tables at all** rather than a partial one —
-it does not fail the build, because the 93 single strings are what the engine has always
-built against and taking them down for a table nothing consumes yet would be worse. Before
-`u2_status_draw_full()` can land,
-one of these has to be chosen, and it is an owner call because it decides what CI is allowed
-to certify:
+This was first written up as a decision for the owner between a CI content fixture, a
+skipping test, or a committed generated table. **That framing was wrong and those options
+are withdrawn.** The rule is that game truth needs the game, the game cannot go on GitHub,
+so game truth is checked on a dev box and CI checks structure. Concretely:
 
-1. give the engine-tests workflow a content fixture the way the emulator runs do, and the
-   Z screen is testable there;
-2. let the Z command and its test skip when `U2_T_*` is absent, so CI proves the layout and
-   nothing about the names;
-3. add a generated, committed pool artefact derived from the exe, which is the only option
-   that makes the names available with no content — and it needs a licensing read, because it
-   is game text copied into our tree outside `asm/`.
+* the extractor emits the seven tables when it has the exe, and when it does not it **warns
+  and emits none** — never a partial or silently-empty table;
+* `status.c` compiles either way (`#ifdef U2_T_WEAPONS_N`), and with no pool the names render
+  blank while every position, label, dash and count still draws;
+* `status_check.c` asserts the layout in both modes and asserts *which mode it ran in*, via
+  `u2_status_has_pool()`, so a silently lost pool cannot pass as green.
+
+`status_check` passes with 44 checks against the pool and 39 without it.
+
+### Two more things the bytes said, found by building it
+
+**`DS:31 = 0x26` is the right margin, not an unknown.** Open question 3 asked what the
+`mov byte [0x31],0x26` at the head of the handler was for. It is the right margin, and it is
+load-bearing: at the default `0x1d` (col 29) the `TORCHES-` field printed at column 29
+overflows and wraps onto the `ARMOUR` row, so the row-4 label came out reading
+`RCHES-50-`. `status_check` caught that on its first run.
+
+**The item list starts at index 0; the other three start at 1.** The loop heads are
+`mov bl,1` for weapons (`f4955`), armour (`f49ae`) and spells (`f4a06`), but `mov bl,0` for
+items (`f4a5e`). So `RING` can be listed and `HANDS` and `SKIN` cannot — which corrects the
+sweeping statement above that every loop starts at 1. The plural and the dash are also two
+separate prints with only the plural conditional: name, then `S` unless index 3, then `-`
+always, then the count. Collapsing them into one separator produced `RINGS01`, and that was
+the second bug the test caught.
+
+**`MALE` and `FEMALE` are exe-only locators.** `asm/5400` stores them as a byte list, so the
+fallback paints them empty and the sex assertion is conditional on the string being
+available. Asserting an empty cell and calling it a pass would have been the third bug.

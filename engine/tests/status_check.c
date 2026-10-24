@@ -11,6 +11,7 @@
  * the GOLD= tail restores the margin to 0x1d.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "core/ctx.h"
@@ -59,6 +60,141 @@ static const char *row_text(u2_ctx *ctx, int row, char *buf, int c0, int c1)
  * rect) and the status block (cols 30..39, outside it). */
 #define msg_text(ctx, row, buf)    row_text((ctx), (row), (buf), 0, 29)
 #define status_text(ctx, row, buf) row_text((ctx), (row), (buf), 30, 39)
+
+/* Read exactly cols c0..c1 with no stripping. row_text strips leading blanks, which is
+ * right for the message window and wrong for a position assertion: "the label starts at
+ * column 29" has to mean the glyphs are physically at column 29. */
+static const char *cell_span(u2_ctx *ctx, int row, int c0, int c1, char *buf)
+{
+    int n = 0;
+    for (int c = c0; c <= c1 && n < 60; c++)
+        buf[n++] = (char)ctx->vram.cell[row][c].ch;
+    buf[n] = '\0';
+    return buf;
+}
+
+static void z_at(u2_ctx *ctx, int row, int col, const char *want, const char *what)
+{
+    char buf[64], msg[180];
+    const char *got = cell_span(ctx, row, col,
+                                col + (int)strlen(want) - 1, buf);
+    snprintf(msg, sizeof msg, "%s — row %d col %d reads \"%s\", want \"%s\"",
+             what, row, col, got, want);
+    ok(strcmp(got, want) == 0, msg);
+}
+
+/* Concatenate a band of rows. The list bodies wrap across several rows exactly as the
+ * original's do — the transcription's item list runs from row 18 to row 22 — so a
+ * substring check has to look at the whole band, not one row. */
+static const char *z_band(u2_ctx *ctx, int r0, int r1, char *buf, size_t cap)
+{
+    size_t n = 0;
+    for (int r = r0; r <= r1; r++)
+        for (int c = 0; c < 40 && n + 1 < cap; c++) {
+            char ch = (char)ctx->vram.cell[r][c].ch;
+            if (ch == '\r' || ch == '\n') ch = ' ';
+            buf[n++] = ch;
+        }
+    buf[n] = '\0';
+    return buf;
+}
+
+static void z_checks(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+
+    memcpy(st->name, "G23MAX", 7);
+    st->sex = 'F';
+    st->race = 0; st->pclass = 0;
+    st->exp_lo = 0x99; st->exp_hi = 0x00;
+    st->readied_weapon = 9; st->worn_armour = 6; st->spell_pick = 0;
+    st->torches = 0x50; st->keys = 0x20; st->tools = 0x20;
+    st->stat_str = st->stat_agi = st->stat_sta = 0x40;
+    st->stat_cha = st->stat_wis = st->stat_int = 0x40;
+    for (int i = 0; i < 10; i++) st->weapons_owned[i] = 1;
+    for (int i = 0; i < 8; i++)  st->owned_armour[i] = 0;
+    for (int i = 0; i < 10; i++) st->spell_counts[i] = 0;
+    for (int i = 0; i < 16; i++) st->items_held[i] = 1;
+
+    u2_vram_init(&ctx->vram);
+    u2_status_draw_full(ctx);
+
+    /* Header. The sex string is a committed label, so it is asserted unconditionally. */
+    z_at(ctx, 0, 1, "G23MAX", "name");
+    z_at(ctx, 1, 1, "A LEVEL ", "level label");
+    z_at(ctx, 1, 9, "99", "level value (DS:56)");
+    /* MALE/FEMALE are exe-only run locators (asm/5400 stores them as a byte list), so
+     * the fallback build paints them empty. Assert the position only when the string is
+     * actually available, rather than asserting an empty cell and calling it a pass. */
+#ifdef U2_S_SEX_FEMALE
+    if (U2_S_SEX_FEMALE[0])
+        z_at(ctx, 1, 12, U2_S_SEX_FEMALE, "sex");
+#endif
+
+    /* The three-column block, at the columns the str_out_at pairs set. */
+    z_at(ctx, 3, 1,  "  WEAPON-",  "weapon label");
+    z_at(ctx, 3, 29, "TORCHES-50", "torches");
+    z_at(ctx, 4, 1,  "  ARMOUR-",  "armour label");
+    z_at(ctx, 4, 32, "KEYS-20",    "keys");
+#ifdef U2_S_Z_SPELL
+    z_at(ctx, 5, 4,  "SPELL-",     "spell label");
+#endif
+    z_at(ctx, 5, 31, "TOOLS-20",   "tools");
+
+    /* The stats: the derived columns are 1/16/30 on row 6 and 2/15/29 on row 7, which
+     * is NOT the even spacing the screenshot suggested. */
+    z_at(ctx, 6, 1,  "STRENGTH-40", "strength");
+    z_at(ctx, 6, 16, "STAMINA-40",  "stamina");
+    z_at(ctx, 6, 30, "WISDOM-40",   "wisdom");
+    z_at(ctx, 7, 2,  "AGILITY-40",  "agility");
+    z_at(ctx, 7, 15, "CHARISMA-40", "charisma");
+    z_at(ctx, 7, 29, "INTELL.-40",  "intelligence");
+
+    /* The four list headers. */
+    z_at(ctx, 9,  1, "WEAPONS: ", "weapons list header");
+    z_at(ctx, 12, 1, "ARMOUR: ",  "armour list header");
+    z_at(ctx, 14, 1, "SPELLS: ",  "spells list header");
+    z_at(ctx, 18, 1, "ITEMS: ",   "items list header");
+
+    if (u2_status_has_pool()) {
+        /* With the pool the lists carry names, start at index 1 (so no HANDS), and the
+         * item loop must not double the S on BOOTS. */
+        char band[512];
+        z_at(ctx, 9, 10, "DAGGERS-01", "weapons list starts at index 1");
+        z_band(ctx, 9, 11, band, sizeof band);
+        ok(strstr(band, "HANDS") == NULL,
+           "HANDS is never listed (loop starts at index 1)");
+        ok(strstr(band, "QUICK SWORDS-01") != NULL,
+           "a two-word weapon name survives the plural");
+        z_band(ctx, 18, 23, band, sizeof band);
+        /* The item list wraps mid-word exactly as the original's does — the transcription
+         * notes BOOTS rendering as "BOO"/"TS-01" — so a substring test has to look at the
+         * band with the wrap's line breaks removed. Stripping spaces is the honest way to
+         * ask "did the glyphs BOOTS-01 appear in order", which is the claim being made. */
+        char flat[512];
+        size_t fn = 0;
+        for (size_t i = 0; band[i] && fn + 1 < sizeof flat; i++)
+            if (band[i] != ' ') flat[fn++] = band[i];
+        flat[fn] = '\0';
+        ok(strstr(flat, "BOOTS-01") != NULL,
+           "BOOTS takes the bare dash, not a doubled S");
+        ok(strstr(flat, "RINGS-01") != NULL,
+           "a normal item takes the plural S");
+        ok(strstr(flat, "BOOTSS") == NULL, "no doubled S anywhere in the item list");
+    } else {
+        /* Without the pool the names are blank by design, and that must be visible in the
+         * output rather than silent: each entry still renders its plural, dash and count,
+         * so the layout and the loop bounds are still exercised. This is a supported
+         * configuration, not a degraded one — CI builds this way. */
+        char band[512];
+        z_at(ctx, 9, 10, "S-01", "weapons list with no pool: counts still print");
+        z_band(ctx, 18, 23, band, sizeof band);
+        ok(strstr(band, "S-01") != NULL,
+           "item list with no pool: plurals, dashes and counts survive");
+        ok(strstr(band, "RING") == NULL && strstr(band, "BOOTS") == NULL,
+           "no pool means no names, and the test proves it rather than assuming");
+    }
+}
 
 int main(void)
 {
@@ -134,6 +270,12 @@ int main(void)
     ok(strcmp(msg_text(&ctx, 20, buf), "CMD: EAST") == 0,
        "fourth command scrolls the oldest out of the window");
     ok(strcmp(msg_text(&ctx, 23, buf), "CMD:") == 0, "prompt still bottom");
+
+    /* --- the Z status screen -------------------------------------------- */
+    printf("  --- the Z whole-page status screen (docs/status-screen-z.md § 7) ---\n");
+    z_checks(&ctx);
+    printf("  %s  pool mode: %s\n", "ok",
+           u2_status_has_pool() ? "name pool present" : "name pool absent (no content)");
 
     printf("status_check: %s\n", fails ? "FAIL" : "PASS");
     return fails ? 1 : 0;

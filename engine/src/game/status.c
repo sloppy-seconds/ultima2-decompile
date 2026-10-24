@@ -159,26 +159,39 @@ static void z_append(char *out, size_t cap, const char *s)
 }
 
 /*
- * The list loops, asm/495B..4AA5. Every one of them starts at index 1 — so HANDS and SKIN
- * can never appear — skips an entry whose count byte is zero, prints the name, the plural,
- * the count as two packed-decimal digits, and a space. The item loop is the one with a
- * special case: index 3 already ends in S, so it prints the bare dash instead of "S-".
+ * The list loops, asm/495B..4AA5. Each prints the name, the plural, the count as two
+ * packed-decimal digits, and a space, skipping entries whose count byte is zero.
+ *
+ * The start index is NOT the same for all four, and that is easy to get wrong: the loop
+ * heads load `mov bl,1` for weapons (f4955), armour (f49ae) and spells (f4a06), but
+ * `mov bl,0` for items (f4a5e). So RING can be listed and HANDS and SKIN cannot — which
+ * is what status_check asserts, and what the first version of this function got wrong.
+ *
+ * The item loop is also the one with a special case: index 3 already ends in S, so it
+ * prints the bare dash instead of "S-" (f4a7a: cmp byte [0x1f],3).
+ *
+ * Read the item loop's bytes carefully, because the plural and the dash are two separate
+ * prints and only the plural is conditional: name, then "S" unless index 3, then "-"
+ * always, then the count. Collapsing those into one separator string is what produced
+ * `RINGS01` in the first version.
  */
 static void z_list(u2_ctx *ctx, int col, int row, const char *header,
                    const uint8_t *counts, int n,
-                   const char *const *names, int names_n, int bound,
-                   const char *sep_plural, const char *sep_plain, int plain_index)
+                   const char *const *names, int names_n, int start, int bound,
+                   const char *sep_plural, int plain_index, const char *sep_always)
 {
-    char line[128];
+    char line[256];
     line[0] = '\0';
     z_append(line, sizeof line, header);
-    for (int i = 1; i < bound && i < n; i++) {
+    for (int i = start; i < bound && i < n; i++) {
         if (counts[i] == 0)
             continue;
         z_append(line, sizeof line,
                  (i < names_n) ? names[i] : "");
-        z_append(line, sizeof line,
-                 (sep_plain && i == plain_index) ? sep_plain : sep_plural);
+        if (i != plain_index)
+            z_append(line, sizeof line, sep_plural);
+        if (sep_always)
+            z_append(line, sizeof line, sep_always);
         z_bcd(line, sizeof line, counts[i]);
         z_append(line, sizeof line, " ");
     }
@@ -190,6 +203,13 @@ void u2_status_draw_full(u2_ctx *ctx)
     u2_state *st = &ctx->state;
     char name[17];
     char b[48];
+
+    /* asm/4568 sets DS:31 = 0x26 before drawing anything. That is the right margin, and
+     * it matters: the default 0x1d (col 29) makes TORCHES- at column 29 overflow and
+     * wrap onto the ARMOUR row, which is exactly what the first version of this function
+     * did and status_check caught. 0x26 = 38 gives the page its full 40 columns. */
+    const uint8_t margin_was = st->right_margin;
+    st->right_margin = 0x26;
 
     memcpy(name, st->name, 16);
     name[16] = '\0';
@@ -267,17 +287,19 @@ void u2_status_draw_full(u2_ctx *ctx)
     /* The four lists. Count arrays: weapons DS:76, armour DS:80, spells DS:B6,
      * items DS:D6 — all read off the loop bodies in asm/495B..4AA5. */
     z_list(ctx, 1, 9,  U2_S_Z_WEAPONS_LIST, st->weapons_owned,
-           (int)sizeof st->weapons_owned, Z_TBL(U2_T_WEAPONS), 10,
-           U2_S_Z_PLURAL_DASH, NULL, -1);
+           (int)sizeof st->weapons_owned, Z_TBL(U2_T_WEAPONS), 1, 10,
+           U2_S_Z_PLURAL_DASH, -1, NULL);
     z_list(ctx, 1, 12, U2_S_Z_ARMOUR_LIST, st->owned_armour,
-           (int)sizeof st->owned_armour, Z_TBL(U2_T_ARMOUR), 7,
-           U2_S_Z_PLURAL_DASH, NULL, -1);
+           (int)sizeof st->owned_armour, Z_TBL(U2_T_ARMOUR), 1, 7,
+           U2_S_Z_PLURAL_DASH, -1, NULL);
     z_list(ctx, 1, 14, U2_S_Z_SPELLS_LIST, st->spell_counts,
-           (int)sizeof st->spell_counts, Z_TBL(U2_T_SPELLS), 10,
-           U2_S_Z_PLURAL_DASH, NULL, -1);
+           (int)sizeof st->spell_counts, Z_TBL(U2_T_SPELLS), 1, 10,
+           U2_S_Z_PLURAL_DASH, -1, NULL);
     z_list(ctx, 1, 18, U2_S_Z_ITEMS_LIST, st->items_held,
-           (int)sizeof st->items_held, Z_TBL(U2_T_ITEMS), 16,
-           U2_S_Z_PLURAL_S, "-", 3);
+           (int)sizeof st->items_held, Z_TBL(U2_T_ITEMS), 0, 16,
+           U2_S_Z_PLURAL_S, 3, "-");
+
+    st->right_margin = margin_was;
 }
 
 int u2_status_has_pool(void)
