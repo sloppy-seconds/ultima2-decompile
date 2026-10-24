@@ -1077,6 +1077,32 @@ Two side effects of the same seam, both worth reproducing:
   something, unidentified, and interesting because the fan patch added its own
   speed control independently.
 
+#### Re-verified hop by hop, 2026-10-28, and three things the trace added
+
+Every hop above was re-checked against `original/ultimaii.exe` rather than trusted. File `0x5109`
+is `48 0e 50 19 4d 05 4b 17`; file `0x787E` is `0e 19 05 17`; the four walk-loop compares at
+runtime `094F/0976/099D/09C3` are `3a 06 6e|6f|71|70 02`, i.e. `cmp al,[DS:26E..271]`. Four
+scancodes, four distinct codes, each landing on exactly one of the four bytes the walk loop
+tests. The swallow site is `3c 05 74 08 / 3c 0e 74 04 / 3c 17 75 05 / b0 00` at file `0x5158`.
+Nothing above is corrected; three things were missing from it.
+
+* **The swallow list is three, not four.** It covers `0x05`, `0x0E` and `0x17` — east, north and
+  west — and omits `0x19`, south. `Ctrl-S` is `0x13`, which this routine already spends on the
+  `DS:54D` toggle, so south could not take its own initial; it got `0x19`, and the swallow list
+  was never extended to match. The prediction, **unobserved**, and on `docs/needs-gameplay.md`
+  as G30: typing `Ctrl-Y` moves the character south while `Ctrl-E`, `Ctrl-N` and `Ctrl-W` do
+  nothing. If that is wrong, the swallow list has been misread.
+* **`key_poll` drains the keyboard buffer.** After the consume at `asm/4F56`, `asm/4F69..4F74`
+  loops `AH=01h`/`AH=00h` until nothing is pending, keeping the first key and discarding the
+  rest. That is a game behaviour, and it is the mechanism underneath standing hazard 1 of
+  `docs/needs-gameplay.md`: keys arriving mid-turn are not lost in transit, they are thrown away
+  on purpose by the next `key_poll`. No retry logic in the injection tool can fix that; the only
+  fix is one key, then wait for the state to move.
+* **The return convention is a single instruction.** `AH = 0xFF` (consumed) versus `AH = 0x00`
+  (none) is decided by the no-key branch at `asm/4F52` jumping *past* the `mov $0xff,%ah` at
+  `asm/4FD1`. Read as a fragment, `key_poll` looks like a routine with no return value; the
+  Phase 3 split put the setter and the skip in different files.
+
 ### The movement model, proven
 
 Main input loop, file `0x0B36..0x0BF1` (re-decoded; the `asm/` fragments

@@ -61,21 +61,22 @@ one I caught before writing a probe instead of after shipping a wrong claim. Wri
 `docs/contract-creature-tick.md` § "The `DS:1F` contradiction", including the verdict on
 `asm/0CC0`'s breakpoint warning: still correct, still load-bearing, but path-local.
 
-### U3 — the arrow scancode path, end to end
+### U3 — ~~the arrow scancode path, end to end~~ **CLOSED 2026-10-28c — it was already traced**
 
-Contract 1 consumes direction codes at `DS:26E..271`. Nobody has traced how a scancode gets
-there.
+`docs/phase4-implementation.md` § "Direction keys: proven, and they are the arrows" has had the
+whole chain since CP4, including the table address, the backwards scan, the `DS:26E..271` data
+initialiser and the live `captures/spice86/live-ds-4f4d.bin` confirmation. The handoff's "cited
+but never traced" was wrong about its own tree — fourth Step 0 miss, first one where the answer
+was in the file the ticket told me to write.
 
-- **Goal:** close the chain hardware scancode → `INT 16h` AH=01h/00h → the translation table →
-  `DS:26E..271` → the walk-loop compares. `docs/phase4-plan.md` § 350 asserts a table at
-  `CS:0x4F09` with `48->0e, 50->19, 4d->05, 4b->17` and claims `Ctrl-E/N/W` are swallowed at
-  the key seam. **That claim is cited but never traced.** Verify it or refute it.
-- **First command:** `cd asm && ls | grep -iE 'key|poll|scancode|arrow'` then read
-  `4F4D_key_poll.asm`, `2CD8_keys_add_two.asm`, `462F_status_keys.asm`.
-- **Done when:** either a traced chain with addresses at every hop, or a named break point.
-- **Falsification:** the four arrow scancodes must map to four distinct direction codes that
-  match the four bytes the walk loop compares against. If two arrows land on the same code, the
-  table reading is wrong.
+What was done instead: every hop re-verified against `original/ultimaii.exe` (table bytes, DS
+initialiser, the four walk-loop compares, the swallow site — all match), and the trace turned up
+three things that had not been written down. The swallow list is **three codes, not four**, so
+`Ctrl-Y` should walk south (G30); `key_poll` **drains the typeahead buffer**, which is the real
+mechanism behind standing hazard 1 and means no injection tool can fix a key burst; and the
+`AH=0xFF`/`AH=0x00` return convention is one instruction that the Phase 3 fragment split put in a
+different file from the branch that skips it. `asm/4F4D_key_poll` now carries the span and the
+contract, and nine of its fragments got their clause.
 
 ### U4 — item 1 as a reconciliation contract, not an extraction
 
@@ -100,10 +101,10 @@ Self-contained, low risk, and it closes the last unnamed files in `docs/apple2-r
 - **Done when:** each is classified as code, data, or overlay, with the evidence. If one turns
   out to be a gameplay table, that is worth a paragraph, not a contract.
 
-## Step 0 failed twice — read this before you start
+## Step 0 failed twice in one session, and twice more in the next — read this before you start
 
-Both failures in one session, and the second was mine in the turn where I promised to apply the
-discipline:
+The first two, both in a single session, and the second was mine in the turn where I promised to
+apply the discipline:
 
 1. I called `0x50B3` an undecoded black box. It is `asm/50B3_map_tile_ptr`, named, byte-proven,
    live-observed in 49 of 60 harvests, 25 caller files, addressing spelled out in the header.
@@ -121,6 +122,15 @@ grep -rn "<address>" docs/ disasm/   # has someone already written it down?
 ```
 
 If the answer is yes, the work is reconciliation or extension, not extraction. Say which.
+
+**The discipline was applied in the next session and still produced two more, which is the part
+worth recording.** U2 (`DS:1F`'s "contradiction") was answered in `asm/0CB0`'s header six days
+earlier, and U3 (the arrow scancode chain) was fully traced in `docs/phase4-implementation.md`
+since CP4 — a file the ticket itself cited for a *different* claim. Both were caught before the
+wrong claim shipped rather than after, which is the only thing that distinguishes them from the
+first two. The lesson is not "grep once", it is that **the ticket is not the source of truth
+about what is unknown**: a handoff written by a tired agent lists gaps it guessed at, and two of
+the five gaps on the list below were not gaps. Grep the *question*, not the task title.
 
 ## Hard rules for unattended work
 
