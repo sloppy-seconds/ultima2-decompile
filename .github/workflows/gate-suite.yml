@@ -1,0 +1,47 @@
+name: gate-suite
+
+# EVERY OTHER GATE, IN CI. This exists because the project's safety property is its gates,
+# and until now only two of them ran automatically: assemble_clean (asm-checksum) and the
+# engine suite (engine-tests). cmd_handlers, fragment_splits, xref_provenance and the body
+# guard were local habits -- which is not a theory of failure but a recorded one:
+# xref_provenance sat red for a week and nobody noticed, because nothing ran it.
+#
+# check_all.sh --ci enforces "a SKIP IS NOT A PASS" for real: a REQUIRED gate that cannot
+# run fails the job instead of quietly skipping. Gates whose inputs are gitignored by policy
+# (original/, references/apple/, the Ghidra output) are declared optional and print SKIP*
+# so the log says out loud what was not checked, rather than pretending.
+#
+# The copyrighted original is not in this repo and is not fetched here, so the string and
+# Apple II gates are expected to SKIP* on CI. That is the design, not a gap to close.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # ci_base.sh needs a real base ref; fetch-depth 1 leaves none.
+          fetch-depth: 0
+      - name: Toolchain
+        run: python3 --version && as --version | head -1
+
+      - name: Gate suite (required gates must run; optional ones declare themselves)
+        env:
+          GITHUB_PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GITHUB_PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          BASE=$(bash tools/ci_base.sh) || exit 2
+          echo "ASM_GUARD_BASE=$BASE"
+          ASM_GUARD_BASE="$BASE" bash tools/check_all.sh --ci
+
+      # The body guard gained an exception path (marked corrections) and a base-ref
+      # requirement. Both are places a gate silently dies, so its ten controls run in CI
+      # rather than only when someone remembers. They build a throwaway worktree, which is
+      # why they are not part of check_all --ci.
+      - name: Body guard controls (prove the gate can still go red)
+        run: bash engine/tests/asm_body_guard_selftest.sh

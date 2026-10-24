@@ -38,20 +38,10 @@ jobs:
       # body edit sailed through. See engine/tests/asm_body_guard.py.
       - name: asm/ body guard (against the merge base)
         env:
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
+          GITHUB_PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GITHUB_PUSH_BEFORE: ${{ github.event.before }}
         run: |
-          BASE="${PR_BASE:-}"
-          if [ -z "$BASE" ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
-            BASE="$PUSH_BEFORE"
-          fi
-          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            BASE="$(git rev-parse HEAD~1 2>/dev/null || true)"
-          fi
-          if [ -z "$BASE" ]; then
-            echo "::error::no base ref available; refusing to run the body guard vacuously"
-            exit 2
-          fi
+          BASE=$(bash tools/ci_base.sh) || exit 2
           echo "body guard base: $BASE"
           python3 engine/tests/asm_body_guard.py --base "$BASE"
 
