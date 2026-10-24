@@ -190,7 +190,16 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
-* **2026-10-28** — **If the input of the thing you are measuring can be written, write it;
+* **2026-10-28b** — **A wrapper named from an INT call shape must have its register split
+  decoded first.** A naming wave that labels system wrappers by recognizable INT/port shapes
+  read `mov $0x1,%ax` before an `int 10h` as "function 1", but the immediate loads AX: AH is 0
+  and AL is 1, i.e. set-video-mode with mode 1 — not the cursor-shape or teletype call the
+  label claimed. The wrong name then propagated into the reimplementation's seam map and
+  became load-bearing there. Rule for a generic harness: derive the function number from AH
+  (or AH and AL separately, when the call takes a pair) after tracking writes to the whole
+  register, and refuse to name a wrapper when the write that set the number is not visible
+  inside the function's own bytes.
+* **2026-10-28** — **If the input of the thing you are measuring can be written, write it; 
   waiting for the program to produce the value is the expensive way to sample a rare branch.**
   A selector that had resisted two sessions of passive trapping resolved in one afternoon once
   the harness could poke the counter and drive one command per sample. The generic shape is

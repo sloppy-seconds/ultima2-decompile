@@ -228,6 +228,8 @@ static void draw_field(u2_ctx *ctx, form *f, int which)
         memcpy(b, f->name, (size_t)f->name_len);
         b[f->name_len] = '\0';
         seam_str_out(ctx, b);
+        /* Pad the field with the bare primitive, not char_print: the cell is already
+         * inside the margin and the field must not wrap or sync the cursor. */
         for (int i = f->name_len; i < NAME_MAX; i++) seam_char_out(ctx, ' ');
         break;
     }

@@ -74,9 +74,11 @@ void seam_char_print(u2_ctx *ctx, uint8_t ch)
     text_sync_cursor(ctx);                        /* asm/5057 -> asm/51FD */
 }
 
+/* Engine primitive, not an asm seam: one glyph at the cursor with none of char_print's
+ * CR / margin / sync behaviour. asm=- because there is no located original site for it. */
 void seam_char_out(u2_ctx *ctx, uint8_t ch)
 {
-    u2_trace(ctx, "char_out", "4A1C", "ch=0x%02X", ch);
+    u2_trace(ctx, "char_out", "-", "ch=0x%02X", ch);
     u2_vram_put(&ctx->vram, ch, ctx->state.text_attr);
 }
 

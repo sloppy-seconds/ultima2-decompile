@@ -1,8 +1,8 @@
 /*
  * vram.c — 40x25 character grid: primitives only.
- * spec: asm/4A1C_char_out.asm (teletype), asm/5025_sub_5025.asm (INT 10h
- *       AH=06h window scroll), asm/51FD_str_out_core.asm (cursor),
- *       asm/53A0_sub_53a0.asm (40-column row clear)
+ * spec: asm/5025_sub_5025.asm (INT 10h AH=06h window scroll),
+ *       asm/51FD_str_out_core.asm (cursor), asm/53A0_sub_53a0.asm (40-column row
+ *       clear). u2_vram_put is the exception: an engine primitive with no asm spec.
  * The margin/attribute/wrap policy lives in core/seam.c, next to the asm that
  * implements it; this file is the hardware-shaped storage underneath.
  */
@@ -51,9 +51,10 @@ void u2_vram_poke(u2_vram *v, int row, int col, uint8_t ch, uint8_t attr)
 
 void u2_vram_put(u2_vram *v, uint8_t ch, uint8_t attr)
 {
-    /* char_out (asm/4A1C) is a bare INT 10h AH=01h teletype: no CR handling,
-     * no attribute of its own. Callers that want the game's text printer
-     * semantics use char_print instead (see core/seam.c). */
+    /* Engine primitive: one glyph at the cursor, no CR handling, no margin policy
+     * and no attribute of its own. It is not asm/4A1C, which is a video-mode set;
+     * the original's INT 10h AH=0E teletype site has never been located. Callers
+     * that want the game's text printer semantics use char_print (see core/seam.c). */
     ch &= 0x7F;
     if (ch < 0x20)
         return;

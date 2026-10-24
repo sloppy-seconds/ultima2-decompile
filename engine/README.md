@@ -80,7 +80,7 @@ address on every call, which is what makes a trace auditable against `asm/`:
 
 | seam | asm spec | engine |
 | --- | --- | --- |
-| `char_out` | `asm/4A1C_char_out.asm` | `seam_char_out` |
+| `char_out` | — engine primitive, no located asm site | `seam_char_out` |
 | `char_print` | `asm/5003_char_print.asm` | `seam_char_print` |
 | `char_print_wrap` | `asm/53F4_char_print_wrap.asm` | `seam_str_out` |
 | `str_out` | `asm/4FDF_str_out.asm` | `seam_str_out` |

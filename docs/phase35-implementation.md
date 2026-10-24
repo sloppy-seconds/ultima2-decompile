@@ -16,6 +16,12 @@ functions), INT/port seams. Renames applied only where the evidence is direct:
 * **structural anchors** — Phase 2 facts (`cmd_dispatch` = the cs:0x730 jump
   table; `cmd_done` = the 59-site handler return that prints CR).
 
+> **Correction 2026-10-28b.** One name from this wave was wrong. `char_out` (asm/4A1C) is
+> `push ax ; mov $0x1,%ax ; int 10h` — AX=0x0001, so AH=00 set-video-mode AL=01, not a
+> teletype — and it has been renamed `screen_clear_mode1` with the evidence in its header.
+> The shape heuristic read the immediate as AH when in fact it loads the whole register.
+> See `docs/harness-portability.md` § 6.
+
 Every renamed file carries a `# name-evidence:` header line. Renames touch
 only the file name + header + entry label; cross-function references are
 address labels (`L_<file-offset>`), so nothing else moves. Each rename

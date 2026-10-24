@@ -10,7 +10,9 @@
  * call, clock(), or read(2) directly.
  *
  * Seam map (asm -> API):
- *   char_out        asm/4A1C_char_out.asm   -> seam_char_out   -> renderer->cell
+ *   char_out        engine primitive, no located asm site -> seam_char_out -> renderer->cell
+ *                   (it used to cite asm/4A1C, which is INT 10h AH=00 AL=01 -- a video-mode
+ *                   set, not a teletype. The AH=0E teletype site has never been found.)
  *   char_print      asm/5003_char_print.asm -> seam_char_print
  *   str_out         asm/4FDF_str_out.asm    -> seam_str_out   -> renderer->cell
  *   str_out_at      asm/51EB_str_out_at.asm -> seam_goto      -> renderer->cursor

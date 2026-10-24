@@ -9,15 +9,19 @@
  * margin is 0x26/0x28 (asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm), and the
  * scroll window spans columns 0..right margin (asm/5025_sub_5025.asm).
  *
- * The original drives the screen three ways and the engine models each:
+ * The original drives the screen two ways and the engine models both, plus one
+ * primitive that is the engine's own:
  *   1. its own text printer — char_print (asm/5003_char_print.asm) writes with
  *      INT 10h AH=09h at the cursor in DS:0x2E (column) / DS:0x2F (row), using
  *      the attribute in DS:0x23E, wrapping at DS:0x31 and scrolling the
  *      message window when the row reaches 24;
- *   2. teletype — char_out (asm/4A1C_char_out.asm) is INT 10h AH=01h;
- *   3. direct video-memory pokes — routines that point DS at 0xB800 and read
+ *   2. direct video-memory pokes — routines that point DS at 0xB800 and read
  *      raw disk sectors into VRAM (asm/5351_sub_5351.asm + asm/535A_sub_535a.asm)
- *      are the picture path; the engine's bitmap side of it is CP9.
+ *      are the picture path; the engine's bitmap side of it is CP9;
+ *   3. a bare one-glyph write at the cursor — the engine's u2_vram_put, reached by
+ *      seam_char_out. It used to be mapped to char_out (asm/4A1C), but that routine
+ *      is INT 10h AH=00 AL=01, a video-mode set, and the INT 10h AH=0E teletype
+ *      site has never been located in this binary.
  *
  * Cursor position is applied with INT 10h AH=02h in str_out_core
  * (asm/51FD_str_out_core.asm). NB: docs/phase4-plan.md §1 lists DS:0x2E/0x2F

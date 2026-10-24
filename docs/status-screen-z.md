@@ -136,22 +136,21 @@ monsters on the field: read `mon_x`, press `Z`, read again.
 
 ## 5. Open questions, named
 
-1. **Exact column of every field.** The fragments set `DS:2E/2F` and use the `0x8d` escape,
-   and the transcription above is eyeballed from a screenshot. Derive the positions from
-   the writes in `4580..46BF` before asserting them in a test — a test that encodes an
-   eyeballed column is the `view_check.c` mistake again.
+1. **Exact column of every field.** **Closed 2026-10-28** — see § 7, which derives every
+   position from the `mov di,bx` / `mov si,bx` pairs in the handler and corrects three
+   columns in the § 2 transcription. Kept here only so the § 2 table is read with § 7.
 2. **`ARMOUR:` and `SPELLS:` print empty** for a character wearing POWER armour. Either the
    lists show only *spares*, or the owned-armour array is elsewhere than `state.h`'s
    `reserved_80[0x16]`. Unresolved.
 3. **`DS:31 = 0x26` and `DS:54F = 1`** are set at the top of the handler and their meaning
    is unknown. `DS:54F` is past the 256-byte save record, in the DS scratch area.
-4. **`asm/4A1C_char_out.asm` is misnamed** — see the `# NAME DISPUTED:` line added to that
-   file in the same commit as this document. It is not character output: `mov $0x1,%ax` is
-   AX=0x0001, so AH=00 set-video-mode AL=01, and it falls through (no `ret`) into the
-   cursor-zero at `4A22`. The engine has already inherited the wrong name in three places —
-   `platform.h:13` maps `char_out -> seam_char_out`, `vram.h:17` and `vram.c:54` call it a
-   teletype — so fixing it is an engine change with a seam in it, and it needs an owner.
-   One caller today (`creation.c:231`), which is why this has not bitten yet.
+4. **`asm/4A1C_char_out.asm` is misnamed** — **renamed 2026-10-28b** to
+   `asm/4A1C_screen_clear_mode1.asm`, owner-approved. It is not character output: `mov $0x1,%ax`
+   is AX=0x0001, so AH=00 set-video-mode AL=01, and it falls through (no `ret`) into the
+   cursor-zero at `4A22`. The engine's `seam_char_out` keeps its name and its behaviour but no
+   longer cites this address: the INT 10h AH=0E teletype it was said to stand in for has never
+   been located, so the seam is engine-authored. The header and the seam map in
+   `engine/src/platform/platform.h` carry the detail.
 5. **`A LEVEL 99` vs the handoff's `A LEVEL 00`** for the same character.
 
 ## 6. What implementing it actually needs, in order

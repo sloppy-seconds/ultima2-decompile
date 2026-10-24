@@ -6,12 +6,15 @@
  * per named seam in the asm tree. Game logic calls these and nothing else
  * that touches the outside world. Every call is traced with the asm function
  * it stands in for, which is what makes a --trace log auditable against asm/.
+ * One exception: char_out has no located asm counterpart and traces asm=-.
  */
 
 #include <stdint.h>
 #include "core/ctx.h"
 
-/* seam: char_out (asm/4A1C_char_out.asm) — teletype one character. */
+/* One glyph at the cursor: no CR handling, no margin policy of its own.
+ * Engine primitive — the asm/4A1C it used to cite is INT 10h AH=00 AL=01, a video-mode
+ * set, and the real INT 10h AH=0E teletype site has never been located in this binary. */
 void seam_char_out(u2_ctx *ctx, uint8_t ch);
 /* seam: char_print (asm/5003_char_print.asm) — teletype with CR handling. */
 void seam_char_print(u2_ctx *ctx, uint8_t ch);
