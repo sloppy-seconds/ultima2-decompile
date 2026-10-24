@@ -13,9 +13,12 @@ python3 tools/fragment_splits.py --selftest # controls, run before believing any
 ## Why this exists
 
 The clean wave gave every CFG-discovered basic block its own `asm/` file and its own row
-in `disasm/function-map.tsv`. That yields a correct byte proof and a wrong function map.
-The shape of a victim: a run of adjacent fragments, each ending on a branch into the next,
-only the first with an inbound `call`, exactly one `ret` in the whole run.
+in `disasm/function-map.tsv`. That yields a correct byte proof and a map that is correct
+about *starts* while saying nothing about *routines* — see `disasm/phase2-summary.md` § "What
+a row in `function-map.tsv` actually means", which is the precise version of what used to be
+written here as "a wrong function map". The shape of a victim: a run of adjacent fragments,
+each ending on a branch into the next, only the first with an inbound `call`, exactly one
+`ret` in the whole run.
 
 It was found by hand in the commerce region (`docs/g22-split-proposal.md`, merged under
 the owner's ruling as `2028..2051`, `2052..20AA`, `20AB..2121`), and then the identical

@@ -16,6 +16,38 @@ Owner approved CP6 2026-10-19; CP7 artifacts signed off same day.
 | Genuine Reko fabrications | **1 in 1299** (0A5F); 5 of 6 flagged were bytecheck FPs — see `disasm/defects.md` |
 | Reko failures | 3, all non-functions (2395/35DD nop-pads, 531B string site) |
 
+## What a row in `function-map.tsv` actually means
+
+The filename oversells it, and an agent who reads it literally will go hunting a defect that
+is not there.
+
+`tools/build_function_map.py` does not infer routines. It collects **discovered starts**
+(execution-confirmed or jump-table seeds, then `call` targets, then Reko procedure defines,
+in that priority order) and then **tiles the segment**: each start ends at `next_start - 1`,
+the last ends at `0x8FFF`, coverage is total by construction. A row therefore asserts two
+things and only two: *this address is a discovered entry point*, and *this is the region up
+to the next one*. It does not assert that the region is one routine, has one `ret`, or serves
+one purpose. "Functions" in the table above is the name of the artefact, not a claim about
+its rows.
+
+That is why the fragment pathology in `docs/fragment-splits.md` is not a Phase 2 bug. A real
+routine reached by a backwards branch yields several discovered starts, and the tiling
+faithfully cuts it into several rows. The map is correct about starts and silent about
+routines. The routine truth lives in `asm/` headers, which is where `AGENTS.md` § 3 sends
+anyone looking up an address.
+
+Two consequences worth knowing cold:
+
+* **The map and the `asm/` file set cannot diverge.** `check_func.py` validates a file's body
+  against its map row, so widening a row without joining the files fails `LENGTH MISMATCH`
+  and `assemble_clean.sh` dies on that row. Tested 2026-10-28d in a throwaway worktree:
+  `4AAD..4AE5` widened with the files left split gave `body assembled 11 B, map says 57 B`,
+  while `asm_body_guard` stayed green throughout because it only reads `asm/`. A map-only
+  correction is therefore not a cheaper substitute for merging. Merging is the only route.
+* **So correcting a row means merging, and merging needs an owner ruling** (`AGENTS.md` § 3).
+  Where a real span is known but unmerged, record it in the `asm/` header and leave the map
+  alone. That is the sanctioned state, not a backlog item.
+
 ## Phase 2 defect fix worth remembering
 
 Phase 1's linear disassembly mis-aligned at 106 function starts; the map-driven rebuild
