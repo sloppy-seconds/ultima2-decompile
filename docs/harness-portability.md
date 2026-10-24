@@ -190,6 +190,33 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28c** — **On a ported binary, a carry-flag-setting instruction two bytes away can
+  change the arithmetic, and a corpus split into one file per instruction will split the two
+  apart.** A real-mode x86 routine inherited from a 6502 original kept a `STC` in front of a
+  `SUB`. On the 6502, `SBC` with carry set is a plain subtract; on x86, `SUB` always subtracts
+  CF, so the port silently computes `a - b - 1`. Two sibling routines in the same binary did the
+  same subtraction with `STC` followed by `CMC`, which cancels it, so the idiom was not
+  consistent enough to pattern-match either. Nothing errored; the value was plausible and the
+  off-by-one only showed up as an asymmetry in behaviour. Three rules for a generic harness.
+  First, when a port is suspected, treat every `CLC`/`STC`/`CMC` adjacent to an arithmetic
+  instruction as load-bearing and resolve the pair, even across a fragment boundary. Second,
+  diff sibling routines that compute the same quantity — a disagreement between two near-copies
+  is a far better detector than a plausibility check on one. Third, a corpus chopped into
+  minimal fragments for label preservation must be re-read in address order before any
+  arithmetic claim is made about it; the instruction that sets a flag and the instruction that
+  consumes it can land in different files, and each file on its own reads as harmless.
+
+* **2026-10-28c** — **A predicate can return its verdict in the flags, not the return value, and
+  a decompiler will report it as a function that always succeeds.** A gate routine ended both of
+  its exits with an explicit compare against zero immediately before `RET`, and every caller
+  branched on the resulting zero flag rather than testing the returned byte. Read as a value
+  the function looks like it returns 0 or 255 and the callers look like they forgot to check.
+  Two rules. When a caller branches on a flag right after a call, look inside the callee for a
+  `CMP`/`TEST` on its return path and record the convention in the header, because it is a
+  calling convention and not a local detail. And prefer to reconstruct such a routine as one
+  function with two exits rather than as the fragments the boundary detector produced — the
+  verdict polarity is only legible when both exits are in scope at once.
+
 * **2026-10-28b** — **An instruction file that states an environment absolute will be quoted
   as evidence by the next agent, so a stale one is worse than a missing one.** A top-level
   rules file asserted "no display and no Xvfb, so keystrokes are unavailable". The host half

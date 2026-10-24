@@ -633,6 +633,11 @@ is the candidate tile byte feeding a per-species passability rule, not a rate la
 sentence above is left as written because the reasoning in § 12 was sound at the time; the
 correction lives in § 13 rather than being edited backwards.
 
+The ladder itself is now fully decoded (2026-10-28): the tile→verdict table, the two
+water-only species clauses, the `mon_type >= 0x78` clause, the `DS:26A` total freeze and the
+`DS:4A` edge guard are in `docs/contract-creature-tick.md` § "The step gate", and the routine
+is named on disk as `asm/2199_creature_step_gate.asm`.
+
 ## 13. The `0x1240` blocker was an address-space slip, and what the bytes actually say (2026-10-27)
 
 `docs/handoff-cp5-2026-10-24.md` § 2 named one thing to do first: "identify what
