@@ -54,6 +54,43 @@ STR_OUT_FILE = 0x51DF          # file offset of the printer's entry (the L_0051d
 WRAPPERS = (0x8D, 0x0D)
 
 
+def data_span_mask(exe=None):
+    """A bytearray mask of file offsets that asm/ renders as data, byte for byte.
+
+    Not the same as the extracted strings: the five blob files write ONE BYTE PER `db` LINE,
+    each with its own `L_xxxxxx:` label (`db 0x54  # split: branch target inside data`), so no
+    printable run of MIN_LEN is ever found inside them and a mask built from extracted strings
+    is empty exactly where it is most needed. Labels tile these regions, so the span of a data
+    line is 'from its own preceding label to the next label' and needs no base arithmetic at
+    all — which also means it cannot drift from the logic in parse().
+    """
+    if exe is None:
+        exe = open(EXE, 'rb').read()
+    mask = bytearray(len(exe))
+    for p in sorted(glob.glob('asm/*.asm')):
+        lines = open(p, errors='replace').read().splitlines()
+        marks = []                      # (line_idx, kind, addr) kind: 'L' label, 'D' data
+        for i, ln in enumerate(lines):
+            m = LABEL_RE.match(ln)
+            if m:
+                marks.append((i, 'L', int(m.group(1), 16)))
+            elif DB_RE.match(ln):
+                marks.append((i, 'D', None))
+        for j, (i, kind, addr) in enumerate(marks):
+            if kind != 'D':
+                continue
+            prev_lbl = next((a for k, (x, kd, a) in
+                             ((k, marks[k]) for k in range(j - 1, -1, -1)) if kd == 'L'), None)
+            next_lbl = next((a for x, kd, a in marks[j + 1:] if kd == 'L'), None)
+            if prev_lbl is None:
+                continue
+            lo = prev_lbl
+            hi = next_lbl if next_lbl is not None else lo + 16
+            for k in range(max(0, lo), min(len(exe), max(hi, lo + 1))):
+                mask[k] = 1
+    return mask
+
+
 def str_out_sites(exe):
     """File offsets of the byte after every near `call` to the string printer.
 
