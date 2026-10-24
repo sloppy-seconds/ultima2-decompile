@@ -27,10 +27,15 @@
 #         Of the 64 tile bytes that ever occur in a sector map (all multiples of 4,
 #           docs/passability-findings.md F12) exactly five are ever accepted: 0x08, 0x0C,
 #           0x5C, 0x70 and — for the two water kinds only — 0x00.
-# NOT ESTABLISHED: what 0x5C is. It is art 0x17 (checkerboard rows), 72 cells in mapx03
-#           and 4 in mapx71, and it is the only clause that splits on kind. See the
-#           0x5C/0x2E lead recorded in docs/contract-creature-tick.md; it is a lead, not
-#           a claim, and it is on docs/needs-gameplay.md.
+# 0x5C IS THE FORCE FIELD, settled live 2026-10-28 (captures/spice86/g29-field). It is art
+#           0x17 (checkerboard rows), 72 cells in mapx03 and 4 in mapx71, and it is the only
+#           clause that splits on kind. Standing on it with no ring costs exactly 1000 HP,
+#           observed six times; with the ring (DS:D6 != 0) it costs nothing; a plain 0x70 step
+#           costs nothing. So the gate's reading is: monsters cross force fields, the four NPC
+#           classes (Fighter/Cleric/Wizard/Thief, mon_type >= 0x78) may not. Same commit
+#           corrects docs/phase4-state.md § CP5, which had ruled a tile trigger out on a units
+#           error — it searched mapx00 for the MODE byte 0x2e, which is map_byte >> 1, and map
+#           bytes are multiples of 4.
 # label: kept as sub_2199 on purpose — labels are body and CP0 md5s them
 # func 2199..21A2  len 000A B  evidence: seed+call+reko
 # provenance: static, decoded from asm/2199..asm/21FC in address order 2026-10-28

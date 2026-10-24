@@ -2,14 +2,18 @@
 # name-evidence: `stc ; mov al,[DS:00]; sub al,[di+0x137]; mov [DS:19],al` and the same
 #   pair for DS:01 / [di+0x157] / DS:1A. No clamp and no wrap adjust, so the delta can go
 #   negative (it is read as signed by asm/50EF at the caller).
-# CORRECTION 2026-10-28, two claims this header used to make.
-#   (1) It is NOT the plain difference. The `stc` sets CF and x86 `sub` subtracts CF, so the
-#       stored value is player - creature - 1. asm/152E and asm/0B0F both write `stc ; cmc`
-#       to cancel it; this routine does not. See asm/4F11_monster_step_vector.
+# CORRECTION 2026-10-28, three claims this header used to make.
+#   (1) It IS the plain difference. An earlier version of this header said the `stc` made it
+#       player - creature - 1. Wrong: x86 `SUB` does not subtract CF, only `SBB` does, so the
+#       `stc` is a dead instruction — a translated 6502 `SEC ; SBC`, where the SEC was needed
+#       on the 6502 and is merely harmless here. Measured live, 20/20 trials, in
+#       captures/spice86/g28-pursuit.
 #   (2) asm/212E does not use this routine's value. Every path through the special-attack
 #       dispatch joins at asm/0AFC, which calls asm/4F11 and overwrites DS:19/DS:1A with the
 #       clamped -1/0/+1 step before asm/212E reads them. What THIS routine feeds is the
 #       magnitude tests in asm/0AAA and asm/1040, not the step.
+#   (3) asm/152E is not a torus variant. It clamps through asm/50D8_sign_of_al and does no
+#       wrap; the torus behaviour is the `add al,al` pair in asm/4F11.
 # called from: the per-slot creature loop asm/0A6D..0AB5, once per non-empty slot,
 #   immediately before asm/0AAA tests |DS:19| < 3 and |DS:1A| < 3 for the special
 #   attack gate. asm/152E is the dungeon-side variant and clamps through asm/50D8_sign_of_al.
