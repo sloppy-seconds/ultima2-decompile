@@ -68,12 +68,21 @@ exact byte-for-byte fidelity.
   reason (nobody edits a reference), it is gitignored, and it is *not* a source of truth about
   this binary. Read `docs/external-ultima3-remake.md` before using it — that file carries the
   licence line (MIT code, not-ours art) and the two quarantines.
+* **`references/apple/` is the Apple II original, and it is game content.** Three 140 KB
+  UCSD p-System volume images the owner added: the 6502 build the DOS port descends from.
+  Reading it is allowed and it is now load-bearing, because it is how the lineage claim in § 1
+  got tested. It is read-only for the same reason as the others, it is gitignored, and its
+  extracted files land in `decompiled/apple2/`, which is also gitignored: **never commit
+  them.** Two hard caveats, both measured: this is the **1989 Origin re-release**, not the
+  1982 original, and it is a **corroborator, not a parent** — `--INVALID MOVE!` and the
+  direction words exist only on the DOS side. Read `docs/apple2-reference.md` before using
+  it; it carries the extraction recipe, the memory map and the provenance line.
 
 ### External tool binaries (allowed)
 
 The isolation rule is about **data and decisions**, not about refusing to use installed software. Analysis tools may be invoked by path as infrastructure, exactly like `dotnet` or `objdump` on `PATH`:
 
-* **Vendored in-project:** Spice86 (`tools/spice86/`) and Reko (`tools/reko/`) — self-contained builds, gitignored.
+* **Vendored in-project:** Spice86 (`tools/spice86/`), Reko (`tools/reko/`) and CiderPress2's `cp2` CLI (`tools/ciderpress2/`) — self-contained builds, gitignored. `cp2` is GPL-3.0 and is the only correct reader for the Apple II images; see `docs/apple2-reference.md` § 2.
 * **Referenced by path:** Ghidra lives outside the project (`GHIDRA_HOME`, default `/var/home/paul/Projects/ghidra-12.1.4`). It is Apache-2.0 and too large to vendor, so it is the one external-tool path exception. `source tools/env.sh` wires it up.
 
 Running a tool binary is fine. What the rule forbids is importing **prior findings** — earlier attempts at decompiling Ultima II (entry-point lists, symbol names, struct layouts, conclusions) from a sibling directory such as `decompile-u2` or `ultima2`. Generic, binary-agnostic tooling is safe to reuse; anything that encodes a *conclusion about this binary* must be regenerated from `original/` and `captures/` inside this project. Never browse a sister directory to "check how they did it."
@@ -145,6 +154,11 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
 
 *Ultima II* was hand-coded in 6502 assembly for Apple II and ported to x86 MS-DOS
 as **pure assembly** — there is no C compiler output in the original binary.
+
+> This was long an assumption carried in prose. It is now evidenced: the Apple 6502 build is
+> extracted and disassembled, `JSR $4006` is the same inline-string printer contract as the
+> DOS `str_out`, and 35 strings match verbatim in the same table order on both sides. Full
+> record, including where the two builds **diverge**: `docs/apple2-reference.md`.
 
 * Strict byte-for-byte matching therefore targets an **assembler** (JWasm, MASM
   dialect), which is what Phase 3 did and what CI verifies.
@@ -324,12 +338,13 @@ Verification, in two independent layers:
 | `engine/` | portable C11 engine (Phase 4), own `README.md`, tests, `make` targets | tracked |
 | `engine/assets/tiles/cleanroom/` | original substitute tile art, created under cleanroom protocol; `PROVENANCE.md` is the legal record and travels with it. Never a reproduction of the game's art. The implementer's only legal input is `docs/tile-art-spec.md`; the evidence and the gate's bands live in `docs/tile-art-evidence.md` and `tools/tile_rules.py` and are forbidden to them. **The full procedure, verification chain and recorded failures are in `docs/cleanroom-procedure.md` — read it before commissioning or performing a redraw.** | tracked |
 | `tools/` | our authored Python/shell toolchain: `check_func.py`, `assemble_clean.sh`, `decode_str.py`, `dialect_masm.py`, `xref_provenance.py`, `cfg_printed.py`, `bcd_census.py`, `provenance_from_traces.py`, `reject_trap.py`, `bp_read.py` (stop the CPU at a runtime address and dump memory there; see the two hazards in its docstring), `fragment_splits.py` (nominates routines the clean wave cut into pieces; `docs/fragment-splits.md`), `vga_screen.py`, `map_render.py`, `map_viewer.py`, `tile_review.py`, `tile_rules.py`, `turn_recorder.py`, `vga_ring.py`, `poll_probe.py`, `screenshot_diff.py`, `spice86_{start,stop}.sh` | tracked |
-| `docs/` | phase plans, state, implementation logs, live-capture findings, `spice86-capture.md` (the emulator runbook: headed vs headless, tool index, APIs, gotchas — read it before driving Spice86), `tooling-procedures.md` (input paths and the arrow patch), `harness-portability.md` (the generic-harness design report; method only, never conclusions), and `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts) | tracked |
+| `docs/` | phase plans, state, implementation logs, live-capture findings, `spice86-capture.md` (the emulator runbook: headed vs headless, tool index, APIs, gotchas — read it before driving Spice86), `tooling-procedures.md` (input paths and the arrow patch), `harness-portability.md` (the generic-harness design report; method only, never conclusions), `needs-gameplay.md` (the capture worklist with who-can-do-it verdicts), `apple2-reference.md` (the Apple II disks: extraction, memory map, cross-ISA anchors) and the `contract-*.md` behavioural specs, which state a grade per claim and name their own holes | tracked |
 | `disasm/` | curated analysis: phase summaries, function maps, verdicts, and `fragment-splits.tsv` (generated by `tools/fragment_splits.py` — regenerate, never hand-edit) | tracked |
 | `bestiary/` | third-party creature data joined to our tile table by bitmap identity. `bestiary.tsv` and `matches.md` are our own derived facts; `cache/` and `view.html` hold copyrighted art rips in seven platform variants. Read `docs/bestiary.md` before using it, and note the cleanroom entries. | `cache/` and `view.html` **gitignored** |
 | `captures/` | runtime captures and screenshots | **gitignored** |
 | `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |
-| `references/` | `ultima2/` is the pristine read-only backup; `ultima3/` is an owner-added third-party MIT remake clone (see `docs/external-ultima3-remake.md`) | **gitignored** |
+| `references/` | `ultima2/` is the pristine read-only backup; `ultima3/` is an owner-added third-party MIT remake clone (see `docs/external-ultima3-remake.md`); `apple/` is the Apple II 6502 original as p-System disk images (see `docs/apple2-reference.md`) | **gitignored** |
+| `deploy/` | containerised runtimes. `spice86-novnc/` runs the original game with its own Xvfb + x11vnc + noVNC, so a headed capture needs nothing from the host; `novnc/` does the same for the engine build. `up.sh` in each is the entry point | tracked (the staged `u2-sdl` binary is not) |
 | `decompiled/` | bulk decompiler output, regenerable | **gitignored** |
 | `tmp/` | per-launch game copies | **gitignored** |
 | `build/` | build output | **gitignored** |
