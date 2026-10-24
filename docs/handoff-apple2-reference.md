@@ -52,8 +52,11 @@ Four things fell out that were not in the ticket:
 * `asm/4F11` (now `4F11_monster_step_vector`) is the vector the step actually uses, and contract
   2 had the wrong routine and the wrong mechanism: `asm/50D8` is a **sign function**, not a
   torus wrap, and the torus behaviour is the `add al,al` pair in the caller. Contract 2 corrected.
-* `asm/4F11` and `asm/4F36` both compute `player - creature - 1`, because `stc` sets CF and x86
-  `sub` subtracts it. Derived consequence, never observed: G28.
+* `asm/4F11` and `asm/4F36` both carry a dead `stc` in front of a `sub`. I read that as an
+  off-by-one and wrote it into contract 2 as a finding. **It is wrong — `SUB` ignores CF, only
+  `SBB` consumes it** — and `captures/spice86/g28-pursuit` disproved it the same day by reading
+  `DS:19/DS:1A` directly, 20/20 trials. Retracted in place in contract 2, `asm/4F11` and
+  `asm/4F36`. The `stc` is a translated 6502 `SEC ; SBC`, harmless on x86.
 * `DS:1B7` is the per-slot saved terrain byte of the grid stamp, not a mystery mirror table.
 
 ### U2 — ~~settle the `DS:1F` contradiction~~ **CLOSED 2026-10-28c, and it was a reconciliation**
@@ -137,17 +140,21 @@ ticket described: two were already answered somewhere else in the tree, and one 
 by a tired agent, and the next handoff should budget for it: expect to re-frame roughly half of
 what you are handed.
 
-What is genuinely left, in order of value, none of it static:
+What is genuinely left, in order of value:
 
-1. **G28** — the pursuit `-1` consequence. Two seeded cells, one run. It is the only unobserved
-   claim inside contract 2's falsification list.
-2. **G29** — what tile `0x5C` is. One step onto a `mapx03` cell, and it may also be the C5
-   placement answer that has been called unfindable since 2026-10-22.
-3. **G27's remainder** — one poke of `DS:26A = 0x14` and one arrow key.
-4. The 12 command handlers never executed in a capture (`python3 tools/cmd_handlers.py
+1. **The 12 command handlers never executed in a capture** (`python3 tools/cmd_handlers.py
    --unexercised-only`), and the handler bodies the plan actually needs read — pick by need.
-5. The `DS:15..18` ← `DS:2CB/2DE/2E0/2F3` watchpoint, still the one place the plan needs a
-   watchpoint and still not guessable statically.
+2. **The `DS:15..18` ← `DS:2CB/2DE/2E0/2F3` watchpoint.** Note this has moved: with `0x5C` proven
+   to be the field, the mode byte `0x2e` is now explained as `0x5C >> 1`, so the indirect-store
+   hunt may no longer be the only route to C5 — check before spending an afternoon on it.
+3. **Wiring C5 to tile `0x5C` in the engine**, which `docs/phase4-state.md` § CP5 used to forbid
+   and now supports. Engine change, so it needs the usual test gate.
+4. The `0x5C` species clause is worth a line in the engine's creature AI: monsters cross fields,
+   NPC classes do not.
+
+Closed by capture on 2026-10-28: **G27** (`DS:26A` freezes every creature, one per command),
+**G28** (no `-1`; the step is the plain shortest torus direction, and the claim to the contrary
+was retracted), **G29** (`0x5C` is the force field, −1000, ring gates it).
 
 ## Step 0 failed twice in one session, and twice more in the next — read this before you start
 
@@ -198,11 +205,11 @@ the five gaps on the list below were not gaps. Grep the *question*, not the task
 
 ## Hazards this session cost time
 
-- **`stc` before a `sub` is arithmetic on x86.** `SUB` subtracts CF, so a carry-setting
-  instruction two bytes earlier makes every difference `a - b - 1`. Two routines in this binary
-  compute the same delta, one with `stc ; cmc` (harmless) and one with a bare `stc` (off by one),
-  and the CP3 fragment split puts the `stc` and the `sub` in different files. Read pairs in
-  address order, and diff near-duplicate routines against each other rather than trusting one.
+- **Do not recall a flag semantic; look it up or measure the value.** `SUB` ignores CF on x86 and
+  only `SBB` consumes it. A decode that combined a correctly-read `stc`+`sub` with the opposite
+  belief produced a tidy wrong finding that made it into a contract in the same session it was
+  refuted in. The cheap fix, and the one that actually worked: read the two result bytes out of
+  live memory after one turn rather than arguing about them.
 - **A predicate can return its verdict in the flags.** `asm/2199_creature_step_gate` ends both
   exits with `cmp $0x0,%al` before the `ret` and all three callers branch on ZF. Read as a value
   it looks like a function whose result nobody checks; the `cmp` is the calling convention.
@@ -224,10 +231,10 @@ the five gaps on the list below were not gaps. Grep the *question*, not the task
 1. **Merge `apple2-reference` to `main` or not.** All docs + `asm/` headers and three `asm/`
    renames (`2199_creature_step_gate`, `4F11_monster_step_vector`, `50D8_sign_of_al`), no engine
    change. `assemble_clean.sh` byte-matches and `make -C engine test` is green.
-2. **Any live capture.** Watchpoints, the container, `sudo podman` — all need approval. Two new
-   items are now on the list and both are cheap and agent-drivable: **G28** (does the `-1` stall a
-   creature one cell short — two seeded cells, one run) and **G29** (what is tile `0x5C` — one
-   step onto a `mapx03` cell). **G27**'s remainder is a single poke of `DS:26A`.
+2. **Live captures: three were run and all three closed their item.** `captures/spice86/g28-pursuit`
+   (G28, and it refuted a claim this session had made an hour earlier; G27's remainder) and
+   `captures/spice86/g29-field` (G29 — `0x5C` is the force field, which also unblocks wiring C5
+   to a tile). Further captures still need your approval per `AGENTS.md`.
 3. **The `0x2423` naming question.** It is called "passability" but its decoded body branches
    only on `DS:29 & 0x7F` with no tile participating. Renaming it is an `asm/` filename change
    and needs an owner decision.

@@ -40,7 +40,7 @@ callers named in `asm/`). So creature motion is turn-based on player commands, n
 | `DS:27`, `DS:28` | second staging pair; `DS:27` also carries the slot index into the melee path | observed |
 | `DS:1F` | **shared scratch with 20+ writers, not a dedicated variable.** In this system `asm/2199` stores the candidate tile byte here and the step gate reads it back. In the placement cluster `asm/0CC0`/`asm/0CDC` use the same byte as a slot index, and `asm/2677`/`asm/269F` use it to carry the player stamp (`DS:13`) across a call. The live reading of 120 that ruled out "slot cursor" is the on-foot stamp `0x78` | observed, contradiction resolved — see § "The `DS:1F` contradiction" |
 | `DS:26A` | the fourth of the four status counters ticked by `asm/0C33..0C53`. **While non-zero the step gate refuses every move, for every species and every tile.** Only non-zero writer: `asm/3C04_coin_rub`, which sets `0x14` | observed |
-| `DS:20` | contact counter, `incb` on a creature landing on the player | observed |
+| `DS:20` | contact counter, `incb` on a creature landing on the player — **but it is not readable as state between turns**: it read 0 after every turn while contacts were demonstrably happening (HP was falling). `asm/2362` zeroes `DS:1F/20/19/1A` | observed, meaning partial |
 | `DS:00`, `DS:01` | player position, read only | observed |
 | `DS:4A` | world/interior context byte, gates several branches | see `docs/phase4-state.md` |
 | `DS:6` | the **resolved tile address**, written by `map_tile_ptr` (`asm/50B3`) and read back by `asm/2233` and `asm/225A` | observed |
@@ -76,23 +76,32 @@ out. What `DS:26`'s sign means here is **not** established; see `asm/0A83`.
 **2. The pursuit vector.** Three routines write `DS:19`/`DS:1A` and they are not
 interchangeable. `asm/4F36` runs first, `asm/4F11` overwrites it before the step.
 
-* `asm/4F36` (observed): `DS:19 = DS:00 - DS:137[di] - 1`, and the same for the y pair.
-  The `-1` is not a typo and it is not a wrap: the routine is `stc` then `sub`, and x86 `sub`
-  subtracts CF, which `stc` has just set. Unclamped, so it can be a large negative. It feeds
-  the **magnitude** tests only — `asm/0AAA` compares `|DS:19|` against 3 and `asm/1040`
-  against 4.
-* `asm/4F11` (observed), called from `asm/0AFC`, which every path through the special-attack
-  dispatch passes through: `DS:19 = sign(4 * (DS:00 - DS:137[di] - 1))`, same for y. The
-  `add al,al` twice is what makes this the **torus-shortest** direction: `4*d` overflows the
-  signed byte at `|d| >= 32`, which is exactly half the 64-cell grid, so a creature more than
-  half the map away is sent the short way round instead of the long way. Measured over all
-  4096 `(player_x, mon_x)` pairs, the result equals the shortest torus direction in 3904;
-  the 192 exceptions are the two near cells per axis (the `-1`) and the exact antipode.
-  **This is the value `asm/212E` steps with.** `asm/50D8` is a sign function (`-1/0/+1`), not
-  a wrap — the wrap behaviour is the `add` pair in its caller.
-* `asm/152E` (observed): `sign(player - creature)` with `stc ; cmc`, so **no** off-by-one.
-  Reached only from `asm/1151_dungeon_darkness`, i.e. the dungeon side of the split, which
-  `AGENTS.md` § 3 parks. It is not part of this tick.
+* `asm/4F36` (observed): `DS:19 = DS:00 - DS:137[di]`, and the same for the y pair. The `stc`
+  in front of it does nothing — x86 `SUB` does not subtract CF, only `SBB` does — so this is
+  the plain difference. Unclamped, so it can be a large negative. It feeds the **magnitude**
+  tests only: `asm/0AAA` compares `|DS:19|` against 3 and `asm/1040` against 4.
+* `asm/4F11` (observed, and **measured at runtime**), called from `asm/0AFC`, which every path
+  through the special-attack dispatch passes through:
+  `DS:19 = sign(4 * (DS:00 - DS:137[di]))`, same for y. The `add al,al` twice is what makes
+  this the **torus-shortest** direction: `4*d` overflows the signed byte at `|d| >= 32`, which
+  is exactly half the 64-cell grid, so a creature more than half the map away is sent the short
+  way round instead of the long way. Checked over all 4096 `(player_x, mon_x)` pairs: **0
+  mismatches** against the true shortest torus direction, once the 64 exact-antipode cells are
+  set aside. **This is the value `asm/212E` steps with.** `asm/50D8` is a sign function
+  (`-1/0/+1`), not a wrap — the wrap behaviour is the `add` pair in its caller.
+* `asm/152E` (observed): `sign(player - creature)`, written with `stc ; cmc ; sbb` where the CF
+  pair genuinely matters because `SBB` reads it. Reached only from `asm/1151_dungeon_darkness`,
+  i.e. the dungeon side of the split, which `AGENTS.md` § 3 parks. It is not part of this tick.
+
+> **A retraction belongs here.** This contract previously stated the delta was
+> `player - creature - 1`, on the grounds that `stc` set CF and `sub` subtracted it, and
+> derived from it that a creature approaching from above or left parks one cell short. **That is
+> false, and it was false because the flag semantic was recalled instead of looked up:** `SUB`
+> ignores CF on x86. The live measurement in `captures/spice86/g28-pursuit` read `DS:19/DS:1A`
+> after each sweep in 20 trials with a valid control in every one, and the vector is the plain
+> symmetric difference — a creature at `(player-1, player-1)` steps straight onto the player.
+> The `stc` is a translated 6502 `SEC ; SBC`, where the `SEC` was required on the 6502 and is
+> merely dead here.
 
 **3. Wounded creatures retreat** (`0x0B07`/`0x0B0F`, observed):
 
@@ -173,7 +182,7 @@ sixty-four:
 | `0x0C` | `0x03` | forest (proven passable for the player, F11) | **accept** | **accept** | refuse |
 | `0x10` | `0x04` | mountain (proven impassable for the player, F11) | refuse | refuse | refuse |
 | `0x14`..`0x58`, `0x60`..`0x6C`, `0x74`..`0xFC` | — | everything else, 57 bytes: structures, letters, the `0x78` building blocks | refuse | refuse | refuse |
-| `0x5C` | `0x17` | checkerboard rows; 72 cells in `mapx03`, 4 in `mapx71`; **identity unknown** | **accept** | refuse | refuse |
+| `0x5C` | `0x17` | **the force field** — exactly −1000 HP with no ring, nothing with one (`captures/spice86/g29-field`); 72 cells in `mapx03`, 4 in `mapx71` | **accept** | refuse | refuse |
 | `0x70` | `0x1C` | magenta vertical dashes; 12691 cells in the 4096-byte grids over 15 sectors (`engine/src/game/overworld.c` cites 12889, which is the same count including each file's 128-byte container tail — both are right for their own domain), and in the `*x1/*2/*3` sectors it forms the street and open-ground runs between the `0x78` blocks | **accept** | **accept** | refuse |
 
 Grades: the ladder, the ordering and the verdict polarity are **observed** (the bytes are in
@@ -221,10 +230,10 @@ jumps to the melee hit roll at `asm/0B62`. The melee roll is `rand & 7` compared
 ### C behavioral contract
 
 ```c
-/* Everything below is now transcribed from bytes, but this function is still NOT
- * executable ground truth: the DS:26 clause of the per-slot gate and the identity of
- * tile 0x5C are unproven, and the -1 in the pursuit delta has never been observed in
- * play. See § "What this contract deliberately does not claim". */
+/* Everything below is transcribed from bytes and the parts marked measured were read
+ * out of live memory, but this function is still NOT executable ground truth: the
+ * DS:26 clause of the per-slot gate is unproven and the engine does not yet wire the
+ * 0x5C force field. See § "What this contract deliberately does not claim". */
 
 #define CREATURE_X(s)   DS[0x137 + (s)]
 #define CREATURE_Y(s)   DS[0x157 + (s)]
@@ -279,10 +288,10 @@ static int creature_step_gate(uint8_t tile, uint8_t kind)
 }
 
 /* asm/4F11_monster_step_vector. The clamped step, per axis: the short way round a
- * 64-cell torus, aimed at one cell below/left of the target because of the -1. */
+ * 64-cell torus. Measured at runtime, not inferred — see the retraction in step 2. */
 static int8_t step_axis(uint8_t player, uint8_t mon)
 {
-    int8_t d = (int8_t)(player - mon - 1);   /* stc then sub: CF is subtracted */
+    int8_t d = (int8_t)(player - mon);       /* the stc before the sub is a no-op */
     int8_t s4 = (int8_t)(4 * d);             /* add al,al twice; overflows at |d| >= 32 */
     return s4 == 0 ? 0 : (s4 > 0 ? 1 : -1);  /* asm/50D8 sign_of_al */
 }
@@ -402,12 +411,16 @@ they are cheap:
 4. **`0x70` must accept and its neighbour `0x74` must refuse.** `0x70` is the only byte above
    `0x14` that is accepted unconditionally, and it is the one that makes town movement possible
    at all.
-5. **A creature at `mon_x = player_x - 1` must not change `mon_x`**, and one at
-   `mon_x = player_x + 1` must step onto the player. This is the derived consequence of the `-1`
-   in `asm/4F11` and it is the one claim here that has never been observed. It is on
-   `docs/needs-gameplay.md` as G28 and it is agent-drivable with `tools/u2_edit.py setpos`.
-6. **The gate must refuse everything while `DS:26A != 0`.** Poke `DS:26A = 0x14` and no creature
-   should move; that is a one-write test and it would settle G27.
+5. **A creature at `(player_x - 1, player_y - 1)` must step onto the player.** This was written
+   as the derived consequence of a `-1` in `asm/4F11` and it **failed when it was run**, which is
+   the whole point of listing it: `SUB` does not subtract CF, there is no `-1`, and the step is
+   the plain symmetric difference. Closed by `captures/spice86/g28-pursuit`, 20/20 trials with a
+   valid control in each.
+6. **The gate must refuse everything while `DS:26A != 0`.** **Done 2026-10-28** in
+   `captures/spice86/g28-pursuit`: poking `DS:26A = 0x14` froze both test creatures for three
+   commands and movement resumed the moment it was cleared, with the counter falling 14 → 13 → 12
+   → 11, i.e. exactly one per completed command. A/B/A, so the freeze is not an artefact of the
+   creatures having nowhere to go.
 
 ## What this contract deliberately does not claim
 
@@ -420,24 +433,25 @@ they are cheap:
   freeze described in step 1b. What is *still* not claimed: what `DS:26`'s sign means in that
   clause. It has two unrelated documented meanings (torch counter indoors, movement flip
   outdoors) and neither is verified here.
-* **Tile `0x5C` has no identity.** It is the only clause of the gate that splits on species and
-  the only accepted tile nobody has named. There is a lead — `DS:14 = map_byte >> 1` is a
-  measured transform (`asm/2FAD_vehicle_board_dispatch`, whose sample list includes
-  `0x5C -> 0x2E`), and mode `0x2E` is the force-field event — so **`0x5C` may be a force field**,
-  which would mean monsters cross force fields and the four NPC classes do not. That is a lead
-  and nothing more, it is on `docs/needs-gameplay.md` as G29, and it must not be implemented as
-  fact. It does however contradict the reasoning in `docs/phase4-state.md` § CP5 that rules a
-  tile trigger out for C5 on the grounds that `0x2e` occurs zero times in `mapx00`: `0x2e` is a
-  mode byte and map bytes are multiples of 4, so that test could not have found it either way.
-  Recorded as a disagreement, not resolved.
-* **The `-1` in the pursuit delta is derived, not observed.** The bytes are unambiguous (`stc`
-  with no `cmc` before a `sub`, where `asm/152E` and `asm/0B0F` both cancel it) and the
-  consequence follows arithmetically, but nobody has watched a creature stall one cell short.
-  G28. The tempting explanation is a 6502 port bug — on the 6502, `SBC` with `C=1` is a plain
-  subtract, so a `SEC`/`SBC` pair ported to `STC`/`SUB` gains a `-1` — and that is **recalled
-  reasoning about an ISA, not a finding**. The Apple build in `references/apple/` cannot test it:
-  its game logic is UCSD p-code, not 6502, and a byte-pattern search for the idiom over the
-  extracted files returns nothing.
+* **`0x5C` is the force field, and it was measured, not inferred.** Closed 2026-10-28 in
+  `captures/spice86/g29-field`: stepping onto a `0x5C` cell in sector 03 with no ring costs
+  **exactly 1000 HP**, observed on six separate crossings; with the ring (`DS:D6 != 0`) it costs
+  nothing; stepping onto a plain `0x70` town tile costs nothing. So the gate's species clause
+  reads: monsters walk through force fields, the four NPC classes (`mon_type >= 0x78`) may not.
+  This also means the reasoning in `docs/phase4-state.md` § CP5 that ruled a tile trigger out for
+  C5 was a units error — it searched `mapx00` for the **mode** byte `0x2e`, which is
+  `map_byte >> 1`, and map bytes are multiples of 4, so that test could not have found it either
+  way. The `0x5C -> 0x2E` sample already sitting in `asm/2FAD_vehicle_board_dispatch`'s header
+  was the missing half all along.
+* **The `-1` claim is retracted, and it is worth keeping the retraction.** This contract asserted
+  `player - creature - 1` on the grounds that `stc` sets CF and `sub` subtracts it. **`SUB` does
+  not subtract CF on x86; only `SBB` does.** The claim was arithmetically tidy, explained
+  something nobody had measured, and was wrong. It survived into a written contract because it
+  was derived from bytes that were read correctly and combined with a flag semantic recalled
+  incorrectly. It died the same day it was written, when `captures/spice86/g28-pursuit` read
+  `DS:19/DS:1A` after each sweep: 20/20 trials, plain symmetric difference, valid control in
+  every trial. The `stc` is a translated 6502 `SEC ; SBC` — needed on the 6502, dead on x86 — and
+  it is a harmless port artefact, not a bug.
 * **`asm/0CC0` is placement, not movement.** Its own header is explicit: "This is a PLACEMENT
   store, not movement: nothing here computes a new coordinate." Do not fold it into this tick.
 * **Dungeons are out of scope.** `asm/1151` and `asm/147F` also write `DS:137[di]` and belong

@@ -190,21 +190,22 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
-* **2026-10-28c** — **On a ported binary, a carry-flag-setting instruction two bytes away can
-  change the arithmetic, and a corpus split into one file per instruction will split the two
-  apart.** A real-mode x86 routine inherited from a 6502 original kept a `STC` in front of a
-  `SUB`. On the 6502, `SBC` with carry set is a plain subtract; on x86, `SUB` always subtracts
-  CF, so the port silently computes `a - b - 1`. Two sibling routines in the same binary did the
-  same subtraction with `STC` followed by `CMC`, which cancels it, so the idiom was not
-  consistent enough to pattern-match either. Nothing errored; the value was plausible and the
-  off-by-one only showed up as an asymmetry in behaviour. Three rules for a generic harness.
-  First, when a port is suspected, treat every `CLC`/`STC`/`CMC` adjacent to an arithmetic
-  instruction as load-bearing and resolve the pair, even across a fragment boundary. Second,
-  diff sibling routines that compute the same quantity — a disagreement between two near-copies
-  is a far better detector than a plausibility check on one. Third, a corpus chopped into
-  minimal fragments for label preservation must be re-read in address order before any
-  arithmetic claim is made about it; the instruction that sets a flag and the instruction that
-  consumes it can land in different files, and each file on its own reads as harmless.
+* **2026-10-28c** — **A flag semantic asserted from recall rather than looked up will produce a
+  confident, tidy, wrong finding, and it will survive into a contract if it explains something.
+  Check the semantic, or better, measure the value.** A reconstruction read two instructions
+  correctly — a carry-set immediately before a subtract — combined them with a remembered rule
+  about the carry flag, and concluded the routine computed `a - b - 1`. The remembered rule was
+  false: on x86 `SUB` ignores CF and only `SBB` consumes it. Nothing about the byte reading was
+  wrong, which is what made it dangerous. The derived claim was behavioural (creatures should
+  stall one cell short when approaching from one side), it fitted an unmeasured gap, and it went
+  into a written contract before anyone ran it. Two rules for a generic harness. First, any
+  decode that depends on a flag semantic needs the semantic cited or checked, not recalled —
+  carry behaviour across `CLC`/`STC`/`CMC`/`SUB`/`SBB`/`ADC` is exactly the family where a
+  half-remembered rule reads as a bug in the target. Second, and this is the one that actually
+  paid: **prefer measuring the value to deriving it.** The claim died in one afternoon by reading
+  the two result bytes out of live memory after each turn, twenty trials with a control — which
+  is cheaper than the argument that produced it. A derived claim that explains an unmeasured
+  behaviour is a prediction waiting to be run, not a finding.
 
 * **2026-10-28c** — **A predicate can return its verdict in the flags, not the return value, and
   a decompiler will report it as a function that always succeeds.** A gate routine ended both of
