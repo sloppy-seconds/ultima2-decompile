@@ -1,4 +1,9 @@
-# sub_8dcd — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_8dcd — the fourth INT 1Ah site, and the only one that has never run: a proper wrapper
+#           (`mov $0x0,%ah ; pushf ; int $0x1a ; popf ; ret`) called from asm/8CD0, executed in
+#           0 of 136 harvested ExecutedInstructions sets. The three sites that DO run are in
+#           asm/06AC_clock_tick_wait; this one is dead in every capture on record.
+#           Note the tail of this file is zero pad, not code — `func 8DCD..8FFF` is the clean
+#           wave's range claim, not a 563-byte routine.
 # func 8DCD..8FFF  len 0233 B  evidence: call
 # seams: clock_int1a
 # confidence: low (bytes proven by check_func.py)

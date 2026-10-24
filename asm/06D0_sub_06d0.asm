@@ -1,4 +1,5 @@
-# sub_06d0 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_06d0 — part of asm/06AC_clock_tick_wait: the rollover guard inside the measured loop.
+#           Fragment; read the owner.
 # func 06D0..06D3  len 0004 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

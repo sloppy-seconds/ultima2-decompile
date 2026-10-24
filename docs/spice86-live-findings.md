@@ -1398,8 +1398,7 @@ Two corrections to this section, both found by reading the engine before changin
 auto-PASS, and its comment block cites the bytes: the overworld wait loop polls the keyboard
 (runtime `0x08CE`), tests `cmp $0xff,%ah` for "no key" (`0x08D1`), and advances a **byte
 counter** with `incb DS:21; jne <loop>` (`0x08D6`). `incb`/`jne` is iterate-until-wrap, so
-the original's timeout is a **poll count**, not a timer — there is no `INT 1Ah` anywhere in
-the corpus, and the only read of the BIOS tick at `0x40:6C` is the startup RNG seed. That
+the original's timeout is a **poll count**, not a timer. That
 earlier note also records a measured **~7.6 s at `--Cycles 3000`** and deliberately declines
 to encode it, because the wall-clock figure is an artifact of the emulator's cycle setting.
 The ~7.5 s measured above reproduces that number independently, which is corroboration of
@@ -1408,6 +1407,28 @@ turn in the original, and an engine that budgets milliseconds would be **less** 
 than the poll count it would replace. An agent about to "fix" this by switching to a
 wall-clock deadline should read that comment first; the knob for the owner's enhanced-mode
 request already exists as `--auto-pass-polls` (`-1` disables it for pure turn-based play).
+
+> **CORRECTION 2026-10-28d — the reasoning above was right and the evidence under it was
+> false.** This paragraph went on to say "there is no `INT 1Ah` anywhere in the corpus, and the
+> only read of the BIOS tick at `0x40:6C` is the startup RNG seed", and that sentence has been
+> standing since 2026-10-21. It is wrong on both halves. `CD 1A` occurs four times in the
+> binary, three of them inside one routine at runtime `06AC..06EC`, and all three of those
+> execute in **136 of 136** harvested `ExecutedInstructions` sets — the game reads the BIOS
+> tick on every single run. The routine is now decoded and named
+> (`asm/06AC_clock_tick_wait`): it opens a 20-tick window (`cmp $0x14,%dx`), counts how many
+> 100-iteration busy passes fit in it into `DS:74`, and the code immediately after the `ret`
+> multiplies and divides by that count, which reads as machine-speed calibration — inferred,
+> not proven, and nobody has dumped `DS:74` live.
+>
+> **The conclusion stands; the reason given for it does not.** The PASS timeout is a poll count
+> because the PASS loop's own bytes say so (`incb DS:21 ; jne` at runtime `0x8D6`), not because
+> no clock exists. Two things to take from that. First, a negative-existence claim over a
+> *partially decoded tree* is not a negative result about the binary — this is the third time
+> that shape has bitten (F6, T2, and the `strings_atlas` trailing-`db` drop). Second, and this
+> is the trap: the clock routine and the PASS loop are **different code that share a number
+> across bases** — the third `INT 1Ah` is at *file* `0x8CE`, and the keyboard poll is at
+> *runtime* `0x08CE`. Anyone re-deriving this by grepping `8CE` will land on the wrong one and
+> conclude the opposite of whatever they were trying to check.
 
 **2. The status counters do not tick once per turn.** Poking `DS:26A..26D = 0f 0f 0f 0f` and
 sampling at 0.7 s intervals with the player idle:

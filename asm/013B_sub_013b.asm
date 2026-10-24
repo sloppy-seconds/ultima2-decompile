@@ -1,4 +1,6 @@
-# sub_013b — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_013b — part of the same split startup routine as asm/0133: call the consumer of the
+#           clock window's pass count (`call L_0008ed`, i.e. asm/06ED). Reached by fallthrough
+#           from the `call` at runtime 0138, not by any call or jump — see asm/0133.
 # func 013B..013D  len 0003 B  evidence: seed+reko
 # calls: L_0008ed
 # confidence: low (bytes proven by check_func.py)

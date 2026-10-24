@@ -22,15 +22,20 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 
 ## Resume notes (read this first after a compaction)
 
-- **2026-10-21 correction to the T2 closure.** T2 recorded "no `INT 1Ah` exists
-  in the corpus". That was true of the decoded `asm/` tree and **false of the
-  binary**: `CD 1A` occurs at file `0x8AE`, `0x8C0`, `0x8CE` and `0x8FD0`
-  (runtime `0x6AE`, `0x6C0`, `0x6CE`, `0x8DD0`). The auto-PASS conclusion is not
-  automatically wrong — those sites still have to be shown reachable from the
-  PASS path — but the evidence cited for it does not hold as written, so T2 is
-  downgraded from closed to **re-open, needs re-proof**. Same lesson as F6: a
-  negative result from a probe over a partially decoded tree is not a negative
-  result about the binary.
+- **2026-10-21 correction to the T2 closure — RESOLVED 2026-10-28d, no capture needed.** T2
+  recorded "no `INT 1Ah` exists in the corpus". That was true of the decoded `asm/` tree and
+  **false of the binary**: `CD 1A` occurs at file `0x8AE`, `0x8C0`, `0x8CE` and `0x8FD0`
+  (runtime `0x6AE`, `0x6C0`, `0x6CE`, `0x8DD0`). The re-proof asked for was reachability, and
+  the answer came out of the existing harvests rather than a new one: the first three execute
+  in **136 of 136** `ExecutedInstructions` sets, the fourth in **0 of 136**. The three that run
+  are one routine, now decoded and named `asm/06AC_clock_tick_wait` — a 20-tick window that
+  counts busy passes into `DS:74` for what reads as machine-speed calibration (inferred).
+  **T2's conclusion survives and is re-based**: the auto-PASS timeout is a poll count because
+  the PASS loop's own bytes at runtime `0x8D6` say `incb DS:21 ; jne`, not because no clock is
+  read. Full write-up where the claim was made: `docs/spice86-live-findings.md § Addendum`,
+  corrected in the same commit. Same lesson as F6, restated because it has now bitten three
+  times: a negative result from a probe over a partially decoded tree is not a negative result
+  about the binary.
 
 - **2026-10-21 passability re-decode: read `docs/passability-findings.md`.** The
   full routine (file `0x2623..0x287F`) was decoded contiguously and it contains

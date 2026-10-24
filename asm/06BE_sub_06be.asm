@@ -1,4 +1,5 @@
-# sub_06be — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_06be — part of asm/06AC_clock_tick_wait: poll A, the pre-window read of the BIOS tick.
+#           Fragment of a 65-byte routine; read the owner.
 # func 06BE..06C1  len 0004 B  evidence: seed+reko
 # seams: clock_int1a
 # confidence: low (bytes proven by check_func.py)

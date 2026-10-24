@@ -1,4 +1,6 @@
-# sub_06cc — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_06cc — part of asm/06AC_clock_tick_wait: poll B, the head of the measured loop — this is
+#           the third and load-bearing INT 1Ah read, and the target of the 20-tick back-edge.
+#           Fragment; read the owner.
 # func 06CC..06CF  len 0004 B  evidence: seed+reko
 # seams: clock_int1a
 # confidence: low (bytes proven by check_func.py)
