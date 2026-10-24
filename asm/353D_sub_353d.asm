@@ -1,4 +1,11 @@
 # sub_353d — MIS-DECODED: the tail of the instruction that starts in asm/353A, not a routine
+# body corrected: 2026-10-28d -- evidence: original/ultimaii.exe file 0x373D..0x3745 is
+#           `1e 49 00 8b fb 0b ff 74 1f`, which objdump -mi8086 decodes from the real
+#           boundary at 353A as the tail of `mov 0x49,%bl` then `mov %bx,%di ; or %di,%di ;
+#           je 3565`. The four mnemonics this file used to show (push %ds, dec %cx,
+#           add %cl,0xbfb(%bp,%di), push 0x1f(%si)) were the leftover bytes of an
+#           instruction the clean wave abandoned after its opcode. tools/forced_keep_audit.py
+#           flags asm/353A @353C as the cause; both cases are its --selftest controls.
 # NAME DISPUTED — same defect as asm/353A, recorded here because this is where the wrong bytes
 #           are most visible. The listing reads:
 #               push %ds                      ; actually ModRM byte 0x1e of `mov 0x49,%bl`
@@ -22,10 +29,7 @@
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_353d:
 L_00373d:
-        push   %ds
-L_00373e:
-        dec    %cx
-L_00373f:
-        add    %cl,0xbfb(%bp,%di)
-L_003743:
-        push   0x1f(%si)
+        .byte 0x1e, 0x49, 0x00  # tail of `mov 0x49,%bl`; its opcode 0x8a is asm/353A's forced-keep
+        .byte 0x8b, 0xfb        # mov %bx,%di -- gas encodes the same move as 89 df, so kept as bytes
+        .byte 0x0b, 0xff        # or %di,%di  -- gas encodes the same or as 09 ff
+        je L_003765             # 74 1f: sector tens digit 0 -> "ANOS: LEGENDS!"

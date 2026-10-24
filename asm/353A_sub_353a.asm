@@ -13,9 +13,12 @@
 #           writer of the era index handed to asm/3546_time_index_message, and it was hiding in a
 #           forced-keep byte rather than being absent. See that file's header for the full era
 #           table.
-# cannot be fixed here: the corrected instruction means changing body lines, and labels and
-#           instructions are both body — engine/tests/asm_body_guard.py freezes them and CP0 md5s
-#           them. The correct decode is recorded in prose and in disasm/defects.md instead.
+# cannot be fixed here: the corrected instruction means changing body lines. asm/353D has now
+#           been corrected under the `# body corrected:` marker (2026-10-28d) and the whole
+#           binary still rebuilds byte-identically; this file's own body is already correct for
+#           its declared span 353A..353C, because the instruction genuinely starts on its last
+#           byte and continues into asm/353D. The forced-keep here is honest; the invented
+#           mnemonics next door were the defect.
 # provenance: static, re-decoded 2026-10-28d from original/ultimaii.exe file 0x373A..0x3745
 # confidence: high for the corrected decode; the committed body below is known-wrong and stays
 #           because the guard says so, not because it is believed
