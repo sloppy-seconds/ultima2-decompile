@@ -389,7 +389,11 @@ adds a `--data-dir` seam and reads the player's own files the way the original
       so only the comparison waits. Added 2026-10-22; context in
       `docs/harness-portability.md` § 8.
 
-- [ ] **Decode the dungeon map format and reproduce the wireframe renderer.** This is
+- [ ] **Decode the dungeon map format and reproduce the wireframe renderer.**
+      **PARKED by the owner 2026-10-28: overworld and town first.** A dungeon is a
+      first-person wireframe with its own byte semantics, so nothing measured there
+      is evidence about the 2D world and nothing measured here may be carried in
+      without re-measuring; the rule is in `AGENTS.md` § 3. This is
       the largest unexplained surface in the game and it blocks any real dungeon crawl.
       **It also owns the `original/monsters` question** — the 64×34 table at `DS:2900`
       is stroke data whose consumer is this renderer, so T9's "how do the coordinate
