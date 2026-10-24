@@ -605,7 +605,8 @@ inference, the contradiction has to be resolved before anything is changed.
 **What the engine does now.** One resident sector (`engine/src/core/world.h`), and
 `asm/5AE1` gives the window origin as `(x-9, y-5)` — the player sits at screen cell
 (9,5) of a 20x16 viewport, not the centre. Off-sector cells take their tile from the
-single byte `DS:12` (`tile_offsector`), which is proven and is why the engine paints a
+single byte `DS:12` (`tile_offsector`, since renamed `view_mode` — see the G29 resolution
+below), which is proven and is why the engine paints a
 uniform strip at the edges. Crossing is handled by `site_leave()` / the edge test.
 
 **The conflict.** `asm/242D/2434` was read as testing **only the high edge**, which

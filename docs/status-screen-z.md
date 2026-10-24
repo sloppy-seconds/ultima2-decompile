@@ -144,8 +144,8 @@ monsters on the field: read `mon_x`, press `Z`, read again.
    `reserved_80[0x16]`. Unresolved.
 3. **`DS:31 = 0x26` and `DS:54F = 1`** are set at the top of the handler and their meaning
    is unknown. `DS:54F` is past the 256-byte save record, in the DS scratch area.
-4. **`asm/4A1C_char_out.asm` is misnamed** — **renamed 2026-10-28b** to
-   `asm/4A1C_screen_clear_mode1.asm`, owner-approved. It is not character output: `mov $0x1,%ax`
+4. **`asm/4A1C_char_out.asm` was misnamed** — renamed 2026-10-28b, owner-approved, to
+   `asm/4A1C_screen_clear_mode1.asm`. It is not character output: `mov $0x1,%ax`
    is AX=0x0001, so AH=00 set-video-mode AL=01, and it falls through (no `ret`) into the
    cursor-zero at `4A22`. The engine's `seam_char_out` keeps its name and its behaviour but no
    longer cites this address: the INT 10h AH=0E teletype it was said to stand in for has never
