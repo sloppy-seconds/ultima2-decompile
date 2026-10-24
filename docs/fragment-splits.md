@@ -110,32 +110,57 @@ intent and the bytes support it only sometimes. Merging also has a cost — it m
 lines between files, which is exactly what `engine/tests/asm_body_guard.py` exists to
 police.
 
-### Merging is not concatenation, and one candidate proves it (2026-10-28d)
+### Merging is not concatenation — but it is solvable, and the tree already knew (2026-10-28d)
 
 An attempt was made to merge `06AC..06EC` — eleven fragments, the clock-tick wait, span
-verified byte by byte and confirmed by this tool the same day. It is the best-evidenced
-candidate in the tree and it still could not be merged.
+verified byte by byte and confirmed by this tool the same day. The first attempt failed, and
+the first write-up of it here said *structurally unmergeable*. **That was wrong**, and the
+correction is more useful than the original claim.
 
-Each fragment carries its own `clock_int1a:` seam label, because each was a separate file and
-separate compilation unit. Concatenated into one file, the label is defined three times and
-**jwasm refuses to assemble it**: `symbol 'clock_int1a' is already defined`. `check_func.py
-06AC` fails and `assemble_clean.sh` goes red.
+Two separate obstacles were tangled together, and only one of them is real.
 
-The only fixes are to delete two of the three label lines or rename them — and a label line is
-body, which `asm_body_guard` forbids editing, correctly, because a label is what makes the
-byte stream addressable. So this candidate is **structurally unmergeable under the current
-guards**, and the same will be true of any run whose fragments each carry a seam label
-(`key_int16`, `video_int10`, `dos_int21`, `speaker_tone`, `clock_int1a`).
+**Obstacle 1 — mine, not the tree's.** `disasm/function-map.tsv` still declared `06AC` as a
+4-byte function, so `check_func` refused on length: `body assembled 65 B, map says 4 B`. The
+map is Phase 2 output and it is part of the merge procedure. All three sanctioned merges
+(`21a86bf`, `4644eb9`, `a98ec94`) edited it: the surviving row takes the full span and the
+absorbed rows are deleted. I did not, and then blamed the guards for my own omission. Preflight
+rule: a merge touches **both** `asm/` and the map, or it has not been done.
 
-Two things follow, and both belong in the TSV's margin rather than in a merge proposal.
-First: before proposing a merge, check whether the fragments share a seam label — that is a
-one-grep preflight and it saves an afternoon of confident failure. Second: the seam labels are
-themselves an artefact of the fragment view. A seam appearing three times in one routine is
-three call sites, and the tree encodes that as three definitions of the same name. Whether
-that should change is a question about the reconstruction's shape, not about this candidate.
+**Obstacle 2 — real, and narrow.** Each fragment carries its own `clock_int1a:` seam label,
+because each was a separate compilation unit and `tools/clean_wave.py` emits one per `int`
+site. Concatenated into one unit, jwasm refuses: `symbol 'clock_int1a' is already defined`.
 
-The merge was reverted the same day it was attempted: guard conserved at 26,080 lines, byte
-match identical, nothing lost.
+Commenting the two duplicate label lines fixes it, and the fix is **provable rather than
+argued**, because a bare label emits no bytes. Tested end to end in a throwaway worktree, with
+`original/` symlinked in and the repo never touched:
+
+    check_func 06AC                       PASS 06AC clock_tick_wait [65 B]
+    assemble_clean.sh                     CLEAN REBUILD BYTE-MATCH: 37344 bytes identical
+
+The only gate that objects is `engine/tests/asm_body_guard.py`, at 26,080 -> 26,078 lines.
+Its objection is correct as written — a label line is body — but the thing it protects is byte
+conservation, and `assemble_clean.sh` proves byte conservation directly and more strongly.
+So this is a policy question about the guard's scope, not an impossibility, and it belongs to
+the owner rather than to an agent who wants their own work to pass.
+
+**The scope is small, and it was measured, not guessed.** Enumerating the seam labels of all 36
+strong runs: **33 merge today with the proven procedure and no policy change at all.** Only
+three collide, and they collide on two names:
+
+    06AC..06EC   11 frags   clock_int1a x3
+    4A3E..4A73    7 frags   video_int10 x3
+    5003..505E   10 frags   video_int10 x2
+
+The narrow ruling on offer is therefore: may `asm_body_guard` accept the removal of a
+**duplicate** seam label — one of the four names in `clean_wave.py`'s `INT_SEAM` map — when at
+least one copy survives in the merged unit? That is mechanically checkable and enumerable, and
+it is not a bless mode: it permits one provably zero-byte class of change and nothing else.
+
+The forward fix needs no ruling and touches no existing line. `clean_wave.py` should number the
+seam label per site (`video_int10`, `video_int10_2`, …) so that a routine with three `int` sites
+has three distinct symbols and a future merge never collides. That is a change to how the tree
+is *generated*, which is allowed; rewriting the tree that was already generated is the part that
+needs the owner.
 
 Two things to check on any candidate before proposing it:
 
