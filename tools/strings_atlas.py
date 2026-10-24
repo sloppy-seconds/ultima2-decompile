@@ -47,19 +47,49 @@ FUNC_RE = re.compile(r'^#\s*func\s+([0-9A-Fa-f]{4})\.\.([0-9A-Fa-f]{4})')
 NAME_RE = re.compile(r'^#\s*name-evidence:\s*(.*)')
 LABEL_RE = re.compile(r'^L_([0-9a-fA-F]{6}):')
 DB_RE = re.compile(r'^\s*\.?byte\s+(.*)$|^\s*db\s+(.*)$')
-ITEM = re.compile(r'"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]{2})')
+ITEM = re.compile(r'"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]{2})|(\d+)')
 MIN_LEN = 3
 END_SLACK = 4        # a trailing db may finish this many bytes past the declared # func end
 
 
+def strip_comment(s):
+    """Drop a trailing `# ...` that is outside a quoted string.
+
+    `db "-WHAT?",0          # string (NUL at 0x356c)` — the operand is `"-WHAT?",0` and the
+    rest is a note. Decoding the whole line instead made the byte stream pick up `0x35` and `6`
+    out of the address in the comment, so the run came out two bytes long and its anchor missed.
+    The hex form of this bug predates the decimal one: `0x356c` matched `0x35` even before bare
+    decimals were accepted. A `#` inside quotes is data, so quote state has to be tracked.
+    """
+    out = []
+    in_str = False
+    for ch in s:
+        if ch == '"':
+            in_str = not in_str
+        elif ch == '#' and not in_str:
+            break
+        out.append(ch)
+    return ''.join(out)
+
+
 def db_bytes(s):
-    """Decode a db/.byte operand into the raw bytes it emits."""
+    """Decode a db/.byte operand into the raw bytes it emits.
+
+    Three operand shapes appear in the tree, and the third was missed until it cost nine
+    strings: quoted text, `0xNN` hex, and **bare decimal** `0` — the clean wave writes
+    `db "TRANSACT-",0` in some files and `db "MALE",0x00` in others, and the decimal form
+    decoded as a nine-byte string with no terminator. That put the base one byte early
+    against the next label and then the byte-exactness filter in build() dropped the string
+    as unverifiable, which is the silent kind of wrong: no error, just a missing row.
+    """
     out = bytearray()
-    for m in ITEM.finditer(s):
+    for m in ITEM.finditer(strip_comment(s)):
         if m.group(1) is not None:
             out.extend(m.group(1).encode('latin1'))
-        else:
+        elif m.group(2) is not None:
             out.append(int(m.group(2), 16))
+        else:
+            out.append(int(m.group(3)) & 0xFF)
     return bytes(out)
 
 
@@ -129,6 +159,38 @@ def exe_anchor(exe, raw, start, end):
     return None
 
 
+def _data_line_runs(lines):
+    """Group the indices of consecutive data lines into runs.
+
+    Two `db`/`.byte` lines are in the same run when nothing but blank lines and `#` comments
+    separates them. This exists because the base-address rule assumed a run of one: the db is
+    the last thing before the next label, so `base = next_label - len(raw)`. When a forced-keep
+    `.byte` filler line follows the string — which is what the clean wave emits when gas would
+    re-encode an instruction differently — the string is no longer last, and the computed base
+    lands short by the filler's length. That silently dropped `TRANSACT-` in the merged
+    `asm/4050_cmd_T` and `-WHAT?` in `asm/334D_cmd_D`: both rendered correctly as data, both
+    invisible to the atlas, and both looked exactly like a classification gap from the outside.
+    """
+    idxs = []
+    for i, ln in enumerate(lines):
+        if ln.strip().startswith('#') or not ln.strip():
+            continue
+        if DB_RE.match(ln):
+            idxs.append(i)
+    runs, cur = [], []
+    for i in idxs:
+        if cur and all((not lines[j].strip()) or lines[j].strip().startswith('#')
+                       for j in range(cur[-1] + 1, i)):
+            cur.append(i)
+        else:
+            if cur:
+                runs.append(cur)
+            cur = [i]
+    if cur:
+        runs.append(cur)
+    return runs
+
+
 def parse(path, exe=None):
     """Return (fname, start, end, evidence, [(file_off, text)])."""
     fname = os.path.basename(path)[:-4]
@@ -138,6 +200,44 @@ def parse(path, exe=None):
     # index the labels so each db can find the next one
     labelled = [(i, int(m.group(1), 16))
                 for i, ln in enumerate(lines) if (m := LABEL_RE.match(ln))]
+    # pre-pass: decode every data line, then work out where each run of them starts.
+    # A run is anchored by the label that follows the WHOLE run, not by the line after each
+    # db — see _data_line_runs.
+    raws = {}
+    for idx, line in enumerate(lines):
+        m = DB_RE.match(line)
+        if not m:
+            continue
+        operand = m.group(1) if m.group(1) is not None else m.group(2)
+        r = db_bytes(operand)
+        if r:
+            raws[idx] = r
+    bases = {}
+    for run in _data_line_runs(lines):
+        run = [i for i in run if i in raws]
+        if not run:
+            continue
+        nxt = [a for i, a in labelled if i > run[-1]]
+        if nxt:
+            total = sum(len(raws[i]) for i in run)
+            addr = nxt[0] - total
+            for i in run:
+                bases[i] = addr
+                addr += len(raws[i])
+        else:
+            # No `L_xxxxxx` label follows the run at all. That happens in the files the 2026-10-23
+            # merges rewrote with `.Lname:` local labels, which carry no address and so cannot
+            # anchor anything — `asm/334D_cmd_D` is one. Anchor the WHOLE run against the exe
+            # rather than each line: a 10-byte concatenation is far more likely to be unique
+            # than the 7-byte string on its own, and the per-line offsets then fall out of the
+            # run's own lengths instead of being guessed one line at a time.
+            joined = b''.join(raws[i] for i in run)
+            at = exe_anchor(exe, joined, start, end) if exe is not None else None
+            for i in run:
+                bases[i] = at
+                if at is not None:
+                    at += len(raws[i])
+            continue
     out = []
     for idx, line in enumerate(lines):
         m = FUNC_RE.match(line.strip())
@@ -151,17 +251,16 @@ def parse(path, exe=None):
         m = DB_RE.match(line)
         if not m:
             continue
-        operand = m.group(1) if m.group(1) is not None else m.group(2)
-        raw = db_bytes(operand)
+        raw = raws.get(idx)
         if not raw:
             continue
-        nxt = [a for i, a in labelled if i > idx]
-        if nxt:
-            base = nxt[0] - len(raw)      # the db is the last thing before that label
-        else:
+        base = bases.get(idx, 'unset')
+        if base is None:
             base = exe_anchor(exe, raw, start, end) if exe is not None else None
             if base is None:
                 continue
+        elif base == 'unset':
+            continue
         for off, text in printable_runs(raw):
             out.append((base + off, text))
     return fname, start, end, evidence, out
