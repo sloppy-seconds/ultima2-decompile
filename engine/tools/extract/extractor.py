@@ -145,6 +145,12 @@ MANIFEST = [
     # str_out call plus its inline string, so the db-index locator is exact and
     # needs no hand-checked file offset.
     ("U2_S_INVALID_MOVE",      "0A02_invalid_move_msg.asm", 0),
+    # CP5 C3 — the movement reject a paralysed character gets. asm/2520 tests DS:26B inside
+    # the passability routine and, if set, prints this and takes the same reject return
+    # (runtime 0x2538) an impassable tile uses. The db line carries a trailing 0x0d newline
+    # glyph, which puts it outside DB_RE, so this is a run locator; the engine emits the
+    # newline itself, as it does for --INVALID MOVE!.
+    ("U2_S_MOVE_PARALYZED",    "2527_sub_2527.asm", ("run", 0x272A, 12, "--PARALIZED!")),
     # The Z status screen's labels (docs/status-screen-z.md § 7). Each is the inline string
     # of a str_out call inside the handler, so the offsets are the call site plus three.
     # Four of these files were named "shop_header_*" by the bulk wave on a caller that was

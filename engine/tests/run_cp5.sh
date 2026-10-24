@@ -408,6 +408,46 @@ PYEOF
     fi
 fi
 
+# --- C3: legs paralysis is a movement rejection ----------------------------
+# asm/2520 sits inside the passability routine: if DS:26B is set it prints
+# "--PARALIZED!" and takes the same reject return an impassable tile uses. The
+# counter is reached the only way it is reached in play — a Daemon (type 0x34,
+# dispatched by asm/0AD3) casting it during the fight — so no debug seam and no
+# cheat flag are needed to gate this.
+#
+# The control matters more than the case. The same script against an Orc (type
+# 0x30, no special at all) must NOT produce the word; without that half this gate
+# could not fail, which is the failure mode this project has been bitten by twice.
+python3 tests/cp5_fight_seed.py "$WORK/c3" >/dev/null 2>&1
+for kind in daemon orc; do
+    python3 - "$WORK/c3/content/monx00" "$kind" <<'PYEOF'
+import sys
+p, kind = sys.argv[1], sys.argv[2]
+d = bytearray(open(p, 'rb').read())
+d[64 + 0]  = 200                       # hp: it has to survive the whole script
+d[96 + 0]  = 0x34 if kind == 'daemon' else 0x30
+d[128 + 0] = 0x08
+d[160 + 0] = 1                         # role 1: the AI pass that casts specials
+open(p, 'wb').write(bytes(d))
+PYEOF
+    # 16 turns of space to let the Daemon close and cast, then one west step.
+    # 0xf2 is U2_KEY_LEFT (platform.h); the script input takes hex tokens verbatim.
+    { for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do printf 'SP\n'; done
+      printf '0xf2\n'; } > "$WORK/c3-$kind.keys"
+    ./u2 --headless --play-map --cleanroom          --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save"          --script "$WORK/c3-$kind.keys" --dump-state > "$WORK/c3-$kind.out" 2>&1
+done
+
+if grep -q -- "--PARALIZED!" "$WORK/c3-daemon.out"; then
+    if grep -q -- "--PARALIZED!" "$WORK/c3-orc.out"; then
+        bad "CP5 C3: the control Orc also printed --PARALIZED! — the gate cannot fail"
+    else
+        ok "CP5 C3: a Daemon's leg paralysis rejects the next step with --PARALIZED!, and a plain melee Orc does not"
+    fi
+else
+    bad "CP5 C3: the Daemon fight never produced --PARALIZED! — the special or the reject is not wired"
+    sed 's/^/        /' "$WORK/c3-daemon.out" | tail -6
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP5 SPEC: PASS\n'

@@ -1220,6 +1220,31 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * reject. */
         const int blocked_by_creature = u2_monsters_at(ctx, nx, ny) >= 0;
 
+        /* CP5 C3: legs paralysis is a movement rejection, not a combat overlay.
+         *
+         * asm/2520 is inside the passability routine: `mov al,[0x26b] ; cmp al,0 ;
+         * je continue`, and on the set path it prints "--PARALIZED!" and falls into the
+         * SAME reject return at runtime 0x2538 that an impassable tile uses. So a
+         * paralysed step is not a special mode, it is the ordinary refusal with a
+         * different word — which is also what the owner's recollection said the status
+         * effect does (legs stop you moving, arms stop you fighting).
+         *
+         * It is checked BEFORE the terrain test because that is the address order inside
+         * the routine (2520 precedes the mode ladder at 25C0). Consequence, inferred from
+         * that order and not yet observed live: a paralysed player facing a mountain gets
+         * --PARALIZED!, not --INVALID MOVE!. If a capture ever shows the terrain word
+         * winning, the two branches swap and nothing else here changes.
+         *
+         * No food is spent, same as every other refusal, and the turn does not advance —
+         * the reject paths above all `continue` without creature_turn(). */
+        if (ctx->state.paral_legs != 0) {
+            seam_str_out(ctx, word);                  /* no CR: same line */
+            seam_str_out(ctx, U2_S_MOVE_PARALYZED);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            continue;
+        }
+
         if (blocked_by_creature || !u2_tile_passable(&ow->world, nx, ny)) {
             /* Blocked. The direction word and the complaint share a line:
              * "CMD: WEST--INVALID MOVE!" then a fresh prompt below.
