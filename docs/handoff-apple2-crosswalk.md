@@ -7,6 +7,48 @@ This is a proposal with its prerequisites already checked, not an open-ended inv
 `AGENTS.md` first, then `docs/apple2-reference.md` § 4 (anchors), § 6 (limits) and § 8 (the Ghidra
 6502 recipe). Everything below assumes that.
 
+---
+
+## Status — executed 2026-10-28d, T0–T4 done, nothing here needs a capture
+
+All five open questions have a written verdict and every one of them is static, as designed.
+
+| | verdict | where it lives |
+| --- | --- | --- |
+| **Q0** step vector `x4` | corroborated (was already answered in T0) | `asm/4F11`, `asm/4F36`, `asm/50D8` `# apple2-twin:` |
+| **Q1** the `0x5C` species clause | **corroborated** — `$6672` is a clause-for-clause match, `CMP #$78` guarding `CMP #$5C` | `asm/2199_creature_step_gate` |
+| **Q2** the step-gate tile ladder | **corroborated** — same accept set, and a compare ladder on both sides, not a table | same file |
+| **Q3** `DS:1B7` | **corroborated** — `$66C5`/`$6701` are the save-and-restore pair, fourth witness | `asm/2233`, `asm/225A` |
+| **Q4** the `DS:15..18` ticket | **Apple-silent** — no equivalent indirection on three shape scans; closed as a DOS-port artefact | `asm/5B71_mode_table_copy`, `docs/needs-gameplay.md` G3 |
+| **Q5** the coin-rub freeze | **corroborated** — `$7DC6` prints, then `LDA #$14 ; STA $D9` | `asm/3C04_coin_rub` |
+
+Built: `tools/apple2_seeds.py` (the scan that was never in the tree; reproduces the documented
+328 exactly, and 309 with the vector table excluded), `tools/apple2_ghidra.sh` (the whole chain,
+md5s at the end, exits non-zero if the seed list drifts from the committed one),
+`tools/apple2_index.py` + `disasm/apple2-functions.tsv`, and `tools/apple2_anchor_map.py` +
+`disasm/apple2-anchors.tsv`. Committed structure, no bulk, no game text anywhere in git.
+
+**The measured anchor count is 24 distinct strings of 433 DOS strings (5.5%), 17 clusters, all
+order-preserving.** The remembered 35 is gone from `docs/apple2-reference.md` § 4.
+
+Two things the plan did not predict, both worth more than the questions it was written to close:
+
+* **`tools/strings_atlas.py` was silently dropping a fifth of its own corpus.** It located a
+  string by subtracting its length from the next `L_` label and skipped any `db` with no label
+  after it — which is every file ending in its string, 232 files, including `--INVALID MOVE!`,
+  the negative control this handoff was built around. The atlas reported a clean 337/337 and its
+  selftest passed while it happened. Fixed with a verified-search fallback: 433 strings, all
+  verifying byte-exactly. **A control that only exercises the easy path certifies nothing.**
+* **The vector-table exclusion was not housekeeping, it was the difference between a usable
+  import and a lying one.** With the vectors out of the seeds, `$4054`/`$406F`/`$4080` decompile
+  to the step vector, the raw delta and the printer. With them in, those addresses held vectors
+  whose bodies were somebody else's code, and the output looked confident.
+
+What is left is the "needs a person" list below, unchanged: push or stay local, and whether the
+crosswalk earns a CI home (it cannot run on a clean checkout — `references/apple/` and
+`original/` are gitignored, so the most CI could check is a committed count manifest; the
+`--selftest` gates are local).
+
 ## Why this exists
 
 The DOS binary is a translation of the Apple II 6502. Where the two agree, **the 6502 around a
