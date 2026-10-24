@@ -5,7 +5,20 @@
 # calls: L_0051df (str_out)
 # provenance: live:airport (+50 other harvests), static
 #           entry executed in 51 of 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+#           confidence: low (bytes proven by check_func.py)
+# REAL FUNCTION SPAN: runtime 50F9..51A4 — **25 fragments, one `ret` at asm/51A4**, the worst
+#           split in the tree and now confirmed as one routine by `tools/fragment_splits.py`
+#           on 2026-10-28d. It is the status-line printer: each field is a basic block that
+#           positions the cursor (DS:2E/DS:2F), calls `str_out` with the label, then emits the
+#           value. Four labelled fields on record — `H.P.=`, `FOOD=`, `EXP.=`, `GOLD=` — and
+#           the run ends at asm/51A4's lone `ret`.
+#           Why it fragmented so badly: most of the interior bytes are `reko`-only rows with no
+#           seed, and the clean wave rendered them as forced-keep `.byte` lines or as nonsense
+#           (`add %cl,0x521e(%bp,%si)` is not a real addressing mode here, it is a mis-decoded
+#           immediate). So the fragment boundaries are artefacts of a decode failure, not of
+#           control flow — which is the case to look for before proposing any merge here.
+#           Do not merge from the TSV alone: read the span, and expect `asm_body_guard` to
+#           object if the byte-for-byte content is not conserved.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 show_hitpoints:
 L_0052f9:

@@ -13,6 +13,11 @@
 #           teletype site it was said to stand in for has never been located in this binary,
 #           so the seam is engine-authored and no longer cites this address. The owner
 #           approved the rename and the minimal fix: the seam stays, the false provenance goes.
+# SPAN CONFIRMED 2026-10-28d: the run is FOUR fragments, not the two this header described.
+#           asm/4A2F and asm/4A3C belong to it, and the `push %ax` here is answered by the
+#           `pop %ax ; ret` at asm/4A3C three files later — which is the evidence, not an
+#           inference from adjacency. `tools/fragment_splits.py` now reports 4A1C..4A3D as one
+#           candidate; it could not before the loop clause was fixed.
 # name-evidence: 6-byte wrapper: mov ax,1 + int 10h, no ret; tail-called by cmd_Z and
 #           followed by the cursor zero at asm/4A22_sub_4a22.asm
 # func 4A1C..4A21  len 0006 B  evidence: seed+call+reko
