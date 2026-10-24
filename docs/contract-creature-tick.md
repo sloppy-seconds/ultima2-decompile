@@ -32,11 +32,14 @@ callers named in `asm/`). So creature motion is turn-based on player commands, n
 | `DS:157+x` | creature **y** for slot `x` | observed |
 | `DS:177+x` | creature **HP** for slot `x` | observed |
 | `DS:197+x` | creature **type/kind** for slot `x` | observed |
-| `DS:1B7+x` | per-slot mirror table, read and written around the commit | observed, meaning unknown |
-| `DS:19`, `DS:1A` | the movement delta, signed, one byte per axis | observed |
+| `DS:1B7+x` | the **terrain byte currently under creature x** — the save-and-restore slot for the grid stamp. Written at spawn by `asm/0CEE_spawn_tile_store`, read back and written into the old cell on every move by `asm/2233`, re-saved from the new cell by `asm/225A` | observed (three sites agree), role inferred |
+| `DS:19`, `DS:1A` | the movement delta, signed, one byte per axis. **Two different values occupy it in one slot**: the raw delta from `asm/4F36`, then the clamped -1/0/+1 step from `asm/4F11` | observed |
+| `DS:13` | the player's riding/stamp byte. `0x22` = on a horse (`asm/2FD6_vehicle_horse`), `0x78` = on foot. Gates the sweep at `asm/0A7C` | observed |
+| `DS:26` | sign-tested by the sweep gate at `asm/0A83`. Meaning here NOT established — it is the torch counter inside a tower and was measured flipping `00`/`FF` on overworld movement | see `asm/0A83` |
 | `DS:23`, `DS:24` | candidate new position, staging | observed |
 | `DS:27`, `DS:28` | second staging pair; `DS:27` also carries the slot index into the melee path | observed |
-| `DS:1F` | the **sector-grid tile byte at the candidate cell**, stored by `asm/2199` from `map_tile_ptr`'s `AL`. `asm/0CC0` reads the same byte as a slot index — see the note below | observed, dual use unresolved |
+| `DS:1F` | **shared scratch with 20+ writers, not a dedicated variable.** In this system `asm/2199` stores the candidate tile byte here and the step gate reads it back. In the placement cluster `asm/0CC0`/`asm/0CDC` use the same byte as a slot index, and `asm/2677`/`asm/269F` use it to carry the player stamp (`DS:13`) across a call. The live reading of 120 that ruled out "slot cursor" is the on-foot stamp `0x78` | observed, contradiction resolved — see § "The `DS:1F` contradiction" |
+| `DS:26A` | the fourth of the four status counters ticked by `asm/0C33..0C53`. **While non-zero the step gate refuses every move, for every species and every tile.** Only non-zero writer: `asm/3C04_coin_rub`, which sets `0x14` | observed |
 | `DS:20` | contact counter, `incb` on a creature landing on the player | observed |
 | `DS:00`, `DS:01` | player position, read only | observed |
 | `DS:4A` | world/interior context byte, gates several branches | see `docs/phase4-state.md` |
@@ -53,13 +56,43 @@ into `asm/0AA4_monster_spawn_entry`, which is `jmp 0x0E9C` — the only branch i
 the wandering-spawn cluster. A caller search that follows only `call` sites concludes that
 cluster is dead code. It is not; it is reached by fall-through once per sweep.
 
-**2. The pursuit vector.** Two variants exist and they are not interchangeable:
+**1b. The per-slot gate** (`asm/0A7C`/`asm/0A83`, observed — this was the `slot_gate_unproven`
+hole, and it is now a rule)
 
-* `asm/4F36` (observed, high confidence): `DS:19 = DS:00 - DS:137[di]`,
-  `DS:1A = DS:01 - DS:157[di]`. Plain `sub`, **no wrap adjust**, so the delta is signed and can
-  be a large negative.
-* `asm/152E` (observed): the same difference but routed through `asm/50D8`, which applies a
-  torus wrap.
+```
+if DS:13 != 0x22                              -> the creature takes its turn
+else if DS:26 >= 0                            -> the creature takes its turn
+else if mon_type[di] in {0x48, 0x3C, 0x2C}    -> the creature takes its turn
+else                                          -> skip this slot for this sweep
+```
+
+`DS:13 == 0x22` is the horse riding state: `asm/2FD6_vehicle_horse` stores `0x22` into `DS:13`,
+and `[DS:13]` was measured live as `0x22` on a horse and `0x26` in the plane
+(`asm/2FAD_vehicle_board_dispatch`). So the gate reads: **while the player is mounted and
+`DS:26` has its sign bit set, land creatures do not move at all** — and the three exemptions are
+the frigate, the balron and the sea creature, i.e. the same three species the step gate singles
+out. What `DS:26`'s sign means here is **not** established; see `asm/0A83`.
+
+**2. The pursuit vector.** Three routines write `DS:19`/`DS:1A` and they are not
+interchangeable. `asm/4F36` runs first, `asm/4F11` overwrites it before the step.
+
+* `asm/4F36` (observed): `DS:19 = DS:00 - DS:137[di] - 1`, and the same for the y pair.
+  The `-1` is not a typo and it is not a wrap: the routine is `stc` then `sub`, and x86 `sub`
+  subtracts CF, which `stc` has just set. Unclamped, so it can be a large negative. It feeds
+  the **magnitude** tests only — `asm/0AAA` compares `|DS:19|` against 3 and `asm/1040`
+  against 4.
+* `asm/4F11` (observed), called from `asm/0AFC`, which every path through the special-attack
+  dispatch passes through: `DS:19 = sign(4 * (DS:00 - DS:137[di] - 1))`, same for y. The
+  `add al,al` twice is what makes this the **torus-shortest** direction: `4*d` overflows the
+  signed byte at `|d| >= 32`, which is exactly half the 64-cell grid, so a creature more than
+  half the map away is sent the short way round instead of the long way. Measured over all
+  4096 `(player_x, mon_x)` pairs, the result equals the shortest torus direction in 3904;
+  the 192 exceptions are the two near cells per axis (the `-1`) and the exact antipode.
+  **This is the value `asm/212E` steps with.** `asm/50D8` is a sign function (`-1/0/+1`), not
+  a wrap — the wrap behaviour is the `add` pair in its caller.
+* `asm/152E` (observed): `sign(player - creature)` with `stc ; cmc`, so **no** off-by-one.
+  Reached only from `asm/1151_dungeon_darkness`, i.e. the dungeon side of the split, which
+  `AGENTS.md` § 3 parks. It is not part of this tick.
 
 **3. Wounded creatures retreat** (`0x0B07`/`0x0B0F`, observed):
 
@@ -76,31 +109,109 @@ CF-clearing pair, not arithmetic, and `al = 0 - DS:19`.
 here is `0x10` while the flee threshold above is `0x0F`; they are different constants and that
 is not a transcription error.
 
-**5. The step** (`asm/212E`, observed):
+**5. The step, and the three cells it tries** (`asm/212E..asm/218B`, observed)
 
 ```
-DS:23 = (DS:137[di] + DS:19) & 0x3F
+DS:23 = (DS:137[di] + DS:19) & 0x3F          ; DS:19/1A are the clamped -1/0/+1 from asm/4F11
 DS:24 = (DS:157[di] + DS:1A) & 0x3F
 call map_tile_ptr        ; asm/50B3 -> AL = tile at (DS:23,DS:24), ZF if zero, DS:6 = address
+call creature_step_gate  ; asm/2199 -> AL = 0 accept, 0xFF refuse (ZF is what is tested)
 ```
 
 `map_tile_ptr` is a **fetch, not a test**. Its body is `y*64 + x + word[DS:472]`, and
 `word[DS:472]` is `0x1800` in every live capture, so it returns the byte of the 64-wide sector
 grid at the staged cell. It has 25 caller files and is byte-proven. What decides whether the
-creature moves is the **caller's classification of the returned tile**, at `asm/21A6..asm/21D8`,
-which compares `DS:1F` against `0x00`, `0x04`, `0x10`, `0x14`, `0x2C`, `0x48`, `0x5C`, `0x70`
-and `0x78` — and that classifier is still unread.
+creature moves is the caller's classification of the returned tile, `asm/2199..asm/2200`,
+decoded in full below.
+
+If the **diagonal** cell is refused the routine does not give up; it retries on one axis at a
+time, in this order:
+
+| order | cell | code | guard |
+| --- | --- | --- | --- |
+| 1 | `(mon_x + dx, mon_y + dy)` — diagonal | `asm/212E` → `asm/214D` | — |
+| 2 | `(mon_x, mon_y + dy)` — vertical only | `asm/215C` → `asm/2166` | skipped when `DS:1A == 0` (`asm/2155`) |
+| 3 | `(mon_x + dx, mon_y)` — horizontal only | `asm/216E` → `asm/2186` | — |
+| — | all three refused | `asm/218B` | no move this sweep |
+
+That is the mechanism behind the per-species geometry measured live in
+`captures/spice86/cp5-g28-approach/` (Orc 190/190 diagonal, Fighter 164/164 diagonal,
+Merchant 123/124 axis). Note what that means: the split is **terrain-driven**, not a per-species
+movement rule. The only species-dependent clause in the whole gate is the `0x5C` test.
 
 The `& 0x3F` is the toroidal wrap of the 64x64 sector grid, and it is applied here, on the
 creature side, independently of the identical mask the player path applies inside `0x2423`.
 
-**6. Contact test** (`asm/2201`/`asm/220A`, observed): if the candidate cell equals the player
-cell on **both** axes, the creature attacks instead of moving. Otherwise the no-contact path at
-`asm/2216` stages the candidate into `DS:27`/`DS:28`, re-stages the current position into
-`DS:23`/`DS:24`, and re-fetches the tile at the creature's current cell.
+**5b. The step gate** (`asm/2199_creature_step_gate`, runtime `0x2199..0x2200`, observed)
 
-**7. The commit** (`asm/2233`, observed): `DS:137[di] = DS:27` and `DS:157[di] = DS:28`. The
-write goes through the staging pair, never directly from the arithmetic.
+Entry: `AL` is the tile `map_tile_ptr` just fetched, and the routine's first instruction stores
+it to `DS:1F`. Two returns, each ending in `cmp $0x0,%al` so the callers can branch on ZF:
+`asm/21F7` returns 0 (accept) and `asm/21FC` returns `0xFF` (refuse).
+
+```
+if DS:26A != 0                       -> refuse            (asm/21A3; every species, every tile)
+if mon_type in {0x2C, 0x48}          -> accept iff tile == 0x00   (asm/21A6, 21AE, 21D8)
+else:
+    if mon_type < 0x78 and tile == 0x5C -> accept        (asm/21B2, 21B6)
+    if tile in {0x10, 0x04, 0x00}       -> refuse        (asm/21BD, 21C5, 21C9)
+    if tile <  0x14                     -> accept        (asm/21CD, jb)
+    if tile == 0x70                     -> accept        (asm/21D1)
+    otherwise                           -> refuse        (asm/21D5)
+accept then passes a site guard: if DS:4A != 0, candidate x == 0 or candidate y == 0 is
+refused (asm/21E2, 21E9, 21F0).
+```
+
+Read against the tile bytes that actually occur in a sector map — every one of them a multiple
+of 4, `docs/passability-findings.md` F12, so 64 values — the accepted set is five bytes out of
+sixty-four:
+
+| tile | art | what it is | kind < 0x78 | kind >= 0x78 | kind 0x2C / 0x48 |
+| --- | --- | --- | --- | --- | --- |
+| `0x00` | `0x00` | water (proven impassable for the player, F11) | refuse | refuse | **accept** |
+| `0x04` | `0x01` | sparse pixels | refuse | refuse | refuse |
+| `0x08` | `0x02` | grass (proven passable for the player, F11) | **accept** | **accept** | refuse |
+| `0x0C` | `0x03` | forest (proven passable for the player, F11) | **accept** | **accept** | refuse |
+| `0x10` | `0x04` | mountain (proven impassable for the player, F11) | refuse | refuse | refuse |
+| `0x14`..`0x58`, `0x60`..`0x6C`, `0x74`..`0xFC` | — | everything else, 57 bytes: structures, letters, the `0x78` building blocks | refuse | refuse | refuse |
+| `0x5C` | `0x17` | checkerboard rows; 72 cells in `mapx03`, 4 in `mapx71`; **identity unknown** | **accept** | refuse | refuse |
+| `0x70` | `0x1C` | magenta vertical dashes; 12691 cells in the 4096-byte grids over 15 sectors (`engine/src/game/overworld.c` cites 12889, which is the same count including each file's 128-byte container tail — both are right for their own domain), and in the `*x1/*2/*3` sectors it forms the street and open-ground runs between the `0x78` blocks | **accept** | **accept** | refuse |
+
+Grades: the ladder, the ordering and the verdict polarity are **observed** (the bytes are in
+`asm/2199..asm/21FC`). The `art = type >> 2` reading of the species clauses and of the tile
+names is **inferred** from `docs/art-index.md` and `disasm/tile-art.tsv`. The sector counts and
+the spatial distribution of `0x70` and `0x5C` are **measured** over `original/mapx*` by a
+throwaway pass in this session, and the reading of `0x70` as "town ground" is **inferred** from
+that distribution.
+
+Three things about this table are worth saying out loud:
+
+* It **agrees with the player's proven passability on all four bytes that have been settled by
+  walking** (`0x00` blocks, `0x08` and `0x0C` pass, `0x10` blocks) — and it is a completely
+  different mechanism, since `docs/passability-findings.md` F1 and F10 established that the
+  player's routine does not read a tile at all. Two independent gates, same four verdicts. And
+  `0x70` is the fifth agreement from a different direction again: `engine/src/game/overworld.c`
+  admits art `0x1C` for the player on an owner report from a town ("the terrain I'm not standing
+  on (cobblestone) should be passable"), which the creature gate reaches from bytes alone.
+* The `0x2C`/`0x48` arm is the first place in this tree where those two species are separated
+  by **behaviour** rather than by art, and both move only on water. `0x2C >> 2` is the sea
+  creature and `0x48 >> 2` is the frigate.
+* The `DS:4A` site guard is what makes the wrapped edge a wall inside a settlement while the
+  wilderness stays a torus, and it is the same byte `cmd_A` gates on.
+
+**6. Contact, tested twice** (`asm/0B25`/`asm/0B39` before the gate, `asm/2201`/`asm/220A`
+after it; observed). Both compare the candidate against `DS:00`/`DS:01` on **both** axes. The
+second is not redundant: the axis-substituted candidates from `asm/215C` and `asm/216E` can
+land on the player where the diagonal candidate did not. The first one leads to the attack
+path; the second one leads to `asm/218B`, which is the no-move tail and the Minax proximity
+check, not an attack (`docs/monster-spawn.md` § 13).
+
+**7. The commit** (`asm/2233`/`asm/225A`, observed): the write goes through the staging pair,
+never directly from the arithmetic. And it is a **stamp-and-restore pair**, which is what
+`DS:1B7` is for: `asm/2233` writes `DS:1B7[di]` into the grid cell `DS:6` addresses (the
+creature's old cell) to put the terrain back, commits `DS:27`/`DS:28` into `mon_x`/`mon_y`,
+re-fetches the new cell, then `asm/225A` saves that new cell's terrain byte into `DS:1B7[di]`
+and stamps `mon_type` into the cell. `asm/0CEE_spawn_tile_store` writes `DS:1B7` the same way
+at spawn, and the spawn arms read it back with `cmp $0x8,%al` — three sites, one meaning.
 
 **8. On contact** (`0x0B4D`, observed): `incb DS:20`, `DS:27 = di`, then a type dispatch —
 `DS:197[di] == 0xFC` falls through to the thief steal attempt at `asm/0B5F`, anything else
@@ -110,42 +221,89 @@ jumps to the melee hit roll at `asm/0B62`. The melee roll is `rand & 7` compared
 ### C behavioral contract
 
 ```c
-/* Only the parts marked observed below are a specification. The per-slot gate at
- * step 1 and the tile classifier at asm/21A6..asm/21D8 are NOT established, so
- * this function is deliberately not executable ground truth end to end. */
+/* Everything below is now transcribed from bytes, but this function is still NOT
+ * executable ground truth: the DS:26 clause of the per-slot gate and the identity of
+ * tile 0x5C are unproven, and the -1 in the pursuit delta has never been observed in
+ * play. See § "What this contract deliberately does not claim". */
 
 #define CREATURE_X(s)   DS[0x137 + (s)]
 #define CREATURE_Y(s)   DS[0x157 + (s)]
 #define CREATURE_HP(s)  DS[0x177 + (s)]
 #define CREATURE_KIND(s) DS[0x197 + (s)]
+#define CREATURE_SAVED_TILE(s) DS[0x1B7 + (s)]  /* terrain under it; restored on move */
 
 #define FLEE_HP_THRESHOLD   0x0F   /* below this, the creature retreats   */
 #define REGEN_HP_THRESHOLD  0x10   /* below this, it regains 1 HP per tick */
 #define KIND_THIEF          0xFC   /* contact with this kind steals instead */
 #define GRID_WRAP_MASK      0x3F   /* 64x64 toroidal sector grid          */
+#define KIND_SEA_MONSTER    0x2C   /* water-only movers  */
+#define KIND_FRIGATE        0x48   /* "                  */
+#define KIND_BALRON         0x3C   /* sweep-gate exempt  */
+#define RIDING_HORSE        0x22   /* DS:13 value set by asm/2FD6 */
 
 /* asm/50B3 map_tile_ptr. Returns the sector-grid tile byte at the staged cell:
  * word[DS:472] + DS:24*64 + DS:23, with the resolved address left in DS:6 and ZF
  * set when the tile is 0. It decides nothing; the caller classifies the tile. */
 extern uint8_t map_tile_ptr(void);
 
+/* The grid write behind asm/2233's `mov %al,(%bx,%si)` and asm/225A's stamp,
+ * where DS:6 is the address map_tile_ptr resolved for the staged cell. */
+extern void write_grid(uint16_t addr, uint8_t byte);
+extern void minax_proximity_check(int slot);  /* asm/1040, docs/monster-spawn.md § 13 */
+
 static void wander_spawn_attempt(void);   /* asm/0AA4 -> runtime 0x0C9C cluster */
 static void on_contact(int slot);         /* asm/0B4D: steal roll + melee roll  */
+
+/* asm/2199_creature_step_gate. May this creature step onto (DS:23, DS:24)?
+ * The tile is the value map_tile_ptr left in AL; the routine stores it to DS:1F and
+ * reads it back. Returns 0 to accept and 0xFF to refuse; the callers branch on ZF,
+ * which both returns set with an explicit cmp before the ret. */
+static int creature_step_gate(uint8_t tile, uint8_t kind)
+{
+    if (DS[0x26A] != 0) return 0xFF;      /* asm/21A3: freeze, every species */
+
+    int accept;
+    if (kind == KIND_SEA_MONSTER || kind == KIND_FRIGATE) {
+        accept = (tile == 0x00);          /* asm/21A6, 21AE -> 21D8 */
+    } else if (kind < 0x78 && tile == 0x5C) {
+        accept = 1;                       /* asm/21B2, 21B6 */
+    } else {
+        accept = (tile != 0x10 && tile != 0x04 && tile != 0x00)  /* asm/21BD, 21C5, 21C9 */
+              && (tile < 0x14 || tile == 0x70);                  /* asm/21CD, 21D1, 21D5 */
+    }
+    if (!accept) return 0xFF;
+
+    /* asm/21E2, 21E9, 21F0: inside a settlement the wrapped edge is a wall. */
+    if (DS[0x4A] != 0 && (DS[0x23] == 0 || DS[0x24] == 0)) return 0xFF;
+    return 0;
+}
+
+/* asm/4F11_monster_step_vector. The clamped step, per axis: the short way round a
+ * 64-cell torus, aimed at one cell below/left of the target because of the -1. */
+static int8_t step_axis(uint8_t player, uint8_t mon)
+{
+    int8_t d = (int8_t)(player - mon - 1);   /* stc then sub: CF is subtracted */
+    int8_t s4 = (int8_t)(4 * d);             /* add al,al twice; overflows at |d| >= 32 */
+    return s4 == 0 ? 0 : (s4 > 0 ? 1 : -1);  /* asm/50D8 sign_of_al */
+}
 
 void creature_sweep(void)                 /* runtime 0x0A6D */
 {
     for (int di = 31; di >= 1; di--) {    /* slot 0 is never examined */
         if (CREATURE_KIND(di) == 0) continue;
 
-        /* --- unproven gate: DS:13 == 0x22, the sign of DS:26, and the
-         * --- 0x48 / 0x3C / 0x2C kind compares. See asm/0A7C and asm/0A83.
-         */
-        if (!slot_gate_unproven(di)) continue;
+        /* asm/0A7C, asm/0A83: mounted + DS:26 negative freezes land creatures. */
+        if (DS[0x13] == RIDING_HORSE && (int8_t)DS[0x26] < 0) {
+            uint8_t k = CREATURE_KIND(di);
+            if (k != KIND_FRIGATE && k != KIND_BALRON && k != KIND_SEA_MONSTER)
+                continue;
+        }
 
-        /* Pursuit vector, no-wrap variant (asm/4F36). The torus-wrapped variant
-         * is asm/152E and is used from a different caller. */
-        int8_t dx = (int8_t)(DS[0x00] - CREATURE_X(di));
-        int8_t dy = (int8_t)(DS[0x01] - CREATURE_Y(di));
+        /* asm/0AAA tests |raw delta| < 3 for the special-attack gate, using the
+         * unclamped asm/4F36 value. Then asm/0AFC overwrites DS:19/1A with the
+         * clamped step below — the order matters and is easy to lose. */
+        int8_t dx = step_axis(DS[0x00], CREATURE_X(di));
+        int8_t dy = step_axis(DS[0x01], CREATURE_Y(di));
 
         if (CREATURE_HP(di) < FLEE_HP_THRESHOLD) {   /* wounded: retreat */
             dx = (int8_t)-dx;
@@ -158,45 +316,133 @@ void creature_sweep(void)                 /* runtime 0x0A6D */
         uint8_t nx = (uint8_t)((CREATURE_X(di) + dx) & GRID_WRAP_MASK);
         uint8_t ny = (uint8_t)((CREATURE_Y(di) + dy) & GRID_WRAP_MASK);
 
-        if (nx == DS[0x00] && ny == DS[0x01]) {      /* would land on player */
+        if (nx == DS[0x00] && ny == DS[0x01]) {      /* asm/0B25/0B39: would land on player */
             on_contact(di);                          /* does NOT move it     */
             continue;
         }
 
-        DS[23] = nx; DS[24] = ny;
-        uint8_t tile = map_tile_ptr();   /* -> DS:1F via asm/2199; classifier unread */
-        (void)tile;
+        /* asm/212E..asm/218B: three candidate cells, diagonal first, then vertical
+         * only (skipped when dy == 0), then horizontal only. First one the gate
+         * accepts wins; if none is accepted the creature does not move. */
+        int moved = 0;
+        for (int c = 0; c < 3 && !moved; c++) {
+            DS[23] = (c == 1) ? CREATURE_X(di) : nx;
+            DS[24] = (c == 2) ? CREATURE_Y(di) : ny;
+            if (c == 1 && dy == 0) continue;         /* asm/2155 */
+            uint8_t tile = map_tile_ptr();           /* -> DS:1F via asm/2199 */
+            if (creature_step_gate(tile, CREATURE_KIND(di)) != 0) continue;
 
-        DS[27] = nx; DS[28] = ny;                    /* commit via staging   */
-        CREATURE_X(di) = nx;
-        CREATURE_Y(di) = ny;
+            nx = DS[23]; ny = DS[24];
+            if (nx == DS[0x00] && ny == DS[0x01]) break;  /* asm/2201/220A -> 218B */
+
+            /* asm/2216/2233/225A: restore the old cell, commit, stamp the new one. */
+            uint8_t ox = CREATURE_X(di), oy = CREATURE_Y(di);
+            DS[23] = ox; DS[24] = oy; map_tile_ptr();     /* DS:6 := old cell */
+            write_grid(DS[6], CREATURE_SAVED_TILE(di));
+            CREATURE_X(di) = nx; CREATURE_Y(di) = ny;
+            DS[23] = nx; DS[24] = ny;
+            CREATURE_SAVED_TILE(di) = map_tile_ptr();     /* terrain under me now */
+            write_grid(DS[6], CREATURE_KIND(di));
+            moved = 1;
+        }
+        if (!moved && DS[0x4A] != 0) minax_proximity_check(di);  /* asm/218B -> asm/1040 */
     }
 
     wander_spawn_attempt();   /* reached by fall-through, not by call */
 }
 ```
 
-### What this contract deliberately does not claim
+## The `DS:1F` contradiction, closed
+
+Contract 2 used to record `DS:1F` as having "two lives" that could not both be right: `asm/2199`
+stores a tile byte and `asm/0CC0` reads a slot index. **There is no contradiction, and the way
+the question was framed was the error.** `DS:1F` is a general-purpose scratch byte with more
+than twenty writers, and different code paths give it different meanings. That answer was
+already on disk — `asm/0CB0_sub_0cb0.asm`'s header has said since 2026-10-23 that `DS:1F` is
+shared scratch and cites a live reading of 120 that rules out a slot index. The task was
+reconciliation, not extraction.
+
+The three readings, all correct in their own path:
+
+| path | meaning of `DS:1F` | sites |
+| --- | --- | --- |
+| the creature step | the candidate **tile byte**, stored by `asm/2199` and read back at `asm/21B6`/`21BD`/`21D8` | observed |
+| the placement cluster | a **slot index**, written from `DI` by `asm/0CB0` and read into `BL` by `asm/0CC0`/`asm/0CDC`/`asm/0CEE` | observed |
+| the player stamp | the saved **`DS:13` value**, written by `asm/2677` and restored by `asm/269F` | observed |
+
+The third one explains the live reading that broke the first two theories: 120 = `0x78` is the
+on-foot player stamp, and `asm/2677`/`asm/269F` carry it across a call.
+
+**The trap in the grep is still there and still bites.** `mov $0x1f,%bl` is the immediate 31, not
+a read of `DS:1F` — it appears in `asm/0A6D`, `asm/0C9C`, `asm/1015`, `asm/1151`, `asm/147F`,
+`asm/23E6`, `asm/330C`, `asm/4660` and `asm/2E3D`. Discard those before counting uses
+(`docs/monster-spawn.md` § 11).
+
+**Is `asm/0CC0`'s instrumentation warning still load-bearing? Yes, and it is not built on a
+misreading.** Inside the placement path `DS:1F` really does hold the slot index, so a
+`MEMORY_WRITE` breakpoint on a fixed `DS:137+n` really will miss writes when it holds a
+different `n`. What must not be carried away from it is the idea that `DS:1F` *is* a slot index
+as a matter of record — it is a slot index in that path, a tile in this one, and a stamp in a
+third.
+
+## Falsification
+
+A contract that cannot be wrong is not a contract. These are the checks that would break it, and
+they are cheap:
+
+1. **`0x0C` must accept and `0x10` must refuse** for an ordinary kind (`0x30`, Orc). These are
+   adjacent multiples of 4 and both verdicts are independently proven for the *player* by the
+   live walk in `docs/passability-findings.md` F11. If a creature ever steps onto a mountain, or
+   refuses a forest, this table is wrong.
+2. **`0x5C` must accept for kind `0x30` and refuse for kind `0xF0`** (Fighter). Same tile, two
+   verdicts — this is the only clause that splits on species, and if both kinds get the same
+   answer the `jae` at `asm/21B2` has been misread.
+3. **`0x00` must refuse for kind `0x30` and accept for kind `0x2C`.** If a sea creature is seen
+   on grass, or an orc in the water, the water-only arm is wrong.
+4. **`0x70` must accept and its neighbour `0x74` must refuse.** `0x70` is the only byte above
+   `0x14` that is accepted unconditionally, and it is the one that makes town movement possible
+   at all.
+5. **A creature at `mon_x = player_x - 1` must not change `mon_x`**, and one at
+   `mon_x = player_x + 1` must step onto the player. This is the derived consequence of the `-1`
+   in `asm/4F11` and it is the one claim here that has never been observed. It is on
+   `docs/needs-gameplay.md` as G28 and it is agent-drivable with `tools/u2_edit.py setpos`.
+6. **The gate must refuse everything while `DS:26A != 0`.** Poke `DS:26A = 0x14` and no creature
+   should move; that is a one-write test and it would settle G27.
+
+## What this contract deliberately does not claim
 
 * **`0x50B3` was called a black box here, and that was wrong.** It is `asm/50B3_map_tile_ptr`,
   already named, byte-proven, live-observed in 49 of 60 harvests, and cited by 25 caller files.
   The header even spells out the addressing. Calling it undecoded was a process failure: the
-  first move was `ls asm/ | grep -i <word>`, and it was skipped. The real unread piece is the
-  **caller's tile classifier** at `asm/21A6..asm/21D8`, not the fetch.
-* **The per-slot gate is unread.** `asm/0A7C` and `asm/0A83` test `DS:13 == 0x22`, the sign of
-  `DS:26`, and compare the kind against `0x48`, `0x3C`, `0x2C`. The owning header says
-  explicitly: "NOT ESTABLISHED: what the DS:13 / DS:26 tests and the 0x48/0x3C/0x2C kind
-  compares mean." The contract keeps that as a named hole, `slot_gate_unproven`.
-* **`DS:1F` still looks like it has two lives, and neither reading is proven wrong.** `asm/2199`
-  stores `map_tile_ptr`'s tile byte there, and `asm/0CC0` reads it as a slot index in
-  `mov 0x1f,%bl`. A tile value is a multiple of 4 up to `0xFC` and a slot index is 0..31, so the
-  two readings are not reconcilable as the same variable without one of them being wrong. Left
-  open deliberately. `asm/0CC0` also warns that a `MEMORY_WRITE` breakpoint on a fixed
-  `DS:137+n` will miss writes whenever `DS:1F` holds a different `n`.
+  first move was `ls asm/ | grep -i <word>`, and it was skipped. The real unread piece was the
+  **caller's tile classifier** at `asm/21A6..asm/21D8`, and that is now decoded above.
+* **The per-slot gate is no longer a hole.** `asm/0A7C`/`asm/0A83` are the horse-and-`DS:26`
+  freeze described in step 1b. What is *still* not claimed: what `DS:26`'s sign means in that
+  clause. It has two unrelated documented meanings (torch counter indoors, movement flip
+  outdoors) and neither is verified here.
+* **Tile `0x5C` has no identity.** It is the only clause of the gate that splits on species and
+  the only accepted tile nobody has named. There is a lead — `DS:14 = map_byte >> 1` is a
+  measured transform (`asm/2FAD_vehicle_board_dispatch`, whose sample list includes
+  `0x5C -> 0x2E`), and mode `0x2E` is the force-field event — so **`0x5C` may be a force field**,
+  which would mean monsters cross force fields and the four NPC classes do not. That is a lead
+  and nothing more, it is on `docs/needs-gameplay.md` as G29, and it must not be implemented as
+  fact. It does however contradict the reasoning in `docs/phase4-state.md` § CP5 that rules a
+  tile trigger out for C5 on the grounds that `0x2e` occurs zero times in `mapx00`: `0x2e` is a
+  mode byte and map bytes are multiples of 4, so that test could not have found it either way.
+  Recorded as a disagreement, not resolved.
+* **The `-1` in the pursuit delta is derived, not observed.** The bytes are unambiguous (`stc`
+  with no `cmc` before a `sub`, where `asm/152E` and `asm/0B0F` both cancel it) and the
+  consequence follows arithmetically, but nobody has watched a creature stall one cell short.
+  G28. The tempting explanation is a 6502 port bug — on the 6502, `SBC` with `C=1` is a plain
+  subtract, so a `SEC`/`SBC` pair ported to `STC`/`SUB` gains a `-1` — and that is **recalled
+  reasoning about an ISA, not a finding**. The Apple build in `references/apple/` cannot test it:
+  its game logic is UCSD p-code, not 6502, and a byte-pattern search for the idiom over the
+  extracted files returns nothing.
 * **`asm/0CC0` is placement, not movement.** Its own header is explicit: "This is a PLACEMENT
   store, not movement: nothing here computes a new coordinate." Do not fold it into this tick.
 * **Dungeons are out of scope.** `asm/1151` and `asm/147F` also write `DS:137[di]` and belong
-  to the dungeon encoding, which `AGENTS.md` parks.
+  to the dungeon encoding, which `AGENTS.md` parks. `asm/152E` — the clamped step vector with
+  **no** off-by-one — is reached only from `asm/1151`, so it is on the parked side too.
 
 ## Apple II cross-reference
 
@@ -212,7 +458,10 @@ not the AI.
 
 ```bash
 python3 tools/check_func.py 0A6D
+python3 tools/check_func.py 2199          # the step gate head
+python3 tools/check_func.py 4F11          # the clamped step vector
 python3 tools/check_func.py 4F36
+python3 tools/check_func.py 50D8          # sign_of_al
 grep -rn "0x137(%di)" asm/*.asm | grep "mov    %al"      # the position writers
 grep -rn "and    \$0x3f" asm/212E_sub_212e.asm asm/0B25_sub_0b25.asm
 ```
@@ -220,3 +469,8 @@ grep -rn "and    \$0x3f" asm/212E_sub_212e.asm asm/0B25_sub_0b25.asm
 The two thresholds `0x0F` (flee) and `0x10` (regen) are the details most likely to be
 "corrected" into one value. They are two different constants in two different fragments and
 both are observed.
+
+The step gate is the part most likely to be "simplified". Three things in it are load-bearing
+and look like accidents: the `cmp $0x0,%al` before each `ret` (that is the calling convention),
+the `stc` without a matching `cmc` in `asm/4F11`, and the `add al,al` pair that turns a clamp
+into a torus direction. None of the three is a transcription error.
