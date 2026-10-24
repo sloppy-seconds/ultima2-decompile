@@ -163,12 +163,41 @@ Observed directly, each one a claim the working brief made on assumption:
 * The "287 of 288 Apple-only strings" figure from the first anchor pass is an artefact: the
   regex caught hi-res bitmap noise, not text. Do not cite it.
 
-## 7. Next
+## 7. Disks 2 and 3: the data correspondence
+
+Disk 2 is volume `PLAYER`, disk 3 is volume `GALACTIC`. Both hold a subdirectory `M` of
+per-sector files, and the naming maps onto the DOS side one-for-one:
+
+| Apple | bytes | DOS | bytes | relation |
+| --- | --- | --- | --- | --- |
+| `M/AP.NN` | 4096 | `mapxNN` | 4224 | **first 4096 bytes identical** on 31 of 33 sectors |
+| `M/ON.NN` | 256 | `monxNN` | 384 | **first 256 bytes identical**, tested 5 of 5 |
+| `TLK.NN` | 256 | `tlkxNN` | 384 | same shape, content differs (~100/256 equal) |
+
+Every DOS file is exactly 128 bytes longer than its Apple counterpart, and in all three
+families the extra block begins with `0x1A`. See `docs/map-format.md` § 2 for what that
+proves about the tail and what it does not.
+
+Two things to know before using these as evidence:
+
+* **Sector numbers are not unique across disks.** `AP.10` and `AP.15` exist on both disk 2 and
+  disk 3 with completely different content (44.8% and 35.4% of cells differ). The disk selects
+  the scenario set; the two digits do not identify a world on their own. The DOS build carries
+  one flat `mapxNN` set, so where the two Apple disks disagree, disk 2 is the one that matches
+  DOS.
+* **`TLK` content genuinely differs between platforms**, unlike `AP` and `ON`. Do not treat
+  Apple dialogue data as a cross-check on `tlkxNN` until that difference is explained.
+
+Also on these disks and not yet examined: `MONSTERS.` (2048, note the trailing dot),
+`PLAYER` (256), `STARS.OBJ` (1899, loads `$1000`), `STARTUP` (1303), `END` (316), and
+`SHAPES`/`DNGDRAW.OBJ` duplicated from disk 1.
+
+## 8. Next
 
 1. Import `ULTIMA.II.OBJ` at `$5000` and `STD.SUBS.OBJ` at `$4000` into Ghidra with
    `6502:LE:16:default`, seeded with the `JSR $4006` call sites as entry points.
 2. Resolve `FL`, `II`, `WII`, `UL`.
-3. Catalog disks 2 and 3; disk 2 is the player master and probably holds scenario data in a
-   layout comparable to `mapxNN` / `monxNN`.
+3. ~~Catalog disks 2 and 3~~ done, see § 7. Next there: explain the `0x1A` +128 block, and
+   the sector `10`/`15` content deltas if they ever matter.
 4. Then the actual deliverable: behavioural contracts, starting with the overworld movement
    tick and time-door spawning.

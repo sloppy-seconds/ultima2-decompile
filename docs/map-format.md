@@ -27,6 +27,29 @@ Sector maps are `original/mapxNN`, one per sector, 33 of them, all exactly
 | `0x1000` | 1 | always `0x1A` - a header marker, present in all 33 files |
 | `0x1001..0x107F` | 127 | mostly zero; 25 distinct variants across the 33 sectors, purpose unproven |
 
+### Cross-checked against the Apple II build
+
+The Apple II reference disks hold the same sector maps as `M/AP.NN`, 4096 bytes each
+(`docs/apple2-reference.md` § 8). This is an independent encoding, produced by a different
+port, so it is a real gate on the model above rather than a second reading of the same bytes.
+
+* **The `64x64` row-major grid is confirmed byte for byte on 31 of 33 sectors.** Not a
+  re-derivation of the same file: a different serializer, same bytes.
+* **Sectors `10` and `15` are the two exceptions, and they are content differences, not
+  format differences.** Sector `10` differs in exactly one cell, index 543 (`x=31, y=8`),
+  where DOS has `0x08` and Apple has `0x24`. Sector `15` differs in 260 cells confined to
+  `y=59..63`, the southern edge, where Apple has `0x80` and DOS has grass or forest. Two
+  single-tile and edge-only deltas across 31 matching sectors is what a content revision looks
+  like, not a layout mismatch. Do not chase them as a decoder bug.
+* **The `0x1000..0x107F` tail does not exist on Apple at all**, and the marker is not
+  map-specific: `monxNN` (384) and `tlkxNN` (384) are each exactly 128 bytes longer than the
+  Apple `ON.NN` and `TLK.NN` (256), and `monxNN[256] == 0x1A` in all 33 files and
+  `tlkxNN[256] == 0x1A` in all 15. So the tail is a **DOS-port container artifact appended to
+  every per-sector file**, not part of Garriott's map format. That narrows what those 127
+  bytes can be: they cannot be original map content, and the per-file-type blocks differ from
+  each other, so they are not one shared per-sector structure either. Still unproven; now
+  bounded.
+
 Tile lookup, verified against a live frame at 199/200 cell agreement:
 
     tile(x, y) = data[y * 64 + x]        # x, y in 0..63
