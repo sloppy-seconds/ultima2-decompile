@@ -1073,9 +1073,18 @@ Two side effects of the same seam, both worth reproducing:
 * `Ctrl-S` (`0x13`) toggles the flag at `DS:0x54D` and returns `AH=0` rather than
   the `AH=0xFF` "consumed" marker, so it never reaches the game as a key. Two
   function keys (`AX=0x7300` / `0x7400`) adjust `[DS:0x74]` by `±0x200` bounded by
-  `[DS:0x554]` and `0x3a00` and then call `asm/08ED` — an in-game control of
-  something, unidentified, and interesting because the fan patch added its own
-  speed control independently.
+  `[DS:0x554]` and `0x3a00` and then call `asm/06ED` — **identified 2026-10-28d: this is the
+  game's speed control.** F7 (`0x7300`) raises DS:74 by 0x200 capped at 0x3a00
+  (`asm/4FA5_speed_faster_f7`), F8 (`0x7400`) lowers it floored at DS:554
+  (`asm/4F8E_speed_slower_f8`), and both converge on `asm/4FB3_speed_rescale_call`, which calls
+  the rescaler at `asm/06ED..0710` that rebuilds the 20 delay slots at DS:580. Those slots are
+  served by `asm/0711_speed_delay_lookup` to fourteen animation and key-timeout sites. The fan
+  patch added its own speed control independently.
+  *The earlier version of this note said the keys "call `asm/08ED`", and that was wrong by 0x200:*
+  the instruction is `call L_0008ed`, and `L_0008ed` is a **file** offset, i.e. runtime `06ED`.
+  Runtime `08ED` is an unrelated routine that calls `L_004ce6` and has nothing to do with speed.
+  Reading a label as a runtime address is exactly the confusion the +0x200 bias produces, and it
+  had this note hunting the wrong function for a week.
 
 #### Re-verified hop by hop, 2026-10-28, and three things the trace added
 
