@@ -13,7 +13,7 @@ deliberately does not claim". Everything below assumes you have done that.
 | `asm/` reconstruction + CI proof | green, untouched this session |
 | `make -C engine test` | green at every commit that could break something (CP5 SPEC: PASS) |
 | Apple II disks | parsed, extracted, memory-mapped, imported to Ghidra. `docs/apple2-reference.md` |
-| Behavioural contracts | 2: `docs/contract-overworld-walk.md`, `docs/contract-creature-tick.md` |
+| Behavioural contracts | 2: `docs/contract-overworld-walk.md`, `docs/contract-creature-tick.md` (contract 2's two named holes closed 2026-10-28c) |
 | Tooling added | `tools/ciderpress2/` (vendored, gitignored), `tools/apple2_image.py`, `tools/ghidra/Seed6502.java` |
 | Docs fixed | stale "keystrokes are unavailable" killed in 4 places; 6 `AGENTS.md` gaps closed |
 
@@ -32,44 +32,34 @@ Step 0 is not ceremonial. Read the "Step 0 failed twice" section below before yo
 Ordered by value, each sized to finish in one sitting with no owner input. Every item is
 **static-only** — nothing here needs the container, the emulator, or a decision from Paul.
 
-### U1 — the tile classifier at `asm/21A6..21D8`  ← start here
+### U1 — ~~the tile classifier at `asm/21A6..21D8`~~ **CLOSED 2026-10-28c**
 
-This is the actual gate on whether a creature moves, and it is the named hole in contract 2.
+The whole gate is decoded and it is `asm/2199_creature_step_gate` (runtime `0x2199..0x2200`),
+named on disk. Rule, table, grades and falsification: `docs/contract-creature-tick.md`
+§ "The step gate" and § "Falsification". Both of contract 2's named holes are gone — the tile
+ladder and `slot_gate_unproven` (which was the horse-and-`DS:26` freeze, `asm/0A7C`/`asm/0A83`).
 
-- **Goal:** decode the classifier that reads `DS:1F` and compares it against `0x00`, `0x04`,
-  `0x10`, `0x14`, `0x2C`, `0x48`, `0x5C`, `0x70`, `0x78`. Produce the rule as a table: which
-  tile values let a creature step, which refuse, and what the refusals do.
-- **First command:** `cd asm && for f in 21A6* 21AE* 21B2* 21B6* 21BD* 21C5* 21C9* 21CD* 21D1*
-  21D5* 21D8* 21DF* 21E2* 21E9* 21F0* 21F7* 21FC*; do echo "## $f"; cat $f; done`
-- **Also read:** `asm/50B3_map_tile_ptr.asm` (it is the producer of `DS:1F` — a fetch, not a
-  test), `asm/2199*`, `docs/passability-findings.md`.
-- **Done when:** contract 2's `slot_gate_unproven` hole is replaced by a real rule, and the
-  contract gains a **Falsification** line: a specific tile value that must produce a different
-  verdict from its neighbour. If every tile classifies the same way, the classifier is not what
-  you think and you must say so rather than ship a table that cannot fail.
-- **Stop when:** you find the verdict depends on a `DS:` field with no static writer. Write up
-  what you need watched and stop; do not guess. That is a Step 2 job and it needs a person to
-  approve the capture.
+Four things fell out that were not in the ticket:
 
-### U2 — settle the `DS:1F` contradiction
+* `DS:26A` is the creature-move freeze counter and its only setter is `asm/3C04_coin_rub`.
+  That closes the static half of `docs/needs-gameplay.md` G27.
+* `asm/4F11` (now `4F11_monster_step_vector`) is the vector the step actually uses, and contract
+  2 had the wrong routine and the wrong mechanism: `asm/50D8` is a **sign function**, not a
+  torus wrap, and the torus behaviour is the `add al,al` pair in the caller. Contract 2 corrected.
+* `asm/4F11` and `asm/4F36` both compute `player - creature - 1`, because `stc` sets CF and x86
+  `sub` subtracts it. Derived consequence, never observed: G28.
+* `DS:1B7` is the per-slot saved terrain byte of the grid stamp, not a mystery mirror table.
 
-Contract 2 records it and leaves it open. It is probably resolvable statically.
+### U2 — ~~settle the `DS:1F` contradiction~~ **CLOSED 2026-10-28c, and it was a reconciliation**
 
-- **Goal:** `asm/2199` stores a **tile byte** into `DS:1F`; `asm/0CC0` reads `DS:1F` as a
-  **slot index** (`mov 0x1f,%bl`). A tile is a multiple of 4 up to `0xFC`; a slot is 0..31.
-  Both cannot be right.
-- **First command:** `cd asm && grep -ln "0x1f," *.asm | xargs grep -n "0x1f,"` and enumerate
-  every reader and writer with its context.
-- **Trap waiting for you there:** the same grep matches `mov $0x1f,%bl` in
-  `asm/0A6D_monster_sweep_head.asm` and `asm/0C9C`, which is the **immediate 31** setting the
-  sweep width, not a read of `DS:1F`. It has fooled people before (`docs/monster-spawn.md` § 11).
-  Discard those before counting uses.
-- **Done when:** either the two uses are shown to be different code paths that genuinely share
-  the byte, or one of the two existing readings is proven wrong — and the losing header gets
-  corrected in the same commit (Step 6).
-- **Note:** `asm/0CC0`'s header already warns that a `MEMORY_WRITE` breakpoint on a fixed
-  `DS:137+n` misses writes when `DS:1F` holds a different `n`. If you conclude that warning is
-  built on a misreading, say so loudly — it is load-bearing for anyone instrumenting the sweep.
+There is no contradiction: `DS:1F` is shared scratch with three legitimate readings (tile in this
+system, slot index in the placement cluster, saved `DS:13` stamp across `asm/2677`/`asm/269F`).
+**The answer was already on disk** — `asm/0CB0_sub_0cb0.asm`'s header has said "shared scratch
+with 20+ writers" since 2026-10-23 and cites the live reading of 120 that kills the slot-index
+theory; 120 is `0x78`, the on-foot stamp. Third Step 0 miss in the same number of turns, and this
+one I caught before writing a probe instead of after shipping a wrong claim. Written up in
+`docs/contract-creature-tick.md` § "The `DS:1F` contradiction", including the verdict on
+`asm/0CC0`'s breakpoint warning: still correct, still load-bearing, but path-local.
 
 ### U3 — the arrow scancode path, end to end
 
@@ -150,6 +140,14 @@ If the answer is yes, the work is reconciliation or extension, not extraction. S
 
 ## Hazards this session cost time
 
+- **`stc` before a `sub` is arithmetic on x86.** `SUB` subtracts CF, so a carry-setting
+  instruction two bytes earlier makes every difference `a - b - 1`. Two routines in this binary
+  compute the same delta, one with `stc ; cmc` (harmless) and one with a bare `stc` (off by one),
+  and the CP3 fragment split puts the `stc` and the `sub` in different files. Read pairs in
+  address order, and diff near-duplicate routines against each other rather than trusting one.
+- **A predicate can return its verdict in the flags.** `asm/2199_creature_step_gate` ends both
+  exits with `cmp $0x0,%al` before the `ret` and all three callers branch on ZF. Read as a value
+  it looks like a function whose result nobody checks; the `cmp` is the calling convention.
 - **The Apple `.dsk` is `order=dos/sect`.** A linear byte read crosses the sector skew and
   splits the 39-byte directory records. Hand-deriving it produced a grid that parsed cleanly
   and was off by one record, silently attributing every file's size and load address to its
@@ -165,10 +163,13 @@ If the answer is yes, the work is reconciliation or extension, not extraction. S
 
 ## Needs a person — do not attempt these unattended
 
-1. **Merge `apple2-reference` to `main` or not.** 11 commits, all docs + tooling, no engine or
-   `asm/` changes.
-2. **Any live capture.** Watchpoints, the container, `sudo podman` — all need approval. U1's
-   stop-condition may route here.
+1. **Merge `apple2-reference` to `main` or not.** All docs + `asm/` headers and three `asm/`
+   renames (`2199_creature_step_gate`, `4F11_monster_step_vector`, `50D8_sign_of_al`), no engine
+   change. `assemble_clean.sh` byte-matches and `make -C engine test` is green.
+2. **Any live capture.** Watchpoints, the container, `sudo podman` — all need approval. Two new
+   items are now on the list and both are cheap and agent-drivable: **G28** (does the `-1` stall a
+   creature one cell short — two seeded cells, one run) and **G29** (what is tile `0x5C` — one
+   step onto a `mapx03` cell). **G27**'s remainder is a single poke of `DS:26A`.
 3. **The `0x2423` naming question.** It is called "passability" but its decoded body branches
    only on `DS:29 & 0x7F` with no tile participating. Renaming it is an `asm/` filename change
    and needs an owner decision.
