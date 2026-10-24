@@ -3,8 +3,25 @@
 #           gate in its fall-through chain; reads [DS:26C] — the arms counter proven
 #           by asm/0EC2_combat_paralyzed_arms — and on non-zero branches to
 #           asm/2BAD_sub_2bad, which prints "PARALIZED!" and returns to the command
-#           loop without attacking. Observed on screen as a `CMD:` line reading
-#           exactly that, in the same slot the attack messages use.
+#           loop without attacking.
+# CORRECTION 2026-10-28d: this header used to add "observed on screen as a `CMD:` line reading
+#           exactly that". It was never observed on screen. `tools/cfg_printed.py
+#           captures/spice86/castle-03-live` lists print sites whose `call` is confirmed in
+#           ExecutedInstructions, and asm/2BAD's `PARALIZED!` appears only under `--all`, which
+#           is the discovered-but-not-executed set — the exact trap AGENTS.md § 4 names, where a
+#           CFG block stands in for a run that did not happen. The look-alike that IS executed
+#           there is `--PARALIZED!` at runtime 2527 = asm/2527_sub_2527, a different routine in
+#           a different part of the tree, still unreviewed bulk-wave output. Two messages, two
+#           addresses, and only one of them has ever reached a screen.
+# provenance: static. Bytes proven by tools/check_func.py; the chain (reached from asm/2B8F_cmd_A,
+#           reads [DS:26C], branches to asm/2BAD) is static inference from the listing. The arms
+#           counter's identity is corroborated by asm/0EC2_combat_paralyzed_arms, whose own
+#           `ARMS PARALIZED!` print IS executed in captures/spice86/castle-03-live — but that is
+#           the combat field effect, not this command gate.
+# owner-note: the owner's recollection that arms paralysis stops you fighting while legs paralysis
+#           stops you moving is what pointed here, and the bytes agree on the structure. The
+#           reject message itself is still unconfirmed in motion.
+# confidence: medium (bytes proven; the gate's existence is solid, its on-screen text unobserved)
 # func 2BA5..2BAC  len 0008 B  evidence: seed+reko
 # confidence: medium (bytes proven by check_func.py; the chain and the counter's
 #           identity are what raise it above the bulk-wave default)

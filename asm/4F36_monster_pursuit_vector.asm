@@ -17,6 +17,12 @@
 # called from: the per-slot creature loop asm/0A6D..0AB5, once per non-empty slot,
 #   immediately before asm/0AAA tests |DS:19| < 3 and |DS:1A| < 3 for the special
 #   attack gate. asm/152E is the dungeon-side variant and clamps through asm/50D8_sign_of_al.
+# provenance: live:g28-pursuit, static. The bytes are static (tools/check_func.py). The
+#           no-clamp finding — that DS:19/DS:1A carry the raw signed difference and that the
+#           leading `stc` is a dead instruction left over from a translated 6502 `SEC ; SBC` —
+#           was measured live over 20/20 trials in captures/spice86/g28-pursuit, and the 6502
+#           side corroborates it independently: the ancestor's equivalent needs the SEC, the
+#           x86 port kept the flag set and dropped the subtract-with-borrow.
 # func 4F36..4F4C  len 0017 B  evidence: seed+call+reko
 # apple2-twin: $406F in STD.SUBS.OBJ, reached from the JMP vector $4003. `SEC ; LDA $00 ;
 #           SBC $4D00,X ; STA $17` and the y pair — the raw delta with no clamp and no x4,

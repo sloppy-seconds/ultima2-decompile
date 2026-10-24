@@ -11,6 +11,15 @@
 # not: the general monster attack. Contact with the player produces no attack at
 #   all — see docs/monster-spawn.md § 13, which is also the correction of the
 #   "0x1240 sits in a gap" note that blocked CP5 W6 for a session.
+# provenance: static. Read from the listing and decoded 2026-10-28d; bytes proven by
+#           tools/check_func.py. The type-0x40-is-Minak identification is MEASURED, not recalled:
+#           it comes from bitmap identity in docs/art-index.md (type>>2 -> art tile), and it is a
+#           third-party-adjacent inference about a name, not an observation of the fight. No
+#           harvest has ever executed this path — the only Minax strings in the corpus
+#           (`MINAX IS DEAD!!`, `MINAX CRIES: DIE FOOL!`) are discovered-but-not-executed, and
+#           docs/phase4-state.md records them as still unexecuted.
+# confidence: medium — the bytes and the reachability are solid, the Minax naming rests on the
+#           art index rather than on any text this routine prints
 # func 1040..1047  len 0008 B  evidence: seed+reko
 # confidence: medium (the branch and the callee are bytes; the Minax identity is
 #   third-party art matching plus our own type>>2 rule)
