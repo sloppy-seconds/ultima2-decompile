@@ -30,13 +30,18 @@
 #           mattered: the five-way era split is original 1983 design, not a DOS-port invention.
 #           What the Apple side adds is the SHAPE of the answer. $4E13 has exactly ONE writer
 #           in the whole resident image, at $6BF8, and it is computed: `LDA $4E38 ; LSR A ;
-#           CMP $4E13 ; BCC keep ; CLC ; ADC #$01 ; STA $4E13`. So on the ancestor the era
-#           index is derived from a counter ($4E38) shifted right by one — it is not read out
-#           of a per-sector field. See docs/needs-gameplay.md G14: that re-points the ticket
-#           away from the sector-tens-digit hypothesis.
-#           NOT claimed: that $4E13 corresponds to DS:49. It sits one byte below $4E14, which
-#           asm/2199 pins to DS:4A, so the adjacency is suggestive — but DS:49 has no reads
-#           anywhere in the tree and this routine takes the index in a register, not memory.
+#           CMP $4E13 ; BCC keep ; CLC ; ADC #$01 ; STA $4E13`. A value shifted right by one,
+#           then plus one. That is the arithmetic that turns ten things into five — and $4E13
+#           sits one byte below $4E14, which asm/2199 pins to DS:4A, the sector ONES digit.
+#           tools/u2_edit.py records DS:49/4A as the sector's two decimal digits patched into
+#           the mapx filename, so DS:49 is the TENS digit, and the mapping the ticket guessed
+#           is the mapping the ancestor implements: tens 0-9, >>1, into five eras.
+#           GRADE: inferred, and specifically NOT observed — nobody has dumped DS:49 next to the
+#           value in %di at this entry. But it is inferred from two independent sides agreeing
+#           on adjacency, on the shift, and on five-against-ten, which is a long way from a
+#           guess. The DOS writer of the index is still unidentified: the reads of DS:49 that do
+#           exist (asm/2290, 22D5, 2305, 26B7, 26CC, 2708, 3C2E_cmd_O; written by asm/26C6) are
+#           filename and sector-loading sites, not this one.
 # provenance: static
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (strings and dispatch proven by bytes; the code that
