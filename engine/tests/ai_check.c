@@ -329,6 +329,115 @@ int main(void)
     CHECK(all_one, "asm/114A: slots 7..0 all take role 1");
     CHECK(ctx.state.mon_role[8] == 0, "and slot 8 does not: the loop counts 7 down to 0");
 
+    /* --- the step gate, exhaustively: asm/2199..21FC, corroborated by Apple $6672 ----------
+     *
+     * The existing checks above probe the gate one case at a time, which is how a gate passes
+     * while being wrong about a tile nobody thought to try. This block enumerates every tile
+     * byte that can actually occur in a sector map — all multiples of 4, per
+     * docs/passability-findings.md F12 — against an expectation written from the clause list in
+     * asm/2199's header and independently confirmed clause for clause on the Apple II side at
+     * $6672. The expectation is NOT read out of ai.c: if the engine and this table ever
+     * disagree, one of them is wrong, and a test that copies the implementation proves nothing.
+     *
+     * The accept set the original has five members: 0x08, 0x0C, 0x5C, 0x70, and 0x00 for the two
+     * water kinds only. Anything else must be refused, and that "anything else" is the part a
+     * spot-check cannot cover. */
+    {
+        /* Written from asm/2199's rule, not from ai.c. */
+        int bad = 0, cases = 0;
+        const uint8_t types[] = { 0x2c, 0x48, 0x30, 0x34, 0x74, 0x78, 0x7c, 0xfc };
+        for (int ti = 0; ti < (int)(sizeof types / sizeof types[0]); ti++) {
+            for (int tile = 0; tile <= 0xfc; tile += 4) {
+                uint8_t t = types[ti];
+                int water = (t == 0x2c || t == 0x48);
+                int want;
+                if (water) {
+                    want = (tile == 0x00);
+                } else {
+                    int ladder = !(tile == 0x10 || tile == 0x04 || tile == 0x00)
+                              && (tile < 0x14 || tile == 0x70);
+                    want = (t < 0x78) ? (tile == 0x5c || ladder) : ladder;
+                }
+                arm(&ctx, &w, GRASS, 7, 5, 5, 40, t);
+                ctx.state.mon_role[7] = 1;
+                ctx.state.sector_second = 0;      /* world sweep: no site guard, no role gate */
+                w.map[6 * U2_SECTOR_EDGE + 6] = (uint8_t)tile;
+                rep = u2_ai_creature_turn(&ctx, &w, 9, 9);
+                int got = (ctx.state.mon_x[7] == 6 && ctx.state.mon_y[7] == 6);
+                cases++;
+                if (got != want) {
+                    bad++;
+                    if (bad <= 6)
+                        printf("  FAIL  gate: type %02X onto tile %02X -> %s, spec says %s\n",
+                               t, tile, got ? "accept" : "refuse", want ? "accept" : "refuse");
+                }
+            }
+        }
+        CHECK(bad == 0, "asm/2199 step gate: %d/%d (type x tile) combinations agree with the "
+                        "clause list (%d disagree)", cases - bad, cases, bad);
+
+        /* The freeze counter refuses everything, before any tile is consulted (asm/2199). */
+        int frozen_bad = 0;
+        for (int tile = 0; tile <= 0xfc; tile += 4) {
+            arm(&ctx, &w, GRASS, 7, 5, 5, 40, 0x30);
+            ctx.state.mon_role[7] = 1;
+            ctx.state.sector_second = 0;
+            ctx.state.counter_26A = 0x14;     /* the value asm/3C04_coin_rub stores */
+            w.map[6 * U2_SECTOR_EDGE + 6] = (uint8_t)tile;
+            u2_ai_creature_turn(&ctx, &w, 9, 9);
+            if (ctx.state.mon_x[7] != 5) frozen_bad++;
+        }
+        CHECK(frozen_bad == 0,
+              "asm/2199: DS:26A = 0x14 refuses all 64 tiles, whatever the species (%d leaked)",
+              frozen_bad);
+
+        /* The site guard (asm/21e2): inside a site, column 0 and row 0 are refused; on the
+         * world map the grid wraps and they are walkable. */
+        arm(&ctx, &w, GRASS, 7, 1, 5, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 1;
+        u2_ai_creature_turn(&ctx, &w, 0, 8);      /* step lands on column 0 */
+        CHECK(ctx.state.mon_x[7] == 1,
+              "asm/21e2: inside a site a step onto column 0 is refused");
+
+        arm(&ctx, &w, GRASS, 7, 1, 5, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 0;
+        u2_ai_creature_turn(&ctx, &w, 0, 8);
+        CHECK(ctx.state.mon_x[7] == 0,
+              "control: on the world map the same step is allowed — the guard is the site digit");
+
+        arm(&ctx, &w, GRASS, 7, 2, 5, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 1;
+        u2_ai_creature_turn(&ctx, &w, 0, 8);      /* step lands on column 1 */
+        CHECK(ctx.state.mon_x[7] == 1,
+              "control: inside a site a step onto column 1 is fine — the guard is the edge, not x");
+
+        /* Row 0 is a separate arm of the same `||`, and a table that only tries column 0 will
+         * pass while row 0 is unguarded. Found by mutation, not by writing the test. */
+        arm(&ctx, &w, GRASS, 7, 5, 1, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 1;
+        u2_ai_creature_turn(&ctx, &w, 9, 0);      /* step lands on row 0 */
+        CHECK(ctx.state.mon_y[7] == 1,
+              "asm/21e2: inside a site a step onto row 0 is refused");
+
+        arm(&ctx, &w, GRASS, 7, 5, 1, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 0;
+        u2_ai_creature_turn(&ctx, &w, 9, 0);
+        CHECK(ctx.state.mon_y[7] == 0,
+              "control: on the world map the same row-0 step is allowed");
+
+        arm(&ctx, &w, GRASS, 7, 5, 2, 40, 0x30);
+        ctx.state.mon_role[7] = 1;
+        ctx.state.sector_second = 1;
+        u2_ai_creature_turn(&ctx, &w, 9, 0);      /* step lands on row 1 */
+        CHECK(ctx.state.mon_y[7] == 1,
+              "control: inside a site a step onto row 1 is fine");
+    }
+
     printf("ai_check: %d checks, %d failures\n", checks, fails);
     return fails != 0;
 }
