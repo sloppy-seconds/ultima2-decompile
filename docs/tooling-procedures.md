@@ -129,7 +129,10 @@ under XWayland. It was input that was blocked, not output.
 
 There is **no Xvfb, Xephyr, Xvnc, Xnest or weston** on this host, and Bazzite is
 rpm-ostree immutable so installing one needs a reboot. `podman` is available and
-`fedora:44` is cached locally, which is the route to a real virtual display.
+`fedora:44` is cached locally, which is the route to a real virtual display — and
+that route is now built: `deploy/spice86-novnc/` runs the emulator inside a container
+with its own Xvfb, x11vnc and noVNC, so a headed capture needs nothing from the host.
+`tools/vnc/` is the older, engine-only variant of the same idea.
 
 ---
 

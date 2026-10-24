@@ -257,8 +257,11 @@ Verification, in two independent layers:
   tooling was re-derived from scratch repeatedly — a hand-rolled `dotnet` launch skips
   the run-dir copy, the port pick, the state file and the harvest, and the harvest loss
   is silent. Two facts worth knowing cold: an agent shell on this host has **no display
-  and no Xvfb**, so keystrokes are unavailable and `--headless` is the default for
-  unattended work; and headless Spice86 **ignores SIGTERM and SIGINT**, so a CFG
+  and no Xvfb**, which means there is no host window to focus — it does **not** mean no
+  keystrokes. `tools/spice86_type.py` injects keys over the MCP endpoint with no window at
+  all, and `deploy/spice86-novnc/up.sh` runs the emulator in a container that brings its own
+  Xvfb and noVNC. `--headless` remains the default for unattended work because it is the
+  simpler path, not the only one; and headless Spice86 **ignores SIGTERM and SIGINT**, so a CFG
   harvest must come from `monitor dumpAll`, never from a signal. When a capture seems
   to need walking somewhere, seed state instead — `--player` with `tools/u2_edit.py
   setpos` is the only way to change sector, and `--seed-map` installs a synthetic one.

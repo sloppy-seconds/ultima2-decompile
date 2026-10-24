@@ -72,8 +72,22 @@ the CFG is written. The signal sequence after it is teardown, not flush.
 
 **An agent shell usually has no display.** On this host `WAYLAND_DISPLAY` and
 `DISPLAY` are both unset in an agent context and **`Xvfb` is not installed**, so
-there is no way to conjure a focusable window. `--headless` is the default for
-unattended work, and keystroke-driven captures are simply unavailable.
+there is no way to conjure a focusable window on the host itself. `--headless` is
+the default for unattended work.
+
+**That is not a keystroke limitation, and it used to be written as one.** An earlier
+draft of this paragraph said keystroke-driven captures were "simply unavailable", and
+that sentence was false from the moment `deploy/spice86-novnc/` landed — and arguably
+before, given `spice86_type.py` two paragraphs above. Two working routes exist:
+
+* **No window at all** — `tools/spice86_type.py --keys A,Right` over the MCP endpoint.
+  This is the path `--auto-play` uses and it works headless.
+* **A real virtual display** — `deploy/spice86-novnc/up.sh` builds and starts a container
+  holding Xvfb + Spice86 + x11vnc + websockify, `DISPLAY=:99` inside, noVNC published on
+  host `:6085`. `--player FILE` seeds a character, `--no-patch` leaves the arrow keys
+  unpatched, `--down` tears it down. Read `deploy/spice86-novnc/README.md` before using it.
+
+So a capture that genuinely needs keypresses is not blocked. Say which route you used.
 
 **Headless is not a dead end, because keystrokes are rarely the right tool.**
 Position and sector are set by editing the save and relaunching with `--player`, not
@@ -494,10 +508,11 @@ so a loaded character is placed by the map loader rather than restored to a save
   a resume with no re-arm (measured). Re-arming the same address stacks duplicates, so a
   capture that must see every pass should arm once and drive the resume itself.
 - **No display does not mean no capture.** An agent shell here has no
-  `WAYLAND_DISPLAY`/`DISPLAY` and `Xvfb` is not installed, so keystrokes are
-  unavailable — but state reads, memory writes, save seeding and the screen-as-memory
-  renderers all work. Reach for `--player` and `--seed-map` before assuming a run must
-  be driven.
+  `WAYLAND_DISPLAY`/`DISPLAY` and `Xvfb` is not installed, so there is no host window to
+  focus — but keystrokes, state reads, memory writes, save seeding and the screen-as-memory
+  renderers all work. Keys go in via `spice86_type.py` over MCP, or via
+  `deploy/spice86-novnc/up.sh` for a real display. Reach for `--player` and `--seed-map`
+  anyway: seeding state is still cheaper than driving input.
 - **Poking `DS:00/01` to teleport does not work.** It writes, it reads back, and then
   movement stops entirely; it is a mirror. Change sector by editing the save and
   relaunching: `u2_edit.py set <file> sector NN`, then `setpos <file> X Y` — note

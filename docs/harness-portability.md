@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28b** — **An instruction file that states an environment absolute will be quoted
+  as evidence by the next agent, so a stale one is worse than a missing one.** A top-level
+  rules file asserted "no display and no Xvfb, so keystrokes are unavailable". The host half
+  was still true; the conclusion had been false for many commits, and the same file contradicted
+  itself twenty lines later by documenting the key-injection tool. An agent read the summary
+  line, quoted it, and used it to rule a whole subsystem out of scope — the failure was quoting
+  the rule instead of checking the tool index. Two rules for a generic harness. Environment
+  facts live **next to the tool that makes them true**, in one place, and the top-level file
+  points there instead of restating them. And any absolute of the form "X is unavailable" needs
+  a date and a named probe beside it, because the only thing worse than an environment you do
+  not understand is one you misunderstand with confidence. Audit these on the day a tool lands,
+  not on request: the drift is invisible from inside the session that causes it.
+
 * **2026-10-28b** — **Never hand-derive a container's sector or block order when a reference
   implementation exists; a wrong skew shifts every record by one and every field still looks
   plausible.** A raw disk image was read linearly, the fixed-size directory records fell out of
