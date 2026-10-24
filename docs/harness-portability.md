@@ -190,6 +190,20 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28b** — **Never hand-derive a container's sector or block order when a reference
+  implementation exists; a wrong skew shifts every record by one and every field still looks
+  plausible.** A raw disk image was read linearly, the fixed-size directory records fell out of
+  phase at sector boundaries, and the repair attempt produced a grid that parsed cleanly and
+  attributed each record's length and load address to the *neighbouring* file. Nothing
+  complained: sizes were sane, names were sane, and the error was invisible until an independent
+  tool reported the real lengths and every derived number was wrong at once. Two rules for a
+  generic harness. First, treat an on-disk container format as a solved problem and vendor a
+  real parser as infrastructure, then validate any in-house reader against its output rather
+  than against the raw bytes. Second, when checking a structural parse, assert on a field that
+  is externally verifiable (declared length, record count, a value the format restates
+  elsewhere), not on plausibility of the decoded numbers — a misaligned record yields
+  individually plausible numbers far more often than nonsense.
+
 * **2026-10-28b** — **When two loops share a body, check which one the gate belongs to before
   attaching it to the reconstruction.** A per-entity sweep can be entered from more than one
   dispatch site, and a filter that is real in one entry path is absent in another; applying it
