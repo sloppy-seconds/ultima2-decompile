@@ -158,6 +158,13 @@ Observed directly, each one a claim the working brief made on assumption:
 * **No Apple-derived name goes into an `asm/` filename.** `AGENTS.md` requires a discovered
   name to be evidenced by *this* binary. A 6502 routine that looks like the same function
   supports a hypothesis and a `# name-evidence:` line; it does not on its own rename a file.
+* **Shared text does not mean shared behaviour, and the first probe already says so.**
+  `--INVALID MOVE!`, the DOS reject echo at `asm/0A02_invalid_move_msg.asm`, **does not exist
+  anywhere in the Apple build** — searched plain and high-bit-set across every resident
+  segment. The era table and `ANKH` are present, so this is not a search artefact. Either the
+  DOS port added the reject message, or the Apple build rejects a move silently or words it
+  differently. Until that is settled, the walk loop cannot be aligned by message anchor, and
+  no contract for movement may cite an Apple routine as the origin of the DOS reject path.
 * **Dungeons stay parked.** `DNGDRAW.OBJ` and `SHAPES` are the first-person wireframe, and
   nothing in them settles how the overworld or a town draws or stamps anything.
 * The "287 of 288 Apple-only strings" figure from the first anchor pass is an artefact: the
