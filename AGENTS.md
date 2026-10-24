@@ -111,6 +111,30 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
   notes we write (`disasm/*.md|tsv|txt`, reports, summaries). Small factual findings (addresses,
   sizes, verdicts) expressed in our own prose are fine; verbatim copyrighted blobs and GPL
   binaries are not.
+* **The text/art line, ruled 2026-10-28.** Copyright protects game text exactly as much as it
+  protects a sprite — there is no category exemption, and nobody should argue otherwise. The
+  line this project actually draws is about *where the bytes live and whether they are
+  load-bearing for the proof*:
+  * **Text is committed, because it cannot be otherwise.** Every string the engine must print
+    lives inside `ultimaii.exe`, and `asm/` is a byte-exact reconstruction of that file. There
+    is no way to have the reconstruction without the text, and there is no cleanroom path for
+    it: if the engine prints anything other than `NO DOOR THERE!` it is behaviourally wrong.
+    Short functional strings are also the weakest claims that exist, which is most of them.
+  * **Art and sound are never committed, and are substituted under the cleanroom.** They live
+    in sidecar files (`pic*`, the tile data) that `asm/` does not reconstruct, and unlike text
+    they *can* be redrawn — which is why `engine/assets/tiles/cleanroom/` and
+    `docs/cleanroom-procedure.md` exist.
+  * What is additionally forbidden is a **convenience copy** of content the reconstruction
+    already carries. The generated `gen_content.h` is derived at build time and gitignored;
+    hand-maintained duplicates of game text in `docs/` would both drift and add exposure.
+* **OPEN TODO — the committed text table, for i18n.** A locale layer wants one canonical table
+  keyed by stable IDs, so a translation can replace the English without touching code. The keys
+  already exist: the extractor's `STRINGS` list is exactly `U2_S_NAME -> (asm file, which db
+  line)`, committed, with the values generated. The gap is that the indexed name pool (weapons,
+  armour, spells, items, stats, races, classes — `docs/status-screen-z.md` § 7) is emitted as
+  seven whole arrays with no per-entry symbol, so a translator would translate arrays rather
+  than entries. When i18n is scheduled, give each pool entry a `U2_S_`-style ID and keep the
+  values generated, not committed. Deliberately not done now.
 * When in doubt about whether an artefact is safe to commit, **do not commit it and ask the user.**
 
 ---
