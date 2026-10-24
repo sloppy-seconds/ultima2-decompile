@@ -2,6 +2,17 @@
 # name-evidence: string 'YOU RUB A COIN...'
 # func 3C04..3C2D  len 002A B  evidence: seed+reko
 # calls: L_000c33, L_0051df (str_out)
+# apple2-twin: $7DC6 in ULTIMA.II.OBJ. Hand-decoded: `JSR $4006` then the inline string then
+#           `LDA #$14 ; STA $D9` at $7DD9 — print, then store 20 into the creature-move freeze
+#           counter, which is the same counter asm/2199_creature_step_gate refuses on and the
+#           same constant this file stores to DS:26A. That is the second witness the behaviour
+#           is intended and not a decode error, and it is worth saying what it is NOT: nobody
+#           has seen a player trigger this path in 60 harvests, and a second implementation
+#           agreeing does not make the DOS entry executed. CORROBORATED, not observed.
+#           Note this pair did NOT come from tools/apple2_anchor_map.py: the Apple text is
+#           'You rub a coin....' (sentence case, four dots) against DOS 'YOU RUB A COIN...'
+#           (upper, three dots), and the crosswalk matches verbatim only. Found by a targeted
+#           search for the counter store.
 # provenance: static
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)

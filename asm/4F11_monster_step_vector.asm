@@ -26,6 +26,15 @@
 #           used by the asm/0AAA special-attack distance test), then every path through
 #           the special dispatch joins at asm/0AFC, which calls THIS routine.
 # func 4F11..4F1F  len 000F B  evidence: seed+call+reko
+# apple2-twin: $4054 in STD.SUBS.OBJ, reached from the JMP vector $4000. Same shape per axis:
+#           `SEC ; LDA $00 ; SBC $4D00,X ; ASL A ; ASL A ; JSR $4036` then store to $17 ($18
+#           for the y pair via $4D20). Shared sign routine at $44D5 via vector $4036, shared
+#           zero-page destination pair, same x4, same 32-byte-strided table pair ($4D00/$4D20
+#           = this file's DS:137/DS:157). CORROBORATED, not observed: a second independent
+#           implementation agrees, which is what makes the torus reading of the x4 original
+#           1983 design rather than a DOS-port invention. It does not rename this file and it
+#           does not raise the grade. Found 2026-10-28 via tools/apple2_anchor_map.py and the
+#           hand-decode in docs/handoff-apple2-crosswalk.md T0.
 # provenance: static, decoded 2026-10-28; the x4/torus reading and the retraction of the
 #           -1 were both settled live the same day (captures/spice86/g28-pursuit)
 # confidence: high (bytes, and the resulting vector measured at runtime per slot)

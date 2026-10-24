@@ -36,6 +36,25 @@
 #           corrects docs/phase4-state.md § CP5, which had ruled a tile trigger out on a units
 #           error — it searched mapx00 for the MODE byte 0x2e, which is map_byte >> 1, and map
 #           bytes are multiples of 4.
+# apple2-twin: $6672 in ULTIMA.II.OBJ (the accept return is $66B2, the refuse return $66C2,
+#           and the site guard is $66B2..$66C1). Hand-decoded from raw bytes, and it is a
+#           clause-for-clause match, not a resemblance: `STA $F0` for the tile, then the
+#           freeze counter $D9 (this file's DS:26A) refuses first; then `LDA $4D60,X` (the
+#           type array, this file's DS:197) with `CMP #$2C`/`CMP #$48` for the two water kinds
+#           accepting iff tile == 0; then `CMP #$78 ; BCS` guarding `CMP #$5C ; BEQ accept`;
+#           then refuse {0x10, 0x04, 0x00}, accept below 0x14, accept 0x70, refuse otherwise;
+#           then the same site guard on $4E14 (DS:4A) and the candidate pair $F4/$F5 (DS:23/24).
+#           Answers two open questions at once, both at CORROBORATED grade — it does not rename
+#           this file and does not promote the species reading below.
+#             Q1 the 0x78 split: the threshold, the tile it guards and the direction of the
+#                clause are original design, not a DOS-port invention. What is NOT corroborated
+#                is the *meaning* of >= 0x78: "the four NPC classes" still rests on mon_type>>2
+#                being the art index, and the Apple side only repeats the number.
+#             Q2 the tile ladder: the accept set arrives on both sides through a compare ladder
+#                over the same byte values, not a table lookup, so the ladder is the shape the
+#                rule was written in from the start.
+#           Found 2026-10-28 with tools/apple2_anchor_map.py (string anchors) and confirmed
+#           against the image bytes, not against Ghidra's decompiler output.
 # label: kept as sub_2199 on purpose — labels are body and CP0 md5s them
 # func 2199..21A2  len 000A B  evidence: seed+call+reko
 # provenance: static, decoded from asm/2199..asm/21FC in address order 2026-10-28

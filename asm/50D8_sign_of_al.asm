@@ -8,6 +8,10 @@
 #           wrap"; it does not, and the torus behaviour lives in the `add al,al` pair
 #           in its caller. Corrected 2026-10-28.
 # func 50D8..50DB  len 0004 B  evidence: seed+call+reko
+# apple2-twin: $44D5 in STD.SUBS.OBJ, reached from the JMP vector $4036. `CMP #$00 ; BEQ +7 ;
+#           BPL +3 ; LDA #$FF ; RTS` / `LDA #$01 ; RTS` — three exits, three values, the same
+#           shape byte for byte, and called from the same place in the step vector. CORROBORATED,
+#           not observed; it does not rename anything and it does not promote the NOT-clause below.
 # provenance: static, decoded 2026-10-28
 # confidence: high (four bytes to the first exit, and every exit is a `ret`)
 # label: kept as sub_50d8 on purpose — labels are body and CP0 md5s them

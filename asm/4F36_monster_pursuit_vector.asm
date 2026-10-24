@@ -18,6 +18,14 @@
 #   immediately before asm/0AAA tests |DS:19| < 3 and |DS:1A| < 3 for the special
 #   attack gate. asm/152E is the dungeon-side variant and clamps through asm/50D8_sign_of_al.
 # func 4F36..4F4C  len 0017 B  evidence: seed+call+reko
+# apple2-twin: $406F in STD.SUBS.OBJ, reached from the JMP vector $4003. `SEC ; LDA $00 ;
+#           SBC $4D00,X ; STA $17` and the y pair — the raw delta with no clamp and no x4,
+#           which is exactly what this file is. CORROBORATED, not observed; it does not rename
+#           anything. The SEC here is also the witness that settles the retraction below: on
+#           the 6502 `SEC` before `SBC` is *required* for a plain subtract (SBC computes
+#           A - M - 1 + C), so the DOS `STC` before `SUB` is a faithful translation of a pair
+#           that needed the flag over there and does not need it here — both sides compute the
+#           plain difference. Found via tools/apple2_anchor_map.py.
 # confidence: high (four stores, no ambiguity)
 # label: kept as sub_4f36 on purpose — labels are body and CP0 md5s them
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
