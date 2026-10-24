@@ -21,6 +21,22 @@
 #        body content, and a label emits no bytes, so renaming it buys nothing and
 #        breaks the guard. Naming lives in the filename and this header.
 # calls: L_000c33 (return to command loop), L_0051df (str_out)
+# apple2-twin: $777B in ULTIMA.II.OBJ, and it is the same dispatch, not a similar one. Hand-
+#           decoded: `LDX $4E13` then `BEQ / DEX / BEQ / DEX / BEQ / DEX / BEQ`, five arms, each
+#           a `JSR $4006` followed by its inline era string, and the fall-through (index >= 4)
+#           prints 2112 A.D. — exactly this file's `dec %di ; je` chain with 2112 as the
+#           fall-through. The order matches too: 0 LEGENDS, 1 9,000,000 B.C., 2 1423 B.C.,
+#           3 1990 A.D., 4+ 2112 A.D. CORROBORATED, and it settles the part of G14 that
+#           mattered: the five-way era split is original 1983 design, not a DOS-port invention.
+#           What the Apple side adds is the SHAPE of the answer. $4E13 has exactly ONE writer
+#           in the whole resident image, at $6BF8, and it is computed: `LDA $4E38 ; LSR A ;
+#           CMP $4E13 ; BCC keep ; CLC ; ADC #$01 ; STA $4E13`. So on the ancestor the era
+#           index is derived from a counter ($4E38) shifted right by one — it is not read out
+#           of a per-sector field. See docs/needs-gameplay.md G14: that re-points the ticket
+#           away from the sector-tens-digit hypothesis.
+#           NOT claimed: that $4E13 corresponds to DS:49. It sits one byte below $4E14, which
+#           asm/2199 pins to DS:4A, so the adjacency is suggestive — but DS:49 has no reads
+#           anywhere in the tree and this routine takes the index in a register, not memory.
 # provenance: static
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (strings and dispatch proven by bytes; the code that
