@@ -31,12 +31,23 @@ fi
 trap 'git -C "$ROOT" worktree remove --force "$WT" 2>/dev/null; git -C "$ROOT" worktree prune 2>/dev/null' EXIT
 
 cd "$WT" || exit 1
+# CI runners have no commit identity; control 5 commits inside the worktree.
+git -C "$WT" config user.email "gates@localhost"
+git -C "$WT" config user.name  "gate controls"
 TARGET="asm/0711_speed_delay_lookup.asm"
 [ -f "$TARGET" ] || { echo "SKIP: $TARGET not present"; exit 0; }
 # Run the guard from the REAL checkout, not the worktree's copy: the worktree is at HEAD,
 # so running its own guard would test the old code and report a change that was never made.
 # The guard reads HEAD via git and asm/ via cwd, so cwd=worktree + script=ROOT is correct.
-GUARD="python3 $ROOT/engine/tests/asm_body_guard.py"
+#
+# The guard is deliberately run with CI unset. Controls 1-5b and 7-8 test the LOCAL contract,
+# where base=HEAD is the right thing because the job is catching an edit before it is
+# committed; the guard refuses to run that way under CI, and it should. Control 6 tests the
+# CI contract on purpose, with CI=true set explicitly. This distinction is exactly what the
+# first version of this file got wrong: it passed locally and failed in CI, because GitHub
+# sets CI=true and the guard correctly refused a vacuous comparison. A control that only
+# works from one environment is not a control.
+GUARD="env -u CI -u GITHUB_ACTIONS python3 $ROOT/engine/tests/asm_body_guard.py"
 
 echo "controls on the body guard:"
 
@@ -141,11 +152,15 @@ fi
 # ---- 7: the guard must inspect the tree no matter which directory calls it -----------
 # tests/run_cp0.sh runs it from engine/, where there is no asm/ at all. It used to find
 # zero files, print "conserved (0 lines, 0 -> 0 files)", and CP0 called that a PASS.
-sub_out=$(cd "$WT/engine" && python3 "$ROOT/engine/tests/asm_body_guard.py" 2>&1)
-if [ -z "$sub_out" ]; then
+sub_clean=$(env -u CI -u GITHUB_ACTIONS python3 -c "
+import subprocess,os
+os.chdir('$WT/engine')
+print(subprocess.run(['python3','$ROOT/engine/tests/asm_body_guard.py'],
+                     capture_output=True,text=True).stdout.strip())")
+if [ -z "$sub_clean" ]; then
     no "7  guard produced no output when called from engine/"
-elif printf '%s' "$sub_out" | grep -qE '\(0 lines'; then
-    no "7  vacuous when called from engine/ -- got: $sub_out"
+elif printf '%s' "$sub_clean" | grep -qE '\(0 lines'; then
+    no "7  vacuous when called from engine/ -- got: $sub_clean"
 else
     ok "7  guard inspects the real tree when called from engine/"
 fi
@@ -154,7 +169,7 @@ fi
 mkdir -p "$WT/tmp-empty/asm" && echo x > "$WT/tmp-empty/README"
 rc8=$( cd "$WT/tmp-empty" && git init -q . && git add README && \
        git -c user.email=t@t -c user.name=t commit -q -m empty && \
-       python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $? )
+       env -u CI -u GITHUB_ACTIONS python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $? )
 [ "$rc8" = "2" ] && ok "8  an empty asm/ is an error, not a conserved" \
                  || no "8  expected exit 2 on an empty asm/, got $rc8"
 
