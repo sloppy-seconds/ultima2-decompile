@@ -61,6 +61,7 @@ fi
 echo "== gates over tracked inputs (CI-runnable) =="
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
+run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
 
 echo "== DOS string atlas =="
 run "strings_atlas selftest" original/ultimaii.exe asm -- python3 tools/strings_atlas.py --selftest

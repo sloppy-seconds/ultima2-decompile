@@ -110,6 +110,33 @@ intent and the bytes support it only sometimes. Merging also has a cost — it m
 lines between files, which is exactly what `engine/tests/asm_body_guard.py` exists to
 police.
 
+### Merging is not concatenation, and one candidate proves it (2026-10-28d)
+
+An attempt was made to merge `06AC..06EC` — eleven fragments, the clock-tick wait, span
+verified byte by byte and confirmed by this tool the same day. It is the best-evidenced
+candidate in the tree and it still could not be merged.
+
+Each fragment carries its own `clock_int1a:` seam label, because each was a separate file and
+separate compilation unit. Concatenated into one file, the label is defined three times and
+**jwasm refuses to assemble it**: `symbol 'clock_int1a' is already defined`. `check_func.py
+06AC` fails and `assemble_clean.sh` goes red.
+
+The only fixes are to delete two of the three label lines or rename them — and a label line is
+body, which `asm_body_guard` forbids editing, correctly, because a label is what makes the
+byte stream addressable. So this candidate is **structurally unmergeable under the current
+guards**, and the same will be true of any run whose fragments each carry a seam label
+(`key_int16`, `video_int10`, `dos_int21`, `speaker_tone`, `clock_int1a`).
+
+Two things follow, and both belong in the TSV's margin rather than in a merge proposal.
+First: before proposing a merge, check whether the fragments share a seam label — that is a
+one-grep preflight and it saves an afternoon of confident failure. Second: the seam labels are
+themselves an artefact of the fragment view. A seam appearing three times in one routine is
+three call sites, and the tree encodes that as three definitions of the same name. Whether
+that should change is a question about the reconstruction's shape, not about this candidate.
+
+The merge was reverted the same day it was attempted: guard conserved at 26,080 lines, byte
+match identical, nothing lost.
+
 Two things to check on any candidate before proposing it:
 
 1. **Run length.** `50F9..51A4` is 25 fragments over 172 bytes, mostly 1- and 2-byte basic
