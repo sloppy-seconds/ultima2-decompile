@@ -1,0 +1,31 @@
+# Apple II <-> DOS string anchors. Generated — do not hand-edit.
+#   python3 tools/apple2_anchor_map.py -o disasm/apple2-anchors.tsv
+# No game text: text_id is sha256[:10] of the normalised string.
+dos_foff	dos_runtime	dos_len	text_id	dos_owner	apple_addr	apple_seg	apple_len	match
+000E8F	0C8F	9	7e26509de4	0C8C_character_dead_msg	$5443	ULTIMA.II.OBJ	9	matched
+001115	0F15	14	98ce381ebd	0F12_combat_magic_missile	$561F	ULTIMA.II.OBJ	14	matched
+00114B	0F4B	12	a7756a70eb	0F48_combat_sleep_spell	$564B	ULTIMA.II.OBJ	12	matched
+00149F	129F	10	a57c1f51b5	1151_dungeon_darkness	$58BF	ULTIMA.II.OBJ	10	matched
+002032	1E32	5	a59f3e6a0c	19D7_magic_shop_menu	$6371	ULTIMA.II.OBJ	5	matched
+002032	1E32	5	a59f3e6a0c	19D7_magic_shop_menu	$6493	ULTIMA.II.OBJ	5	matched
+002158	1F58	5	a59f3e6a0c	19D7_magic_shop_menu	$6371	ULTIMA.II.OBJ	5	matched
+002158	1F58	5	a59f3e6a0c	19D7_magic_shop_menu	$6493	ULTIMA.II.OBJ	5	matched
+0026E4	24E4	25	1f5a97b5d7	24B5_force_field_event	$6A6A	ULTIMA.II.OBJ	25	matched
+002ABE	28BE	13	4213459fd6	277B_sub_277b	$6D7C	ULTIMA.II.OBJ	13	matched
+002DEF	2BEF	8	9034042007	2BEC_combat_hit_msg	$6FC1	ULTIMA.II.OBJ	8	matched
+002E93	2C93	13	0598135a66	2C38_sub_2c38	$7033	ULTIMA.II.OBJ	13	matched
+003091	2E91	4	0e76070442	2E3D_combat_attack_flow	$71D6	ULTIMA.II.OBJ	4	matched
+00321D	301D	23	58a31ffceb	2FFE_vehicle_ship	$732C	ULTIMA.II.OBJ	23	matched
+0032DA	30DA	22	f4c68a9263	3048_vehicle_plane	$73D2	ULTIMA.II.OBJ	22	matched
+003752	3552	15	4cee54739b	3546_time_index_message	$778C	ULTIMA.II.OBJ	15	matched
+0037AE	35AE	15	36fb0b1f87	3596_show_year_1990	$77E8	ULTIMA.II.OBJ	15	matched
+003B06	3906	25	0a695f62a9	38B0_cmd_L	$7AF6	ULTIMA.II.OBJ	25	matched
+003B27	3927	19	e06a875f95	38B0_cmd_L	$7B17	ULTIMA.II.OBJ	19	matched
+003EF7	3CF7	16	baab732d39	3C2E_cmd_O	$7E8E	ULTIMA.II.OBJ	16	matched
+003F37	3D37	18	3af12c5a62	3C2E_cmd_O	$7ECA	ULTIMA.II.OBJ	18	matched
+003F6B	3D6B	15	1e02598d1f	3C2E_cmd_O	$7EFA	ULTIMA.II.OBJ	15	matched
+003FAF	3DAF	9	2da9df7d5f	3C2E_cmd_O	$7F32	ULTIMA.II.OBJ	9	matched
+0041E0	3FE0	11	2c0dcf00f0	3F5D_steal_attempt	$8136	ULTIMA.II.OBJ	11	matched
+0041FD	3FFD	13	43dbb52350	3F5D_steal_attempt	$8153	ULTIMA.II.OBJ	13	matched
+004228	4028	14	a31544437b	3F5D_steal_attempt	$8179	ULTIMA.II.OBJ	14	matched
+00431B	411B	9	28f9cf9d8d	4108_street_jester	$8253	ULTIMA.II.OBJ	9	matched
