@@ -11,11 +11,22 @@
 # 1..5 branch away (asm/0A4A..0A5F jump to L_001213/L_001214/L_001215/L_00135f/L_00135e),
 # and digits 6..9 fall through to the sweep at asm/0A6D from the last compare.
 # NOT ESTABLISHED: what the 1..5 branches do, or why the sector digit selects on them.
+# RESOLVED 2026-10-28 from the branch targets. Digits 1, 2 and 3 all enter the role-gated
+#           creature sweep at asm/1013/1015 -- runtime 1213/1214/1215 land on the loop whose
+#           body at asm/101C tests mon_type and then mon_role (docs/monster-spawn.md § 14).
+#           Digits 4 and 5 land at runtime 135E/135F, which is inside asm/1151's span: the
+#           dungeon flow, parked per AGENTS.md § 3. So the sweep this tail jumps to for digit 0
+#           is the WORLD-MAP sweep, and it reads mon_role nowhere in asm/0A6D..0AB5: every live
+#           slot in range gets the full pass. The engine had been applying the town gate here,
+#           which froze the overworld -- owner-reported 2026-10-28 and fixed in
+#           engine/src/game/ai.c as the gated_sweep test.
 # label: kept as sub_0a38 on purpose (CP3 cross-reference anchor).
 # func 0A38..0A49  len 0012 B  evidence: seed+reko
 # provenance: static reassembly 2026-10-28 (docs/monster-spawn.md § 15.2), corroborated
 #           by a stop at 17D:0CEE reached during an arrow-key walk in the same session
-# confidence: high for the flow and for DS:49/4A's identity; none for the 1..5 arms
+# confidence: high for the flow and for DS:49/4A's identity; high for the 1..3 arms (the
+#           branch targets are bytes and the target loop is § 14's), none for the 4/5 arms,
+#           which land inside asm/1151 and are unread
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_0a38:
 L_000c38:

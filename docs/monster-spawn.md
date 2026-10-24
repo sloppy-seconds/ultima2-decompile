@@ -782,6 +782,30 @@ saying what the values mean. They mean this, and it is all in one fragment chain
 | `0x03` | `asm/1086`, a wander off a per-slot pair at `DS:1F7`/`DS:217` — **not decoded** | 10–24 slots, usually the majority |
 | `0x81..0x85` | excluded by the `js` at `asm/1033`; these are the scripted townsfolk `asm/3C2E_cmd_O` enumerates one by one | exactly 4–5 slots, always the same low values |
 
+### Which sweep the gate belongs to — a correction (2026-10-28)
+
+Everything above is true of the **town** sweep only. `asm/0A38`, the tail every completed
+command falls through to, dispatches on the sector's second decimal digit:
+
+| digit | where the tail goes | what gates it |
+| --- | --- | --- |
+| `0` — the world map | the sweep at `asm/0A6D` | **nothing**: `asm/0A6D..0AB5` reads `mon_role` nowhere in its span |
+| `1`, `2`, `3` — towns and interiors | runtime `1213`/`1214`/`1215`, i.e. the `asm/1013/1015` chain above | `mon_role` |
+| `4`, `5` — dungeons | runtime `135E`/`135F`, inside `asm/1151`'s span | unread, and parked per `AGENTS.md` § 3 |
+| `6..9` | falls through to `asm/0A6D` | nothing, as digit 0 |
+
+On the ungated sweep the ring at `asm/0AAA`/`0AB6`/`0AC0` still applies, but its escape is a
+jump to runtime `0AFC` — the unit step and the move — not to the loop-back at `0AA1`. So
+outside three cells a world-map creature skips the special and still walks; the move itself
+is unconditional. The gates that really exist there are the `DS:13`/`DS:26` filters, the ring
+for specials, and the species/tile ladder inside the move routine.
+
+The consequence is what the owner caught by playing: a wandering spawn on the world map lands
+in a slot whose `mon_role` is 0 — `monx20` ships 0 in all thirty-two slots and the spawner
+writes no role — and the engine applied the town gate to the world-map sweep, so every
+overworld creature stood frozen while the player walked past it. `gated_sweep` in
+`engine/src/game/ai.c` is the dispatch, and `engine/tests/ai_check.c` pins both halves.
+
 Three things follow, and all three were previously assumed the other way.
 
 **Role 2 is the alerted state and it is not a caster.** It walks in and does not cast,

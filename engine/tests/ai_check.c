@@ -100,8 +100,11 @@ int main(void)
           "empty sector: nothing examined, nothing moved, no roll");
 
     /* --- the step is a diagonal toward the player (asm/212e) ---------------- */
-    /* Every creature this file expects to act needs role 1 (asm/102B): the arm()
-     * helper leaves the arrays zeroed, and role 0 means "inert". */
+    /* Everything in this file down to the role-gate section runs on the world map
+     * (sector digit 0), which asm/0A38 sends to the UNGATED sweep — mon_role is
+     * not consulted there, so the role-1 writes below are belt-and-braces for
+     * creatures that would act either way. The gated sweep is tested on its own.
+     */
     arm(&ctx, &w, GRASS, 3, 5, 5, 40, 0x30);       /* Fighter, plain */
     ctx.state.mon_role[3] = 1;
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
@@ -211,22 +214,28 @@ int main(void)
           "the new cell carries the creature's type byte, which is what the renderer draws");
 
     /* --- the role gate (asm/102B / asm/1033): most slots are inert ----------- */
-    /* monxNN ships role 0 in six to eleven slots and 0x81..0x85 in four or five,
-     * and both of those do nothing at all. Without this control the checks above
-     * would pass while every creature in a town acted. */
+    /* Only on the TOWN sweep: asm/0A38 sends sector digits 1..3 to the role-gated
+     * chain at asm/1013/1015, so every check in this block sets the second digit
+     * first. monxNN ships role 0 in six to eleven slots and
+     * 0x81..0x85 in four or five, and both of those do nothing at all. Without
+     * this control the checks above would pass while every creature in a town
+     * acted. */
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[13] = 0;
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5,
           "role 0: asm/102B sends the slot to next, so an inert creature stays put");
 
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[13] = 0x81;          /* a scripted townsperson */
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.moved == 0,
           "role 0x81: asm/1033 is `js next`, so bit 7 excludes the scripted folk");
 
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x34);   /* a paralyser... */
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[13] = 2;                /* ...but alerted */
     u2_rng_seed(&ctx, seed);
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);  /* far enough that it is not contact */
@@ -234,12 +243,37 @@ int main(void)
           "role 2 goes straight to the move routine: it chases, never casts, rolls nothing");
 
     arm(&ctx, &w, GRASS, 13, 5, 5, 14, 0x30);
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[13] = 2;
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.retreated == 0 && ctx.state.mon_x[13] == 6,
           "role 2 does not run: the retreat test is on the role-1 path only");
 
+    /* --- the world-map sweep is NOT role-gated (asm/0A38 -> asm/0A6D) -------- */
+    /* The regression this exists for. asm/0A38 dispatches the post-command tail on
+     * the sector's second decimal digit: 0 jumps to the sweep at asm/0A6D, which
+     * never reads mon_role; 1..3 branch to the gated chain; 6..9 fall through to
+     * 0A6D too. The engine applied the town gate to both, so every wandering
+     * spawn — born role 0, because monx20 ships role 0 in all 32 slots — stood
+     * still while the player walked past it. Owner-reported 2026-10-28: "any
+     * monster I can see in the viewport has a turn and usually comes to attack me".
+     * Flip the gated_sweep test in ai.c and one of these two goes red. */
+    arm(&ctx, &w, GRASS, 14, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 0;         /* the world map */
+    ctx.state.mon_role[14]  = 0;         /* what a wandering spawn leaves behind */
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 1 && ctx.state.mon_x[14] == 6 && ctx.state.mon_y[14] == 6,
+          "world map: a role-0 creature takes the full pass and pursues (asm/0A6D has no role test)");
+
+    arm(&ctx, &w, GRASS, 14, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;         /* a town sector, same creature */
+    ctx.state.mon_role[14]  = 0;
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 0 && ctx.state.mon_x[14] == 5,
+          "control: the identical role-0 creature in a digit-1..3 sector stays put");
+
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;         /* the gated sweep, where role means something */
     ctx.state.mon_role[13] = 3;
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5,
@@ -247,10 +281,12 @@ int main(void)
 
     /* --- the melee pool and the armour dodge (asm/0B62 / asm/0B79) ----------- */
     /* A role-2 creature in contact draws exactly one roll, the melee roll, so the
-       seed controls it directly. Find a seed whose first roll is non-negative and
-       whose low three bits are 0: with armour 0 the blow lands, with armour 1 it is
-       dodged. That is the whole of what armour does in the original, and it is the
-       only damage a plain melee creature can ever do. */
+       seed controls it directly — which is why these run on the gated (interior)
+       sweep: on the world map the same creature also rolls for a special first and
+       the seed would be spent on the wrong thing. Find a seed whose first roll is
+       non-negative and whose low three bits are 0: with armour 0 the blow lands,
+       with armour 1 it is dodged. That is the whole of what armour does in the
+       original, and it is the only damage a plain melee creature can ever do. */
     uint8_t mseed = 0;
     while (mseed < 255) {
         const uint8_t r = first_roll(mseed);
@@ -261,6 +297,7 @@ int main(void)
     CHECK(mr < 0x80 && (mr & 7) == 0, "a seed exists whose first roll is hit-able at SKIN");
 
     arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[14] = 2;
     ctx.state.worn_armour = 0;                      /* SKIN */
     u2_rng_seed(&ctx, mseed);
@@ -269,6 +306,7 @@ int main(void)
           "SKIN: the blow lands and pools mon_hp>>2 + 1 = %d", (40 >> 2) + 1);
 
     arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[14] = 2;
     ctx.state.worn_armour = 1;                      /* one step of armour */
     u2_rng_seed(&ctx, mseed);

@@ -2,6 +2,12 @@
  * ai.c — the creature turn, implemented against asm/0A6D..0AB5 and
  * asm/2122..2260. Written up in docs/monster-spawn.md § 13.
  *
+ * One routine, two sweeps: asm/0A38 sends the world map (sector digit 0) and
+ * digits 6..9 here ungated, and the town sectors (digits 1..3) to the role-gated
+ * chain at asm/1013/1015; digits 4 and 5 branch into the dungeon flow, which is
+ * parked. The `gated_sweep` test below is that dispatch; mon_role means nothing
+ * on the world map.
+ *
  * The shape that surprises people, and that every line below is trying to be
  * faithful to: a creature never attacks the player for being next to it. It
  * rolls for a special from within two cells, it walks toward the player if the
@@ -218,11 +224,27 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
         if (st->mon_type[slot] == 0) continue;
         rep.examined++;
 
-        /* asm/102B and asm/1033: the role byte gates the whole turn.
+        /* Two sweeps hang off the post-command tail, and asm/0A38 picks between
+         * them on the sector's second decimal digit: digit 0 — the world map —
+         * jumps here (asm/0A6D), digits 1..3 branch to the role-gated sweep at
+         * asm/1013/1015, digits 4 and 5 branch into runtime 135E/135F inside
+         * asm/1151's span (the dungeon flow, parked per AGENTS.md § 3), and
+         * digits 6..9 fall through to asm/0A6D as well. So mon_role gates the
+         * TOWN sweep and not the world map: on the world map every live slot gets
+         * the full pass, which is why a wandering spawn walks at you even though
+         * monx20 ships role 0 in all thirty-two slots. The engine applied the
+         * town gate here, so the world map was frozen — owner-reported 2026-10-28,
+         * and the dispatch is in the bytes of asm/0A38 (docs/monster-spawn.md § 14
+         * documented the gate without the dispatch that selects it).
          *
-         *   role == 0    -> next slot. Inert. monx00 ships 0 in every slot, and
-         *                   eight of the thirty-two in a town do nothing until
-         *                   violence wakes them (see u2_ai_alarm).
+         * Inside the gated sweep, asm/102B and asm/1033:
+         *
+         *   role == 0    -> asm/1040, the Minax proximity check, and thence next
+         *                   slot for everything that is not Minax. Inert, in
+         *                   practice: monx00 ships 0 in every slot, and eight of
+         *                   the thirty-two in a town do nothing until violence
+         *                   wakes them (see u2_ai_alarm). The Minax arm is still
+         *                   not modelled.
          *   role & 0x80  -> next slot. asm/1033 is `js <next>`, so bit 7 excludes
          *                   0x81..0x85, which are the scripted townsfolk that
          *                   asm/3C2E_cmd_O enumerates one by one.
@@ -243,12 +265,16 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
          *                   "plausible reading promoted past its evidence" failure
          *                   AGENTS.md § 5 names. Decoding asm/1086 is the open item.
          */
-        const uint8_t role = st->mon_role[slot];
-        if (role == 0 || (role & 0x80)) continue;
-        if (role > 3) continue;
-        const int casts   = (role == 1);   /* asm/0AAA is only on the role-1 path */
-        const int retreat = (role == 1);   /* asm/0B07 likewise                   */
-        const int moves   = (role == 1 || role == 2);
+        const int gated_sweep = (st->sector_second >= 1 && st->sector_second <= 3);
+        int casts = 1, retreat = 1, moves = 1;   /* the ungated world-map pass */
+        if (gated_sweep) {
+            const uint8_t role = st->mon_role[slot];
+            if (role == 0 || (role & 0x80)) continue;
+            if (role > 3) continue;
+            casts   = (role == 1);   /* asm/0AAA is only on the role-1 path */
+            retreat = (role == 1);   /* asm/0B07 likewise                   */
+            moves   = (role == 1 || role == 2);
+        }
 
         /* asm/4F36: the raw pursuit vector, player minus creature, signed byte.
          * This is what the proximity gate measures, and it is a distance, not a

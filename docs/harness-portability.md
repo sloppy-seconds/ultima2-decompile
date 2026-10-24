@@ -190,6 +190,20 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28b** — **When two loops share a body, check which one the gate belongs to before
+  attaching it to the reconstruction.** A per-entity sweep can be entered from more than one
+  dispatch site, and a filter that is real in one entry path is absent in another; applying it
+  everywhere produces behaviour that looks like a rate limit or a probability and is actually a
+  missing code path. The tell is a measured "most of the time nothing happens" statistic that
+  has no explicit gate behind it — re-derive the dispatch table above the loop, not just the
+  loop, and let the entry sites, not the shared body, decide which filters apply.
+* **2026-10-28b** — **A sentinel byte written into the wrong address space survives forever and
+  renders as content.** A kill marker copied from a half-read write site landed in the grid the
+  renderer indexes, where the index transform turned it into a visible glyph, and the rebuild
+  pass was then taught to skip that value so it could not clean itself up. When a constant comes
+  from a site whose base register was assumed, verify the buffer by its size and its consumer
+  before writing it into a derived view, and never add a skip to a rebuild loop to preserve a
+  byte whose address was inferred.
 * **2026-10-28b** — **A wrapper named from an INT call shape must have its register split
   decoded first.** A naming wave that labels system wrappers by recognizable INT/port shapes
   read `mov $0x1,%ax` before an `int 10h` as "function 1", but the immediate loads AX: AH is 0
