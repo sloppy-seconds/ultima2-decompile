@@ -78,7 +78,31 @@ def printable_runs(raw):
     return runs
 
 
-def parse(path):
+def exe_anchor(exe, raw, start, end):
+    """Locate a trailing `db` by searching the executable for its exact bytes.
+
+    The next-label rule cannot work for the last `db` in a file: there is no label after it.
+    That is not a corner case, it is 232 of the 600-odd files in `asm/` -- including
+    `asm/0A02_invalid_move_msg`, whose only string was silently missing from the atlas. A
+    tool that drops a documented string because of where it sits in a listing is the failure
+    mode this file exists to prevent.
+
+    So search the declared function window (widened, because `# func` ends are approximate --
+    `asm/0A02` declares 0A14 for a string that runs to 0A16) and accept the hit only if it is
+    unique. Ambiguous or absent means unproven, and unproven entries are dropped, not guessed.
+    """
+    if start is None:
+        return None
+    lo = max(0, start + BIAS)
+    hi = min(len(exe), end + BIAS + 256)
+    hits, i = [], exe.find(raw, lo, hi)
+    while i != -1:
+        hits.append(i)
+        i = exe.find(raw, i + 1, hi)
+    return hits[0] if len(hits) == 1 else None
+
+
+def parse(path, exe=None):
     """Return (fname, start, end, evidence, [(file_off, text)])."""
     fname = os.path.basename(path)[:-4]
     lines = open(path, errors='replace').read().splitlines()
@@ -105,9 +129,12 @@ def parse(path):
         if not raw:
             continue
         nxt = [a for i, a in labelled if i > idx]
-        if not nxt:
-            continue
-        base = nxt[0] - len(raw)          # the db is the last thing before that label
+        if nxt:
+            base = nxt[0] - len(raw)      # the db is the last thing before that label
+        else:
+            base = exe_anchor(exe, raw, start, end) if exe is not None else None
+            if base is None:
+                continue
         for off, text in printable_runs(raw):
             out.append((base + off, text))
     return fname, start, end, evidence, out
@@ -118,7 +145,7 @@ def build(exe=None):
     if exe is None:
         exe = open(EXE, 'rb').read()
     for p in sorted(glob.glob('asm/*.asm')):
-        fname, start, end, evidence, strings = parse(p)
+        fname, start, end, evidence, strings = parse(p, exe)
         for foff, text in strings:
             end = foff + len(text)
             # A real inline message is terminated by a control byte. This filter is
