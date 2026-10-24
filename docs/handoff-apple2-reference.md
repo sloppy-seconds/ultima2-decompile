@@ -78,19 +78,32 @@ mechanism behind standing hazard 1 and means no injection tool can fix a key bur
 different file from the branch that skips it. `asm/4F4D_key_poll` now carries the span and the
 contract, and nine of its fragments got their clause.
 
-### U4 — item 1 as a reconciliation contract, not an extraction
+### U4 — ~~item 1 as a reconciliation contract~~ **REFRAMED 2026-10-28c: the document was forbidden, so it became a generated gate**
 
-**Do not re-derive this.** See "Step 0 failed twice".
+The ticket asked for "a short contract that crosswalks `asm/0A1F_cmd_dispatch` →
+`disasm/jump-table.txt` → the 26 `cmd_X` files, and records the per-letter handler entry points
+in one place". That document must not be written by hand: `AGENTS.md` § 3 forbids exactly this —
+"Do not create flow tables, address cheat-sheets or symbol indexes in `docs/` or `disasm/` that
+duplicate [asm/] … Any derived view must be *generated* by a tool, never kept by hand." The
+per-letter entry points are already in two authoritative places (the table file and the
+filenames), so a third hand-maintained copy would only add a way to be stale.
 
-- **Goal:** a short contract that crosswalks `asm/0A1F_cmd_dispatch` → `disasm/jump-table.txt`
-  → the 26 `cmd_X` files, and records the per-letter handler entry points in one place. The
-  pieces all exist; nobody has joined them into a document an engine author can read.
-- **Already done, do not repeat:** the table is decoded. `disasm/jump-table.txt` has all 26
-  lines and they match the filenames exactly (`2B8F handler=A` ↔ `2B8F_cmd_A.asm`).
-- **Genuine gaps left:** (a) 19 of 26 handlers have never been executed in a capture — see
-  `disasm/jump-table.md` § "Cross-check vs entry-points.txt"; (b) what each handler *does* is
-  mostly unread. (a) is a capture job, not yours. (b) is 26 small static jobs — pick the ones
-  item 2/3/4 of the plan need, not all 26.
+What was built instead is `tools/cmd_handlers.py`: it joins the three existing sources —
+`disasm/jump-table.txt`, the `asm/<ADDR>_cmd_<L>.asm` filename, and each header's
+`entry executed in N of 60 harvests` line — prints the crosswalk, and **exits non-zero when the
+three disagree**. Negative controls run and recorded: a letter/file mismatch, a table entry with
+no file, and a malformed line all exit 1; the real inputs exit 0 with
+`26 handlers crosswalked, 12 never executed in a capture`.
+
+The join also corrected a number in the ticket. **It is 12 handlers never executed in the current
+60-harvest corpus, not 19.** The 19 in `disasm/jump-table.md` counts handlers absent from the
+single Phase 1 playthrough's runtime CFG (`disasm/entry-points.txt`), which is a different corpus
+and a different question; both are right about their own. The tool says so in its own footer so
+the two numbers cannot be mistaken for a contradiction later.
+
+What is genuinely left, and is not a static job: 12 handlers have never executed in a capture
+(`--unexercised-only` lists them), and most handler *bodies* are still unread — 26 small static
+jobs, and the plan should pick them by need rather than by letter.
 
 ### U5 — resolve `FL`, `II`, `WII`, `UL` from the Apple build
 
@@ -193,8 +206,10 @@ the five gaps on the list below were not gaps. Grep the *question*, not the task
 ```bash
 bash tools/assemble_clean.sh                 # the asm proof; must stay green
 make -C engine && make -C engine test        # engine suite
+python3 tools/cmd_handlers.py --check        # jump table ↔ asm filenames ↔ provenance gate
 python3 tools/check_func.py 50B3             # map_tile_ptr, 37 B
 python3 tools/check_func.py 0A6D             # sweep head
+python3 tools/check_func.py 2199             # the creature step gate
 python3 tools/check_func.py 0936             # walk loop head
 ./tools/ciderpress2/cp2 catalog "references/apple/Ultima II (4am crack)/Ultima II (4am crack) disk 1 - program.dsk"
 ```
