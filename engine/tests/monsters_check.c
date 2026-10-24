@@ -89,6 +89,23 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* A sector map too, so the grid the creatures are stamped INTO exists. Same
+     * rule as the monx filler: engine-authored, no game bytes. The pattern never
+     * reaches 0x80, so a cell left at 0x80 after a restamp cannot be confused
+     * with terrain. */
+    snprintf(p, sizeof p, "%s/mapx31", dir);
+    FILE *mf = fopen(p, "wb");
+    if (!mf) { printf("  FAIL  cannot write %s\n", p); return 1; }
+    for (int i = 0; i < U2_SECTOR_TILES; i++) {
+        uint8_t b = (uint8_t)(i & 0x3F);
+        fwrite(&b, 1, 1, mf);
+    }
+    fclose(mf);
+    if (u2_world_load(&ctx, &w, 1, id) != U2_WORLD_OK) {
+        printf("  FAIL  mapx31 did not load\n");
+        return 1;
+    }
+
     /* --- 1. the columns land where docs/monster-spawn.md § 6 says ------ */
     int occupied = u2_monsters_spawn(&ctx, &w);
     CHECK(occupied == 31, "31 occupied slots, the one all-zero slot reported empty (got %d)", occupied);
@@ -177,6 +194,46 @@ int main(int argc, char **argv)
             CHECK(rb[SLOT_ROL * 32 + 27] == 0x01 && rb[SLOT_TYP * 32 + 27] == 0x2C,
                   "control: slot 27 is born role 0x01, so 0x01 is not only an acquired alarm");
         }
+    }
+
+    /* --- 5. the grid is derived: a departure puts the terrain back ---------- */
+    /* Slot 7 is the one slot of the synthetic set whose x and y are both inside
+     * the 64x64 sector (57,58); slot 5 (41,42) is the control that stays alive.
+     * Section 3 zeroed slot 7's hp, which is exactly the state a kill leaves
+     * apart from the type byte this block clears itself. */
+    {
+        const int dead = 7, alive = 5;
+        const int dcell = (int)ctx.state.mon_y[dead] * U2_SECTOR_EDGE
+                        + (int)ctx.state.mon_x[dead];
+        const int acell = (int)ctx.state.mon_y[alive] * U2_SECTOR_EDGE
+                        + (int)ctx.state.mon_x[alive];
+        const uint8_t terrain = w.map_base[dcell];
+
+        CHECK(w.map[dcell] == ctx.state.mon_type[dead],
+              "a live creature's type byte is the cell the renderer reads");
+
+        /* The kill, the way asm/2E3D leaves the record: three fields cleared,
+         * the coordinates left alone. */
+        ctx.state.mon_hp[dead] = 0;
+        ctx.state.mon_type[dead] = 0;
+        ctx.state.mon_kind[dead] = 0;
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(w.map[dcell] == terrain,
+              "a killed creature's cell returns to the terrain underneath");
+
+        /* The regression this whole section exists for. The kill path used to
+         * stamp 0x80 over the cell and the restamp used to exempt any cell
+         * carrying it, which is how a dead creature stayed on screen as the
+         * letter A (0x80 >> 2 = art 32) for the rest of the visit. Re-add either
+         * half and this check goes red. */
+        w.map[dcell] = 0x80;
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(w.map[dcell] == terrain,
+              "restamp does NOT exempt a cell carrying 0x80 (got 0x%02x, want terrain 0x%02x)",
+              w.map[dcell], terrain);
+
+        CHECK(w.map[acell] == ctx.state.mon_type[alive],
+              "the rebuild re-stamps the creatures still standing, it does not blank the grid");
     }
 
     printf("monsters_check: %d checks, %d failures\n", checks, fails);

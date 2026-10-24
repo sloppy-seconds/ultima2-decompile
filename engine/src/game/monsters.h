@@ -77,7 +77,9 @@ void u2_monsters_store(u2_ctx *ctx, u2_world *w);
  * Re-stamp the sector grid from the creature arrays, restoring the terrain under
  * any cell a creature has left. Call it whenever the arrays move (a creature
  * turn, a kill) and before anything reads the grid for passability or drawing.
- * Rebuilds from `world.map_base`, so it is idempotent.
+ * Rebuilds from `world.map_base`, so it is idempotent, and nothing is exempt:
+ * a cell carrying 0x80 is terrain like any other, which is what keeps a killed
+ * creature from staying on screen as a letter (see the comment in monsters.c).
  */
 void u2_monsters_restamp(u2_ctx *ctx, u2_world *w);
 

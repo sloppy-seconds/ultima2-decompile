@@ -946,14 +946,17 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
     seam_str_out(ctx, U2_S_CMD_PROMPT);
     if (r == 2) {
         char num[8];
-        /* asm/2E3D file 0x30F4: movb $0x80, (%bx,%si) — the dead creature's cell
-         * is stamped with the view's "do not draw" bit, not restored to the
-         * terrain underneath. That is what the bytes show, so it is what happens;
-         * whether the original ever puts terrain back is a separate unproven
-         * question and inventing a restore would be worse than the blank. */
-        const int cell = ty * U2_SECTOR_EDGE + tx;
-        if (cell >= 0 && cell < U2_SECTOR_TILES)
-            ow->world.map[cell] = 0x80;
+        /* The dead creature's cell goes back to terrain. asm/2E3D clears the
+         * record — hp, type and kind — and the grid is a derived view (map_base
+         * plus the live stamps), so re-stamping after the clear is what puts the
+         * floor back. This used to write 0x80 into the cell instead, on the
+         * strength of `movb $0x80,(%bx,%si)` at file 0x30F4. That byte is a
+         * staging-space flag, not a map byte: in map space the renderer's >>2
+         * turns it into art 32, the first letter glyph, so the engine left a
+         * letter A on the grass for the rest of the visit.
+         * captures/spice86/cp5-fight/screen3.png -> screen4.png (sector 31, a
+         * town) shows the original leaving plain floor. */
+        u2_monsters_restamp(ctx, &ow->world);
         seam_str_out(ctx, U2_S_KILLED);
         snprintf(num, sizeof num, "%u", (unsigned)a.gold);
         seam_str_out(ctx, num);

@@ -66,10 +66,9 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
      * anywhere. One grid, one truth.
      *
      * The empty-slot test is the module's own (x||y), not hp, so a slot the
-     * spawner left alone is never stamped. On a kill, asm/2E3D file 0x30F4 writes
-     * 0x80 over the cell, which is the view's "do not draw" bit rather than a
-     * restoration of the terrain beneath; whether the original ever puts terrain
-     * back is not established, so the kill path writes what the bytes show.
+     * spawner left alone is never stamped. On a kill the record is cleared and
+     * the terrain underneath shows again — see u2_monsters_restamp, and note
+     * that the 0x80 at asm/2E3D file 0x30F4 is not this grid.
      *
      * INFERRED, and it is the line to suspect first if a creature ever draws in
      * the wrong cell: that the stamp lands at y*64+x with the sector's own stride
@@ -110,10 +109,16 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
  * reproduced is the observable property: one creature per cell, and the cell
  * under it survives its departure.
  *
- * One cell is left alone on purpose: a cell carrying 0x80. That is the stamp
- * asm/2E3D file 0x30F4 writes over a killed creature, and restoring terrain
- * there would undo a proven byte with an unproven one. A creature walking onto
- * such a cell stamps it normally, because the loop below runs after the skip.
+ * One cell used to be exempt, and that was wrong (2026-10-28). This loop left any
+ * cell carrying 0x80 alone, because asm/2E3D file 0x30F4 does write
+ * `movb $0x80,(%bx,%si)` on a kill and the address pair was assumed to name the
+ * map cell. Whatever it names, it is not the cell the renderer reads: 0x80 is a
+ * staging-space flag, and in map space the `>>2` transform turns it into art 32,
+ * the first letter glyph — so the engine drew a letter A on the grass where the
+ * creature had died, permanently, because nothing would clear it.
+ * captures/spice86/cp5-fight/screen3.png -> screen4.png (sector 31, a town,
+ * `ATTACK--EAST--HIT!!!` then `KILLED--GOLD+1--EXP.+02`) shows the original
+ * leaving plain floor. Terrain comes back here, unconditionally.
  */
 void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
 {
@@ -121,8 +126,7 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
         return;
 
     for (int i = 0; i < U2_SECTOR_TILES; i++)
-        if (w->map[i] != 0x80)
-            w->map[i] = w->map_base[i];
+        w->map[i] = w->map_base[i];
 
     const u2_state *s = &ctx->state;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
