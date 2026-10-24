@@ -1,10 +1,15 @@
-# Handover — `apple2-reference`: the Apple path is open, two contracts exist, and one was wrong
+# Handover — `apple2-reference`: the unattended queue is closed, contract 2's holes are gone, and three of five tickets were not what they said
 
-Session label continues `docs/handoff-2026-10-28b.md`. Branch **`apple2-reference`**, 11 commits,
-working tree clean. Not merged to `main` — that is an owner call, see "Needs a person".
+Session label continues `docs/handoff-2026-10-28b.md`, then `2026-10-28c` (U1–U5). Branch
+**`apple2-reference`**, working tree clean. Not merged to `main` — that is an owner call, see
+"Needs a person".
 
-Read this file, then `AGENTS.md`, then `docs/contract-creature-tick.md` § "What this contract
-deliberately does not claim". Everything below assumes you have done that.
+**U1–U5 are all closed.** Read "Queue status after 2026-10-28c" for what is actually left, and
+read the Step 0 section before starting anything: three of the five tickets were not extractions,
+and one of them was forbidden by `AGENTS.md`.
+
+Everything below assumes you have read this file, then `AGENTS.md`, then
+`docs/contract-creature-tick.md` § "What this contract deliberately does not claim".
 
 ## State of the world
 
@@ -13,7 +18,8 @@ deliberately does not claim". Everything below assumes you have done that.
 | `asm/` reconstruction + CI proof | green, untouched this session |
 | `make -C engine test` | green at every commit that could break something (CP5 SPEC: PASS) |
 | Apple II disks | parsed, extracted, memory-mapped, imported to Ghidra. `docs/apple2-reference.md` |
-| Behavioural contracts | 2: `docs/contract-overworld-walk.md`, `docs/contract-creature-tick.md` (contract 2's two named holes closed 2026-10-28c) |
+| Behavioural contracts | 2: `docs/contract-overworld-walk.md`, `docs/contract-creature-tick.md` — both named holes in contract 2 closed 2026-10-28c, and it now has a Falsification section |
+| Unattended queue | U1–U5 closed. U2, U3 and U4 were reconciliations or a reframe, not extractions |
 | Tooling added | `tools/ciderpress2/` (vendored, gitignored), `tools/apple2_image.py`, `tools/ghidra/Seed6502.java` |
 | Docs fixed | stale "keystrokes are unavailable" killed in 4 places; 6 `AGENTS.md` gaps closed |
 
@@ -105,14 +111,43 @@ What is genuinely left, and is not a static job: 12 handlers have never executed
 (`--unexercised-only` lists them), and most handler *bodies* are still unread — 26 small static
 jobs, and the plan should pick them by need rather than by letter.
 
-### U5 — resolve `FL`, `II`, `WII`, `UL` from the Apple build
+### U5 — ~~resolve `FL`, `II`, `WII`, `UL` from the Apple build~~ **CLOSED 2026-10-28c**
 
-Self-contained, low risk, and it closes the last unnamed files in `docs/apple2-reference.md` § 3.
+All four are **data**, and the finding is that they are one format rather than four mysteries.
+`docs/apple2-reference.md` § 3b has it; the short version: none of them carries a single
+`JSR $4006`, a leading `JMP` vector table or a printable run, which is the negative side of the
+signature `ULTIMA.II.OBJ`/`STD.SUBS.OBJ`/`BIOS.SUBS` all have. Independently, the ProDOS catalog
+splits disk 1 into a code batch (`14-Dec-88` onward) and a content batch (`26-Nov-88 15:36..39`,
+with `SHAPES`, `TABLES.903C.OBJ` and the seven `PIC.*`) and the four land in the content batch —
+so the shared `$4000` aux type that made them look like overlays was never a discriminator.
 
-- **First command:** `./tools/ciderpress2/cp2 catalog "references/apple/Ultima II (4am
-  crack)/Ultima II (4am crack) disk 1 - program.dsk"`
-- **Done when:** each is classified as code, data, or overlay, with the evidence. If one turns
-  out to be a gameplay table, that is worth a paragraph, not a contract.
+Structurally each is a strictly monotonic run of `dest:2 ($2000..$3FFF) payload $00` records, and
+that parse consumes 99% of all four files with zero out-of-order destinations (124/204/125/441
+records). Every destination in all 894 records lands inside `$2000..$3FF7`, which is exactly the
+window the 8184-byte `PIC.*` pictures occupy at `$2000`. `FL`'s payloads are 94%
+7 MHz-artifact bytes; `UL` 50%, `II` 20%, `WII` 0% — so the picture-patch reading is stated as a
+hypothesis with its weak case named, not as a conclusion. What the records draw and what the
+names mean are left unclaimed, and § 6 bars using any of it to derive DOS behaviour regardless.
+
+## Queue status after 2026-10-28c
+
+**U1–U5 are all closed.** Three of the five (U2, U3, U4) turned out not to be the extraction the
+ticket described: two were already answered somewhere else in the tree, and one was forbidden by
+`AGENTS.md` § 3 and became a generated gate instead. That is the actual shape of a queue written
+by a tired agent, and the next handoff should budget for it: expect to re-frame roughly half of
+what you are handed.
+
+What is genuinely left, in order of value, none of it static:
+
+1. **G28** — the pursuit `-1` consequence. Two seeded cells, one run. It is the only unobserved
+   claim inside contract 2's falsification list.
+2. **G29** — what tile `0x5C` is. One step onto a `mapx03` cell, and it may also be the C5
+   placement answer that has been called unfindable since 2026-10-22.
+3. **G27's remainder** — one poke of `DS:26A = 0x14` and one arrow key.
+4. The 12 command handlers never executed in a capture (`python3 tools/cmd_handlers.py
+   --unexercised-only`), and the handler bodies the plan actually needs read — pick by need.
+5. The `DS:15..18` ← `DS:2CB/2DE/2E0/2F3` watchpoint, still the one place the plan needs a
+   watchpoint and still not guessable statically.
 
 ## Step 0 failed twice in one session, and twice more in the next — read this before you start
 

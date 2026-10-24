@@ -62,12 +62,67 @@ Aux type on a `BIN` under ProDOS is the 6502 load address, so this table is a me
 | `TABLES.903C.OBJ` | `$903C` | 1220 | filename is its own load address; opens `01 02 04 08 10 20 40`, the HGR bit table |
 | `BIOS.SUBS` | `$9700` | 2592 | I/O and status-line subs, opens with a `JMP` vector table |
 | `STD.SUBS.OBJ` | `$4000` | 2787 | runtime library, opens with a `JMP` vector table. **`$4006` is one of those vectors, not code** |
-| `FL`, `II`, `WII`, `UL` | `$4000` | 2981/1419/734/2617 | unresolved; `$4000` again, so overlays or data |
+| `FL`, `II`, `WII`, `UL` | `$4000` | 2981/1419/734/2617 | **data, not code and not overlays** — see § 3b |
 | `PIC.CAS/DNG/MIN/OUT/RUS/SPA/TWN` | `$2000` | 8184 each | double hi-res pictures, one per scenario |
 | `HTXT` | `$5000` | 2048 | hi-res text page |
 
 The overlay structure is itself a finding: `CREATE` at `$6000` and `ULTIMA.II.OBJ` at
 `$5000` overlap, so the game swaps segments rather than living in one flat image.
+
+## 3b. `FL`, `II`, `WII` and `UL` are data, and they are one format
+
+Closed 2026-10-28c. All four were the last unnamed files on disk 1. The answer is **data**, and
+the interesting part is that all four are the *same* structure.
+
+**They are not code.** Three signatures separate the known code files from these four, and all
+three agree:
+
+| file | `JSR $4006` (the inline-string printer) | leading `JMP $xxxx` vector table | printable runs |
+| --- | --- | --- | --- |
+| `ULTIMA.II.OBJ` | 229 | 0 | 117 |
+| `STD.SUBS.OBJ` | 6 | **28** | 20 |
+| `BIOS.SUBS` | 18 | **20** | 12 |
+| `CREATE` | 0 | 0 | 6 |
+| `FL` / `II` / `WII` / `UL` | **0** | **0** | **0** (only byte runs that happen to be ASCII) |
+
+**They are not overlays either, and the catalog says so without any content analysis.** Every
+file on disk 1 dated `14-Dec-88` or later is code (`STD.SUBS.OBJ`, `DNGDRAW.OBJ`, `CREATE`,
+`ULTIMA.II.OBJ`, `BIOS.SUBS`, `UPDATE.OBJ`). Every file in the `26-Nov-88 15:36..15:39` batch is
+content: `SHAPES`, `TABLES.903C.OBJ`, the seven `PIC.*`, and these four. Two export sessions,
+and the four unknowns are on the content side of the line. The shared `$4000` aux type that made
+them look like library overlays is not a discriminator — `PIC.*` load at `$2000` and `SHAPES` at
+`$0800`, so the aux type is where each loader wanted them, not what they are.
+
+**The format, measured.** Each file is a strictly monotonic sequence of records:
+
+```
+record := dest:2 (little-endian, $2000..$3FFF)  payload:*  $00
+```
+
+Parsing that rule from offset 0 consumes **99% of every one of the four files** with **zero
+out-of-order destinations** — 124 records in `FL` (`$205d..$3fe5`), 204 in `II`
+(`$2067..$3ff3`), 125 in `WII` (`$2067..$3fc5`), 441 in `UL` (`$202b..$3fa2`). A code file, or a
+picture, does not survive that parse; the parse failing is the negative control and it is what
+makes the result worth writing down.
+
+**And every destination lands inside the picture.** The seven `PIC.*` files are 8184 bytes
+loading at `$2000`, so a picture occupies `$2000..$3FF7`. The highest destination anywhere in the
+four tables is `$3ff3` and the lowest is `$202b`: **all 894 records address bytes inside the
+`PIC.*` window.** Measured, and not the kind of fit that happens by accident.
+
+What that probably means, **inferred and not proven**: these are patch tables applied to a
+backdrop already in memory — byte runs written into a loaded picture. `FL`'s payloads are 94%
+classic 7 MHz-artifact bytes (`$aa`, `$d5`, `$55`, `$2a`, `$95`), which is what a double-hi-res
+byte run is made of; `UL` is 50%, `II` 20% and `WII` 0%, so if this reading is right the four are
+not four instances of one thing and `WII` is the odd one out. `II` and `WII` share 71 destination
+addresses with only 2 of them byte-identical — same layout, different content, which is what two
+variants of one screen would look like.
+
+**What is not claimed:** what any record draws, why the destinations skip around instead of
+trending with file position, and what the four names stand for. None of it is needed for the
+classification, and per § 6 none of it may be used to derive DOS behaviour anyway. The extracted
+files are gitignored game content, so re-derive from `references/apple/` with the § 2 recipe
+before quoting any number here.
 
 ## 4. Cross-ISA anchors
 
@@ -239,7 +294,9 @@ not produce a coherent printer, so this is also the confirmation that the segmen
 
 1. ~~Import `ULTIMA.II.OBJ` and `STD.SUBS.OBJ` into Ghidra~~ done, see § 8. Next there: prune
    the junk seed functions and name routines from the anchor table.
-2. Resolve `FL`, `II`, `WII`, `UL`.
+2. ~~Resolve `FL`, `II`, `WII`, `UL`~~ done 2026-10-28c, see § 3b: data, one shared record
+   format, every destination inside the `PIC.*` picture window. What is left there is what § 3b
+   explicitly declines to claim — what the records draw and what the names mean.
 3. ~~Catalog disks 2 and 3~~ done, see § 7. Next there: explain the `0x1A` +128 block, and
    the sector `10`/`15` content deltas if they ever matter.
 4. Then the actual deliverable: behavioural contracts, starting with the overworld movement
