@@ -1,4 +1,4 @@
-# sub_2213 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_2213 — accepted candidate is the player's own cell -> asm/218B, the no-move tail.
 # func 2213..2215  len 0003 B  evidence: seed+reko
 # calls: L_00238b
 # confidence: low (bytes proven by check_func.py)

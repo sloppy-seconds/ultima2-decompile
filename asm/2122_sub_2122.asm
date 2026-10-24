@@ -1,4 +1,4 @@
-# sub_2122 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_2122 — creature move routine, entry: the low-HP regen check (part of asm/2199's caller)
 # func 2122..2129  len 0008 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

@@ -1,4 +1,6 @@
-# sub_2216 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_2216 — commit staging: DS:27/DS:28 := the accepted candidate, DS:23/DS:24 := the
+#           creature's CURRENT cell, then re-fetch so asm/50B3 leaves DS:6 pointing at the
+#           old cell for asm/2233 to restore.
 # func 2216..2232  len 001D B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

@@ -1,13 +1,18 @@
-# monster_pursuit_vector — DS:19/DS:1A := player cell minus this creature's cell
-# name-evidence: `mov al,[DS:00]; sub al,[di+0x137]; mov [DS:19],al` and the same
-#   pair for DS:01 / [di+0x157] / DS:1A. Plain `sub`, no wrap adjust, so the delta
-#   is the direct difference and can go negative (it is read as signed by
-#   asm/50EF at the caller).
+# monster_pursuit_vector — DS:19/DS:1A := the raw pursuit delta, unclamped
+# name-evidence: `stc ; mov al,[DS:00]; sub al,[di+0x137]; mov [DS:19],al` and the same
+#   pair for DS:01 / [di+0x157] / DS:1A. No clamp and no wrap adjust, so the delta can go
+#   negative (it is read as signed by asm/50EF at the caller).
+# CORRECTION 2026-10-28, two claims this header used to make.
+#   (1) It is NOT the plain difference. The `stc` sets CF and x86 `sub` subtracts CF, so the
+#       stored value is player - creature - 1. asm/152E and asm/0B0F both write `stc ; cmc`
+#       to cancel it; this routine does not. See asm/4F11_monster_step_vector.
+#   (2) asm/212E does not use this routine's value. Every path through the special-attack
+#       dispatch joins at asm/0AFC, which calls asm/4F11 and overwrites DS:19/DS:1A with the
+#       clamped -1/0/+1 step before asm/212E reads them. What THIS routine feeds is the
+#       magnitude tests in asm/0AAA and asm/1040, not the step.
 # called from: the per-slot creature loop asm/0A6D..0AB5, once per non-empty slot,
 #   immediately before asm/0AAA tests |DS:19| < 3 and |DS:1A| < 3 for the special
-#   attack gate. The same pair is the move delta in asm/212e, so one vector drives
-#   both the strike decision and the step. asm/152E computes the same delta with a
-#   torus wrap through asm/50D8.
+#   attack gate. asm/152E is the dungeon-side variant and clamps through asm/50D8_sign_of_al.
 # func 4F36..4F4C  len 0017 B  evidence: seed+call+reko
 # confidence: high (four stores, no ambiguity)
 # label: kept as sub_4f36 on purpose — labels are body and CP0 md5s them

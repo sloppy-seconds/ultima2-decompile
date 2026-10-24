@@ -1,4 +1,5 @@
-# sub_220a — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_220a — contact re-test, y half. Both equal -> asm/2213 -> asm/218B (no move, and the
+#           Minax proximity check if DS:4A != 0). Neither -> asm/2216, commit the move.
 # func 220A..2212  len 0009 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

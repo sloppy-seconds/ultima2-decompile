@@ -1,4 +1,6 @@
-# sub_212e — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_212e — stage the DIAGONAL candidate cell: (mon_x+DS:19, mon_y+DS:1A) & 0x3F, then fetch
+#           its tile. DS:19/DS:1A hold the clamped unit step from asm/4F11_monster_step_vector,
+#           not the raw pursuit delta from asm/4F36.
 # func 212E..214C  len 001F B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

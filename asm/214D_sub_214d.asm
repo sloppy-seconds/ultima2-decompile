@@ -1,4 +1,4 @@
-# sub_214d — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_214d — call the step gate asm/2199_creature_step_gate on the diagonal candidate
 # func 214D..214F  len 0003 B  evidence: seed+reko
 # calls: L_002399
 # confidence: low (bytes proven by check_func.py)

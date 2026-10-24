@@ -6,7 +6,9 @@
 # Loop-back labels L_000ca1 and L_000c74 are named from asm/0BAB, asm/2195 and asm/2272
 # as well, so the AI paths do return to the sweep rather than leaving it -- which is what
 # makes the sweep's end-of-loop fall-through unconditional. docs/monster-spawn.md § 15.2.
-# NOT ESTABLISHED: what the DS:13 / DS:26 tests and the 0x48/0x3C/0x2C kind compares mean.
+# NOT ESTABLISHED: what DS:26's sign means in the mounted clause (see asm/0A83). The DS:13
+#           test is the horse riding state and the 0x48/0x3C/0x2C compares are mon_type; both
+#           resolved 2026-10-28, see asm/0A7C and asm/0A83.
 # label: kept as sub_0a74 on purpose (CP3 cross-reference anchor).
 # func 0A74..0A7B  len 0008 B  evidence: seed+reko
 # provenance: static reassembly 2026-10-28 (docs/monster-spawn.md § 15.2)

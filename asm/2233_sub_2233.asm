@@ -1,4 +1,9 @@
-# sub_2233 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_2233 — restore the old cell, then commit. `mov 0x1b7(%di),%al` + `mov %al,(%bx,%si)`
+#           writes DS:1B7[di] back into the grid cell DS:6 addresses, i.e. the terrain that
+#           was under this creature before it moved. Then DS:27/DS:28 become mon_x/mon_y and
+#           the new cell is fetched. THIS is what DS:1B7 is for: the per-slot saved terrain
+#           byte, written the same way by asm/0CEE_spawn_tile_store at spawn and read by the
+#           spawn arms' `cmp $0x8,%al` guards.
 # func 2233..2259  len 0027 B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

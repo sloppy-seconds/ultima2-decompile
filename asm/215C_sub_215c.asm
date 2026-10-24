@@ -1,4 +1,7 @@
-# sub_215c — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_215c — VERTICAL-ONLY candidate: DS:23 := mon_x, DS:24 keeps the candidate y. Re-fetch,
+#           then asm/2166 re-gates. This and asm/216E are why a creature moves on one axis
+#           when the diagonal tile refuses it (the per-species geometry measured live in
+#           captures/spice86/cp5-g28-approach/).
 # func 215C..2165  len 000A B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

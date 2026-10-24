@@ -1,4 +1,6 @@
-# sub_21d5 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_21d5 — step gate default: every tile from 0x14 up that is not 0x5C or 0x70 is refused,
+#           which is 57 of the 64 reachable tile bytes. Includes 0x78 (art 0x1E, the solid
+#           blocks that make up town buildings) and the whole 0x80..0xE4 letter range.
 # func 21D5..21D7  len 0003 B  evidence: seed+reko
 # calls: L_0023fc
 # confidence: low (bytes proven by check_func.py)

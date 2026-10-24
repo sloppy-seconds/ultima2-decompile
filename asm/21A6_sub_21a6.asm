@@ -1,4 +1,5 @@
-# sub_21a6 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_21a6 — step gate, species clause 1: mon_type == 0x2C goes to asm/21D8, the water-only
+#           arm. 0x2C >> 2 == art 0x0B, the sea creature in disasm/tile-art.tsv.
 # func 21A6..21AD  len 0008 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

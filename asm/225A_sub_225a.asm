@@ -1,4 +1,7 @@
-# sub_225a — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_225a — finish the commit: DS:1B7[di] := the terrain byte of the NEW cell (the value
+#           asm/2233's fetch left in AL), then stamp mon_type into that cell, then the DS:4A
+#           tail. Together with asm/2233 this is the save-and-restore pair behind
+#           docs/art-index.md § 2's "the grid cell holds the type byte".
 # func 225A..226E  len 0015 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

@@ -1,4 +1,7 @@
-# sub_152e — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_152e — dungeon-side step vector: DS:19/DS:1A := sign(player - creature), no off-by-one
+#           (`stc ; cmc` cancels CF before the sbb, unlike asm/4F11_monster_step_vector).
+#           Reached only from asm/1151_dungeon_darkness, i.e. the dungeon side of the split,
+#           which AGENTS.md § 3 parks. asm/212E on the overworld path uses asm/4F11 instead.
 # func 152E..154D  len 0020 B  evidence: call+reko
 # calls: L_0052d8
 # confidence: low (bytes proven by check_func.py)

@@ -1,4 +1,5 @@
-# sub_216e — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_216e — HORIZONTAL-ONLY candidate: DS:23 := the candidate x, DS:24 := mon_y. The last of
+#           the three cells tried; re-fetch, then asm/2186 re-gates.
 # func 216E..2185  len 0018 B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

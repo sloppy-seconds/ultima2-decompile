@@ -1,4 +1,4 @@
-# sub_2195 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_2195 — no-move exit in the wilderness: -> asm/0AA1_monster_sweep_next (next slot).
 # func 2195..2198  len 0004 B  evidence: seed+reko
 # calls: L_000ca1
 # confidence: low (bytes proven by check_func.py)
