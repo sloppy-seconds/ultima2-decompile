@@ -190,6 +190,47 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28d** — **A second implementation of the same logic in a different ISA is a
+  tiebreaker for static ambiguity, and it must be built as a gated lookup rather than a
+  reading habit.** Where a port and its ancestor share a string verbatim, the routines around
+  the string are the same routine, and a question that cannot be settled statically on one side
+  often can be on the other: which of two readings of a compare is right, whether a table is
+  what we think, whether a branch is a guard or a fallback. None of that touches execution,
+  which stays a play question on both sides. Three method rules, all paid for. **Anchor on
+  text, and gate the matcher with a string known to exist on only one side** — the negative
+  control is what makes "matched" mean something, and a matcher that reports the platform-only
+  string as matched is broken in a way that looks like success. **Require order preservation
+  per cluster, not set membership** — strings that cluster into the same tables in the same
+  order on both sides is the evidence that this is a translation and not a rewrite, and it is
+  computable, whereas a remembered count of "the anchor set" is not (the remembered count here
+  was off by a third and nobody noticed until a tool measured it). **Expect the yield to be
+  small and say so** — a few percent of the string inventory is a normal honest result, and a
+  tool that reports a suspiciously high rate is matching noise.
+
+* **2026-10-28d** — **A cross-ISA corroborator can agree with a wrong reading, and the place
+  it agrees is exactly where the ISAs differ.** A port translated a source-side `SEC` before
+  `SBC` into a target-side carry-set before a subtract. On the source ISA the flag set is
+  *required* for a plain subtract; on the target ISA it does nothing. So a reader who wrongly
+  believed the target subtract consumed the carry would find the source code "consistent" with
+  the wrong reading — the ancestor implementation would have endorsed a false claim rather than
+  contradicting it. The rule for a harness that ships a crosswalk: a second implementation
+  raises a claim from *inferred* to *corroborated* and no further, and any claim that rests on
+  an instruction-level semantic still needs that semantic cited or measured on the ISA that
+  executes it. Corroboration is agreement between two readings, not proof of either.
+
+* **2026-10-28d** — **An extractor whose not-found path is a silent `continue` will lose data
+  in a way its own selftest cannot see, if the lost case is positional rather than semantic.**
+  A string atlas located each embedded string by subtracting its byte count from the address of
+  the next label in the listing, and skipped any string with no label after it. That is not a
+  corner case, it is every file whose last emitted line is the string — a fifth of the tree,
+  including a string the project used as a negative control elsewhere. The tool reported a
+  clean count, its controls passed, and `N/N offsets verify` was true of the strings it chose
+  to report. Two rules. Any locator rule needs its **failure mode named in the docstring with
+  the shape of input that triggers it**, and a control case must be routed through the rare
+  path, not only the common one — a control that passes on the easy case certifies nothing about
+  the branch that drops data. Prefer a fallback that can only be accepted by verification (search
+  the binary for the exact bytes, accept a unique hit, otherwise drop) over one that guesses.
+
 * **2026-10-28c** — **A flag semantic asserted from recall rather than looked up will produce a
   confident, tidy, wrong finding, and it will survive into a contract if it explains something.
   Check the semantic, or better, measure the value.** A reconstruction read two instructions
