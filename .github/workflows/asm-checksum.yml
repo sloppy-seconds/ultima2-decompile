@@ -23,8 +23,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The body guard compares the tree against a BASE REF. With the default
+          # fetch-depth of 1 there is no base to compare to, and the guard would either
+          # pass vacuously or fail for the wrong reason. Full history is small here.
+          fetch-depth: 0
       - name: Install toolchain (binutils + python3 are preinstalled)
         run: python3 --version && as --version | head -1
+
+      # asm/ body content is the thing CP0 protects. The guard compares a working tree to
+      # a ref, so on a clean checkout it MUST be given a base: comparing HEAD to HEAD can
+      # only ever print "conserved", which is a gate that cannot go red. It used to be run
+      # that way from `make test` and passed unconditionally in CI -- a committed, unmarked
+      # body edit sailed through. See engine/tests/asm_body_guard.py.
+      - name: asm/ body guard (against the merge base)
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          BASE="${PR_BASE:-}"
+          if [ -z "$BASE" ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BASE="$PUSH_BEFORE"
+          fi
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          fi
+          if [ -z "$BASE" ]; then
+            echo "::error::no base ref available; refusing to run the body guard vacuously"
+            exit 2
+          fi
+          echo "body guard base: $BASE"
+          python3 engine/tests/asm_body_guard.py --base "$BASE"
+
+      - name: asm/ correction markers currently in force
+        run: python3 engine/tests/asm_body_guard.py --list-marked
+
       - name: Rebuild from cleaned tree and verify checksum
         run: bash tools/assemble_clean.sh /tmp/u2-clean-rebuild.bin
       - name: Per-function spot check (sample)

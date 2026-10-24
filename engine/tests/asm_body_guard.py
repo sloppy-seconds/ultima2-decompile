@@ -52,9 +52,20 @@ Merging and splitting still need no marker, because they preserve the canonical 
 Removing a file whose body lines vanish is still a failure even with a marker: the content
 has to go somewhere.
 
+Usage:
+    python3 engine/tests/asm_body_guard.py [--base REF] [--list-marked]
+
+  --base REF     compare against REF instead of HEAD. Locally HEAD is right, because the
+                 guard's job there is to catch an edit before it is committed. In CI it is
+                 WRONG: a clean checkout makes HEAD and the worktree the same thing, so the
+                 comparison is vacuous and can only PASS. CI must pass the merge base. The
+                 guard detects this and exits 2 rather than reporting a pass it did not earn.
+  --list-marked  list every file carrying a correction marker, with its evidence.
+
 Exit 0 = body content conserved, or changed only in marked files. Exit 1 = changed in an
-unmarked file, or content removed.
+unmarked file, or content removed. Exit 2 = misconfigured (CI without a real base).
 """
+import os
 import re
 import subprocess
 import sys
@@ -141,17 +152,126 @@ def raw_from_worktree():
     return out
 
 
+def parse_args(argv):
+    """--base REF (default HEAD) and --list-marked. Kept hand-rolled: this runs inside
+    `make test` before anything else and must not gain dependencies."""
+    base, list_marked = 'HEAD', False
+    i = 0
+    while i < len(argv):
+        if argv[i] == '--base':
+            i += 1
+            if i >= len(argv):
+                sys.exit('asm_body_guard: --base needs a ref')
+            base = argv[i]
+        elif argv[i] == '--list-marked':
+            list_marked = True
+        elif argv[i] in ('-h', '--help'):
+            print(__doc__)
+            sys.exit(0)
+        else:
+            sys.exit(f'asm_body_guard: unknown argument {argv[i]!r}')
+        i += 1
+    return base, list_marked
+
+
+def vacuous_in_ci(base):
+    """Refuse to report a meaningless PASS.
+
+    The guard compares a working tree against a ref. On a clean CI checkout the two are
+    the same commit, so the comparison is between a thing and itself and can only ever
+    print "conserved" -- which is a gate that cannot go red, the exact failure AGENTS.md
+    § 3 singles out. It did exactly that for as long as anyone can remember: a committed
+    unmarked body edit sails through, and CI cheerfully reports the guard passing.
+
+    So in CI, insist on a real base. Locally, HEAD is the right default because the value
+    is catching an edit BEFORE it is committed.
+    """
+    ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
+    if not ci:
+        return None
+    if base == 'HEAD':
+        return ('running in CI with --base HEAD: the checkout is clean, so this compares '
+                'HEAD to itself and can only PASS. Pass the merge base, e.g. '
+                '--base "$MERGE_BASE". Refusing to report a vacuous pass.')
+    try:
+        head = subprocess.run(['git', 'rev-parse', 'HEAD'],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        base_sha = subprocess.run(['git', 'rev-parse', base],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+    except subprocess.CalledProcessError as exc:
+        return f'cannot resolve base ref {base!r} in CI: {exc}'
+    if head == base_sha:
+        return (f'--base {base} resolves to HEAD ({head[:12]}): the comparison would be '
+                'between a commit and itself. The base ref was probably not fetched.')
+    return None
+
+
+def list_marked_files():
+    """Every asm/ file carrying a correction marker, with its evidence text."""
+    import glob
+    rows = []
+    for path in sorted(glob.glob('asm/*.asm')):
+        mk = marker_in(open(path, errors='replace').read())
+        if mk:
+            rows.append((os.path.basename(path), mk))
+    return rows
+
+
+def to_repo_root():
+    """cd to the repo root.
+
+    The guard globs `asm/` and runs `git ls-tree -- asm/`, both of which are relative to
+    the current directory. It is invoked from `engine/` by tests/run_cp0.sh, where there
+    is no `asm/` at all -- so it found zero files, printed "conserved (0 lines, 0 -> 0
+    files)", and CP0 reported that as a PASS. That was a second vacuous gate, independent
+    of the HEAD-vs-HEAD one, and it had been green the whole time.
+    """
+    try:
+        root = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except subprocess.CalledProcessError:
+        return False
+    if root:
+        os.chdir(root)
+    return True
+
+
 def main():
-    head = stream_from_git('HEAD')
+    base, list_marked = parse_args(sys.argv[1:])
+    if not to_repo_root():
+        print('asm_body_guard: MISCONFIGURED -- not inside a git repo, so asm/ cannot be found')
+        return 2
+
+    if list_marked:
+        rows = list_marked_files()
+        for name, mk in rows:
+            print(f'{name}\t{mk}')
+        print(f'# {len(rows)} file(s) carry a body-correction marker')
+        return 0
+
+    why = vacuous_in_ci(base)
+    if why:
+        print(f'asm_body_guard: MISCONFIGURED -- {why}')
+        return 2
+
+    head = stream_from_git(base)
     work = stream_from_worktree()
+    if not work:
+        print('asm_body_guard: MISCONFIGURED -- found 0 files in asm/ from %s. '
+              'A guard that inspects nothing cannot go red; refusing to report conserved.'
+              % os.getcwd())
+        return 2
     a, b = canonical(head), canonical(work)
+    if not a:
+        print(f'asm_body_guard: MISCONFIGURED -- base {base!r} has 0 asm/ files.')
+        return 2
     if a == b:
-        print('asm/ body content conserved (%d lines, %d -> %d files)'
-              % (len(b), len(head), len(work)))
+        print('asm/ body content conserved vs %s (%d lines, %d -> %d files)'
+              % (base, len(b), len(head), len(work)))
         return 0
 
     # The stream changed. That is legal only inside files that carry a correction marker.
-    head_raw, work_raw = raw_from_git('HEAD'), raw_from_worktree()
+    head_raw, work_raw = raw_from_git(base), raw_from_worktree()
     offenders, permitted = [], []
     for path in sorted(set(head_raw) | set(work_raw)):
         old, new = head_raw.get(path), work_raw.get(path)

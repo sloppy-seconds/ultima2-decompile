@@ -103,6 +103,60 @@ for i in range(len(files)-1):
         break
 PY
 if $GUARD >/dev/null 2>&1; then ok "4  merge-shaped change accepted with no marker"; else no "4  guard broke merging -- regression"; fi
+git -C "$WT" checkout -q -- .
+
+# ---- 5: the CI-blindness regression. A COMMITTED unmarked edit must still be caught ---
+# This is the bug the --base flag exists for. With base=HEAD a clean checkout compares HEAD
+# to itself and can only PASS, so a violation that has been committed is invisible and CI
+# reported the guard green forever. The guard must now be given a base and must fail.
+python3 - "$TARGET" <<'PY'
+import sys
+p=sys.argv[1]; s=open(p).read()
+old="        mov    0x580(%bx),%bx"; assert old in s
+open(p,'w').write(s.replace(old,"        mov 0x580(%bx),%bx",1))
+PY
+git -C "$WT" add -A && git -C "$WT" commit -q -m "simulated committed violation"
+if $GUARD --base HEAD~1 >/dev/null 2>&1; then
+    no "5  COMMITTED unmarked edit passed with a real base -- THE CI FIX DID NOT TAKE"
+else
+    ok "5  committed unmarked edit caught when given a base"
+fi
+if $GUARD --base HEAD >/dev/null 2>&1; then
+    ok "5b base=HEAD is vacuous by construction (why CI must pass a real base)"
+else
+    no "5b expected the HEAD-vs-HEAD comparison to be vacuous"
+fi
+git -C "$WT" reset --hard -q HEAD~1
+
+# ---- 6: in CI, refusing to run vacuously must be an error, not a silent pass ---------
+CI=true python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; rc6=$?
+if [ "$rc6" = "2" ]; then
+    ok "6  CI without a base exits 2 (misconfigured, not silently passed)"
+elif [ "$rc6" = "0" ]; then
+    no "6  guard reported success in CI with no base -- it is a gate that cannot go red"
+else
+    no "6  expected exit 2 in CI without a base, got $rc6"
+fi
+
+# ---- 7: the guard must inspect the tree no matter which directory calls it -----------
+# tests/run_cp0.sh runs it from engine/, where there is no asm/ at all. It used to find
+# zero files, print "conserved (0 lines, 0 -> 0 files)", and CP0 called that a PASS.
+sub_out=$(cd "$WT/engine" && python3 "$ROOT/engine/tests/asm_body_guard.py" 2>&1)
+if [ -z "$sub_out" ]; then
+    no "7  guard produced no output when called from engine/"
+elif printf '%s' "$sub_out" | grep -qE '\(0 lines'; then
+    no "7  vacuous when called from engine/ -- got: $sub_out"
+else
+    ok "7  guard inspects the real tree when called from engine/"
+fi
+
+# ---- 8: a guard that sees nothing must refuse rather than report conserved ------------
+mkdir -p "$WT/tmp-empty/asm" && echo x > "$WT/tmp-empty/README"
+rc8=$( cd "$WT/tmp-empty" && git init -q . && git add README && \
+       git -c user.email=t@t -c user.name=t commit -q -m empty && \
+       python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $? )
+[ "$rc8" = "2" ] && ok "8  an empty asm/ is an error, not a conserved" \
+                 || no "8  expected exit 2 on an empty asm/, got $rc8"
 
 echo
 echo "caught $pass, MISSED $fail"

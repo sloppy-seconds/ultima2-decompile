@@ -97,11 +97,19 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     [ -z "$dirty" ] && ok "original/ and references/ untouched" \
                    || bad "protected paths dirty: $dirty"
 
-    if guard=$(python3 tests/asm_body_guard.py 2>&1); then
-        ok "$guard"
-    else
-        bad "asm/ body content changed: $(printf '%s' "$guard" | tr '\n' ' ')"
-    fi
+    # The guard compares a tree to a ref. With no base it uses HEAD, which on a clean
+    # checkout means comparing HEAD to itself -- a PASS that checked nothing. The guard
+    # now exits 2 when it spots that, and CP0 reports it as a SKIP rather than a pass or
+    # a false "content changed". The real CI check lives in .github/workflows/
+    # asm-checksum.yml, which passes the merge base. Set ASM_GUARD_BASE to do the same
+    # here (e.g. before a rebase, ASM_GUARD_BASE=origin/main make -C engine test).
+    guard_rc=0
+    guard=$(python3 tests/asm_body_guard.py ${ASM_GUARD_BASE:+--base "$ASM_GUARD_BASE"} 2>&1) || guard_rc=$?
+    case "$guard_rc" in
+        0) ok "$guard" ;;
+        2) echo "  SKIP  asm/ body guard: $guard" ;;
+        *) bad "asm/ body content changed: $(printf '%s' "$guard" | tr '\n' ' ')" ;;
+    esac
 fi
 
 [ "$fail" = "0" ] && { echo "CP0 TEST: PASS"; exit 0; } || { echo "CP0 TEST: FAIL"; exit 1; }

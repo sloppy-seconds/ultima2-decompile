@@ -215,6 +215,20 @@ Verification, in two independent layers:
   renames the `asm/` file and writes the header.** Not a follow-up, not a
   backlog item. If no file covers the address yet, record it in the owning
   function's header and say so.
+* **A gate has to be able to fail in the place that enforces it, not just locally.**
+  `engine/tests/asm_body_guard.py` compared the working tree to `HEAD`, and CI checks out a
+  clean tree, so in CI it compared `HEAD` to itself and could only ever print `conserved`.
+  A committed, unmarked body edit passed. Separately, `run_cp0.sh` runs the guard from
+  `engine/`, where there is no `asm/`, so it inspected zero files and CP0 reported that as
+  a PASS. Both were gates that had never once been capable of failing where it counted.
+  The guard now takes `--base REF`, refuses with exit 2 when run in CI without a real base
+  or when it finds no `asm/` files, and resolves the repo root itself. CI passes the merge
+  base in `.github/workflows/asm-checksum.yml`. **When you add a gate, write the control
+  that makes it red first, and run that control from the same directory and the same ref
+  position CI will use** — a control run from a comfortable place proves nothing. The
+  controls live in `engine/tests/asm_body_guard_selftest.sh` (10 of them) and are wired
+  into `tools/check_all.sh`.
+
 * **The one exception: a provably-wrong body may be corrected, if the file says so.**
   Freezing a body that is known to be false protects a lie, not a proof. A file may change
   its body only if it carries
