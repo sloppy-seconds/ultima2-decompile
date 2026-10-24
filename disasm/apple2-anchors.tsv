@@ -18,6 +18,9 @@ dos_foff	dos_runtime	dos_len	text_id	dos_owner	apple_addr	apple_seg	apple_len	ma
 00321D	301D	23	58a31ffceb	2FFE_vehicle_ship	$732C	ULTIMA.II.OBJ	23	matched
 0032DA	30DA	22	f4c68a9263	3048_vehicle_plane	$73D2	ULTIMA.II.OBJ	22	matched
 003752	3552	15	4cee54739b	3546_time_index_message	$778C	ULTIMA.II.OBJ	15	matched
+003768	3568	14	bc55a7d402	3566_sub_3566	$77A2	ULTIMA.II.OBJ	14	matched
+00377D	357D	20	2977102749	3577_sub_3577	$77B7	ULTIMA.II.OBJ	20	matched
+003798	3598	15	87fd6acbbc	3596_show_year_1990	$77D2	ULTIMA.II.OBJ	15	matched
 0037AE	35AE	15	36fb0b1f87	3596_show_year_1990	$77E8	ULTIMA.II.OBJ	15	matched
 003B06	3906	25	0a695f62a9	38B0_cmd_L	$7AF6	ULTIMA.II.OBJ	25	matched
 003B27	3927	19	e06a875f95	38B0_cmd_L	$7B17	ULTIMA.II.OBJ	19	matched

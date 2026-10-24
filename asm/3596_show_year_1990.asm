@@ -2,6 +2,10 @@
 # name-evidence: string 'ANOS: 1990 A.D.'; body is a dispatch chain, calendar-write not proven
 # func 3596..35C0  len 002B B  evidence: reko
 # strings: "ANOS: 1990 A.D."
+# RENDERING GAP: this file's declared range also contains 'ANOS: 1423 B.C.' at file 0x03798,
+#           which it renders as instructions — so the atlas sees that one only through the
+#           str_out contract. The declared end (35C0) sits past a neighbouring era entry, which
+#           is how a range can swallow a table. Listed in disasm/str-out-rendering-gap.tsv.
 # calls: L_000c33, L_0051df (str_out)
 # provenance: static
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py

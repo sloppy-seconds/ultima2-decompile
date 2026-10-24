@@ -126,8 +126,8 @@ before quoting any number here.
 
 ## 4. Cross-ISA anchors
 
-**Measured, not remembered: 24 distinct strings match verbatim (25 DOS rows), out of 433 DOS
-strings — 5.5% of the corpus by distinct text — in 17 clusters, and every cluster preserves
+**Measured, not remembered: 27 distinct strings match verbatim (28 DOS rows), out of 453 DOS
+strings — 6.0% of the corpus by distinct text — in 17 clusters, and every cluster preserves
 order on both sides.** The figure this section used to carry — "35 strings" — was a remembered
 count from the first anchor pass and it does not survive measurement. The number of record comes
 from `tools/apple2_anchor_map.py`, and the artefact is `disasm/apple2-anchors.tsv`, both
@@ -149,11 +149,14 @@ prints the text itself to stdout for a human and refuses to write it to a file.
 
 Two things the tool's design is doing on purpose, because both change the number. The DOS side
 is `tools/strings_atlas.py`, imported rather than reimplemented, so every match carries an
-owning `asm/` function — and is capped at what `asm/` renders as data, which is why
-the middle `ANOS:` entries are invisible here and their absence is a DOS-side gap, not an
-Apple-side miss. The Apple side requires every byte of a candidate to be high-bit-set and
-printable once masked, terminated by `$00`; a generic printable-run regex is what produced the
-"287 of 288" artefact in § 6.
+owning `asm/` function. It used also to be capped at what `asm/` renders as data, and that cap
+hid the single best cluster in this table: three of the five `ANOS:` era lines sit in spans
+`asm/` draws as instructions, so the crosswalk could only ever confirm two of them. Since the
+atlas grew a second source — the `str_out` calling convention, which does not care how anything
+is rendered — the era table matches as **five anchors, in order, on both sides**, which is the
+strongest single cluster here and the one the prose table above always claimed. The Apple side
+requires every byte of a candidate to be high-bit-set and printable once masked, terminated by
+`$00`; a generic printable-run regex is what produced the "287 of 288" artefact in § 6.
 
 The known-limit of the verbatim rule, found the hard way: the Apple build's case and punctuation
 can differ from DOS — the coin-rub text at `$7DC6` is sentence-case with four dots against DOS

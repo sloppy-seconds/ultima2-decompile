@@ -28,8 +28,12 @@ md5s at the end, exits non-zero if the seed list drifts from the committed one),
 `tools/apple2_index.py` + `disasm/apple2-functions.tsv`, and `tools/apple2_anchor_map.py` +
 `disasm/apple2-anchors.tsv`. Committed structure, no bulk, no game text anywhere in git.
 
-**The measured anchor count is 24 distinct strings of 433 DOS strings (5.5%), 17 clusters, all
-order-preserving.** The remembered 35 is gone from `docs/apple2-reference.md` § 4.
+**The measured anchor count is 27 distinct strings of 453 DOS strings (6.0%), 17 clusters, all
+order-preserving.** The remembered 35 is gone from `docs/apple2-reference.md` § 4. It started at
+24 of 433; the count rose when `strings_atlas.py` grew a second source (see
+`disasm/defects.md`), which un-hid three `ANOS:` era lines and turned the era table into a
+five-anchor order-preserving cluster — the strongest thing in § 4, and it had been sitting
+invisible because `asm/` renders those bytes as instructions.
 
 Two things the plan did not predict, both worth more than the questions it was written to close:
 

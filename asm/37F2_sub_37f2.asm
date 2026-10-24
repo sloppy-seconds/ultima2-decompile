@@ -1,6 +1,12 @@
 # sub_37f2 — mechanical clean (bulk wave); behavior not yet reviewed
 # func 37F2..380A  len 0019 B  evidence: reko
 # calls: L_003a0b, L_0051df (str_out)
+# RENDERING GAP: prints TWO messages whose bytes this file renders as instructions — 'KLIMB'
+#           at file 0x039F4 and '-WHAT?' at file 0x03A08 — so the atlas knows them only from
+#           the str_out calling convention. The reject echo is the more interesting of the two:
+#           the command word and its '-WHAT?' live in the same span. Listed in
+#           disasm/str-out-rendering-gap.tsv; the fix is a body edit, which
+#           engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_37f2:

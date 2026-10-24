@@ -50,6 +50,47 @@ DB_RE = re.compile(r'^\s*\.?byte\s+(.*)$|^\s*db\s+(.*)$')
 ITEM = re.compile(r'"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]{2})|(\d+)')
 MIN_LEN = 3
 END_SLACK = 4        # a trailing db may finish this many bytes past the declared # func end
+STR_OUT_FILE = 0x51DF          # file offset of the printer's entry (the L_0051df label)
+WRAPPERS = (0x8D, 0x0D)
+
+
+def str_out_sites(exe):
+    """File offsets of the byte after every near `call` to the string printer.
+
+    This is the strongest string evidence in the project and it does not care how `asm/`
+    renders anything: `call str_out` and the bytes after the return address ARE the message,
+    because that is the printer's calling convention (the same contract the Apple II side has
+    with `JSR $4006`, docs/apple2-reference.md § 4). Enumerated from the executable alone.
+    """
+    out = []
+    for i in range(len(exe) - 3):
+        if exe[i] == 0xE8 and \
+           i + 3 + int.from_bytes(exe[i + 1:i + 3], 'little', signed=True) == STR_OUT_FILE:
+            out.append(i + 3)
+    return out
+
+
+def message_at(exe, off):
+    """The message a str_out call prints: skip control wrappers, read to the NUL."""
+    j = off
+    while j < len(exe) and exe[j] in WRAPPERS:
+        j += 1
+    k = j
+    while k < len(exe) and exe[k] != 0:
+        k += 1
+    raw = exe[j:k]
+    if len(raw) < MIN_LEN or not all(0x20 <= c <= 0x7E for c in raw):
+        return None
+    return j, raw.decode('latin1')
+
+
+def owner_of(ranges, foff):
+    """The asm/ file whose declared # func range contains this file offset."""
+    best = None
+    for lo, hi, fname, evidence in ranges:
+        if lo <= foff < hi:
+            best = (fname, evidence)
+    return best
 
 
 def strip_comment(s):
@@ -268,10 +309,13 @@ def parse(path, exe=None):
 
 def build(exe=None):
     rows = []
+    ranges = []
     if exe is None:
         exe = open(EXE, 'rb').read()
     for p in sorted(glob.glob('asm/*.asm')):
         fname, start, end, evidence, strings = parse(p, exe)
+        if start is not None:
+            ranges.append((start + BIAS, end + BIAS, fname, evidence))
         for foff, text in strings:
             end = foff + len(text)
             # A real inline message is terminated by a control byte. This filter is
@@ -294,7 +338,30 @@ def build(exe=None):
                 continue
             rows.append({'file': fname, 'start': start, 'end': end,
                          'evidence': evidence, 'foff': foff,
-                         'runtime': foff - BIAS, 'text': text})
+                         'runtime': foff - BIAS, 'text': text,
+                         'source': 'db-line'})
+    # Second source: the printer's own calling convention. Nine messages sit in spans `asm/`
+    # renders as instructions, so no amount of parsing listings will ever report them -- and
+    # `asm_body_guard` forbids editing those body lines to make them visible, which is a
+    # decision about the tree's invariant rather than a cleanup. The contract does not care
+    # about the rendering, so the atlas no longer does either. Rows are tagged so a reader can
+    # see which kind of evidence each one rests on; both kinds are verified byte-exactly
+    # against the executable by verify().
+    seen = {(r['foff'], r['text']) for r in rows}
+    for site in str_out_sites(exe):
+        m = message_at(exe, site)
+        if m is None:
+            continue
+        foff, text = m
+        if (foff, text) in seen:
+            continue
+        seen.add((foff, text))
+        owner = owner_of(ranges, foff)
+        rows.append({'file': owner[0] if owner else '?',
+                     'start': None, 'end': foff + len(text),
+                     'evidence': (owner[1] if owner else '') or '(no name-evidence recorded)',
+                     'foff': foff, 'runtime': foff - BIAS, 'text': text,
+                     'source': 'str-out-contract'})
     return rows
 
 
@@ -323,13 +390,17 @@ def verify(rows):
 
 
 def show(rows):
+    from collections import Counter
     for r in sorted(rows, key=lambda x: x['foff']):
-        span = '%04X..%04X' % (r['start'], r['end']) if r['start'] is not None else '?'
-        print('file:%06X  runtime:%04X  %-34s [%s]'
-              % (r['foff'], r['runtime'], r['file'], span))
+        span = '%04X..%04X' % (r['start'], r['end']) if r['start'] is not None else 'contract-only'
+        print('file:%06X  runtime:%04X  %-34s [%s]  %s'
+              % (r['foff'], r['runtime'], r['file'], span, r.get('source', 'db-line')))
         print('        %r' % r['text'])
         print('        owner evidence: %s' % (r['evidence'] or '(none recorded)'))
-    print('\n%d strings in %d functions' % (len(rows), len({r['file'] for r in rows})))
+    kinds = Counter(r.get('source', 'db-line') for r in rows)
+    print('\n%d strings in %d functions (%s)'
+          % (len(rows), len({r['file'] for r in rows}),
+             ', '.join('%s=%d' % kv for kv in sorted(kinds.items()))))
 
 
 def selftest():
@@ -370,6 +441,26 @@ def selftest():
         print('SELFTEST FAIL: only %d strings extracted -- the filter is eating real '
               'messages, not just mis-decoded data' % len(build()))
         bad += 1
+    # The contract source must be live. Nine messages sit in spans asm/ renders as instructions,
+    # and asm_body_guard forbids editing those body lines, so the contract is the ONLY thing
+    # that carries them. If it contributes nothing the atlas is blind to them again -- and this
+    # time nothing downstream would notice, which is the whole reason for the control.
+    contract = [r for r in rows if r.get('source') == 'str-out-contract']
+    if not contract:
+        print('SELFTEST FAIL: the str-out contract source contributes nothing -- the atlas is '
+              'blind to every message asm/ does not render as data')
+        bad += 1
+    # Every contract row must be a real print site, not a guess: the byte range has to be
+    # adjacent to a `call str_out`, and it has to hold its own bytes (verify() covers the
+    # second half for all rows).
+    exe = open(EXE, 'rb').read()
+    sites = set(str_out_sites(exe))
+    stray = [r for r in contract if not any(abs(r['foff'] - s) <= 2 for s in sites)]
+    if stray:
+        print('SELFTEST FAIL: %d contract rows are not adjacent to a str_out call site' % len(stray))
+        bad += 1
+    if any(r['source'] == 'str-out-contract' and r['file'] == '?' for r in rows):
+        print('NOTE: some contract rows have no owning asm/ file -- no # func range claims them')
     if bad:
         return 1
     print('SELFTEST PASS: cleric catalogue -> %s, wizard catalogue -> %s, and every '

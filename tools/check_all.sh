@@ -65,7 +65,7 @@ run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.p
 echo "== DOS string atlas =="
 run "strings_atlas selftest" original/ultimaii.exe asm -- python3 tools/strings_atlas.py --selftest
 run "str_out_audit selftest" original/ultimaii.exe asm -- python3 tools/str_out_audit.py --selftest
-run "str_out_audit check" original/ultimaii.exe disasm/str-out-unmatched.tsv -- python3 tools/str_out_audit.py --check
+run "str_out_audit check" original/ultimaii.exe disasm/str-out-rendering-gap.tsv -- python3 tools/str_out_audit.py --check
 
 echo "== Apple II 6502 side (needs gitignored inputs) =="
 run "apple2_seeds selftest" references/apple decompiled/apple2 -- python3 tools/apple2_seeds.py --selftest

@@ -47,10 +47,22 @@ from `original/ultimaii.exe` alone, with no reference to how `asm/` chose to ren
 Compare that set against what `strings_atlas.py` reports and the gap is exactly "the game prints
 this and `asm/` draws it as instructions".
 
-**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 227
-matched, 11 unmatched.** The 11 are in `disasm/str-out-unmatched.tsv` (offsets, lengths and the
-owning `asm/` file — no game text, per `AGENTS.md`), and `--check` goes red on drift in either
-direction: a new unmatched site, or a listed one that got fixed and left the list stale.
+**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 229
+rendered as data by `asm/`, 9 not.** Those 9 are in `disasm/str-out-rendering-gap.tsv` (offsets,
+lengths and the owning `asm/` file — no game text, per `AGENTS.md`), and `--check` goes red on
+drift in either direction: a new gap, or a listed one that got fixed and left the list stale.
+
+**The 9 are documented, not fixed, and that is a deliberate limit rather than a leftover.** The
+only way to make `asm/` render them as data is to replace instruction body lines with `db` lines.
+That keeps `assemble_clean.sh` green — the bytes are identical — but `engine/tests/asm_body_guard.py`
+builds a canonical stream of every non-comment line in the tree and requires it unchanged from
+HEAD, and its docstring is explicit that renaming, merging and splitting are legitimate while
+**editing is not**. It has no bless mode, and adding one would put a door in the only guard that
+currently cannot be talked into accepting a change. So the atlas grew a second source instead:
+`strings_atlas.py` now carries these nine from the calling convention itself, tagged
+`source='str-out-contract'` and verified byte-exactly like every other row, and each owning file
+carries a `# RENDERING GAP:` header saying so. The presentation is weaker than the evidence, and
+that is now visible in both places someone would look.
 
 **The first version of this section said 16 and attributed all of them to `asm/`. That was
 wrong, and wrong twice over.** Six of the sixteen were `strings_atlas` failing to extract a

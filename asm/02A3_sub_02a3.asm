@@ -1,5 +1,9 @@
 # sub_02a3 — mechanical clean (bulk wave); behavior not yet reviewed
 # func 02A3..02CA  len 0028 B  evidence: reko
+# RENDERING GAP: prints '(C)-1983,1989 BY LORD BRITISH' at file 0x004AD, but these bytes are
+#           rendered as instructions, so the atlas knows the message only from the str_out
+#           calling convention. Listed in disasm/str-out-rendering-gap.tsv; the fix is a body
+#           edit, which engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_02a3:
