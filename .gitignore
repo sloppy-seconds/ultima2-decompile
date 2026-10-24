@@ -37,6 +37,10 @@ decompiled/
 # means directories only, so tools/spice86_start.sh and friends stay tracked.
 tools/spice86*/
 tools/reko/
+# CiderPress2 cp2 CLI (GPL-3.0, .NET) — vendored image reader for the Apple II
+# reference disks, same category as the two above: re-fetchable tool build, not
+# our source.  See docs/apple2-reference.md for how it is used.
+tools/ciderpress2/
 
 # Scratch run directories (timestamped Spice86 gameplay runs, captures).
 tmp/
