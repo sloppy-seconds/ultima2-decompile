@@ -36,11 +36,11 @@ callers named in `asm/`). So creature motion is turn-based on player commands, n
 | `DS:19`, `DS:1A` | the movement delta, signed, one byte per axis | observed |
 | `DS:23`, `DS:24` | candidate new position, staging | observed |
 | `DS:27`, `DS:28` | second staging pair; `DS:27` also carries the slot index into the melee path | observed |
-| `DS:1F` | result of the `0x50B3` test, and separately a slot index in `asm/0CC0` | observed, dual use unresolved |
+| `DS:1F` | the **sector-grid tile byte at the candidate cell**, stored by `asm/2199` from `map_tile_ptr`'s `AL`. `asm/0CC0` reads the same byte as a slot index — see the note below | observed, dual use unresolved |
 | `DS:20` | contact counter, `incb` on a creature landing on the player | observed |
 | `DS:00`, `DS:01` | player position, read only | observed |
 | `DS:4A` | world/interior context byte, gates several branches | see `docs/phase4-state.md` |
-| `DS:6` | word pointer to a table indexed by slot | observed, contents not decoded |
+| `DS:6` | the **resolved tile address**, written by `map_tile_ptr` (`asm/50B3`) and read back by `asm/2233` and `asm/225A` | observed |
 
 ### Algorithm breakdown
 
@@ -81,8 +81,15 @@ is not a transcription error.
 ```
 DS:23 = (DS:137[di] + DS:19) & 0x3F
 DS:24 = (DS:157[di] + DS:1A) & 0x3F
-call 0x50B3            ; result -> DS:1F ; what it tests is NOT established
+call map_tile_ptr        ; asm/50B3 -> AL = tile at (DS:23,DS:24), ZF if zero, DS:6 = address
 ```
+
+`map_tile_ptr` is a **fetch, not a test**. Its body is `y*64 + x + word[DS:472]`, and
+`word[DS:472]` is `0x1800` in every live capture, so it returns the byte of the 64-wide sector
+grid at the staged cell. It has 25 caller files and is byte-proven. What decides whether the
+creature moves is the **caller's classification of the returned tile**, at `asm/21A6..asm/21D8`,
+which compares `DS:1F` against `0x00`, `0x04`, `0x10`, `0x14`, `0x2C`, `0x48`, `0x5C`, `0x70`
+and `0x78` — and that classifier is still unread.
 
 The `& 0x3F` is the toroidal wrap of the 64x64 sector grid, and it is applied here, on the
 creature side, independently of the identical mask the player path applies inside `0x2423`.
@@ -90,7 +97,7 @@ creature side, independently of the identical mask the player path applies insid
 **6. Contact test** (`asm/2201`/`asm/220A`, observed): if the candidate cell equals the player
 cell on **both** axes, the creature attacks instead of moving. Otherwise the no-contact path at
 `asm/2216` stages the candidate into `DS:27`/`DS:28`, re-stages the current position into
-`DS:23`/`DS:24`, and calls `0x50B3` again.
+`DS:23`/`DS:24`, and re-fetches the tile at the creature's current cell.
 
 **7. The commit** (`asm/2233`, observed): `DS:137[di] = DS:27` and `DS:157[di] = DS:28`. The
 write goes through the staging pair, never directly from the arithmetic.
@@ -103,9 +110,9 @@ jumps to the melee hit roll at `asm/0B62`. The melee roll is `rand & 7` compared
 ### C behavioral contract
 
 ```c
-/* Only the parts marked observed below are a specification. The body of the
- * per-slot gate at step 0 and the meaning of the 0x50B3 test are NOT established,
- * so this function is deliberately not executable ground truth end to end. */
+/* Only the parts marked observed below are a specification. The per-slot gate at
+ * step 1 and the tile classifier at asm/21A6..asm/21D8 are NOT established, so
+ * this function is deliberately not executable ground truth end to end. */
 
 #define CREATURE_X(s)   DS[0x137 + (s)]
 #define CREATURE_Y(s)   DS[0x157 + (s)]
@@ -117,9 +124,10 @@ jumps to the melee hit roll at `asm/0B62`. The melee roll is `rand & 7` compared
 #define KIND_THIEF          0xFC   /* contact with this kind steals instead */
 #define GRID_WRAP_MASK      0x3F   /* 64x64 toroidal sector grid          */
 
-/* Not established: what this tests. It is called with the candidate cell in
- * DS:23/DS:24 and its result lands in DS:1F. Do not model a verdict here. */
-extern uint8_t test_50B3(void);
+/* asm/50B3 map_tile_ptr. Returns the sector-grid tile byte at the staged cell:
+ * word[DS:472] + DS:24*64 + DS:23, with the resolved address left in DS:6 and ZF
+ * set when the tile is 0. It decides nothing; the caller classifies the tile. */
+extern uint8_t map_tile_ptr(void);
 
 static void wander_spawn_attempt(void);   /* asm/0AA4 -> runtime 0x0C9C cluster */
 static void on_contact(int slot);         /* asm/0B4D: steal roll + melee roll  */
@@ -155,7 +163,9 @@ void creature_sweep(void)                 /* runtime 0x0A6D */
             continue;
         }
 
-        DS[23] = nx; DS[24] = ny;  (void)test_50B3();
+        DS[23] = nx; DS[24] = ny;
+        uint8_t tile = map_tile_ptr();   /* -> DS:1F via asm/2199; classifier unread */
+        (void)tile;
 
         DS[27] = nx; DS[28] = ny;                    /* commit via staging   */
         CREATURE_X(di) = nx;
@@ -168,18 +178,21 @@ void creature_sweep(void)                 /* runtime 0x0A6D */
 
 ### What this contract deliberately does not claim
 
-* **`test_50B3` is a black box.** It is called three times in this path with different staging
-  in `DS:23`/`DS:24`, and its result goes to `DS:1F`. Nothing here establishes what it
-  evaluates. Any engine test that asserts a creature moved or failed to move is asserting an
-  unknown until this is decoded.
+* **`0x50B3` was called a black box here, and that was wrong.** It is `asm/50B3_map_tile_ptr`,
+  already named, byte-proven, live-observed in 49 of 60 harvests, and cited by 25 caller files.
+  The header even spells out the addressing. Calling it undecoded was a process failure: the
+  first move was `ls asm/ | grep -i <word>`, and it was skipped. The real unread piece is the
+  **caller's tile classifier** at `asm/21A6..asm/21D8`, not the fetch.
 * **The per-slot gate is unread.** `asm/0A7C` and `asm/0A83` test `DS:13 == 0x22`, the sign of
   `DS:26`, and compare the kind against `0x48`, `0x3C`, `0x2C`. The owning header says
   explicitly: "NOT ESTABLISHED: what the DS:13 / DS:26 tests and the 0x48/0x3C/0x2C kind
   compares mean." The contract keeps that as a named hole, `slot_gate_unproven`.
-* **`DS:1F` looks like it has two lives.** It is written as the `0x50B3` result in `asm/2199`
-  and read as a slot index in `asm/0CC0`. Unresolved, and `asm/0CC0` warns that a
-  `MEMORY_WRITE` breakpoint on a fixed `DS:137+n` will miss writes whenever `DS:1F` holds a
-  different `n`.
+* **`DS:1F` still looks like it has two lives, and neither reading is proven wrong.** `asm/2199`
+  stores `map_tile_ptr`'s tile byte there, and `asm/0CC0` reads it as a slot index in
+  `mov 0x1f,%bl`. A tile value is a multiple of 4 up to `0xFC` and a slot index is 0..31, so the
+  two readings are not reconcilable as the same variable without one of them being wrong. Left
+  open deliberately. `asm/0CC0` also warns that a `MEMORY_WRITE` breakpoint on a fixed
+  `DS:137+n` will miss writes whenever `DS:1F` holds a different `n`.
 * **`asm/0CC0` is placement, not movement.** Its own header is explicit: "This is a PLACEMENT
   store, not movement: nothing here computes a new coordinate." Do not fold it into this tick.
 * **Dungeons are out of scope.** `asm/1151` and `asm/147F` also write `DS:137[di]` and belong
