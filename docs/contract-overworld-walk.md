@@ -196,3 +196,49 @@ grep -rn "incb   0x0\|decb   0x0\|incb   0x1\|decb   0x1" asm/09[3-9]*.asm asm/0
 The dispatch order (`26E, 26F, 271, 270`) and the mode-byte order (`15, 16, 18, 17`) are the
 two details most likely to be silently "fixed" into a tidy order by a future reader. They are
 not tidy and they are not wrong.
+
+## Next contract: premise check on "time-door spawning"
+
+The work brief asked for a contract on time-door spawning. Before writing one the premise was
+tested, and **it does not survive**. Grade: measured, by byte census over `original/mapxNN`
+and the Apple `M/AP.NN`.
+
+* The moongate is **map tile art index `30`, map byte `0xC0`** (`docs/tile-art-spec.md`).
+* In the overworld it is **authored into the sector grid**. `mapx03` contains exactly four
+  `0xC0` cells, at `(15,25)`, `(20,25)`, `(21,25)`, `(26,25)`, and Apple `AP.03` contains the
+  same four. Same authored positions, two platforms, no code needed to explain them.
+* **No moongate-specific spawn site was found, and the tiles do not need one.** The four
+  `0xC0` cells in `mapx03` are present in the authored data on both platforms, so their
+  existence is fully explained without any runtime writer. What was *not* found is any code
+  that names `0xC0` in order to place it: the only `mov $0xc0,%al` sites are `asm/0896`, which
+  initialises the combat damage accumulator at `DS:22`, and `asm/0DC4`. Neither is a map
+  writer.
+* **Correction, stated so it is not repeated:** an earlier draft of this section claimed "there
+  is no store to the sector grid at `DS:1800` anywhere in `asm/`". That is **unproven and too
+  strong**, and a grep for direct stores would have produced it as a plausible false negative.
+  `asm/5EF2` loads `$0x1800` into `%bx` alongside `$0x800` into `%ax`, `$0x47` into `%cx`,
+  `$0x800` into `%dx` and `$8` into `%bp`, then calls runtime `0x5DA9` — a block operation on
+  the grid reached through a register, which a direct-store grep cannot see. `asm/68C0` also
+  documents `word[DS:472] = 0x1800` as the dungeon grid base. So the grid is writable through
+  pointers and the correct claim is the narrow one above: no *moongate placement* site exists,
+  not that the grid is immutable.
+* `NEGATE TIME` (`asm/3BCE_cmd_N.asm`) is a command that prints a string, not a door. It is
+  the `N` letter command, and per `docs/u2-game-meta-analysis.md` it consumes Strange Coins to
+  freeze creature movement.
+
+One caution before anyone generalises this: the high `0xC0` counts in `mapx15`/`25`/`35`/`45`
+(252 to 258 each) are **dungeon sectors**, where byte semantics differ from the overworld and
+`0x80`-class values mean something else entirely. `AGENTS.md` parks dungeons for exactly this
+reason, and the moongate claim above is about overworld sectors only.
+
+So the brief's "time-door spawning" is most likely a conflation imported from the secondary
+analysis this project already keeps a refutation doc for. The real adjacent targets, both
+evidenced and both live in CP5, are:
+
+1. **The creature movement tick.** `asm/0A6D`..`asm/0AA1` sweep the 32 creature slots. The
+   slot tables are `DS:137+x` = x, `DS:157+x` = y, `DS:177+x` = HP, `DS:197+x` = type, and
+   movement is `(x + DS:19) & 0x3F` and `(y + DS:1A) & 0x3F`, with `DS:19`/`DS:1A` set to
+   player-minus-creature by `asm/152E` and negated by `asm/0B0F` to turn pursuit into retreat.
+   Contact is detected by comparing both masked coordinates against `DS:00`/`DS:01`.
+2. **The `PASS` and letter-command dispatch**, the other half of the loop above, with its jump
+   table already located at file `0x0730`.
