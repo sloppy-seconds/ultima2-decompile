@@ -345,23 +345,23 @@ def selftest(runs, rows):
     # everyone to ignore it.
     # 50F9..51A4 was spot-checked the same day: 25 fragments over 172 bytes, mostly
     # 1- and 2-byte basic blocks, single ret at the end. 4A3E..4A73 is 7 fragments.
-    must = {'50F9': ('50F9',), '4A3E': ('4A3E',),
+    # Both 50F9 and the 2199 step gate were MERGED on 2026-10-28d, so they moved to the
+    # negative list below for the same reason 51A5 and 53B5 did: a positive control that has
+    # been fixed fails for the right reason forever.
+    must = {'4A3E': ('4A3E',),
             # asm/06AC_clock_tick_wait: proved one routine by hand on 2026-10-28d, byte by
             # byte, BEFORE the reachability rule existed. The pairwise rule split it in two
             # because three of its branches point backwards. If this goes missing, the
             # loop-shaped case has regressed.
-            '06AC clock wait': ('06AC', '06EC'),
-            # asm/2199_creature_step_gate declares its own real span in its header (the clean
-            # wave cut it and the header has carried the correction since 2026-10-28). The
-            # detector now has to agree with the hand reading — up to a point: the gate has
-            # TWO returns (accept at 21F7, refuse at 21FC), and the one-`ret` rule stops the
-            # run at the first. 21F7 is the last row the detector claims, not the last row of
-            # the routine.
-            '2199 step gate': ('2199', '21F7')}
+            '06AC clock wait': ('06AC', '06EC')}
     must_not = {'15E1 tavern_menu': 0x15E1, '1799 food_price': 0x1799,
                 '2028 (merged)': 0x2028, '2052 (merged)': 0x2052,
                 '20AB (merged)': 0x20AB,
                 '51A5 (merged)': 0x51A5, '53B5 (merged)': 0x53B5,
+                # merged 2026-10-28d with tools/merge_fragments.py; each re-proved byte-exact
+                # by check_func after the join.
+                '50F9 (merged)': 0x50F9, '2199 (merged)': 0x2199,
+                '06ED (merged)': 0x06ED,
                 # asm/50B3_map_tile_ptr has 26 inbound calls: the most-shared helper in the
                 # tree. It is the case the reachability relaxation must NOT swallow — a routine
                 # everyone jumps into is not a fragment of whoever jumps in.

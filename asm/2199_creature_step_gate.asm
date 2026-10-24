@@ -56,7 +56,8 @@
 #           Found 2026-10-28 with tools/apple2_anchor_map.py (string anchors) and confirmed
 #           against the image bytes, not against Ghidra's decompiler output.
 # label: kept as sub_2199 on purpose — labels are body and CP0 md5s them
-# func 2199..21A2  len 000A B  evidence: seed+call+reko
+# func 2199..21FB  len 0063 B  evidence: seed+call+reko
+# MERGED 2026-10-28d from 18 fragments the Phase 2/3 wave cut out of one routine: 21A3 21A6 21AE 21B2 21B6 21BD 21C5 21C9 21CD 21D1 21D5 21D8 21DF 21E2 21E9 21F0 21F7. Body lines are concatenated in address order and none was edited; engine/tests/asm_body_guard.py requires the tree's assemblable content to be conserved, and it is.
 # provenance: static, decoded from asm/2199..asm/21FC in address order 2026-10-28
 # confidence: high for the bytes and the verdict polarity (both returns are in the bytes
 #           and three callers branch on them); medium for the species reading, which
@@ -70,3 +71,106 @@ L_00239f:
         cmp    $0x0,%al
 L_0023a1:
         je L_0023a6
+sub_21a3:
+L_0023a3:
+        jmp L_0023fc
+L_0023a5:
+        nop
+sub_21a6:
+L_0023a6:
+        mov    0x197(%di),%al
+L_0023aa:
+        cmp    $0x2c,%al
+L_0023ac:
+        je L_0023d8
+sub_21ae:
+L_0023ae:
+        cmp    $0x48,%al
+L_0023b0:
+        je L_0023d8
+sub_21b2:
+L_0023b2:
+        cmp    $0x78,%al
+L_0023b4:
+        jae L_0023bd
+sub_21b6:
+L_0023b6:
+        mov    0x1f,%al
+L_0023b9:
+        cmp    $0x5c,%al
+L_0023bb:
+        je L_0023e2
+sub_21bd:
+L_0023bd:
+        nop
+L_0023be:
+        mov    0x1f,%al
+L_0023c1:
+        cmp    $0x10,%al
+L_0023c3:
+        je L_0023fc
+sub_21c5:
+L_0023c5:
+        cmp    $0x4,%al
+L_0023c7:
+        je L_0023fc
+sub_21c9:
+L_0023c9:
+        cmp    $0x0,%al
+L_0023cb:
+        je L_0023fc
+sub_21cd:
+L_0023cd:
+        cmp    $0x14,%al
+L_0023cf:
+        jb L_0023e2
+sub_21d1:
+L_0023d1:
+        cmp    $0x70,%al
+L_0023d3:
+        je L_0023e2
+sub_21d5:
+L_0023d5:
+        jmp L_0023fc
+L_0023d7:
+        nop
+sub_21d8:
+L_0023d8:
+        mov    0x1f,%al
+L_0023db:
+        cmp    $0x0,%al
+L_0023dd:
+        jne L_0023fc
+sub_21df:
+L_0023df:
+        jmp L_0023e2
+L_0023e1:
+        nop
+sub_21e2:
+L_0023e2:
+        mov    0x4a,%al
+L_0023e5:
+        cmp    $0x0,%al
+L_0023e7:
+        je L_0023f7
+sub_21e9:
+L_0023e9:
+        mov    0x23,%al
+L_0023ec:
+        cmp    $0x0,%al
+L_0023ee:
+        je L_0023fc
+sub_21f0:
+L_0023f0:
+        mov    0x24,%al
+L_0023f3:
+        cmp    $0x0,%al
+L_0023f5:
+        je L_0023fc
+sub_21f7:
+L_0023f7:
+        mov    $0x0,%al
+L_0023f9:
+        cmp    $0x0,%al
+L_0023fb:
+        ret

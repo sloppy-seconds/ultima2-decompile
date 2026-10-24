@@ -110,10 +110,10 @@ MANIFEST = [
     ("U2_S_CLASS_THIEF",       "5400_sub_5400.asm", ("run", 0x5B2F)),
     ("U2_S_CREATE_TOPLAY",     "5400_sub_5400.asm", ("run", 0x5C1F)),
     ("U2_S_CREATE_PROGMSTR",   "5400_sub_5400.asm", ("run", 0x5C43)),
-    ("U2_S_STATUS_HP",         "50F9_show_hitpoints.asm", 0),
-    ("U2_S_STATUS_FOOD",       "5129_sub_5129.asm", 0),
-    ("U2_S_STATUS_EXP",        "5154_sub_5154.asm", 0),
-    ("U2_S_STATUS_GOLD",       "5175_sub_5175.asm", 0),
+    ("U2_S_STATUS_HP",         "50F9_status_line_print.asm", 0),
+    ("U2_S_STATUS_FOOD",       "50F9_status_line_print.asm", 1),
+    ("U2_S_STATUS_EXP",        "50F9_status_line_print.asm", 2),
+    ("U2_S_STATUS_GOLD",       "50F9_status_line_print.asm", 3),
     # The CMD prompt and the four direction words. The prompt is its own
     # routine (asm/087D); the direction words are standalone strings in the
     # movement arms (asm/0955/097C/09A3/09C9 — the echo sites named in
