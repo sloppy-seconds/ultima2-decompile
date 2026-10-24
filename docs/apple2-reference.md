@@ -126,9 +126,31 @@ before quoting any number here.
 
 ## 4. Cross-ISA anchors
 
-35 strings appear verbatim in `original/ultimaii.exe` and in an Apple `BIN`, the Apple side
-with the high bit set per character. They are not scattered, they cluster into the same
-tables on both sides, which is the evidence that this is a translation and not a rewrite:
+**Measured, not remembered: 24 distinct strings match verbatim, out of 433 DOS strings (5.5%),
+in 17 clusters, and every cluster preserves order on both sides.** The figure this section used
+to carry — "35 strings" — was a remembered count from the first anchor pass and it does not
+survive measurement; it is kept below only as the prose record of what was looked at then. The
+number of record comes from `tools/apple2_anchor_map.py`, and the artefact is
+`disasm/apple2-anchors.tsv`, both generated:
+
+```bash
+python3 tools/apple2_anchor_map.py --selftest    # controls; must pass
+python3 tools/apple2_anchor_map.py --summary     # counts and clusters
+python3 tools/apple2_anchor_map.py -o disasm/apple2-anchors.tsv
+```
+
+Two things the tool's design is doing on purpose, because both change the number. The DOS side
+is `tools/strings_atlas.py`, imported rather than reimplemented, so every match carries an
+owning `asm/` function — and is capped at what `asm/` renders as data, which is why
+`ANOS: LEGENDS!` is invisible here and its absence is a DOS-side gap, not an Apple-side miss.
+The Apple side requires every byte of a candidate to be high-bit-set and printable once masked,
+terminated by `$00`; a generic printable-run regex is what produced the "287 of 288" artefact in
+§ 6. And **no game text is committed**: the TSV carries offsets, lengths, segment, match status
+and `sha256[:10]` of the normalised string, and `--show` prints text to stdout only.
+
+The known-limit of the verbatim rule, found the hard way: the Apple build's case and punctuation
+can differ from DOS — `'You rub a coin....'` at `$7DC6` against `YOU RUB A COIN...` — and the
+crosswalk misses those. A targeted search found that one; the tool did not.
 
 | DOS string | DOS file off | Apple address |
 | --- | --- | --- |
@@ -146,6 +168,32 @@ tables on both sides, which is the evidence that this is a translation and not a
 Order is preserved on both sides in every cluster. That is the anchor: a routine that prints
 `STEAL ARMOUR!` in the DOS tree and the same bytes at `$8153` in the Apple tree is the same
 routine, and the 6502 around it is the specification the 8086 was translated from.
+
+### What the anchors have actually settled
+
+Five correspondences, each hand-checked against image bytes rather than against Ghidra's
+decompiler output, and each recorded where `AGENTS.md` says it belongs — in the owning `asm/`
+file's header as a `# apple2-twin:` line, at corroborated grade, renaming nothing:
+
+| DOS | Apple | verdict |
+| --- | --- | --- |
+| `asm/4F11_monster_step_vector` | `$4054` (vector `$4000`) | same per-axis delta, `x4`, shared sign call, same table pair |
+| `asm/4F36_monster_pursuit_vector` | `$406F` (vector `$4003`) | the raw unclamped delta |
+| `asm/50D8_sign_of_al` | `$44D5` (vector `$4036`) | `-1/0/+1`, three exits, same shape |
+| `asm/2199_creature_step_gate` | `$6672` | clause-for-clause: freeze counter, the two water kinds, the `0x78`/`0x5C` split, the refuse set, the site guard |
+| `asm/2233` + `asm/225A` | `$66C5` + `$6701` | the save-and-restore pair behind the per-slot terrain byte |
+| `asm/3C04_coin_rub` | `$7DC6` | print, then store the same counter value into the same freeze byte |
+
+The table mapping that falls out of the last three — `$4D00`/`$4D20`/`$4D60`/`$4D80` =
+`DS:137`/`157`/`197`/`1B7`, and the zero-page scratch `$F0`/`$F4`/`$F5`/`$D9`/`$4E14` =
+`DS:1F`/`23`/`24`/`26A`/`4A` — is corroborated by repeated independent use, not proven, and it
+is written into the headers of the files that discovered it rather than into a hand-maintained
+index here.
+
+One question came back **silent**, which is also an answer: the DOS movement-mode table copy at
+`asm/5B71_mode_table_copy` has no Apple counterpart — no copy-block shape, no tile-indexed
+shift-and-read, and the Apple's step bytes are written only by the routines that compute them.
+See that file's header.
 
 `JSR $4006` occurs 253 times across the volume, 229 of them in `ULTIMA.II.OBJ`. It is the
 same idiom as the DOS `str_out`: `JSR` to the printer, inline high-bit-set string, `00`
@@ -257,18 +305,21 @@ Also on these disks and not yet examined: `MONSTERS.` (2048, note the trailing d
 ## 8. Ghidra 6502 import
 
 Working, and the decompiler reproduces what the hand disassembly says, which is the point of
-doing it this way:
+doing it this way. The whole chain is scripted — `tools/apple2_ghidra.sh` runs extract → image
+→ seeds → import → decompile and prints the four md5s at the end, so a quoted C file can be
+diffed against the index it came from. The by-hand recipe it wraps:
 
 ```bash
 source tools/env.sh
 python3 tools/apple2_image.py -o /var/tmp/u2_6502.bin
+python3 tools/apple2_seeds.py -o /var/tmp/u2_6502_seeds.txt
 WORK=$(mktemp -d /var/tmp/u2-ghidra-6502.XXXXXX); mkdir -p "$WORK/proj"
 "$GHIDRA_HOME/support/analyzeHeadless" "$WORK/proj" u2apple -deleteProject \
     -import /var/tmp/u2_6502.bin \
     -loader BinaryLoader -loader-baseAddr 0x4000 \
     -processor "6502:LE:16:default" \
     -scriptPath tools/ghidra \
-    -postScript Seed6502.java seeds=<seeds.txt> \
+    -postScript Seed6502.java seeds=/var/tmp/u2_6502_seeds.txt \
     -postScript DecompileAll.java out=/var/tmp/u2_6502.c index=/var/tmp/u2_6502.tsv
 ```
 
@@ -278,9 +329,16 @@ Three things that are not obvious:
   `Bad argument`; the language spec goes in `-processor "6502:LE:16:default"`.
 * **A raw image yields zero functions.** Ghidra has no entry point to start from, so
   auto-analysis finds nothing at all. `Seed6502.java` creates functions from a list of JSR/JMP
-  absolute targets. That scan is byte-granular, so a handful of seeds land inside an operand
-  and Ghidra reports `Unable to resolve constructor` for them. 328 seeds gave 328 functions
-  with a few junk ones, which is a good trade against analysing nothing.
+  absolute targets, and `tools/apple2_seeds.py` is that scan — byte-granular, so a handful of
+  seeds land inside an operand and Ghidra reports `Unable to resolve constructor` for them.
+  **The scan must exclude `$4000..$403E`.** That range is `STD.SUBS.OBJ`'s 21-entry JMP vector
+  table, not code, and a byte-granular seed lands on every third byte of it: Ghidra then
+  decompiles the vectors and reports their *targets*' bodies under the vectors' addresses, so
+  the first import presented the monster step vector as `FUN_4000`. With the vectors excluded
+  the scan gives 309 seeds → 309 functions and `$4054`/`$406F`/`$4080` decompile to the step
+  vector, the raw delta and the printer. The committed index is `disasm/apple2-functions.tsv`
+  (generated by `tools/apple2_index.py`); it carries seed-to-seed spans, not Ghidra's
+  `body_bytes`, which reports 1 for every function in this import.
 * **`tools/apple2_image.py` refuses overlapping segments.** `CREATE` loads at `$6000` inside
   `ULTIMA.II.OBJ`, so it is an overlay and is opt-in via `--with create` rather than silently
   stomping bytes. The manifest prints the zero-filled gaps, because zero is a legal 6502 opcode
@@ -292,8 +350,12 @@ not produce a coherent printer, so this is also the confirmation that the segmen
 
 ## 9. Next
 
-1. ~~Import `ULTIMA.II.OBJ` and `STD.SUBS.OBJ` into Ghidra~~ done, see § 8. Next there: prune
-   the junk seed functions and name routines from the anchor table.
+1. ~~Import `ULTIMA.II.OBJ` and `STD.SUBS.OBJ` into Ghidra~~ done, see § 8. ~~Prune the junk
+   seed functions~~ done 2026-10-28d: the junk was not junk, it was the vector table, and the
+   scan now excludes it. ~~Name routines from the anchor table~~ done for the six the first
+   pass could reach — see § 4 "What the anchors have actually settled". Next there: the
+   remaining questions are in `docs/handoff-apple2-crosswalk.md` T3, and the ones that did not
+   move are recorded as silent rather than left open.
 2. ~~Resolve `FL`, `II`, `WII`, `UL`~~ done 2026-10-28c, see § 3b: data, one shared record
    format, every destination inside the `PIC.*` picture window. What is left there is what § 3b
    explicitly declines to claim — what the records draw and what the names mean.
