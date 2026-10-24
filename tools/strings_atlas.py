@@ -49,6 +49,7 @@ LABEL_RE = re.compile(r'^L_([0-9a-fA-F]{6}):')
 DB_RE = re.compile(r'^\s*\.?byte\s+(.*)$|^\s*db\s+(.*)$')
 ITEM = re.compile(r'"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]{2})')
 MIN_LEN = 3
+END_SLACK = 4        # a trailing db may finish this many bytes past the declared # func end
 
 
 def db_bytes(s):
@@ -87,19 +88,45 @@ def exe_anchor(exe, raw, start, end):
     tool that drops a documented string because of where it sits in a listing is the failure
     mode this file exists to prevent.
 
-    So search the declared function window (widened, because `# func` ends are approximate --
-    `asm/0A02` declares 0A14 for a string that runs to 0A16) and accept the hit only if it is
-    unique. Ambiguous or absent means unproven, and unproven entries are dropped, not guessed.
+    So search the declared function window and accept a hit only if it lands where a trailing
+    `db` must land: the `db` is the LAST thing the clean wave emitted before the next label,
+    so it ends at or just past the declared function end. `# func` ends are approximate --
+    `asm/0A02` declares 0A14 for a string that runs to 0A16, `asm/5066` declares 506D for one
+    that runs to 506E -- so allow END_SLACK bytes past it and accept only a hit inside that
+    band.
+
+    Proximity, not uniqueness, and only where proximity is needed. The first version required a
+    unique hit in a 256-byte window and dropped anything ambiguous -- which silently discarded
+    short strings that `asm/` had rendered perfectly well as `db`, `MALE` in
+    `asm/5066_print_sex_male` and `PASS` in `asm/08FF_sub_08ff` among them, because `MALE\0`
+    and `PASS\0` each occur twice nearby. Nine real strings lost to an over-strict guard, and
+    from the outside every one of them looked like a classification problem in `asm/`.
+
+    The second version made the band the only rule and that was its own regression: four
+    strings a unique wide hit had been anchoring correctly (`CAST-`, `DESCEND`, and two in the
+    cmd_M printer) fell outside END_SLACK and vanished, because a declared `# func` end can sit
+    well past the real content -- `asm/8DCD` declares 8DCD..8FFF for a seven-byte routine and
+    zero pad. So the band is a TIE-BREAKER, not a gate: one hit anywhere in the window is
+    accepted on its own, and the band only decides when there is more than one. Ambiguity that
+    survives the band is still dropped -- a narrow verified answer beats a broad guess.
     """
     if start is None:
         return None
     lo = max(0, start + BIAS)
     hi = min(len(exe), end + BIAS + 256)
-    hits, i = [], exe.find(raw, lo, hi)
+    declared_end = end + BIAS
+    hits = []
+    i = exe.find(raw, lo, hi)
     while i != -1:
         hits.append(i)
         i = exe.find(raw, i + 1, hi)
-    return hits[0] if len(hits) == 1 else None
+    if len(hits) == 1:
+        return hits[0]
+    if len(hits) > 1:
+        near = [h for h in hits if abs((h + len(raw)) - declared_end) <= END_SLACK]
+        if len(near) == 1:
+            return near[0]
+    return None
 
 
 def parse(path, exe=None):

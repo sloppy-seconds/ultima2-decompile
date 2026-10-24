@@ -15,9 +15,11 @@ game definitely prints — and it stays quiet, because nothing downstream can te
 between "no string there" and "string there, rendered as instructions". This tool compares the
 contract's answer with the atlas's answer and reports the gap.
 
-It found 16 on first run, including three of the five `ANOS:` era lines, `PASS` (the auto-PASS
-message, which several documents discuss without the atlas ever having seen it), and the title
-screen's copyright line.
+It found 16 on first run and 11 after the extraction bug it exposed was fixed — see
+`disasm/defects.md`, which records both the wrong count and the wrong explanation for it. What
+survives is still worth having: three of the five `ANOS:` era lines, the title screen's copyright
+line, `KLIMB`, `IGNITE TORCH`, `SPELL-`, and a handful of command rejects that `asm/` draws as
+instructions and the atlas therefore cannot see.
 
 THE COMMITTED ARTEFACT IS OFFSETS ONLY. No game text reaches a file — `--show` prints text to
 stdout and nothing else does, same rule as tools/apple2_anchor_map.py and for the same reason

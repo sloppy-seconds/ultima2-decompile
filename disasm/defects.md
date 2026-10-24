@@ -47,17 +47,33 @@ from `original/ultimaii.exe` alone, with no reference to how `asm/` chose to ren
 Compare that set against what `strings_atlas.py` reports and the gap is exactly "the game prints
 this and `asm/` draws it as instructions".
 
-**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 222
-matched, 16 unmatched.** The 16 are in `disasm/str-out-unmatched.tsv` (offsets, lengths and the
+**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 227
+matched, 11 unmatched.** The 11 are in `disasm/str-out-unmatched.tsv` (offsets, lengths and the
 owning `asm/` file — no game text, per `AGENTS.md`), and `--check` goes red on drift in either
 direction: a new unmatched site, or a listed one that got fixed and left the list stale.
 
-What is in the list is the argument for the gate. Three of the five `ANOS:` era lines, including
-one claimed by `asm/3596_show_year_1990` whose declared range swallows a string table. `PASS`,
-which several documents reason about while the atlas never once reported it. The title screen's
-copyright line. And `asm/5066_print_sex_male`, a file **named after the string it prints**, whose
-own string the atlas cannot see — which is the most honest possible demonstration that owner
-naming and string extraction were independent processes here.
+**The first version of this section said 16 and attributed all of them to `asm/`. That was
+wrong, and wrong twice over.** Six of the sixteen were `strings_atlas` failing to extract a
+string that `asm/` had rendered perfectly well as `db` — including `MALE` in
+`asm/5066_print_sex_male` and `PASS` in `asm/08FF_sub_08ff`, which is the pair this section
+built its rhetoric on. The cause was the `exe_anchor` fallback added the same day: it required a
+*unique* byte-pattern hit in a wide window and dropped anything ambiguous, and `MALE\0` and
+`PASS\0` each occur twice nearby. Fixed by making proximity a tie-breaker rather than a gate
+(438 strings now, up from 433, with zero regressions — the first attempt at that fix silently
+*lost* four strings a unique wide hit had been anchoring correctly, and the diff against the
+previous version is the only reason that was caught instead of shipped).
+
+Of the 11 that remain, roughly eight are genuine classification gaps — a printed message sitting
+in a span `asm/` renders as instructions — and the rest are a third thing: a `db` followed by a
+`.byte` filler line breaks the atlas's "subtract the byte count from the next label" rule, which
+assumes the `db` is the last thing emitted before that label. `asm/334D_cmd_D` and the merged
+`asm/4050_cmd_T` are both that shape. Neither is fixed here.
+
+What is in the list is still the argument for the gate. Three of the five `ANOS:` era lines,
+including one claimed by `asm/3596_show_year_1990` whose declared range swallows a neighbouring
+string. The title screen's copyright line. `KLIMB`, `IGNITE TORCH`, `SPELL-`. And the fact that
+the audit was right about *which offsets* were invisible even while the explanation for why was
+wrong twice — the number held, the story did not.
 
 Two things this does **not** claim. It does not say `asm/` is wrong about the bytes: every one of
 those files reassembles byte-identically, and the proof is unaffected. And it does not fix them —
