@@ -58,7 +58,9 @@ static inline uint8_t u2_view_index(uint8_t map_byte)
  * Fill the viewport.
  *
  *   px, py      player position inside the sector, the DS:00 / DS:01 pair
- *   off_map     the DS:12 value used for cells that fall outside the sector
+ *   off_map     the DS:12 byte, which is a mode byte and not a tile (state.h's
+ *               view_mode). It is the filler for the no-sector-resident case only;
+ *               the proven fill loop wraps the viewport instead of blanking it.
  *   underlay    the DS:0x372 analogue, U2_VIEW_TILES bytes; NULL means "no
  *               underlay layer", which suppresses nothing
  *   empty_gate  the DS:54E == 0xFF test; non-zero allows empty tiles to draw

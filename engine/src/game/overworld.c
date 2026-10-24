@@ -192,8 +192,8 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
 
     /* asm/343F tail, reached by every arm: `mov $0x4,%al; mov %al,0x12`. */
-    ctx->state.tile_offsector = 4;
-    ow->off_map_tile = 4;
+    ctx->state.view_mode = 4;
+    ow->view_mode = 4;
     u2_status_draw(ctx);
     /* Rewritten on success, not only on failure: the caller prints this, and a
      * stale note from the opening load would describe the sector we left. */
@@ -742,13 +742,13 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 
     /* The two bytes the original carries into the world and the engine never set
      * until site entry needed them: DS:13 is the sprite stamped into the map cell
-     * (0x78 on foot, constant across every in-world capture) and DS:12 is the
-     * off-sector tile marker, 0xFF in-world and 4 inside a site. cmd_E's on-foot
-     * gate reads the first, so without this it would answer "-ONLY ON FOOT!".
-     * The overworld already carried 0xFF locally in ow->off_map_tile; now the
+     * (0x78 on foot, constant across every in-world capture) and DS:12 is the view
+     * mode, 0xFF in-world and 4 inside a site. cmd_E's on-foot gate reads the
+     * first, so without this it would answer "-ONLY ON FOOT!".
+     * The overworld already carried 0xFF locally in ow->view_mode; now the
      * state block agrees with it. */
     ctx->state.player_stamp   = 0x78;
-    ctx->state.tile_offsector = ow->off_map_tile;
+    ctx->state.view_mode      = ow->view_mode;
 
     /* CP5 W1 wiring: the creature table. asm/22D5 reads 256 bytes of monxNN into
      * DS:137 on the same sector load that reads the map, and u2_monsters_spawn
@@ -793,7 +793,7 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
     ow->y = U2_OVERWORLD_PROBE_Y;
     ow->sector_hi = U2_OVERWORLD_PROBE_SECTOR_HI;
     ow->sector_lo = U2_OVERWORLD_PROBE_SECTOR_LO;
-    ow->off_map_tile = 0xFF;      /* DS:12 in the live capture */
+    ow->view_mode = 0xFF;         /* DS:12 in the live capture */
     return overworld_open(ctx, ow);
 }
 
@@ -801,7 +801,7 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
  * Spawn from the loaded player record — the 'P' path, proven in the re-decode
  * of file 0x09E6..0x0A7F: the game reads PLAYER, reads MONSTERS, reads the
  * sector named by [DS:49][DS:4A], sets mode 4, then copies [DS:5A]->[DS:00]
- * and [DS:5B]->[DS:01] and stamps DS:12 = 0xFF (the off-map tile, matching
+ * and [DS:5B]->[DS:01] and stamps DS:12 = 0xFF (the view mode, matching
  * the live capture). The sector digits and the entry pair all come from the
  * record, so a loaded character stands where the save left it.
  *
@@ -816,14 +816,16 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     ow->y = ctx->state.entry_y;
     ow->sector_hi = ctx->state.sector_first;
     ow->sector_lo = ctx->state.sector_second;
-    ow->off_map_tile = 0xFF;      /* file 0x0A67: mov $0xff,[0x12] */
+    ow->view_mode = 0xFF;         /* file 0x0A67: mov $0xff,[0x12] */
     return overworld_open(ctx, ow);
 }
 
 void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
 {
+    /* The last argument is DS:12 -- a mode byte, not a tile. The fill loop only
+     * reaches for it when no sector is resident; see core/view.c. */
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
-                 ow->off_map_tile, NULL, U2_OVERWORLD_EMPTY_GATE);
+                 ow->view_mode, NULL, U2_OVERWORLD_EMPTY_GATE);
 
     u2_frame_clear(&ow->frame, U2_CGA_BLACK);
     /* The player is not terrain: the game's own staging buffer holds 0x78 at the

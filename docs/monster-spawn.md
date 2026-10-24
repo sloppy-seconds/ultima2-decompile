@@ -1038,12 +1038,13 @@ map and 4 in an interior, written by `asm/0C1F_status_tick_branch` and `asm/0C2B
 independent bytes agreeing on the same branch is worth more than either alone, and it is a
 second confirmation of the `DS:4A` reading that came from a completely different question.
 
-`engine/src/core/state.h` still calls it `tile_offsector` and `overworld.c` still writes 4
-into it; nothing reads the field, which is why the wrong name has been harmless so far. The
-rename is an engine change and is left for an owner. The unreconciled detail, stated rather
-than smoothed: `state.h` cites `asm/5AE1` for a window origin of `(x-9, y-5)`, while these
-two branches compute `(x-10, y-6)`. Different routines, and nobody has checked whether one
-of the readings is wrong.
+`engine/src/core/state.h` now calls it `view_mode` (renamed 2026-10-28b, owner-approved; it was
+`tile_offsector`) and `overworld.c` writes 4 on a site entry and 0xFF in-world, which is what
+the live reads say. Nothing in the engine reads the field, so the rename is bookkeeping that
+keeps the state block honest rather than a behaviour change. The unreconciled detail, stated
+rather than smoothed: `state.h` cites `asm/5AE1` for a window origin of `(x-9, y-5)`, while
+these two branches compute `(x-10, y-6)`. Different routines, and nobody has checked whether
+one of the readings is wrong.
 
 ### What this does and does not license the engine to do
 

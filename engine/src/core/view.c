@@ -55,9 +55,9 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
              * The original never blanks, so it reads as a scroll.
              *
              * off_map is no longer consulted while a sector is resident. DS:12 still
-             * exists and still reads 0xFF live — the engine's tile_offsector = 4 was
-             * never right either — but whatever feeds it is not this loop, and that
-             * is its own ticket. */
+             * exists and still reads 0xFF live, but it is a mode byte (state.h's
+             * view_mode), never a tile — whatever feeds it is not this loop, and
+             * that is its own ticket. */
             uint8_t map_byte = off_map;
             if (w && w->map_loaded)
                 map_byte = u2_world_tile_at(w, mx, my);

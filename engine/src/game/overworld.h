@@ -39,7 +39,7 @@ typedef struct u2_overworld {
     u2_view  view;
     u2_frame frame;
     int      x, y;                 /* position inside the sector, DS:00/01 */
-    uint8_t  off_map_tile;         /* the DS:12 analogue */
+    uint8_t  view_mode;            /* the DS:12 analogue: 0xFF in-world, 4 in a site */
     int      sector_hi, sector_lo;
     /* Turn counter for --debug cli. `turns` advances once per resolved player
      * turn (it is bumped inside creature_turn, the one place every turn passes);

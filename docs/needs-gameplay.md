@@ -660,6 +660,8 @@ Live capture against the containerised original (`deploy/spice86-novnc`, owner w
   east/west coordinate the way the engine's `site_leave()` assumes.
 - `DS:12` reads `0xFF` in a live overworld session. The engine sets `tile_offsector = 4`.
   One of those is wrong and it is probably the engine's.
+  *Correction 2026-10-28b: neither is wrong. `DS:12` is a mode byte — 0xFF in-world, 4 in an
+  interior — and the engine writes exactly that. The field is now `state.view_mode`.*
 
 **What this does to the ticket.** The two candidate designs as written are both wrong:
 there is no second sector to straddle, so design 2 is dead. The seamlessness the owner
@@ -691,7 +693,11 @@ row 5 held the map's own columns 55..63 with bit 7 set:
 `0x08` grass -> `0x04` -> `0x84`; `0x0C` forest -> `0x06` -> `0x86`; column 9 is `0x78`,
 the player stamp. The fill loop masks its coordinates into the sector and reads the torus
 straight through. `u2_view_fill` now does the same. `DS:12` is not consulted by the
-viewport at all, which leaves its real purpose open as **G31**.
+viewport at all, which left its real purpose open as G31 — **settled 2026-10-28**: `DS:12` is
+a mode byte (0xFF world map, 4 interior) and its only readers are
+`asm/5AB1_view_origin_by_mode` and `asm/5AF9`, where `DS:12 == 0xFF` is how `5AB1` decides
+whether the viewport origin wraps. See `docs/monster-spawn.md` § 15.2 and `state.h`'s field,
+now named `view_mode`.
 
 A CP4 test had been asserting the opposite behaviour by name and passing; it is replaced
 and the replacement says why.

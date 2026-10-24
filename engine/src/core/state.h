@@ -42,15 +42,18 @@
 
 typedef struct u2_state {
     /* 0x00 */ uint8_t sector_x;      /* asm/5AE1 fill loop: window origin is (x-9, y-5);
-                                        also the >= 0x40 sector-reload test (asm/242D). */
+                                        also the >= 0x40 sector-reload test (asm/242D).
+                                        Unreconciled: asm/5AB1 computes (x-10, y-6) -- see
+                                        that file's header, this is an open question. */
     /* 0x01 */ uint8_t sector_y;      /* asm/5AE1, asm/2434 */
     /* 0x02 */ uint8_t reserved_02[0x10];
     /* --- movement and passability cluster. Filled 2026-10-21 from the full
      * re-decode of asm/2423_passability.asm and the raw writer scan; narrative
      * in docs/passability-findings.md. Before this these bytes sat inside
      * `reserved_02`, which is why the walk loop had to be re-derived by hand. */
-    /* 0x12 */ uint8_t tile_offsector;  /* NAME DISPUTED 2026-10-28: not a tile and not an
-                                        * off-sector tile source. It is a mode byte --
+    /* 0x12 */ uint8_t view_mode;       /* RENAMED 2026-10-28 from tile_offsector,
+                                        * owner-approved. It was never a tile and never an
+                                        * off-sector tile source: it is a mode byte --
                                         * 0xFF on the world map, 4 in an interior sector --
                                         * written by asm/0C1F/asm/0C2B on the DS:4A branch
                                         * (DS:4A is the sector's low decimal digit), and its
@@ -59,9 +62,10 @@ typedef struct u2_state {
                                         * arms call, and DS:12 == 0xFF is how it decides
                                         * whether the viewport origin wraps (`and $0x3f`).
                                         * Live: 0xFF in sector 20, 4 in sector 32.
-                                        * Nothing reads this field in the engine, so the
-                                        * wrong name has cost nothing yet; renaming it is an
-                                        * owner call. docs/monster-spawn.md § 15.2. */
+                                        * The new name says what the byte selects: how the
+                                        * view origin is computed. Nothing in the engine
+                                        * reads it; it is written so the state block matches
+                                        * a live capture. docs/monster-spawn.md § 15.2. */
     /* 0x13 */ uint8_t player_stamp;    /* the sprite stamped INTO the map cell.
                                          * 0x78 = on foot. NOT the terrain under the
                                          * player: observed 0x78 while standing on
@@ -332,7 +336,7 @@ typedef struct u2_state {
 /* Compile-time proof that the struct still matches the asm offsets. */
 _Static_assert(U2_OFF(player_x)   == 0x023, "player_x moved");
 _Static_assert(U2_OFF(player_y)   == 0x024, "player_y moved");
-_Static_assert(U2_OFF(tile_offsector) == 0x012, "tile_offsector moved");
+_Static_assert(U2_OFF(view_mode)      == 0x012, "view_mode moved");
 _Static_assert(U2_OFF(player_stamp)   == 0x013, "player_stamp moved");
 _Static_assert(U2_OFF(mode_a)         == 0x014, "mode_a moved");
 _Static_assert(U2_OFF(mode_walk)      == 0x015, "mode_walk moved");
