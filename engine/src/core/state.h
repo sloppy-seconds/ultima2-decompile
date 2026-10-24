@@ -222,7 +222,21 @@ typedef struct u2_state {
                                         * live gate DS:D9 (items_held[BOOTS]) went
                                         * to 0. Resist checks read items_held, never
                                         * this byte. */
-    /* 0x6E */ uint8_t reserved_6E[8];
+    /* 0x6E */ uint8_t reserved_6E[6];
+    /* 0x74 */ uint16_t speed;        /* THE GAME SPEED. Two writers, one consumer.
+                                        * Seeded at startup by asm/06AC_clock_tick_wait,
+                                        * which counts how many 100-iteration busy passes
+                                        * fit inside a 20-tick INT 1Ah window (`addw
+                                        * $0x1,0x74`). Overwritten on demand by F7/F8:
+                                        * asm/4FA5_speed_faster_f7 adds 0x200 capped at
+                                        * 0x3a00, asm/4F8E_speed_slower_f8 subtracts 0x200
+                                        * floored at [0x554]; both then call the rescaler
+                                        * via asm/4FB3_speed_rescale_call.
+                                        * MEASURED: 0x3A17 = 14,871, static across 103
+                                        * samples in captures/spice86/g30-clockcal/.
+                                        * Note it sits 31 ABOVE the F7 ceiling: that clamp
+                                        * guards the key handler's arithmetic and never the
+                                        * startup write. */
     /* 0x76 */ uint8_t weapons_owned[10]; /* one count per weapon, 10 entries.
                                         * Proven, docs/save-format.md. asm/363B and
                                         * asm/19D7 add; asm/3F5D steals. */
@@ -328,7 +342,32 @@ typedef struct u2_state {
     /* 0x54F */ uint8_t left_margin;  /* column a CR returns to; 0 or 1 at the sites
                                          asm/456B_sub_456b.asm, asm/48A7_sub_48a7.asm;
                                          read by asm/500D_sub_500d.asm */
-    /* 0x550 */ uint8_t reserved_550[0x100];
+    /* 0x550 */ uint16_t tick_low;    /* INT 1Ah DX (tick low) saved by asm/06B0:
+                                        * `mov %dx,0x550`. Measured 0x008D. */
+    /* 0x552 */ uint16_t tick_high;   /* INT 1Ah CX, saved by `mov %cx,0x552`. Measured 0. */
+    /* 0x554 */ uint16_t speed_baseline;  /* the rescaler's baseline AND the F8 floor:
+                                        * asm/06ED does `sub 0x554,%ax` then `divw 0x554`,
+                                        * asm/4F8E does `cmp 0x554,%ax`. MEASURED 0x068A =
+                                        * 1674. No writer found anywhere in asm/ — searched
+                                        * absolute forms and `(%bx)`-relative stores — so it
+                                        * is initialised by code not yet decoded, or by the
+                                        * loader. The value is measured, the origin is not. */
+    /* 0x556 */ uint8_t reserved_556[2];
+    /* 0x558 */ uint16_t speed_mult[20];  /* per-slot multipliers, read as `mulw
+                                        * 0x558(%bx)` with bx = 0x26 down to 0 step -2.
+                                        * MEASURED (g30-clockcal): 6, 734, 8192, 1280, 3, 3,
+                                        * 3, 1280, 10, 4096, 480, 320, 576, 512, 2048, 1, 0,
+                                        * 0, 0, 0 for slots 0..19. Origin unknown, as 0x554. */
+    /* 0x580 */ uint16_t speed_delay[20]; /* the 20 scaled delay slots, written by
+                                        * `mov %ax,0x580(%bx)` and read back by
+                                        * asm/0711_speed_delay_lookup (`mov 0x580(%bx),%bx`),
+                                        * which 14 routines call with bx set to a slot byte
+                                        * offset. Value = ([0x74]-[0x554]) * mult / [0x554],
+                                        * clamped to 0 when [0x74] < [0x554]. VERIFIED 20/20
+                                        * against the live dump, engine/tests/speed_check.c.
+                                        * The spread (47 .. 64581) says these are not all
+                                        * millisecond delays; what each gates is OPEN. */
+    /* 0x5A8 */ uint8_t reserved_5A8[0xA8];  /* 0x5A8..0x64F */
 } u2_state;
 
 #define U2_OFF(f) ((int)offsetof(u2_state, f))
@@ -399,6 +438,15 @@ _Static_assert(sizeof(((u2_state *)0)->items_held) == 16,
 /* The struct mirrors the whole DS working segment. Naming fields must never
  * change its size; if this fires, a split lost or gained bytes. */
 _Static_assert(sizeof(u2_state) == 0x650, "u2_state size changed");
+/* the speed system's fields, pinned where the bytes put them */
+_Static_assert(U2_OFF(speed)          == 0x074, "speed is DS:0x74");
+_Static_assert(U2_OFF(tick_low)       == 0x550, "tick_low is DS:0x550");
+_Static_assert(U2_OFF(tick_high)      == 0x552, "tick_high is DS:0x552");
+_Static_assert(U2_OFF(speed_baseline) == 0x554, "speed_baseline is DS:0x554");
+_Static_assert(U2_OFF(speed_mult)     == 0x558, "speed_mult is DS:0x558");
+_Static_assert(U2_OFF(speed_delay)    == 0x580, "speed_delay is DS:0x580");
+_Static_assert(sizeof(((u2_state *)0)->speed_mult)  == 40, "20 word slots");
+_Static_assert(sizeof(((u2_state *)0)->speed_delay) == 40, "20 word slots");
 _Static_assert(U2_OFF(story_flag) == 0x239, "story_flag moved");
 _Static_assert(U2_OFF(text_attr)  == 0x23E, "text_attr moved");
 _Static_assert(U2_OFF(rng_state)  == 0x23F, "rng_state moved");

@@ -253,6 +253,29 @@ else
     sed 's/^/        /' "$WORK/ai.build"
 fi
 
+# --- 1g2. the speed model (asm/06ED rescale, F7/F8) ---------------------------
+# The control is a live memory dump, not a hand-written expectation: captures/spice86/
+# g30-clockcal/ gives DS:74, DS:554 and the DS:558 multiplier table, and the engine must
+# reproduce the DS:580 slots the original had actually stored. Model only -- nothing in
+# the engine calls it yet, because what each of the 20 slots gates is still unknown.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/speed_check" \
+        tests/speed_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/speed.build"; then
+    if "$WORK/speed_check" > "$WORK/speed.out" 2>&1; then
+        n=$(sed -n 's/^speed_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/speed.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP5 speed run executed 0 checks — the test is not running"
+        else
+            ok "CP5 speed model: rescale reproduces the live dump, F7/F8 bounds ($n checks, $(tail -1 "$WORK/speed.out"))"
+        fi
+    else
+        bad "CP5 speed check failed:"
+        sed 's/^/        /' "$WORK/speed.out"
+    fi
+else
+    bad "CP5 speed harness did not build:"
+    sed 's/^/        /' "$WORK/speed.build"
+fi
+
 # --- 1h. the world-map site gate (towns) ------------------------------------
 # asm/3389_cmd_E's dispatch. The table is checked on its own and, when the player's
 # content is present, against every gate cell in every world sector: each must name
