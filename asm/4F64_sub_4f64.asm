@@ -1,4 +1,5 @@
-# sub_4f64 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_4f64 — the swallow's body: AL := 0 and return with AH = 0xFF, i.e. "a key was consumed"
+#           but no character is delivered. The caller sees a key that does nothing.
 # func 4F64..4F68  len 0005 B  evidence: seed+reko
 # calls: L_0051d1
 # confidence: low (bytes proven by check_func.py)

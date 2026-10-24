@@ -1,4 +1,6 @@
-# sub_4fd1 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_4fd1 — key_poll's "a key was consumed" return: AH := 0xFF, then fall into the
+#           upper-case tail. The no-key path skips this line, which is the entire difference
+#           between the two return states.
 # func 4FD1..4FD2  len 0002 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
