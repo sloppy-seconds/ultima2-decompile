@@ -62,6 +62,12 @@ echo "== gates over tracked inputs (CI-runnable) =="
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
 run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
+run "asm_body_guard" asm -- python3 engine/tests/asm_body_guard.py
+if [ "$FAST" = 1 ]; then
+    echo "  SKIP  guard_selftest             (--fast: builds a throwaway worktree)"
+else
+    run "guard_selftest" engine/tests/asm_body_guard_selftest.sh -- bash engine/tests/asm_body_guard_selftest.sh
+fi
 
 echo "== DOS string atlas =="
 run "strings_atlas selftest" original/ultimaii.exe asm -- python3 tools/strings_atlas.py --selftest

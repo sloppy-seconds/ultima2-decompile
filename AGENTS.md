@@ -215,6 +215,21 @@ Verification, in two independent layers:
   renames the `asm/` file and writes the header.** Not a follow-up, not a
   backlog item. If no file covers the address yet, record it in the owning
   function's header and say so.
+* **The one exception: a provably-wrong body may be corrected, if the file says so.**
+  Freezing a body that is known to be false protects a lie, not a proof. A file may change
+  its body only if it carries
+  `# body corrected: YYYY-MM-DD -- evidence: <what proved the old decode wrong>`
+  and the marker names its evidence. `asm_body_guard` permits marked changes and fails
+  unmarked ones; **`assemble_clean.sh` is still the authority**, because a marked correction
+  that changes any byte fails there. The two gates are different on purpose: the guard polices
+  authorship, the byte match polices truth. Merging and splitting still need no marker, since
+  they preserve the canonical stream. `tools/forced_keep_audit.py --selftest` enforces the two
+  hand-proved cases, and `engine/tests/asm_body_guard_selftest.sh` proves the guard can still
+  go red in all four shapes (unmarked change, marked change, marked change that alters bytes,
+  merge). Use the marker only for a decode the bytes themselves refute — `asm/353A` and
+  `asm/353D` are the model, where a forced-keep swallowed three bytes and the next fragment
+  invented `push %ds` and `dec %cx` from the leftovers.
+
 * **In `asm/`, only the filename and `#` comment lines may change. Labels are body.**
   A discovered name goes into the filename and the header; the `sub_xxxx:` label line
   stays exactly as it was. `engine/tests/run_cp0.sh` md5s every non-`#` line, both
