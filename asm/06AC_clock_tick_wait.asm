@@ -22,13 +22,30 @@
 #             06EC  ret
 #           On return DS:74 holds how many 100-iteration passes elapsed in the 20-tick window,
 #           and DS:550/DS:552 the tick the window started at.
-# PURPOSE (inferred, and it is the interesting part): the counter is consumed by the code
-#           immediately after the `ret` — asm/06ED sets `%bx = 0x26` and asm/06F0 does
-#           `mov 0x74,%ax ; sub 0x554,%ax ; jae ...` then `mulw 0x558(%bx) ; divw 0x554`.
-#           A pass count measured against a fixed wall-clock window, fed into a multiply and a
-#           divide, is a **machine-speed measurement**: the game is calibrating its own delays
-#           to how fast this CPU is. That is 1983 practice and it explains why the number is
-#           scaled rather than used. Not proven; nobody has dumped DS:74 live.
+# PURPOSE: the counter is consumed by the code immediately after the `ret` — asm/06ED sets
+#           `%bx = 0x26` and asm/06F0 does `mov 0x74,%ax ; sub 0x554,%ax ; jae ...` then
+#           `mulw 0x558(%bx) ; divw 0x554`. A pass count measured against a fixed wall-clock
+#           window, fed into a multiply and a divide, is a **machine-speed measurement**: the
+#           game is calibrating its own delays to how fast this CPU is. Still INFERRED as a
+#           purpose, but it now has a measured value and a magnitude check, below.
+# MEASURED LIVE 2026-10-28d, captures/spice86/g30-clockcal/: sector 03, maxed character, 45 s
+#           idle sampled at ~2 Hz (103 samples). **DS:74 = 0x3A17 (14,871) and DS:550 = 0x8D
+#           (141), DS:552 = 0, and all three were STATIC across every sample** — while the idle
+#           loop was demonstrably running (food fell 9,593,497 -> 4,350,617, and `incb DS:21`
+#           at runtime 08D6 executed). So the window opens at STARTUP and is not re-measured
+#           in-world: the value in DS:74 is a one-off left in scratch. That is consistent with
+#           tools/u2_edit.py, which independently records DS:74/75 as "live scratch that is not
+#           persisted" — it never reaches the save because it is written once, before the world
+#           loads.
+#           The magnitude supports the calibration reading rather than weakening it: 14,871
+#           passes of a 100-iteration delay inside a 20-tick window (~1.10 s) is ~1.35 M
+#           passes/s at the emulator's default `--cycles 3000`, which is the right order for
+#           `dec ax ; jne` at that budget. A scratch byte left over from boot would not be
+#           expected to land there by chance.
+#           What this does NOT settle: what the scaled result is USED for. asm/06ED is also
+#           called from runtime 4FB3, so a consumer exists in-world, but nothing re-measures
+#           there — the in-world code is reading a startup constant. Following that consumer is
+#           the next static step, not a capture.
 # WHY THIS MATTERS TO T2: `docs/spice86-live-findings.md` recorded "there is no INT 1Ah
 #           anywhere in the corpus" as the reason the auto-PASS timeout must be a poll count.
 #           That sentence is false and was corrected 2026-10-28d — see
@@ -40,7 +57,9 @@
 # provenance: static, decoded 2026-10-28d from original/ultimaii.exe file 0x08AC..0x08EC,
 #           byte-aligned instruction by instruction; execution counts from the 136 harvested
 #           ExecutedInstructions sets (all three int sites execute in 136/136)
-# confidence: high for the bytes, the span and the 20-tick window; low for PURPOSE
+# confidence: high for the bytes, the span and the 20-tick window; medium for PURPOSE (the
+#           value is now measured and its magnitude checks out, but nothing has observed the
+#           scaled result being used for anything)
 # label: kept as sub_06ac on purpose — labels are body and CP0 md5s them
 # func 06AC..06AF  len 0004 B  evidence: seed+call+reko
 # seams: clock_int1a
