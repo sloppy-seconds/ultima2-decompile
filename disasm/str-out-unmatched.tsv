@@ -1,0 +1,20 @@
+# str_out call sites the atlas does not report. Generated — do not hand-edit.
+#   python3 tools/str_out_audit.py --emit
+# Offsets are FILE offsets (runtime + 0x200). No game text: len is the byte count.
+file_off	runtime	len	asm_owner_claiming_this_range
+003ED	001ED	15	01EA_sub_01ea
+00453	00253	9	0246_sub_0246
+004AD	002AD	29	02A3_sub_02a3
+004F0	002F0	6	02E6_sub_02e6
+00B07	00907	4	08FF_sub_08ff
+03172	02F72	5	2F6F_cmd_B
+03566	03366	6	334D_cmd_D
+03768	03568	14	3566_sub_3566
+0377D	0357D	20	3577_sub_3577
+03798	03598	15	3596_show_year_1990
+03997	03797	12	3795_sub_3795
+039F4	037F4	5	37F2_sub_37f2
+03A08	03808	6	37F2_sub_37f2
+04253	04053	9	4050_cmd_T
+04850	04650	6	464E_sub_464e
+05269	05069	4	5066_print_sex_male
