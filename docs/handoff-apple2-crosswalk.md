@@ -48,8 +48,8 @@ re-deriving what already exists.
 | Apple disk parsing / extraction | done. `tools/ciderpress2/cp2` (vendored, gitignored) is the only correct reader. Extracted set lives in `decompiled/apple2/`, gitignored |
 | Apple load-address map | done. ProDOS BIN aux type **is** the load address; table in `docs/apple2-reference.md` § 3 |
 | Flat 6502 image for Ghidra | done. `tools/apple2_image.py -o /var/tmp/u2_6502.bin [--with create]`, refuses overlapping segments, prints a manifest of which ranges are backed by bytes |
-| Ghidra 6502 import | works. Recipe in § 8. `-processor "6502:LE:16:default"`, **not** `-language` |
-| Function seeding | `tools/ghidra/Seed6502.java` exists, takes `seeds=<path>` |
+| Ghidra 6502 import | works. Recipe in § 8. `-processor "6502:LE:16:default"`, **not** `-language`. **But the C output mislabels the vector table as functions — see T0 before trusting any address in `$4000..$403E`** |
+| Function seeding | `tools/ghidra/Seed6502.java` exists, takes `seeds=<path>`. The seeds file was generated but never committed; it now survives in `decompiled/apple2-6502/` and must be committed with the vector-table range excluded |
 | DOS string → owning function | **done and gated.** `tools/strings_atlas.py` — 337 strings, `--selftest` verifies every offset against the executable, `--grep` to query, prints both file and runtime bases plus the owner's `name-evidence` line |
 | Anchor pairs | **only ~10 clusters recorded as prose** in § 4. The "35 strings" figure is not recoverable from the repo. This is the gap |
 | The crosswalk itself | **does not exist.** Checked: no tool in `tools/` joins the two sides |
@@ -58,6 +58,78 @@ re-deriving what already exists.
 So the work is three pieces, not a research programme.
 
 ## The plan
+
+### T0 — persist the 6502 artifacts, and fix what the decompiler got wrong
+
+**Part of this is already done, on 2026-10-28, as insurance.** The four artifacts were sitting in
+`/var/tmp` and have been copied to `decompiled/apple2-6502/` (gitignored, correct: it is derived
+output from copyrighted bytes, same class as `decompiled/ghidra`). md5s so a future run can be
+diffed against them:
+
+| file | bytes | md5 |
+| --- | --- | --- |
+| `u2_6502.bin` | 28,672 | `508d525c414b7c42f3442405425baa1a` |
+| `u2_6502_seeds.txt` | 1,640 | `df0e4b6713fd12f21d61f6ce5350f2de` |
+| `u2_6502.c` | 912,488 | `4c2bb3b3c9dfba37dc20f4ab2d8ef0a7` |
+| `u2_6502.tsv` | 13,169 | `824acebe5deed547f670043793e2aefc` |
+
+**What still has to be done:** commit the *structure* and a generator, not the bulk. The repo
+already has the precedent in `.gitignore`: "Curated analysis in `disasm/*.md|tsv|txt` IS
+committed." So `disasm/apple2-seeds.txt` and `disasm/apple2-functions.tsv` belong in git — they
+are addresses and sizes, not content — plus one script that runs extraction → image → seeds →
+Ghidra end to end and prints the checksums above, so anyone can tell whether the C on disk matches
+the committed index.
+
+**And the reason T0 is first rather than housekeeping: the decompiler lied about the very first
+thing it produced, and only the bytes caught it.** `u2_6502.c` presents the step vector as
+`FUN_4000` / `FUN_4003`. `$4000` is not code. It is `STD.SUBS.OBJ`'s opening **JMP vector table**
+— 21 vectors, `$4000..$403E`, and `$4006` (the string printer everyone already knew was a vector)
+sits in the middle of it. The seed scan is byte-granular, so it seeded every third byte of the
+table, and Ghidra decompiled the vectors and reported their *targets*' bodies under the vectors'
+addresses. `Seed6502.java`'s own header warns about junk seeds; this is that, wearing a
+convincing costume. **Rule for everything in T3: a Ghidra 6502 function whose address is in
+`$4000..$403E` is a vector, not a routine, and any claim must be checked against raw bytes.**
+
+Fix in the generator: exclude the vector-table range from the seeds.
+
+#### Q0 is answered, and it came out of this
+
+The real routines are the vector targets. Hand-decoded from the image:
+
+```
+$4054  SEC                 $406F  SEC                 $44D5  CMP #$00
+$4055  LDA $00   ; player x     LDA $00   ; player x         BEQ +7
+$4057  SBC $4D00,X ; mon_x[slot]     SBC $4D00,X            BPL +3
+$405A  ASL A                     STA $17                    LDA #$FF
+$405B  ASL A                 $4077  SEC                     RTS
+$405C  JSR $4036 ; sign         LDA $01                     LDA #$01
+$405F  STA $17                 SBC $4D20,X                  RTS
+$4061  SEC                 $407F  STA $18
+$4062  LDA $01             $4081  RTS
+       ... y pair, identical ...
+```
+
+That is a three-for-three match against routines already named on the DOS side:
+
+| DOS | Apple | what it is |
+| --- | --- | --- |
+| `asm/4F11_monster_step_vector` | `$4054` (via vector `$4000`) | delta, `×4`, sign, store to `$17`/`$18` |
+| `asm/4F36_monster_pursuit_vector` | `$406F` (via vector `$4003`) | the raw unclamped delta |
+| `asm/50D8_sign_of_al` | `$44D5` (via vector `$4036`) | `-1 / 0 / +1`, byte for byte the same shape |
+
+Same 32-byte-strided table pair (`$4D00`/`$4D20` vs `DS:137`/`DS:157`), same zero-page destination
+pair, same `×4`, same shared sign routine. **The torus-shortest reading of the `×4` is original
+1983 design, not a DOS-port invention.**
+
+And it independently corroborates this morning's retraction. The 6502 writes `SEC` before `SBC`
+because on the 6502 that is *required* for a plain subtract (`SBC` = `A − M − 1 + C`). The DOS port
+translated it to `STC` before `SUB`, where it does nothing. Both sides compute the plain
+difference. There is no `-1`, confirmed from two implementations.
+
+**What this tells us about the cost of T3:** one sitting produced a three-routine match on the
+first attempt. That is the optimistic case — these routines are small, adjacent, and in the runtime
+library. Expect the questions that live in `ULTIMA.II.OBJ`'s 14 KB of game logic to be slower, and
+expect some to be unresolvable because the decompiler cannot be trusted there.
 
 ### T1 — make the 6502 listing reproducible (prerequisite, small)
 
@@ -113,13 +185,15 @@ Ordered by how much a good answer is worth. For each: what is open, what to look
 side, and **what a null result means** — because several of these will not move, and "the Apple side
 is silent" is a usable answer that stops the next agent trying.
 
-**Q0 — the step vector's ×4 (do this first; it is the cheapest real test of the whole method).**
-`asm/4F11_monster_step_vector` computes `sign(4 * (player - creature))` per axis, where the ×4 is
-two `add al,al` and is what makes the vector take the short way round the 64-cell torus. The 6502
-has no multiply, so the twin is `ASL A` / `ASL A` feeding a `BMI`/`BPL`. **Prediction:** find two
-adjacent `ASL A` in an anchored routine near the monster-move code. If present, the torus reading is
-confirmed by a second independent implementation. If absent, the ×4 is doing something else and the
-claim in `asm/4F11` needs revisiting — which is also worth knowing.
+**Q0 — the step vector's ×4. ANSWERED 2026-10-28, see T0.** `sign(4 * (player - creature))` per
+axis is present on the Apple side at `$4054`, with `ASL A` / `ASL A` feeding a shared sign routine
+at `$44D5`, and the raw-delta twin at `$406F`. The torus reading is corroborated by a second
+independent implementation, and the absence of the `-1` is corroborated too. What is left: write it
+into `asm/4F11`, `asm/4F36` and `asm/50D8` as `# name-evidence:` lines citing the Apple addresses —
+**corroborated, not observed, and it does not rename anything** (`AGENTS.md`: no Apple-derived name
+goes into an `asm/` filename).
+
+The remaining questions, unchanged:
 
 **Q1 — the `0x5C` species clause.** Settled this month that `0x5C` is the force field
 (`captures/spice86/g29-field`: exactly −1000 HP with no ring, nothing with one). The step gate
@@ -206,6 +280,12 @@ never addresses from this binary.
   anchor in § 4 lands in one of the five segments that *are* in the image — but the tool must read
   the extracted BINs directly for anything else, and must never treat a zero-filled range as code.
   Zero is a legal 6502 opcode; that is exactly why the manifest exists.
+* **`$4000..$403E` in `STD.SUBS.OBJ` is a 21-entry JMP vector table, not code.** The byte-granular
+  seed scan puts a seed on every third byte of it, so Ghidra reports functions there whose bodies
+  are actually their *targets*' code. That is how `u2_6502.c` presented the step vector as
+  `FUN_4000`. Verified by hand: `$4000` = `JMP $4054`, `$4003` = `JMP $406F`, `$4006` = `JMP $4080`
+  (the printer), `$4036` = `JMP $44D5` (the sign routine). **Check any Ghidra 6502 claim against
+  raw bytes, and exclude the vector range from seeds.**
 * **Do not recall an ISA semantic; look it up or measure the value.** See the `SUB`/`SBB`
   retraction at the top. This is the single most transferable lesson of the month.
 
