@@ -454,9 +454,13 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 
     /* The original rewrites the sector unconditionally; the engine's contract
      * is to store only dirty sectors (world.h), and nothing dirties tiles
-     * until combat and town visits exist. */
+     * until combat and town visits exist. The creature block is the other half of
+     * that write — asm/2305 names MONXFF as well as MAPXFF — so a kill has to
+     * reach the file here and not only on a sector transition. */
     if (ow->world.map_dirty)
         u2_world_store(ctx, &ow->world, 1);
+    if (ow->world.mon_dirty)
+        u2_world_store(ctx, &ow->world, 0);
 
     if (u2_save_store(ctx) != U2_SAVE_OK)
         return 1;
@@ -957,6 +961,12 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
          * captures/spice86/cp5-fight/screen3.png -> screen4.png (sector 31, a
          * town) shows the original leaving plain floor. */
         u2_monsters_restamp(ctx, &ow->world);
+        /* And the cleared record has to reach the sector buffer, or a save writes
+         * the monster back out alive. asm/2305 carries both FCB names — MAPXFF at
+         * file 0x2538 and MONXFF at 0x2548 — so the original rewrites the creature
+         * block as well as the map (docs/phase4-implementation.md, the asm/2305
+         * row). */
+        u2_monsters_store(ctx, &ow->world);
         seam_str_out(ctx, U2_S_KILLED);
         snprintf(num, sizeof num, "%u", (unsigned)a.gold);
         seam_str_out(ctx, num);
