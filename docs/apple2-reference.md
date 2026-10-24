@@ -192,10 +192,46 @@ Also on these disks and not yet examined: `MONSTERS.` (2048, note the trailing d
 `PLAYER` (256), `STARS.OBJ` (1899, loads `$1000`), `STARTUP` (1303), `END` (316), and
 `SHAPES`/`DNGDRAW.OBJ` duplicated from disk 1.
 
-## 8. Next
+## 8. Ghidra 6502 import
 
-1. Import `ULTIMA.II.OBJ` at `$5000` and `STD.SUBS.OBJ` at `$4000` into Ghidra with
-   `6502:LE:16:default`, seeded with the `JSR $4006` call sites as entry points.
+Working, and the decompiler reproduces what the hand disassembly says, which is the point of
+doing it this way:
+
+```bash
+source tools/env.sh
+python3 tools/apple2_image.py -o /var/tmp/u2_6502.bin
+WORK=$(mktemp -d /var/tmp/u2-ghidra-6502.XXXXXX); mkdir -p "$WORK/proj"
+"$GHIDRA_HOME/support/analyzeHeadless" "$WORK/proj" u2apple -deleteProject \
+    -import /var/tmp/u2_6502.bin \
+    -loader BinaryLoader -loader-baseAddr 0x4000 \
+    -processor "6502:LE:16:default" \
+    -scriptPath tools/ghidra \
+    -postScript Seed6502.java seeds=<seeds.txt> \
+    -postScript DecompileAll.java out=/var/tmp/u2_6502.c index=/var/tmp/u2_6502.tsv
+```
+
+Three things that are not obvious:
+
+* **The flag is `-processor`, not `-language`.** `analyzeHeadless` rejects `-language` with
+  `Bad argument`; the language spec goes in `-processor "6502:LE:16:default"`.
+* **A raw image yields zero functions.** Ghidra has no entry point to start from, so
+  auto-analysis finds nothing at all. `Seed6502.java` creates functions from a list of JSR/JMP
+  absolute targets. That scan is byte-granular, so a handful of seeds land inside an operand
+  and Ghidra reports `Unable to resolve constructor` for them. 328 seeds gave 328 functions
+  with a few junk ones, which is a good trade against analysing nothing.
+* **`tools/apple2_image.py` refuses overlapping segments.** `CREATE` loads at `$6000` inside
+  `ULTIMA.II.OBJ`, so it is an overlay and is opt-in via `--with create` rather than silently
+  stomping bytes. The manifest prints the zero-filled gaps, because zero is a legal 6502 opcode
+  and an unloaded range must not look like code.
+
+The decompiler's output for `$4080` matches the hand disassembly in behaviour, including
+`unaff_retaddr` becoming the string pointer and the `| 0x80` at emit. A wrong load base would
+not produce a coherent printer, so this is also the confirmation that the segment map is right.
+
+## 9. Next
+
+1. ~~Import `ULTIMA.II.OBJ` and `STD.SUBS.OBJ` into Ghidra~~ done, see § 8. Next there: prune
+   the junk seed functions and name routines from the anchor table.
 2. Resolve `FL`, `II`, `WII`, `UL`.
 3. ~~Catalog disks 2 and 3~~ done, see § 7. Next there: explain the `0x1A` +128 block, and
    the sector `10`/`15` content deltas if they ever matter.
