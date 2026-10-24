@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """fragment_splits.py — find routines the mechanical clean wave cut into pieces.
 
+REGENERATING THE COMMITTED TSV — use BOTH flags:
+
+    python3 tools/fragment_splits.py --tsv --all > disasm/fragment-splits.tsv
+
+`--tsv` prints to stdout and does not write the file, and without `--all` the probable
+grade is omitted, so `--tsv` alone silently drops ten rows and leaves a plausible
+shorter file behind. Check the grade counts after regenerating: strong and probable
+should both be non-zero, and a merge should remove rows only from the grade it came from.
+
 THE PATHOLOGY
 -------------
 The Phase 3 clean wave gave every CFG-discovered basic block its own `asm/` file and

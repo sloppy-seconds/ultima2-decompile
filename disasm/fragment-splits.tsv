@@ -1,8 +1,6 @@
 start	end	n_fragments	rets	entry_call	grade
 06AC	06EC	11	1	yes	strong
-06ED	0710	6	1	yes	strong
 113A	1141	2	1	yes	strong
-2199	21FB	18	1	yes	strong
 2290	22D4	4	1	yes	strong
 22D5	22FC	2	1	yes	strong
 22FD	2304	2	1	yes	strong
@@ -20,7 +18,6 @@ start	end	n_fragments	rets	entry_call	grade
 505F	506E	3	1	yes	strong
 50D8	50E0	3	1	yes	strong
 50EF	50F8	2	1	yes	strong
-50F9	51A4	25	1	yes	strong
 51EB	51FC	2	1	yes	strong
 51FD	5216	2	1	yes	strong
 5217	523D	3	1	yes	strong
