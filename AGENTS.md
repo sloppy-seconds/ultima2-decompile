@@ -12,10 +12,13 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-apple2-reference.md` first (the live entry point: branch `apple2-reference`, the
-> Apple II path is open and extracted, two behavioural contracts exist and one of them needed
-> correcting, and there is a five-item unattended queue that is entirely static — plus the two
-> Step 0 failures that explain why lookup comes before analysis), then
+> `docs/handoff-apple2-crosswalk.md` first (the current proposal: a static Apple II ↔ DOS anchor
+> crosswalk to retire open questions without gameplay, with its prerequisites already checked, the
+> two tools that already exist named so they are not rebuilt, and five questions each with a stated
+> null result), then
+> `docs/handoff-apple2-reference.md` (the queue it supersedes: all five items closed, contract 2's
+> two named holes gone, three captures run and one of them refuting a claim made the same day, and
+> the branch fast-forward merged into `main` — unpushed as of 2026-10-28), then
 > `docs/handoff-2026-10-28b.md` (the two owner-approved renames and
 > three owner-reported creature bugs are done, `mon_role` gates the town sweep only, and what is
 > left there is for a person), then

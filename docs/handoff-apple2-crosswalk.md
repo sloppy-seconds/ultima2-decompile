@@ -1,0 +1,248 @@
+# Handover — the Apple II ↔ DOS anchor crosswalk: a static way to retire open questions without gameplay
+
+Branch **`main`** (the `apple2-reference` work was fast-forward merged on 2026-10-28; 22 commits,
+**not yet pushed to `origin`** — ask before pushing, it triggers CI).
+
+This is a proposal with its prerequisites already checked, not an open-ended investigation. Read
+`AGENTS.md` first, then `docs/apple2-reference.md` § 4 (anchors), § 6 (limits) and § 8 (the Ghidra
+6502 recipe). Everything below assumes that.
+
+## Why this exists
+
+The DOS binary is a translation of the Apple II 6502. Where the two agree, **the 6502 around a
+matched string is the specification the 8086 was translated from** — that sentence is already in
+`docs/apple2-reference.md` § 4, and it has been used exactly once, to confirm the string printer.
+
+The value is not tooling. It is that a large class of open questions in this project are *static
+ambiguity* questions — which of two readings of a compare is right, whether a table is what we
+think, whether a branch is a guard or a fallback — and a second, independent implementation of the
+same logic is a tiebreaker for exactly that class. The Apple side also has a structural advantage:
+`ULTIMA.II.OBJ` is one contiguous 13,961-byte object with real 6502 control flow. The CP3
+fragment-split problem that caused several misreadings — one instruction per file, a flag set in
+one file and consumed in another — does not exist over there.
+
+## What this cannot do, and it matters more than what it can
+
+* **It cannot prove execution.** Nothing about "was this branch ever taken" or "what does this
+  value do in play" transfers across an ISA. Those stay gameplay questions.
+* **It is a corroborator, not a parent.** 1989 Origin re-release, not the 1982 build the DOS port
+  may have come from. `original/ultimaii.exe` stays ground truth. See § 6 of the Apple doc.
+* **It can mislead when the ISAs differ in the exact place you are looking.** Live proof, same day
+  as this doc was written: a claim that the DOS creature step vector was `player - creature - 1`,
+  because `stc` sets CF and `sub` was believed to subtract it. `SUB` ignores CF; only `SBB`
+  consumes it. **The Apple code would not have caught this** — on the 6502, `SEC` before `SBC` is
+  genuinely required, so the 6502 would have looked *consistent with the wrong reading*. It was
+  killed by reading two bytes out of live memory. Full retraction:
+  `docs/contract-creature-tick.md` § "What this contract deliberately does not claim".
+* **No Apple-derived name goes into an `asm/` filename.** It supports a `# name-evidence:` line.
+  That is the ceiling.
+* **Dungeons stay parked.** `DNGDRAW.OBJ` and `SHAPES` are out of scope, same as the DOS dungeon.
+
+## Already built — do not rebuild it
+
+This is the Step 0 section, pre-answered, because this project's dominant failure mode is
+re-deriving what already exists.
+
+| thing | state |
+| --- | --- |
+| Apple disk parsing / extraction | done. `tools/ciderpress2/cp2` (vendored, gitignored) is the only correct reader. Extracted set lives in `decompiled/apple2/`, gitignored |
+| Apple load-address map | done. ProDOS BIN aux type **is** the load address; table in `docs/apple2-reference.md` § 3 |
+| Flat 6502 image for Ghidra | done. `tools/apple2_image.py -o /var/tmp/u2_6502.bin [--with create]`, refuses overlapping segments, prints a manifest of which ranges are backed by bytes |
+| Ghidra 6502 import | works. Recipe in § 8. `-processor "6502:LE:16:default"`, **not** `-language` |
+| Function seeding | `tools/ghidra/Seed6502.java` exists, takes `seeds=<path>` |
+| DOS string → owning function | **done and gated.** `tools/strings_atlas.py` — 337 strings, `--selftest` verifies every offset against the executable, `--grep` to query, prints both file and runtime bases plus the owner's `name-evidence` line |
+| Anchor pairs | **only ~10 clusters recorded as prose** in § 4. The "35 strings" figure is not recoverable from the repo. This is the gap |
+| The crosswalk itself | **does not exist.** Checked: no tool in `tools/` joins the two sides |
+| 6502 seeds file | **not reproducible.** `Seed6502.java` needs `seeds=<path>` and nothing generates it; the § 8 run wrote to `/var/tmp` and it is gone. `disasm/seed-entries.txt` is the *DOS x86* list, not this |
+
+So the work is three pieces, not a research programme.
+
+## The plan
+
+### T1 — make the 6502 listing reproducible (prerequisite, small)
+
+`Seed6502.java` says the seeds come from "scanning for JSR/JMP absolute targets (`tools/apple2_image.py`
+plus a short scan)". That scan is not in the tree. Write it — `tools/apple2_seeds.py`, reading the
+flat image, emitting hex addresses one per line — and commit it. Then re-run the § 8 recipe and
+**keep the output** somewhere durable (`/var/tmp` is fine for the session; the *recipe* is what must
+be committed).
+
+Gate it: the scan should reproduce roughly the documented result (328 seeds → 328 functions, a few
+junk ones landing inside an operand). If it returns 40 or 4000, the scan is wrong, not the game.
+
+**Do not trust Ghidra's decompiler output as a source of claims.** Measured: the `JSR`-inline-string
+idiom breaks its stack assumptions and it emits 18 KB blobs. It confirmed the printer. Read bytes
+for anything you intend to assert.
+
+### T2 — the crosswalk tool (the actual deliverable)
+
+`tools/apple2_anchor_map.py`. Inputs: `original/ultimaii.exe`, the extracted Apple BINs, and the
+load-address map. Output: one row per matched string.
+
+Design constraints, in priority order:
+
+1. **Emit no game text into git.** `AGENTS.md`'s text line is explicit: copyright protects game
+   text exactly as much as a sprite, and the reconstruction in `asm/` already carries what it
+   needs. A hand-handed duplicate in `docs/` or a committed TSV adds drift *and* exposure. So the
+   committed artefact is **offsets, lengths, segment names, match status and a short hash of the
+   string** — never the string itself. `tools/content_inventory.py`'s docstring is the model: it
+   deliberately emits structure, never content. If a human needs to see the text, print it to
+   stdout with a `--show` flag and keep it out of files.
+2. **Match on the normalised string.** Apple text is stored high-bit-set per character
+   (verified at the byte level at `$561F`); DOS text is plain. Mask with `& 0x7F` on the Apple
+   side. Strip the `0x8D`/`0x0D` control wrappers the DOS side uses — `strings_atlas.py` already
+   handles that and its docstring explains why `cfg_printed.py` once silently dropped a string
+   over exactly this.
+3. **Re-use `strings_atlas.py` for the DOS side.** Import it or shell out to it. Do not write a
+   second DOS string scanner; that is the duplication this project punts on.
+4. **Report order preservation per cluster.** The claim in § 4 is that clusters keep their order
+   on both sides, and that is much stronger evidence than set membership. Compute it.
+5. **It must be able to fail.** Negative control is already known and documented:
+   **`--INVALID MOVE!` does not exist anywhere in the Apple build** (searched plain and
+   high-bit-set). So the tool's self-test asserts: that string is present on the DOS side and
+   **unmatched** on the Apple side. If it ever reports a match, the matcher is broken. That is a
+   real gate, not a decorative one.
+
+Expected honest outcome: the matched set is small. 35 out of 337 DOS strings is ~10%. That is fine
+— say it in the output. The tool's value is that it turns "I think this is the same routine" into a
+lookup with a citation.
+
+### T3 — run the open questions through it
+
+Ordered by how much a good answer is worth. For each: what is open, what to look for on the Apple
+side, and **what a null result means** — because several of these will not move, and "the Apple side
+is silent" is a usable answer that stops the next agent trying.
+
+**Q0 — the step vector's ×4 (do this first; it is the cheapest real test of the whole method).**
+`asm/4F11_monster_step_vector` computes `sign(4 * (player - creature))` per axis, where the ×4 is
+two `add al,al` and is what makes the vector take the short way round the 64-cell torus. The 6502
+has no multiply, so the twin is `ASL A` / `ASL A` feeding a `BMI`/`BPL`. **Prediction:** find two
+adjacent `ASL A` in an anchored routine near the monster-move code. If present, the torus reading is
+confirmed by a second independent implementation. If absent, the ×4 is doing something else and the
+claim in `asm/4F11` needs revisiting — which is also worth knowing.
+
+**Q1 — the `0x5C` species clause.** Settled this month that `0x5C` is the force field
+(`captures/spice86/g29-field`: exactly −1000 HP with no ring, nothing with one). The step gate
+accepts it for `mon_type < 0x78` and refuses it above, and the `>= 0x78` reading as "the four NPC
+classes" is **inferred from `type >> 2` being the art index**, not observed. Look for the same
+split on the Apple side. A match upgrades the reading from inferred to corroborated; silence means
+the clause stays inferred and stops the next agent trying to promote it.
+
+**Q2 — the step-gate tile ladder.** `asm/2199_creature_step_gate` accepts exactly five of the 64
+reachable tile bytes: `0x08`, `0x0C`, `0x70`, `0x5C`, and `0x00` for the two water kinds. The ladder
+is observed; the *semantics* of `0x70` as "town ground" is inferred from a spatial distribution. A
+second implementation of the same accept-set would be a genuinely independent witness. Note the
+DOS-side gate is a compare ladder over byte values; the Apple side may express the same rule as a
+table lookup, so match on the **accept set**, not the shape of the code.
+
+**Q3 — `DS:1B7`.** Now understood as the per-slot saved terrain byte that gets written back into
+the old cell when a creature moves (`asm/2233`/`asm/225A`, corroborated by `asm/0CEE` at spawn).
+Three DOS sites, one meaning, still graded *inferred*. A fourth independent witness on the Apple
+side would settle it.
+
+**Q4 — the `DS:15..18` ← `DS:2CB/2DE/2E0/2F3` ticket.** This is the one place the plan has been
+said to *require* a watchpoint, because those four bytes have no static writers anywhere. **It is
+probably now dead**: the whole reason the ticket existed was to explain how a tile became mode
+`0x2e`, and we now know `0x5C >> 1 == 0x2e` and that `0x5C` is the field. Check whether the Apple
+side has an equivalent indirection at all. If it does not, the ticket is a DOS-port artefact and
+should be closed as such rather than spent an afternoon on. Say which.
+
+**Q5 — the coin-rub freeze.** `DS:26A` is the creature-move freeze counter; the only non-zero writer
+is `asm/3C04_coin_rub` storing `0x14`. Measured live (A/B/A, `captures/spice86/g28-pursuit`) but
+`coin_rub`'s entry has never appeared in `ExecutedInstructions` of any of the 60 harvests, so nobody
+has seen a player trigger it. If the Apple build has the same `YOU RUB A COIN...` path with the same
+counter, that is a second witness that the behaviour is intended and not a decode error.
+
+### T4 — write it down where it belongs
+
+Per `AGENTS.md` § 3: a corrected address→behaviour fact renames the `asm/` file and writes the
+header **in the same commit**, and only the filename and `#` comment lines may change — labels are
+body and CP0 md5s them. A corroborated-but-not-proven claim gets a `# name-evidence:` line citing
+the Apple address and stays at `inferred`/`corroborated` grade. It does **not** get promoted to
+`observed`, and it does not rename a file.
+
+Update `docs/apple2-reference.md` § 4 with the real anchor count and a pointer to the generated
+artefact. Add a line to `docs/harness-portability.md` § 6 if the method generalises — method only,
+never addresses from this binary.
+
+## Hard rules for unattended work
+
+* **Never commit** `decompiled/`, `original/`, `references/`, `tools/ciderpress2/`. All gitignored
+  for a reason. The Apple extractions are copyrighted game content.
+* **Never write to `references/`.** Read-only. `cp2` is pointed at it for reads only.
+* **No game text in committed files.** See T2 constraint 1.
+* **`bash tools/assemble_clean.sh` and `make -C engine test` must be green** at any commit touching
+  `asm/`, engine source, tests or tooling. Docs-only commits may skip the suite.
+* **Scratch and logs to `/var/tmp`, never `/tmp`** (`/tmp` is tmpfs here and takes RAM from the
+  model).
+* **Never edit a file with a script; never heredoc a non-trivial script.** Use the edit tool; write
+  the file, syntax-check it, run the file.
+* **No live capture without the owner's approval.** Nothing in T1–T4 needs one. That is the point.
+
+## Hazards already paid for — do not pay twice
+
+* **The `.dsk` is `order=dos/sect`.** A linear byte read crosses the sector skew and splits the
+  39-byte directory records; hand-deriving it produced a grid that parsed cleanly and attributed
+  every file's size and load address to its neighbour. Use `cp2`. Never hand-parse the container.
+* **A raw 6502 image yields zero functions in Ghidra.** No entry point, so auto-analysis finds
+  nothing at all. That is why `Seed6502.java` exists, and why T1 is a prerequisite rather than an
+  afterthought.
+* **Ghidra's 6502 decompiler is weak on this code.** 18 KB blobs, broken stack assumptions.
+  Orientation only. Read bytes for claims.
+* **`analyzeHeadless` takes `-processor`, not `-language`.**
+* **`CREATE` loads at `$6000` inside `ULTIMA.II.OBJ`.** It is an overlay; `apple2_image.py` refuses
+  it unless you opt in. Do not silently stomp those bytes.
+* **Two address bases, always.** `asm/` filenames are runtime offsets; `L_xxxxxx` labels inside them
+  are file offsets; file = runtime + 0x200. On the Apple side, addresses are 6502 load addresses
+  with no relation to either. `strings_atlas.py` prints both bases on purpose; do not fix that.
+* **The "287 of 288 Apple-only strings" figure from the first anchor pass is an artefact** — the
+  regex caught hi-res bitmap noise, not text. Do not cite it. Same trap as the `0x1A` byte that
+  looked like a rare tile and was a container header.
+* **The flat 6502 image covers `$4000..$AFFF` and holds only five segments** — `STD.SUBS.OBJ`,
+  `ULTIMA.II.OBJ`, `DNGDRAW.OBJ`, `TABLES.903C.OBJ`, `BIOS.SUBS` (measured: 28672 bytes, and the
+  manifest names the zero-filled gaps). Everything else is excluded because it would overlap:
+  `SHAPES` at `$0800` and the `PIC.*` at `$2000` sit below the base, and `HTXT` at `$5000` plus
+  `FL`/`II`/`WII`/`UL` at `$4000` collide with resident code. That is fine for the crosswalk — every
+  anchor in § 4 lands in one of the five segments that *are* in the image — but the tool must read
+  the extracted BINs directly for anything else, and must never treat a zero-filled range as code.
+  Zero is a legal 6502 opcode; that is exactly why the manifest exists.
+* **Do not recall an ISA semantic; look it up or measure the value.** See the `SUB`/`SBB`
+  retraction at the top. This is the single most transferable lesson of the month.
+
+## Verification
+
+```bash
+# DOS side, already green — confirm before building on it
+python3 tools/strings_atlas.py --selftest
+
+# Apple side
+./tools/ciderpress2/cp2 catalog "references/apple/Ultima II (4am crack)/Ultima II (4am crack) disk 1 - program.dsk"
+python3 tools/apple2_image.py -o /var/tmp/u2_6502.bin
+
+# the crosswalk, once it exists — must fail on the negative control
+python3 tools/apple2_anchor_map.py --selftest        # asserts --INVALID MOVE! is UNMATCHED
+python3 tools/apple2_anchor_map.py --summary
+
+# the proof and the suite, at any commit that can break them
+bash tools/assemble_clean.sh
+make -C engine && make -C engine test
+python3 tools/cmd_handlers.py --check
+```
+
+## Needs a person
+
+1. **Push or keep local.** `main` is 22 commits ahead of `origin/main`. Pushing triggers CI.
+2. **Any live capture.** Q0–Q5 are all static by design. If one turns out to need the emulator, stop
+   and ask — do not spend an afternoon on a watchpoint that T3 Q4 may have just made unnecessary.
+3. **Whether the crosswalk earns a permanent home in CI.** It is a gate that can fail, which makes it
+   a candidate, but it depends on gitignored inputs (`references/apple/`, `original/`) and so cannot
+   run on a clean checkout. Decide: keep it a local tool, or vendor a manifest of offsets (no text)
+   so CI can at least check the counts.
+
+## Definition of done
+
+Not "the tool exists". Done is: **each of Q0–Q5 has a written verdict — corroborated, contradicted,
+or Apple-silent — in the same commit that records it**, and the anchor count in
+`docs/apple2-reference.md` § 4 is a measured number from the tool rather than a remembered 35.
+Expect some of them to come back silent. That is a result, and it is what stops the next agent
+spending a session on a question that has no second witness.
