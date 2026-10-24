@@ -590,7 +590,34 @@ showed `UNLOCK DIRECTION-Pass` followed by `EAST--INVALID MOVE!`, because the ar
 after the prompt had given up and was consumed as an ordinary move instead. The fix is
 timing, not aim — `--keys U,Right --delay 0.05`. Runs `unlock1`.
 
-Still open in this item: whether an opened cell survives leaving and re-entering the sector.
+**Persistence question — answered by the owner, not yet by a capture.** Recalled
+(owner, 2026-10-28b): "when a door is opened it stays open" — the opened cell survives
+leaving and re-entering the sector. That is a constraint, not a detail. The engine's
+`site_reload()` re-reads `mapxNN` on entry, so if the opening survives in the original,
+either the opened state is carried somewhere other than the re-read map buffer, or the
+buffer is written and something persists it. Per the rule that an item closes on a named
+capture and not on a belief, this stays open until measured — and an owner report is the
+pointer at where to measure, not the measurement.
+
+**Capture that closes it — agent-drivable; fold it into the next unattended play run**
+(the owner's suggestion, rather than spending a run of its own):
+
+1. Sector **31 (Port Boniface)** — confirmed town, `docs/place-names.md`; the owner reports
+   it has many doors, so finding a `0xA0` cell adjacent to a walkable spot is cheap.
+2. `--player` + `tools/u2_edit.py setpos` next to a door cell; read that cell in the sector
+   grid at `DS:0x1800`.
+3. Open it with one burst — `--keys U,<dir> --delay 0.05` — because the prompt polls with a
+   bounded counter and prints `PASS` when it gives up (see above).
+4. Leave the sector through the town edge, then re-enter.
+5. Read the same cell, and diff the whole `DS:0x1800` grid against pristine `mapx31`. If the
+   cell is still open and the rest of the grid matches the file, the opened state lives
+   outside the map buffer. If the grid differs from the file at that cell, the door was
+   written into the resident buffer — then the question becomes what writes it back after a
+   reload, and the answer is a writer worth naming in `asm/`.
+
+Name the capture directory when it runs, and record what the engine does on the same path:
+if the original persists and the engine does not, that is a behavioural bug with its own
+ticket.
 
 ### G29 — sector crossing on the west land bridge: scroll or teleport
 
