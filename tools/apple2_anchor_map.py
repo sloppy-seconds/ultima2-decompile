@@ -58,19 +58,29 @@ IMAGE = "/var/tmp/u2_6502.bin"
 MIN_LEN = 4
 CLUSTER_GAP = 128          # bytes apart on both sides to still count as one cluster
 
-# Positive controls: anchors recorded as prose in docs/apple2-reference.md § 4. Every one of
-# these must come back matched, or the matcher regressed. `ANOS: LEGENDS!` is deliberately NOT
-# here — strings_atlas cannot see it (DOS-side gap, see module docstring), and pretending
-# otherwise would make the control fail for the wrong reason.
+# Positive controls: anchors recorded as prose in docs/apple2-reference.md § 4, keyed by
+# (owning asm/ function, DOS file offset) rather than by text. Keying them by text would put a
+# hand-maintained duplicate of game text in a tool — the exact category AGENTS.md forbids, and
+# the old § 4 table shows why: it had already drifted (`MAGIC MISSILE` for a string that ends in
+# `!`). Resolve through the atlas instead, so a moved string fails the control loudly instead of
+# quietly disagreeing with itself. `ANOS: LEGENDS!` is deliberately absent — strings_atlas cannot
+# see it (DOS-side gap, see module docstring).
 KNOWN_ANCHORS = [
-    "MAGIC MISSILE!", "FIELD CAUSES 1000 DAMAGE!", "ARGH! A TRAP!",
-    "YOU MUST HAVE AN ANKH!", "SHIP INCAPABLE OF LAUNCH!",
-    "THE RING IS YOURS!", "ENILNO IS YOURS!",
-    "STEAL FOOD!", "STEAL ARMOUR!", "STEAL WEAPONS!",
+    ("0F12_combat_magic_missile", 0x001115),
+    ("24B5_force_field_event", 0x0026E4),
+    ("277B_sub_277b", 0x002ABE),
+    ("3048_vehicle_plane", 0x0032DA),
+    ("38B0_cmd_L", 0x003B06),
+    ("3C2E_cmd_O", 0x003EF7),
+    ("3C2E_cmd_O", 0x003F37),
+    ("3F5D_steal_attempt", 0x0041E0),
+    ("3F5D_steal_attempt", 0x0041FD),
+    ("3F5D_steal_attempt", 0x004228),
 ]
-# Negative control, § 6: this string is DOS-only. A matcher that reports it as matched is
-# broken (it is matching substrings, or noise, or the wrong bytes).
-DOS_ONLY = "--INVALID MOVE!"
+# Negative control, § 6: this string is DOS-only, and it is named here as a *substring to look
+# for*, not as content to store — the check is that whatever the atlas reports at that site comes
+# back unmatched.
+DOS_ONLY_OWNER = "0A02_invalid_move_msg"
 
 
 def hi_printable(b):
@@ -200,7 +210,8 @@ def summary(rows, meta):
           f"({meta['apple_distinct']} distinct) in "
           + ", ".join(f"{k}={v}" for k, v in sorted(meta["apple_by_seg"].items())))
     pct = 100.0 * len(matched) / max(1, meta["dos_total"])
-    print(f"matched: {len(matched)}/{meta['dos_total']} DOS strings ({pct:.1f}%) — "
+    print(f"matched: {len(matched)} rows / {len({r['id'] for r in matched})} distinct strings "
+          f"of {meta['dos_total']} DOS strings ({pct:.1f}%) — "
           f"the honest yield is small; the value is that each row is a lookup with a citation")
     print(f"clusters: {len(cl)} "
           f"({sum(1 for _, _, o in cl if o)} order-preserving, "
@@ -225,26 +236,30 @@ def show(rows):
 
 def selftest(exdir=EXDIR, image=IMAGE):
     rows, meta = build(exdir, image)
-    texts = {r["text"] for r in rows}
-    matched = {r["text"] for r in rows if r["apple"]}
+    matched = {(r["dos_owner"], r["dos_foff"]) for r in rows if r["apple"]}
     fails = []
-    # negative control: DOS-only string must be present on the DOS side and UNMATCHED.
-    dos_only = [t for t in texts if DOS_ONLY in t]
+    # Negative control: the reject-echo routine is DOS-only (§ 6). Whatever the atlas reports
+    # for it must come back UNMATCHED. Asserted via its owner and offset, not via its text, so
+    # the control carries no game content and cannot drift away from asm/.
+    dos_only = [r for r in rows if r["dos_owner"] == DOS_ONLY_OWNER]
     if not dos_only:
-        fails.append(f"{DOS_ONLY!r} not found on the DOS side at all — the DOS scanner changed")
-    if any(DOS_ONLY in t for t in matched):
-        fails.append(f"{DOS_ONLY!r} reported as MATCHED — the matcher is broken, "
-                     f"this string is DOS-only (docs/apple2-reference.md § 6)")
-    # positive controls: the prose anchors must come back matched.
-    for a in KNOWN_ANCHORS:
-        if a not in matched:
-            fails.append(f"known anchor {a!r} did not match — matcher regression")
-    # the Apple scanner must not be a printable-run regex wearing a hat: bitmap noise in the
+        fails.append(f"asm/{DOS_ONLY_OWNER} contributed no string to the atlas — the DOS "
+                     f"scanner regressed (this is the case that was silently dropped until "
+                     f"2026-10-28d: a db with no label after it)")
+    for r in dos_only:
+        if (r["dos_owner"], r["dos_foff"]) in matched:
+            fails.append(f"the DOS-only string at {r['dos_owner']}+{r['dos_foff']:06X} reported "
+                         f"as MATCHED — the matcher is broken (docs/apple2-reference.md § 6)")
+    # Positive controls: the prose anchors must come back matched.
+    for owner, foff in KNOWN_ANCHORS:
+        if (owner, foff) not in matched:
+            fails.append(f"known anchor {owner}+{foff:06X} did not match — matcher regression")
+    # The Apple scanner must not be a printable-run regex wearing a hat: bitmap noise in the
     # picture-adjacent segments must not be reported as text.
     if meta["apple_distinct"] > 600:
         fails.append(f"{meta['apple_distinct']} distinct Apple strings — the high-bit filter is "
                      f"not doing its job (the § 6 '287 of 288' artefact shape)")
-    # order preservation must be computed and must hold for the clusters § 4 claims.
+    # Order preservation must be computed and must hold for the clusters § 4 claims.
     cl = clusters(rows)
     if not cl:
         fails.append("no clusters at all")
@@ -256,9 +271,11 @@ def selftest(exdir=EXDIR, image=IMAGE):
         for f in fails:
             print("  -", f)
         return 1
-    print(f"selftest ok: {len(matched)} matched / {meta['dos_total']} DOS strings, "
+    print(f"selftest ok: {len(matched)} matched rows / "
+          f"{len({r['id'] for r in rows if r['apple']})} distinct strings of "
+          f"{meta['dos_total']} DOS strings, "
           f"{len(cl)} clusters all order-preserving, "
-          f"{DOS_ONLY!r} correctly unmatched, {len(KNOWN_ANCHORS)} prose anchors reproduced")
+          f"{DOS_ONLY_OWNER} correctly unmatched, {len(KNOWN_ANCHORS)} prose anchors reproduced")
     return 0
 
 

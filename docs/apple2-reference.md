@@ -126,12 +126,12 @@ before quoting any number here.
 
 ## 4. Cross-ISA anchors
 
-**Measured, not remembered: 24 distinct strings match verbatim, out of 433 DOS strings (5.5%),
-in 17 clusters, and every cluster preserves order on both sides.** The figure this section used
-to carry — "35 strings" — was a remembered count from the first anchor pass and it does not
-survive measurement; it is kept below only as the prose record of what was looked at then. The
-number of record comes from `tools/apple2_anchor_map.py`, and the artefact is
-`disasm/apple2-anchors.tsv`, both generated:
+**Measured, not remembered: 24 distinct strings match verbatim (25 DOS rows), out of 433 DOS
+strings — 5.5% of the corpus by distinct text — in 17 clusters, and every cluster preserves
+order on both sides.** The figure this section used to carry — "35 strings" — was a remembered
+count from the first anchor pass and it does not survive measurement. The number of record comes
+from `tools/apple2_anchor_map.py`, and the artefact is `disasm/apple2-anchors.tsv`, both
+generated:
 
 ```bash
 python3 tools/apple2_anchor_map.py --selftest    # controls; must pass
@@ -139,39 +139,34 @@ python3 tools/apple2_anchor_map.py --summary     # counts and clusters
 python3 tools/apple2_anchor_map.py -o disasm/apple2-anchors.tsv
 ```
 
+The old prose table of matched strings is **gone**, replaced by the generated TSV. Not for
+tidiness: it was a hand-maintained duplicate of game text in `docs/`, which is the category
+`AGENTS.md` forbids, and it had already drifted — it listed `MAGIC MISSILE` for a string that
+ends in `!`, and `ANOS: LEGENDS!` which the DOS side cannot even see. The TSV carries the same
+information in the only form that cannot rot: DOS file offset, DOS runtime offset, owning `asm/`
+function, Apple address, segment, length, and `sha256[:10]` of the normalised text. `--show`
+prints the text itself to stdout for a human and refuses to write it to a file.
+
 Two things the tool's design is doing on purpose, because both change the number. The DOS side
 is `tools/strings_atlas.py`, imported rather than reimplemented, so every match carries an
 owning `asm/` function — and is capped at what `asm/` renders as data, which is why
-`ANOS: LEGENDS!` is invisible here and its absence is a DOS-side gap, not an Apple-side miss.
-The Apple side requires every byte of a candidate to be high-bit-set and printable once masked,
-terminated by `$00`; a generic printable-run regex is what produced the "287 of 288" artefact in
-§ 6. And **no game text is committed**: the TSV carries offsets, lengths, segment, match status
-and `sha256[:10]` of the normalised string, and `--show` prints text to stdout only.
+the middle `ANOS:` entries are invisible here and their absence is a DOS-side gap, not an
+Apple-side miss. The Apple side requires every byte of a candidate to be high-bit-set and
+printable once masked, terminated by `$00`; a generic printable-run regex is what produced the
+"287 of 288" artefact in § 6.
 
 The known-limit of the verbatim rule, found the hard way: the Apple build's case and punctuation
-can differ from DOS — `'You rub a coin....'` at `$7DC6` against `YOU RUB A COIN...` — and the
-crosswalk misses those. A targeted search found that one; the tool did not.
+can differ from DOS — the coin-rub text at `$7DC6` is sentence-case with four dots against DOS
+upper-case with three — and the crosswalk misses those. A targeted search found that one; the
+tool did not.
 
-| DOS string | DOS file off | Apple address |
-| --- | --- | --- |
-| `ANOS: LEGENDS!` … `ANOS: 2112 A.D.` | 14162-14254 | `ULTIMA.II.OBJ` `$77A2`-`$77E8` |
-| `STEAL FOOD!` / `STEAL ARMOUR!` / `STEAL WEAPONS!` | 16864 / 16893 / 16936 | `$8136` / `$8153` / `$8179` |
-| `FIELD CAUSES 1000 DAMAGE!` | 9956 | `$6A6A` |
-| `ARGH! A TRAP!` | 10942 | `$6D7C` |
-| `MAGIC MISSILE` | 4373 | `$561F` |
-| `YOU MUST HAVE AN ANKH!` | 13018 | `$73D2` |
-| `SHIP INCAPABLE OF LAUNCH!` | 15110 | `$7AF6` |
-| `THE RING IS YOURS!` / `ENILNO IS YOURS!` | 16183 / 16119 | `$7ECA` / `$7E8E` |
-| ` ARMOUR` / ` WEAPON` | 7977 / 8280 | `BIOS.SUBS` `$9E7D` / `$9E50` |
-| dungeon shape blobs (`w[MFB@@@gSIDB@@@`) | 25634-25714 | `DNGDRAW.OBJ` `$8A85`-`$8AD5` |
-
-Order is preserved on both sides in every cluster. That is the anchor: a routine that prints
-`STEAL ARMOUR!` in the DOS tree and the same bytes at `$8153` in the Apple tree is the same
-routine, and the 6502 around it is the specification the 8086 was translated from.
+Order is preserved on both sides in every cluster. That is the anchor: a routine that prints the
+same bytes at `$8153` in the Apple tree as the one that prints them at DOS file offset `0x41FD`
+is the same routine, and the 6502 around it is the specification the 8086 was translated from.
 
 ### What the anchors have actually settled
 
-Five correspondences, each hand-checked against image bytes rather than against Ghidra's
+Six correspondences, each hand-checked against image bytes rather than against Ghidra's
 decompiler output, and each recorded where `AGENTS.md` says it belongs — in the owning `asm/`
 file's header as a `# apple2-twin:` line, at corroborated grade, renaming nothing:
 
