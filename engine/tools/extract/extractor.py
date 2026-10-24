@@ -145,6 +145,32 @@ MANIFEST = [
     # str_out call plus its inline string, so the db-index locator is exact and
     # needs no hand-checked file offset.
     ("U2_S_INVALID_MOVE",      "0A02_invalid_move_msg.asm", 0),
+    # The Z status screen's labels (docs/status-screen-z.md § 7). Each is the inline string
+    # of a str_out call inside the handler, so the offsets are the call site plus three.
+    # Four of these sit in files the bulk wave named "shop_header_*"; the Z screen is the
+    # only caller actually identified, so those file names are disputed and are left alone
+    # rather than renamed on one reading. The three run locators are the strings whose db
+    # lines DB_RE cannot see: "A LEVEL " carries a leading 0x8d newline glyph, and the
+    # SPELL- / bare-dash labels sit on multi-string db lines.
+    ("U2_S_Z_A_LEVEL",         "4580_level_gain_msg.asm", ("run", 0x4784, 8, "A LEVEL ")),
+    ("U2_S_Z_WEAPON",          "45C4_status_weapon.asm", 0),
+    ("U2_S_Z_TORCHES",         "45E9_status_torches.asm", 0),
+    ("U2_S_Z_ARMOUR",          "460A_status_armour.asm", 0),
+    ("U2_S_Z_KEYS",            "462F_status_keys.asm", 0),
+    ("U2_S_Z_SPELL",           "464D_sub_464d.asm",       ("exe_only", 0x4850, 6, "SPELL-")),
+    ("U2_S_Z_TOOLS",           "466F_status_tools.asm", 0),
+    ("U2_S_Z_WEAPONS_LIST",    "4748_shop_header_weapons.asm", 0),
+    ("U2_S_Z_ARMOUR_LIST",     "47A2_shop_header_armour.asm", 0),
+    ("U2_S_Z_SPELLS_LIST",     "47FA_shop_header_spells.asm", 0),
+    ("U2_S_Z_ITEMS_LIST",      "4853_shop_header_items.asm", 0),
+    # The list separators. The plural is a literal S and the dash is separate, because the
+    # item loop prints the S for everything except index 3 (BOOTS) and the dash always.
+    ("U2_S_Z_PLURAL_DASH",     "4771_sub_4771.asm", 0),
+    ("U2_S_Z_PLURAL_S",        "4881_sub_4881.asm", 0),
+    # The bare dash the item loop prints after the plural S is deliberately NOT extracted.
+    # It is punctuation, not content — the same class as the space and the digits, which the
+    # engine also emits as literals — and the asm tree holds it as `.byte` fragments, so an
+    # extraction would either die in CI or need an exe-only hole for a hyphen.
     # The creation tail (asm/5400 end). Both strings print before the tail calls
     # the program-startup routine, which is why finishing creation lands on the
     # splash rather than the menu. They are stored as byte lists in the listing
@@ -295,6 +321,23 @@ def collect(source, exe, exe_path, warn):
             cache[fname] = (strings, found)
         strings, found = cache[fname]
 
+        if isinstance(loc, tuple) and loc[0] == "exe_only":
+            # Some labels exist only as bytes the bulk wave could not turn back into text —
+            # "SPELL-" sits in asm/464E as `.byte 0x8f,0x09,0x53,0x50` and friends, because
+            # the disassembler read the string as instructions. There is no honest asm
+            # fallback for those, and inventing one by widening DB_RE is the hazard that
+            # comment documents. So: real value when the user's copy is present, omitted
+            # with a warning when it is not, and anything that prints it guards on the
+            # define existing. CI loses that one label and still proves the field's
+            # position and value; the dev box checks the text.
+            off = loc[1]
+            if exe is not None:
+                rows.append((sym, exe[off:off + loc[2]], f"exe@0x{off:04X}"))
+            else:
+                warn(f"extractor: {sym} is exe-only (asm/ has it as bytes, not text); "
+                     f"omitting — callers must #ifdef it")
+            continue
+
         if isinstance(loc, tuple) and loc[0] == "run":
             off = loc[1]
             if exe is not None:
@@ -367,6 +410,25 @@ POOL_ANCHOR_INDEX = 1
 # whole operand instead, so a build with no exe still gets the same table the exe does.
 POOL_DB_RE = re.compile(r'^\s*db\s+(.*?)\s*#\s*string\s*$')
 POOL_ITEM_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def parse_asm_db_items(path):
+    """Every quoted string on every `db ... # string` line of one asm file.
+
+    parse_asm's DB_RE deliberately wants a single string per line, which is right for
+    code and wrong for the data blobs — the bulk wave wrote the Z screen's separators as
+    `db "S",0x00,"-",0x00` on one line and DB_RE sees none of it. This reads the whole
+    operand. Returns [] when the file does not exist, so a caller can fall back.
+    """
+    items = []
+    if not os.path.exists(path):
+        return items
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            m = POOL_DB_RE.match(line.rstrip("\n"))
+            if m:
+                items += [decode_gas_string(q) for q in POOL_ITEM_RE.findall(m.group(1))]
+    return items
 NAME_TABLES = [
     ("U2_T_WEAPONS", 0x13, 10),
     ("U2_T_ARMOUR",  0x1d, 8),

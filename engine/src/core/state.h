@@ -222,15 +222,19 @@ typedef struct u2_state {
     /* 0x76 */ uint8_t weapons_owned[10]; /* one count per weapon, 10 entries.
                                         * Proven, docs/save-format.md. asm/363B and
                                         * asm/19D7 add; asm/3F5D steals. */
-    /* 0x80 */ uint8_t reserved_80[0x16];
-    /* 0x96 */ uint8_t reserved_96[0x40];
-    /*      */                     /* CANDIDATE, NOT PROVEN, deliberately unnamed:
-                                        * asm/363B, asm/19D7 and asm/3F5D each do a
-                                        * BCD add/sub on 0x96(%di) alongside
-                                        * 0x76(%di), which fits an owned-armour
-                                        * count table of 8 entries. No display site
-                                        * and no live read/write-back yet. Do not
-                                        * use until cited. */
+    /* 0x80 */ uint8_t owned_armour[8]; /* the owned-armour counts the Z screen's ARMOUR:
+                                        * list reads — `mov al,[di+0x80]` in the loop at
+                                        * asm/464E's tail, bounds 1..6, plural "S-". This
+                                        * retires the CANDIDATE note that used to sit on
+                                        * reserved_80: the display site is the citation
+                                        * that was missing. docs/status-screen-z.md § 7. */
+    /* 0x88 */ uint8_t reserved_88[0x0E];
+    /* 0x96 */ uint8_t reserved_96[0x20];   /* 0x96..0xB5 */
+    /* 0xB6 */ uint8_t spell_counts[10];   /* the SPELLS: list counts, `mov al,[di+0xB6]`,
+                                        * bounds 1..9. New finding from the same read; no
+                                        * other reader or writer is identified yet, so
+                                        * nothing but the Z screen should touch it. */
+    /* 0xC0 */ uint8_t reserved_C0[0x16];   /* 0xC0..0xD5 */
     /* 0xD6 */ uint8_t items_held[16]; /* the LIVE inventory array, one count per
                                         * item, 16 slots. The C2 resist gates read
                                         * slots inside it (0xD9 BOOTS, 0xDA CLOAK,
@@ -366,6 +370,8 @@ _Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
 _Static_assert(U2_OFF(boots_count)    == 0x06D, "boots_count moved");
 _Static_assert(U2_OFF(weapons_owned)  == 0x076, "weapons_owned moved");
 _Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
+_Static_assert(U2_OFF(owned_armour)   == 0x080, "owned_armour moved");
+_Static_assert(U2_OFF(spell_counts)   == 0x0B6, "spell_counts moved");
 _Static_assert(U2_OFF(paral_legs)     == 0x26B, "paral_legs moved");
 _Static_assert(U2_OFF(paral_arms)     == 0x26C, "paral_arms moved");
 _Static_assert(U2_OFF(paral_sleep)    == 0x26D, "paral_sleep moved");

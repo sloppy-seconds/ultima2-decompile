@@ -42,4 +42,23 @@ void u2_status_draw_character(u2_ctx *ctx);
 /* Draw one value at its proven position (used by the CP3 test). */
 void u2_status_draw_hp(u2_ctx *ctx);
 
+/*
+ * Draw the whole-page status screen the 'Z' command shows.
+ *
+ * spec: asm/4568_cmd_Z and the fragments it falls through to, fully decoded in
+ *       docs/status-screen-z.md § 7. Every column and row below is read off a
+ *       str_out_at call (column into DS:2E, row into DS:2F), not measured off a
+ *       screenshot — the earlier transcription in § 2 was wrong in three places.
+ *
+ * Degrades on purpose. The indexed name pool is generated from the user's own copy of the
+ * game and CI has no copy, so when the tables are absent the names print blank and every
+ * position, label and number still draws. That is the split this project runs on: game
+ * truth is checked on a dev box, structure is checked in CI.
+ */
+void u2_status_draw_full(u2_ctx *ctx);
+
+/* Non-zero when the name pool was generated into gen_content.h. The CP4 test asserts
+ * which mode it is in, so a silent loss of the pool cannot pass as a green run. */
+int u2_status_has_pool(void);
+
 #endif /* U2_STATUS_H */

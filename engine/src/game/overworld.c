@@ -1041,6 +1041,28 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_UNLOCK_DIRECTION);
             pending_cmd = 'U';
             continue;
+        case 'Z':
+            /* asm/4568 cmd_Z: draw the whole-page status screen and wait for a key.
+             *
+             * No turn passes. The measured before/after pair in docs/status-screen-z.md
+             * § 4 shows food, HP, position and the spawn selector all unchanged across Z,
+             * so this branch deliberately does not touch food_spend() or creature_turn().
+             * Whether the post-command sweep still runs after Z is explicitly unmeasured
+             * (it needs live monsters on the field) and is left as the open question there
+             * rather than guessed at by wiring a turn here.
+             *
+             * The page is a full overwrite, not an overlay, so the world redraws itself on
+             * the next loop iteration like any other command. */
+            u2_status_draw_full(ctx);
+            {
+                u2_key dismiss;
+                if (seam_key_wait(ctx, &dismiss) == 0 && dismiss.ch == 0x1B) {
+                    ctx->frame = NULL;
+                    return 0;
+                }
+            }
+            u2_overworld_draw(ctx, ow);
+            continue;
         case 'E': {
             /* asm/3389 cmd_E. Inside a site the answer is " WHAT?"; the doors
              * only work from the world map, which is [DS:4A] == 0. */
