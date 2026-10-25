@@ -56,11 +56,12 @@ static void cmd_done(u2_ctx *ctx)
 
 /* ---- handlers ------------------------------------------------------------- */
 
-/* UNPROVEN: cmd_H (HYPERWARP) has never been observed executing in any of the 60 harvests.
-   Behaviour is static inference from asm/3782_cmd_H.asm, whose whole body is
-   `call str_out` on the literal "HYPER WHAT?" followed by `jmp L_000c33`. The header rates
-   that `high` confidence, and it is still not a capture. This handler is not code-complete
-   until a capture exercises it. See AGENTS.md section 3 and docs/needs-gameplay.md. */
+/* CAPTURE-CONFIRMED 2026-10-25 (was UNPROVEN): cmd_H was never observed running until
+   captures/spice86/cmd-letters-20261025, where the CMD log reads `HYPER WHAT?` and
+   ExecutedInstructions contains 3782. The marker is removed because the marker gate's R2
+   treats a stale UNPROVEN as a lie in the other direction -- it would tell the next agent that
+   a captured handler still needs capturing. Body is unchanged: asm/3782 is `call str_out` on
+   the literal then `jmp L_000c33`. */
 static u2_cmd_result cmd_H(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)ow; (void)letter;
@@ -69,12 +70,12 @@ static u2_cmd_result cmd_H(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
-/* UNPROVEN: cmd_J (JUMP) has never been observed executing in any of the 60 harvests.
-   Behaviour is static inference from asm/37DC_cmd_J.asm: `call str_out` on "JUMP...WHEE..."
-   then `jmp L_000c33`. Note the message promises an action the body does not perform -- that
-   is what the bytes say, and it is exactly the kind of thing a capture is for: either the
-   jump happens somewhere this routine tail-calls, or the message is a stub the original
-   shipped. Neither is decidable from these four lines. Not code-complete until captured. */
+/* CAPTURE-CONFIRMED 2026-10-25 (was UNPROVEN): cmd_J ran in
+   captures/spice86/cmd-letters-20261025 and printed `JUMP...WHEE...`. The observation the
+   capture settled is the one this comment used to flag as suspicious: the message promises a
+   jump the body never performs, and the body really is only print-and-return -- there is no
+   tail-call hiding the action. So the original ships a message that overstates what the
+   handler does. That is now observed rather than inferred. */
 static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)ow; (void)letter;
@@ -91,7 +92,9 @@ static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  * separately by u2_cmd_implemented() so the marker gate can count what is really there.
  *
  * The letters that are still NULL each lack something specific, and the something is named
- * here rather than left as a gap:
+ * here rather than left as a gap. Note the correction of 2026-10-25: C, M, O, S and T are no
+ * longer evidence-blocked -- G31 captured them and they now show execution evidence -- so what
+ * stops each one below is a missing engine subsystem, not a missing capture.
  *
  *   C  cast_spell_flow needs a spell list and a mana/spell-ready state; asm/310B tail-jumps
  *      to 0x3353 for the direction and the flow is asm/3139, neither wired yet.

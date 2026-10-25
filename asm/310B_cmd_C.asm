@@ -3,8 +3,14 @@
 #           sub_3339 between, runs a timed wait (AH=28h, CX=0x4000 via
 #           sub_54ca), prints "PICXXX  ", returns to dispatcher.
 # func 310B..3138  len 046 B  evidence: seed+reko (jump table cs:0730 entry C)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
+# provenance: live:cmd-letters2-20261025; static
+#           entry executed in 2 of 141 harvests; confirmed by the capture of 2026-10-25.
+#           OPEN QUESTION the capture raised rather than settled: the direction key sent after
+#           `CAST-` produced `EAST--INVALID MOVE!`, which is the step-rejection path, so the
+#           arrow may have been taken as movement instead of as the cast aim. Either the aim
+#           gate at asm/3353 was not entered from this seed state, or the invalid-move came
+#           from something else. Not established; needs a re-run with the aim read live.
+#           Was recorded as never executed against a 60-harvest corpus that has since grown.
 # confidence: medium (flow proven; PICXXX/delay purpose inferred)
 # notes: slice mis-decoded the mov/call chain (cmp $0xb890...); bytes identical
 cmd_C:

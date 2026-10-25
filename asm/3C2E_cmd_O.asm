@@ -3,8 +3,11 @@
 #           recipients: "ENILNO IS YOURS!" / "EARN THE RING!" / "THE RING IS
 #           YOURS!" / "HERE TAKE THIS!" / "ALAKAZAM!" quest messages.
 # func 3C2E..3DBB  len 018E B  evidence: seed+reko (jump table cs:0730 entry O)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
+# provenance: live:cmd-letters2-20261025; static
+#           entry executed in 2 of 141 harvests; confirmed by the capture of 2026-10-25. The
+#           capture proves the entry ran and nothing more -- the OFFER TO WHOM? / HOW MUCH
+#           flow needs a town with NPCs and is not covered by these harvests. Was recorded as
+#           never executed against a 60-harvest corpus that has since grown.
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
