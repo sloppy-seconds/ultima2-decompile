@@ -190,6 +190,22 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28f** — **Never let a gate read a hand-kept copy of a fact it could derive.** The
+  harness had a crosswalk tool that reported whether each command handler had ever executed by
+  parsing a provenance comment in that handler's own file. The comment was written when the capture
+  corpus was a certain size, the corpus grew by more than half, and nobody regenerated the comments.
+  Eight of twenty-six grades were therefore wrong, including one handler whose evidence was cited in
+  an older prose format the parser could not see -- so it reported "never executed" for a routine
+  that a quarter of the corpus contained. Every downstream gate did its job correctly on stale input,
+  which is the worst possible failure: no error, no red, and a scope ruling was made on the bad
+  number. The general shape to avoid is any checker whose input is a human-maintained summary of
+  data the harness already holds; the fix is to point the checker at the primary evidence and keep
+  the comment as prose context only. Two corollaries the same session produced: a literal count
+  baked into a tool's output text ("of the 60 harvests") reads exactly like a measurement and will
+  silently age, and a search that misses because of a morphological variant (singular versus plural)
+  must be reported as "not found by this query" rather than "absent from the binary" -- the first
+  of those cost a false conclusion about an item requirement in the same hour.
+
 * **2026-10-28e** — **Accept a decode proposal by re-assembly, never by a disassembler's
   opinion.** A span the clean wave had rendered as raw bytes was turned back into mnemonics by
   asking a disassembler what the bytes meant and then asking the assembler to reproduce them at

@@ -12,16 +12,19 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-2026-10-28e.md` first (**current entry point** — **§ 1 is eight open owner
-> decisions, D1–D8, ranked by what each unblocks; read that before taking any work**; CI green on
-> all three workflows and pushed through `fa8bf8c`; the forced-keep queue went 36 outstanding →
-> **0**; the rendering-gap list is empty; three documented dispositions were retracted — 2395/35DD
-> are not NOP pads, and 5287/0720 are data tables not routines — and most `gas re-encodes`
-> markers on a truncated instruction were measured false; the body guard could not see a rename
-> and now can, with controls for both directions; both mutation harnesses were gates that exited
-> 0 while printing FAIL and are now CI steps with controls proven red; § 5 is the work that does
-> **not** need a ruling, § 6 is the copy-paste recipes, § 7 is the hazards that cost this session
-> time), then
+> `docs/handoff-2026-10-28f.md` first (**current entry point** — **§ 1 is the open owner
+> decisions D3/D8/D9/D10; § 2 carries a correction that changes a ruling already made: the
+> command-loop evidence split is 22 proven / 4 unproven (D N V W), not 14/12, so eight handlers
+> previously left unimplemented for lack of evidence now have it**; 1219 `asm/` files, whole-binary
+> md5 green, CI green on all three workflows, pushed through `97a75ee`; the command dispatcher
+> exists at `engine/src/game/commands.c` in the `asm/0A1F` shape with `cmd_H`/`cmd_J` landed; the
+> marker gate `tools/cmd_marker_gate.py` has 15 controls and is wired into CI; `asm/4C50` is now
+> known to render a string table as invented instructions and is NOT trustworthy as code; § 3 is
+> the ranked queue, § 5 is the copy-paste capture recipes, § 6 is the hazards that cost this
+> session time), then
+> `docs/handoff-2026-10-28e.md` (the queue it supersedes: the forced-keep corrections went 36 → 0,
+> the rendering-gap list emptied, three documented dispositions were retracted, and both mutation
+> harnesses were gates that exited 0 while printing FAIL), then
 > `docs/handoff-2026-10-28d.md` (the queue it supersedes is closed except the two verdicts;
 > what survives there is the speed-system identification, the era-table G14 closure, and the
 > body-correction marker path's own rationale), then
