@@ -190,6 +190,21 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28e** — **Accept a decode proposal by re-assembly, never by a disassembler's
+  opinion.** A span the clean wave had rendered as raw bytes was turned back into mnemonics by
+  asking a disassembler what the bytes meant and then asking the assembler to reproduce them at
+  the same address, with branch-target labels defined at their targets: only a byte-for-byte
+  match is emitted, and everything else stays a raw-byte line naming what the assembler was
+  asked for. That single rule is what makes the tool safe to run at all — a wrong proposal is
+  indistinguishable from a dialect difference otherwise, and the tree already contains hundreds
+  of genuine dialect cases where the same instruction has two legal encodings. Two details cost
+  real time and both are now controls: an assembler directive that cannot seek backwards will
+  silently place the instruction at its branch target and make every forward branch look like a
+  dialect problem, and a disassembler handed a very short buffer prints a placeholder instead of
+  decoding, which under-claims silently. And the tool prints a candidate and writes nothing, because
+  for spans that are unreachable and decode absurdly, a generated mnemonic is a confident wrong
+  answer — the review step is the difference between a re-cut and a regression.
+
 * **2026-10-28e** — **A content-conservation gate that compares the working tree to a commit
   cannot see a rename, and a rename is a first-class operation in this pipeline.** The guard
   required an unchanged canonical stream across every non-comment line, and permitted a changed
