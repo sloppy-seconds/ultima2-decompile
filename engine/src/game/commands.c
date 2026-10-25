@@ -35,9 +35,13 @@
 /*
  * A handler. Returns what the loop should do next; see u2_cmd_result.
  *
- * `letter` is passed so a shared helper can name which command it was reached from, which
- * matters because several handlers differ only in the word they print before falling into
- * the same aim gate (cmd_U, cmd_S, cmd_C, cmd_O, cmd_T all do this in the original).
+ * `letter` is passed so a shared helper can name which command it was reached from. That
+ * matters more than it sounds: the aim prompt is not one routine the handlers call, it is a
+ * family that shares asm/2362, and the callers of that routine are exactly cmd_U (through
+ * asm/4307), cmd_S (through asm/3F37), cmd_O and two unnamed sites (asm/2BBE, asm/35EB).
+ * cmd_C is NOT one of them -- it takes no direction, which is corrected in its own header --
+ * and cmd_T aims by a different mechanism altogether (a cursor initialiser plus a slot scan,
+ * asm/23E6), so "the direction commands" is not a set you can treat uniformly.
  */
 typedef u2_cmd_result (*cmd_fn)(u2_ctx *ctx, u2_overworld *ow, uint8_t letter);
 
@@ -271,11 +275,15 @@ static u2_cmd_result cmd_M(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      yet tested: several NPCs accept an offer, Lord British is the easiest target, and his
  *      castle is on the same small island as the Port Boniface entrance.
  *   R  ready weapon.
- *   S  asm/3F25 prints STEAL DIRECT- and falls into the aim gate; the effect is
- *      asm/3F5D_steal_attempt, modelled in combat.c for CP5 ticket C6 but not wired to a
- *      world-map direction. Needs a thief playtest to say what the target set really is.
- *   T  asm/4050 TRANSACT aims a ray and needs the street-merchant tables (asm/412C,
- *      asm/41D9), which is CP6.
+ *   S  asm/3F25 prints STEAL DIRECT- and falls into the aim gate: asm/3F37 calls asm/2362 and
+ *      then computes the target as ([DS:00]+[DS:19], [DS:01]+[DS:1A]) into DS:23/DS:24 -- read
+ *      directly, so the aiming is settled. The effect is asm/3F5D_steal_attempt, modelled in
+ *      combat.c for CP5 ticket C6 but not wired to a world-map direction. What a thief playtest
+ *      still has to say is the TARGET SET, not the aim.
+ *   T  asm/4050 TRANSACT does NOT use the asm/2362 aim family -- it seeds a cursor with
+ *      asm/23E6 and scans slots, which is a different shape and is why it cannot share the
+ *      unlock/steal plumbing. It needs the street-merchant tables (asm/412C, asm/41D9),
+ *      which is CP6.
  *   V  "VIEW WHAT?" and the helm view need an inventory view; the Z screen has the lists but
  *      not the per-item selection cmd_V walks.
  *   W  the armour menu needs armour ownership and the strength gate; asm/43F3's menu is read
