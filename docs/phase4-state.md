@@ -170,13 +170,13 @@ tool that measures it rather than a number copied from a diary:
 
 1. The outstanding forced-keep body corrections — queue and status from
    `python3 tools/forced_keep_audit.py`, mechanism in § "the body-correction path" of the
-   current handoff, verification recipe in `AGENTS.md`.
-2. Making `forced_keep_audit`'s `begins-mid-insn` headline defensible instead of known
-   inflated — it must consume `db` lines from `asm/` rather than trusting a linear objdump
-   pass over inline string data.
-3. Wiring the mutation harnesses (`engine/tests/mutate_speed.sh`, `tools/mutate_stepgate.sh`)
+   current handoff, verification recipe in `AGENTS.md`. The queue now splits itself by what
+   kind of fix each item needs: a `gas re-encode` item is a body swap in the previous
+   fragment, a `stop-trunc` item means the map boundary itself cut an instruction and wants a
+   re-decode or a merge.
+2. Wiring the mutation harnesses (`engine/tests/mutate_speed.sh`, `tools/mutate_stepgate.sh`)
    into CI. A control nobody runs has already failed.
-4. The rendering-gap headers listed in `disasm/str-out-rendering-gap.tsv`, now unblocked by
+3. The rendering-gap headers listed in `disasm/str-out-rendering-gap.tsv`, now unblocked by
    the body-correction marker path.
 
 ## Gate log

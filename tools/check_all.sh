@@ -120,6 +120,10 @@ echo "== DOS string atlas (needs original/, gitignored by policy) =="
 opt_run "strings_atlas selftest" original/ultimaii.exe asm -- python3 tools/strings_atlas.py --selftest
 opt_run "str_out_audit selftest" original/ultimaii.exe asm -- python3 tools/str_out_audit.py --selftest
 opt_run "str_out_audit check" original/ultimaii.exe disasm/str-out-rendering-gap.tsv -- python3 tools/str_out_audit.py --check
+# Six controls, three known-true and three known-false, all hand-verified against the bytes.
+# Until now nothing ran them, which is how `begins-mid-insn` shipped a headline number the
+# tool's own docstring called inflated.
+opt_run "forced_keep_audit selftest" original/ultimaii.exe asm -- python3 tools/forced_keep_audit.py --selftest
 
 echo "== Apple II 6502 side (needs gitignored inputs) =="
 opt_run "apple2_seeds selftest" references/apple decompiled/apple2 -- python3 tools/apple2_seeds.py --selftest

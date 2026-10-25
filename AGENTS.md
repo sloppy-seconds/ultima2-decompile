@@ -244,8 +244,9 @@ Verification, in two independent layers:
   unmarked ones; **`assemble_clean.sh` is still the authority**, because a marked correction
   that changes any byte fails there. The two gates are different on purpose: the guard polices
   authorship, the byte match polices truth. Merging and splitting still need no marker, since
-  they preserve the canonical stream. `tools/forced_keep_audit.py --selftest` enforces the two
-  hand-proved cases, and `engine/tests/asm_body_guard_selftest.sh` proves the guard can still
+  they preserve the canonical stream. `tools/forced_keep_audit.py --selftest` enforces six
+  hand-verified cases — three known-true boundaries and three known-false ones that must stay
+  quiet — and `engine/tests/asm_body_guard_selftest.sh` proves the guard can still
   go red in all four shapes (unmarked change, marked change, marked change that alters bytes,
   merge). Use the marker only for a decode the bytes themselves refute — `asm/353A` and
   `asm/353D` are the model, where a forced-keep swallowed three bytes and the next fragment
