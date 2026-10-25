@@ -60,9 +60,17 @@ MARK_RE = re.compile(r"UNPROVEN:\s*cmd_([A-Za-z])")
 # a group of handlers. The letter in the marker is what binds it to the handler -- `UNPROVEN:
 # cmd_C` can only ever satisfy cmd_C -- so position adds no safety, only failure modes.
 
-# Words that mean "finished". Deliberately narrow: this is about a completion claim, and a
-# broad grep for "done" would fire on half the prose in a state document.
-DONE_WORDS = ("code-complete", "code complete", "CODE-COMPLETE", "CODE COMPLETE")
+# Words that mean "finished" when they appear in a checkpoint's STATUS cell.
+DONE_WORDS = ("code-complete", "code complete", "done", "complete", "shipped")
+# R4 reads status cells, not prose. The first version grepped the whole document for
+# "code-complete" and immediately fired on the sentence that STATES the rule:
+# "no checkpoint may be called code-complete while any marker stands". A gate that reports a
+# violation because its own rule is quoted nearby is worse than no gate -- it trains everyone
+# to ignore it. So the claim surface is the checkpoint table, which is where a status is
+# actually asserted. Columns are `| CP | name | status | details |`, so the status is group 3;
+# reading group 2 instead asserts completion about every checkpoint whose *name* contains
+# "done", which is a different bug with the same shape.
+ROW_RE = re.compile(r"^\|\s*(CP\d[.\d]*)\s*\|([^|]*)\|([^|]*)\|")
 
 LETTERS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
 
@@ -129,6 +137,20 @@ def scan_engine(engine_dir):
     return found, bad, markers_anywhere
 
 
+def status_claims(doc_text):
+    """Return [(cp, status_cell)] for checkpoint rows whose status asserts completion."""
+    out = []
+    for line in doc_text.splitlines():
+        m = ROW_RE.match(line)
+        if not m:
+            continue
+        cp, status = m.group(1), m.group(3).strip()
+        low = status.lower()
+        if any(w in low for w in DONE_WORDS):
+            out.append((cp, status))
+    return out
+
+
 def check(engine_dir, state_doc, handlers_json=None):
     try:
         prov = load_provenance(handlers_json)
@@ -170,16 +192,15 @@ def check(engine_dir, state_doc, handlers_json=None):
     elif implemented:
         return fail(f"state document not found: {state_doc}")
 
-    claims = [w for w in DONE_WORDS if w.lower() in doc_text.lower()]
+    claims = status_claims(doc_text) if doc_text else []
     if claims and (markers_anywhere or unproven_impl):
-        which = unproven_impl or ["(marker present)"]
-        problems.append(f"R4 {os.path.basename(state_doc)} claims "
-                        f"{', '.join(repr(c) for c in claims)} while unproven handlers stand: "
-                        f"{', '.join(which)}")
-    if not implemented and re.search(r"command loop[^.\n]{0,80}\b(done|complete|shipped)\b",
-                                     doc_text, re.I):
-        problems.append("R5 the engine has no command handlers, but the state document says "
-                        "the command loop is done")
+        which = ", ".join(unproven_impl) if unproven_impl else "(marker present)"
+        listed = "; ".join(f"{cp} = {st!r}" for cp, st in claims)
+        problems.append(f"R4 {os.path.basename(state_doc)} asserts completion while unproven "
+                        f"handlers stand: {listed} -- outstanding: {which}")
+    if not implemented and any(cp == "CP6" for cp, _ in claims):
+        problems.append("R5 the engine has no command handlers, but the state document's CP6 "
+                        "status cell asserts completion")
 
     print(f"crosswalk: {sum(1 for v in prov.values() if v > 0)} proven / "
           f"{sum(1 for v in prov.values() if v == 0)} unproven of 26")
@@ -224,8 +245,10 @@ def selftest():
     to certify a tree it cannot see -- the failure mode that made `run_cp0.sh` report PASS
     while inspecting zero files."""
     results = []
-    honest_doc = "# state\n\nCP6 command loop: not started.\n"
-    done_doc = "# state\n\nCP6 command loop: done, the project is code-complete.\n"
+    honest_doc = ("# state\n\nno checkpoint may be called code-complete while any marker "
+                  "stands\n\n| CP6 | towns + command loop | in progress | x |\n")
+    done_doc = ("# state\n\nno checkpoint may be called code-complete while any marker "
+                "stands\n\n| CP6 | towns + command loop | done, code-complete | x |\n")
     unprov_src = ("static void cmd_C(u2_ctx *ctx)\n{\n    /* UNPROVEN: cmd_C (CAST) never "
                   "seen running in a capture. */\n}\n")
     unprov_nomark = "static void cmd_C(u2_ctx *ctx)\n{\n    cast_spell(ctx);\n}\n"
@@ -257,6 +280,14 @@ def selftest():
          _handlers("A"), ("/* UNPROVEN: cmd_C (CAST) never seen running in a capture. */\n"
                           "static void cmd_C(u2_ctx *ctx)\n{\n    cast(ctx);\n}\n"),
          honest_doc),
+        # The prose of the state document QUOTES this very rule ("no checkpoint may be called
+        # code-complete while any marker stands"). The first version grepped prose and fired on
+        # that sentence, which is the fastest way to make a gate ignored. honest_doc contains the
+        # quote and an honest status cell, so every prose-reading variant goes red here.
+        ("C10 doc quotes the rule in prose, honest status cell -> GREEN", 0,
+         _handlers("A"), unprov_src, honest_doc),
+        ("C11 zero handlers but CP6 cell claims done -> RED", 1,
+         _handlers("A"), "/* no handlers yet */\n", done_doc),
     ]
 
     for name, want, handlers, source, doc in cases:
