@@ -5,8 +5,6 @@
 # Fixing one means editing body lines, which engine/tests/asm_body_guard.py
 # forbids — see disasm/defects.md for why that is a decision and not a cleanup.
 file_off	runtime	len	asm_owner_claiming_this_range	atlas_source
-004AD	002AD	29	02A3_sub_02a3	str-out-contract
-004F0	002F0	6	02E6_sub_02e6	str-out-contract
 03768	03568	14	3566_sub_3566	str-out-contract
 0377D	0357D	20	3577_sub_3577	str-out-contract
 03798	03598	15	3596_show_year_1990	str-out-contract

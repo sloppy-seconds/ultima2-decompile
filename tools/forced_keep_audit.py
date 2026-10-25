@@ -572,6 +572,8 @@ def tail_attribution(tail_addr: int, tail_bytes: bytes) -> tuple[str, str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tsv", action="store_true")
+    ap.add_argument("--queue", action="store_true",
+                    help="print the outstanding corrections, one line per fix")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
@@ -605,6 +607,22 @@ def main() -> int:
         f["tail"] = data_full[addr + BIAS + kept: addr + BIAS + real]
         f["status"], f["where"] = tail_attribution(addr + kept, f["tail"])
     outstanding = [f for f in partial if f.get("status") == "outstanding"]
+
+    if a.queue:
+        # The queue, not the census. `partial` is a list of causes and causes are permanent by
+        # design, so printing them as if they were work is how a queue of 36 started looking
+        # like a queue of 63 that nobody could finish. One line per fix, grouped by the shape
+        # of fix it needs, because the two kinds are done by different operations.
+        def shape(f):
+            return ("stop-trunc" if "marker `stop-trunc" in f["detail"]
+                    else "body-swap" if "gas said" in f["detail"] else "other")
+        print("file\taddr\tkept\treal\ttail\tshape\tfixes")
+        for f in sorted(outstanding, key=lambda f: (shape(f), f["file"])):
+            m = re.search(r"(\d+) B kept, real insn (\d+) B", f["detail"])
+            kept, real = int(m.group(1)), int(m.group(2))
+            print(f"{f['file']}\t{f['addr']}\t{kept}\t{real}\t"
+                  f"{f['tail'].hex(' ')}\t{shape(f)}\t{f['where']}")
+        return 0
     done = [f for f in partial if f.get("status") == "corrected"]
     inside = [f for f in all_f if f["kind"] == "begins-mid-insn"]
     cascade = [f for f in all_f if f["kind"] == "boundary-inside-insn"]

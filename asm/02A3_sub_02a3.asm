@@ -1,54 +1,24 @@
 # sub_02a3 — mechanical clean (bulk wave); behavior not yet reviewed
 # func 02A3..02CA  len 0028 B  evidence: reko
-# RENDERING GAP: prints '(C)-1983,1989 BY LORD BRITISH' at file 0x004AD, but these bytes are
-#           rendered as instructions, so the atlas knows the message only from the str_out
-#           calling convention. Listed in disasm/str-out-rendering-gap.tsv; the fix is a body
-#           edit, which engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
+# strings: "(C)-1983,1989 BY LORD BRITISH"
+# calls: L_0051df (str_out)
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: bytes 02A3..02A4 are `2f 00`, the tail of
+#           `mov %al,0x2f` whose opcode 0xa2 is the forced-keep at asm/02A0. The mnemonics this
+#           file opened with (das, add %dh,-0x5dfa(%bx,%si), cs add %ch,%al) were those two
+#           bytes plus the real code after them decoded from the wrong offset, and the twenty
+#           lines after that were the inline string `(C)-1983,1989 BY LORD BRITISH` decoded as
+#           code — the rendering gap this header used to declare. Re-cut from the str_out
+#           calling convention at 02AA, which prints the bytes immediately below it. Found by
+#           tools/forced_keep_audit.py and tools/str_out_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_02a3:
 L_0004a3:
-        das
-L_0004a4:
-        add    %dh,-0x5dfa(%bx,%si)
-L_0004a8:
-        cs add %ch,%al
-L_0004ab:
-        xor    0x28(%di),%cl
-L_0004ae:
-        inc    %bx
-L_0004af:
-        sub    %bp,(%di)
-L_0004b1:
-        xor    %di,(%bx,%di)
-L_0004b3:
-        cmp    %dh,(%bp,%di)
-L_0004b5:
-        sub    $0x31,%al
-L_0004b7:
-        cmp    %di,(%bx,%si)
-L_0004b9:
-        cmp    %sp,(%bx,%si)
-L_0004bb:
-        inc    %dx
-L_0004bc:
-        pop    %cx
-L_0004bd:
-        and    %cl,0x4f(%si)
-L_0004c0:
-        push   %dx
-L_0004c1:
-        inc    %sp
-L_0004c2:
-        and    %al,0x52(%bp,%si)
-L_0004c5:
-        dec    %cx
-L_0004c6:
-        push   %sp
-L_0004c7:
-        dec    %cx
-L_0004c8:
-        push   %bx
-L_0004c9:
-        dec    %ax
-        db 0x00        # tail-pad
+        .byte 0x2f, 0x00   # tail of `mov %al,0x2f` (moffs `a2 2f 00`) started at asm/02A0
+L_0004a5:
+        mov    $0x6,%al
+L_0004a7:
+        .byte 0xa2, 0x2e, 0x00   # forced-kept: gas re-encodes 'mov %al,0x2e' differently
+L_0004aa:
+        call L_0051df          # str_out — prints the inline string below
+        db "(C)-1983,1989 BY LORD BRITISH",0x00        # string
