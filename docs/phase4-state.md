@@ -382,6 +382,7 @@ harnesses into CI, and repointing this section.
 | `][` glyph mapping ("II") | deferred to CP9 (SDL2 font decision) | `engine/README.md` § Known limits |
 | PIC picture files during the intro | deferred to CP9 (no bitmap pipeline before then) | `engine/src/game/title.c` header |
 | Live (non-replay) play API / MCP wrapper | optional, build only if a harness needs it; the CLI contract is the substrate | `docs/phase4-plan.md` §7 |
+| **D9** — the command crosswalk's `exec` column was a hand-kept copy of a derivable fact and had drifted wrong eight times | **DECIDED by owner 2026-10-28 (option a) and built.** `tools/cmd_handlers.py` now derives `exec` from `captures/spice86/*/spice86dumpExecutionFlow.json`. Numbers are generated (`--write-provenance` rewrites them; it had fallen behind on all 26 handlers, several counts simply wrong, e.g. A 15→28 and U 3→8). **Verdicts are not auto-rewritten** — a line claiming executed where the captures say never is reported and refused, because the sentence around a number is prose a person wrote. `--verify-provenance` is the gate, wired into `check_all.sh` as declared-optional because `captures/` is gitignored and CI cannot re-derive; it exits 2 rather than passing quiet when the captures are absent. The committed `# provenance:` line stays, so CI still consumes it — what changed is that a human no longer types the digits | this section; controls run: a false verdict went red on verify and was refused by write; a missing captures dir exited 2 |
 
 ## Backlog
 
