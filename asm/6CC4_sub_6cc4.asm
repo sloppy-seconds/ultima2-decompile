@@ -2,10 +2,16 @@
 # func 6CC4..6D3D  len 007A B  evidence: call+reko
 # calls: L_004daa
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: the first three bytes are the tail of
+#           `or %ah,0x47b(%bx,%si)` (`08 a0 7b 04`) whose opcode is the forced-keep at
+#           asm/6B3D; `mov 0x47b,%al` was those three bytes read as an instruction, and gas
+#           encodes the `or` exactly, so the marker on 6B3D blames gas for a boundary.
+#           Everything from 6CC7 was already aligned and is unchanged. Found by
+#           tools/forced_keep_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_6cc4:
 L_006ec4:
-        mov    0x47b,%al
+        .byte 0xa0, 0x7b, 0x04   # tail of `or %ah,0x47b(%bx,%si)` started at asm/6B3D
 L_006ec7:
         mov    %al,0x479
 L_006eca:
