@@ -84,6 +84,12 @@ fi
 
 echo "== gates over tracked inputs (CI-runnable) =="
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
+# The owner's command-loop ruling (AGENTS.md § 3) needs teeth: the twelve handlers no capture
+# has seen run must carry an UNPROVEN marker, and nothing may be called code-complete while one
+# stands. Selftest first -- 9 controls, both polarities, including the one that proves the gate
+# refuses rather than passing on a tree it cannot see.
+run "cmd_marker_gate selftest" tools/cmd_marker_gate.py -- python3 tools/cmd_marker_gate.py --selftest
+run "cmd_marker_gate" engine/src docs/phase4-state.md -- python3 tools/cmd_marker_gate.py
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
 run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
 if [ "$CI_MODE" = 1 ] && [ -z "${ASM_GUARD_BASE:-}" ]; then
