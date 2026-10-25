@@ -1,29 +1,23 @@
 # sub_37f2 — mechanical clean (bulk wave); behavior not yet reviewed
 # func 37F2..380A  len 0019 B  evidence: reko
-# calls: L_003a0b, L_0051df (str_out)
-# RENDERING GAP: prints TWO messages whose bytes this file renders as instructions — 'KLIMB'
-#           at file 0x039F4 and '-WHAT?' at file 0x03A08 — so the atlas knows them only from
-#           the str_out calling convention. The reject echo is the more interesting of the two:
-#           the command word and its '-WHAT?' live in the same span. Listed in
-#           disasm/str-out-rendering-gap.tsv; the fix is a body edit, which
-#           engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
+# strings: "KLIMB", "-WH"
+# calls: L_0051df (str_out)
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: cmd_K is two inline-string sites and a two-way test,
+#           and the map cut both calls after their opcodes (asm/37F1, and the `e8` at 3805 kept
+#           here). The five mnemonics after the first call were `KLIMB` read as code, and the
+#           four-byte forced-keep at 37F9 was its NUL plus the real `movb 0x4a,%al` — gas does
+#           encode that one as `a0 4a 00`, so it is now a mnemonic rather than a keep. `-WHAT?`
+#           straddles the next boundary: this fragment owns `-WH`, asm/380B owns `AT?`. Found by
+#           tools/forced_keep_audit.py and tools/str_out_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_37f2:
 L_0039f2:
-        jmp L_003a0b
+        .byte 0xeb, 0x17   # tail of `call L_0051df` (stop-trunc) started at asm/37F1
 L_0039f4:
-        dec    %bx
-L_0039f5:
-        dec    %sp
-L_0039f6:
-        dec    %cx
-L_0039f7:
-        dec    %bp
-L_0039f8:
-        inc    %dx
-L_0039f9:
-        .byte 0x00,0xa0,0x4a,0x00  # forced-kept: gas re-encodes 'add    %ah,0x4a(%bx,%si)' differently
+        db "KLIMB",0x00        # string
+L_0039fa:
+        movb   0x4a,%al
 L_0039fd:
         cmp    $0x5,%al
 L_0039ff:
@@ -33,6 +27,6 @@ L_003a01:
 L_003a03:
         je L_003a12
 L_003a05:
-        call L_0051df
+        call L_0051df          # str_out — prints the inline string below
 L_003a08:
-        sub    $0x4857,%ax
+        db "-WH"        # first half; `AT?` and the NUL are at asm/380B

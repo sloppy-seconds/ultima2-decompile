@@ -1,19 +1,17 @@
 # sub_464e — mechanical clean (bulk wave); behavior not yet reviewed
 # func 464E..4656  len 0009 B  evidence: reko
-# RENDERING GAP: prints 'SPELL-' at file 0x04850, but these bytes are rendered as instructions,
-#           so the atlas knows the message only from the str_out calling convention. Listed in
-#           disasm/str-out-rendering-gap.tsv; the fix is a body edit, which
-#           engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
+# strings: "SPELL-"
+# calls: L_0051df (str_out)
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: the ordinary inline-string shape again, with the call
+#           cut after its opcode at asm/464D. The whole file was `SPELL-` and the two operand
+#           bytes of that call; the `(bad)` forced-keep was objdump having no mnemonic for the
+#           first byte of the string, not an undecodable instruction. Re-cut from the call target
+#           (file 0051DF, str_out) and the NUL terminator. Found by tools/forced_keep_audit.py and
+#           tools/str_out_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_464e:
 L_00484e:
-        .byte 0x8f,0x09,0x53,0x50  # forced-kept: gas re-encodes '(bad)' differently
-L_004852:
-        .byte 0x45  # forced-kept: gas re-encodes 'inc    %bp' differently
-L_004853:
-        .byte 0x4c  # forced-kept: gas re-encodes 'dec    %sp' differently
-L_004854:
-        .byte 0x4c  # forced-kept: gas re-encodes 'dec    %sp' differently
-L_004855:
-        .byte 0x2d,0x00  # forced-kept: gas re-encodes 'sub    $0xa000,%ax' differently
+        .byte 0x8f, 0x09   # tail of `call L_0051df` (stop-trunc) started at asm/464D
+L_004850:
+        db "SPELL-",0x00        # string
