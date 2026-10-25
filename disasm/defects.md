@@ -195,3 +195,36 @@ Disposition: left as `sub_5d58`, with this note as the record. To settle it, eit
 computes an address in 5D58..5DA8 at runtime, or capture a session and check
 `ExecutedInstructions` for any offset in the span — the second is a scripted run, not an
 owner task, and belongs on `docs/needs-gameplay.md` if someone picks it up.
+
+## 2026-10-28e — the largest remaining defect: `asm/72A0` is a 4.3 KB map row that is 56% padding
+
+`disasm/function-map.tsv` has one row, `72A0..8386`, evidence `call+reko`, and `asm/72A0`
+faithfully renders all 4327 bytes of it. It is not a routine, and the tree already knows:
+**1241 of its 1265 body lines are `db` lines every one of them marked
+`split: branch target inside data`**, with a contiguous run of 1137. The clean wave gave up on
+it.
+
+Measured over the span's bytes:
+
+- **2463 of 4327 bytes are 0x00 (56%)**. No routine is.
+- The printable runs are the game's **ending text**: `MINAX IS DEAD!!`,
+  `ALL HER WORKS SHALL DIE!`, `YOU FEEL A STRANGE FORCE!`, `YOU HAVE SAVED THE UNIVERSE,`,
+  `AND COMPLETED ULTIMA ][! SEEK`, `NOW TO CONQUER WICKED EXODUS,`,
+  `FOUND IN ULTIMA ]I[-D ]II[-P!`, and a `MAPX30` — the sector-name self-patch this tree
+  already documented at `asm/2290`.
+- It is **not** pure data either. Two of the speed-delay call sites found on 2026-10-28e are
+  inside it (`mov $0xe,%bx ; call L_000911` at 750B, `mov $0x6,%bx ; call L_000911` at 7603),
+  so real code lives in the same span as the ending strings and the zero fill.
+
+So the row is a **tiling artefact swallowing three different kinds of thing at once**, which is
+the same failure as `asm/3596`'s range swallowing an era entry, at forty times the size and with
+the game's ending inside it. `tools/str_out_audit.py` reports no gap here because these strings
+are not printed through the `str_out` near-call contract, so the gate that caught the era table
+is blind to this one.
+
+**Not fixed, deliberately.** Splitting it means adding routine starts to
+`disasm/function-map.tsv`, and a map change is an owner ruling, not an agent edit — the map and
+the `asm/` file set cannot diverge, so every new start is a new file and a new boundary. What
+would make it safe to propose: run the existing split detector over the span
+(`tools/fragment_splits.py --tsv --all`) and bring the candidate starts plus the byte histogram
+above. That is the work order; it is not a re-cut.
