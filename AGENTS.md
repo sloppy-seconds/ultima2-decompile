@@ -12,13 +12,17 @@ exact byte-for-byte fidelity.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
 > `docs/phase4-implementation.md`. To start a fresh agent, read
-> `docs/handoff-2026-10-28d.md` first (**current entry point** — CI green on all three
-> workflows and pushed through `8c53bf5`; the body-correction marker path exists and nine
-> corrections have landed, 36 outstanding; the speed system is identified, modelled and
-> tested but deliberately unwired; G14 is closed; two gates were found that could not fail
-> in CI and are now fixed and controlled; § 1 is the one decision that unlocks the most
-> game work, § 6 is the copy-paste recipes, § 7 is the twelve hazards that cost this session
-> time), then
+> `docs/handoff-2026-10-28e.md` first (**current entry point** — CI green on all three
+> workflows and pushed through `c4f3c21`; the forced-keep queue went 36 outstanding → 2 and the
+> two survivors need a human verdict, not mechanics; the rendering-gap list is empty; two
+> documented dispositions were retracted — 2395/35DD are not NOP pads — and most
+> `gas re-encodes` markers on a truncated instruction were measured false; both mutation
+> harnesses were gates that exited 0 while printing FAIL and are now CI steps with controls
+> proven red; § 1 is still the one decision that unlocks the most game work, § 6 is the
+> copy-paste recipes, § 7 is the eleven hazards that cost this session time), then
+> `docs/handoff-2026-10-28d.md` (the queue it supersedes is closed except the two verdicts;
+> what survives there is the speed-system identification, the era-table G14 closure, and the
+> body-correction marker path's own rationale), then
 > `docs/handoff-apple2-crosswalk.md` (executed 2026-10-28d, status block at its head: the
 > static Apple II ↔ DOS anchor crosswalk is built and gated, all six questions Q0–Q5 carry a
 > written verdict — five corroborated, one Apple-silent — the anchor count in

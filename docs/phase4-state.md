@@ -149,7 +149,7 @@ Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
 2026-10-28e. It deliberately carries no counts: every number it could name is printed by a
 tool, and a hand-kept number here has gone stale before.
 
-**Fresh agent: read `AGENTS.md`, then `docs/handoff-2026-10-28d.md`.** That handoff is the
+**Fresh agent: read `AGENTS.md`, then `docs/handoff-2026-10-28e.md`.** That handoff is the
 entry point; the kickoff docs below are historical work orders, not the queue.
 
 **CP5 — combat.** Implemented or resolved ticket by ticket (see § CP5 above and
@@ -168,16 +168,18 @@ before starting: a stub that looks implemented is worse than a gap that says wha
 **Owner-independent work that does not need the above.** In rough value order, each with the
 tool that measures it rather than a number copied from a diary:
 
-1. The outstanding forced-keep body corrections — queue and status from
-   `python3 tools/forced_keep_audit.py`, mechanism in § "the body-correction path" of the
-   current handoff, verification recipe in `AGENTS.md`. The queue now splits itself by what
-   kind of fix each item needs: a `gas re-encode` item is a body swap in the previous
-   fragment, a `stop-trunc` item means the map boundary itself cut an instruction and wants a
-   re-decode or a merge.
-2. Wiring the mutation harnesses (`engine/tests/mutate_speed.sh`, `tools/mutate_stepgate.sh`)
-   into CI. A control nobody runs has already failed.
-3. The rendering-gap headers listed in `disasm/str-out-rendering-gap.tsv`, now unblocked by
-   the body-correction marker path.
+1. Two forced-keep items that need a **verdict**, not a re-cut — a possible data table at the
+   tail of `asm/0720`, and a `lock` prefix at `asm/5287` that cannot coexist with the
+   register-save prologue documented at `asm/52CA`. Both are byte-consistent either way, so the
+   byte match cannot adjudicate and an agent should not guess. Queue: `--queue`.
+2. What each speed delay slot gates — half the slots still have no caller found
+   (`asm/0711_speed_delay_lookup`).
+3. The remaining fragment splits, which are parked deliberately
+   (`disasm/fragment-splits.tsv`, `disasm/phase2-summary.md`).
+
+**Closed 2026-10-28e, so nobody re-does it:** the forced-keep correction queue (36 → 2, and the
+2 are the verdicts above), the rendering-gap list (now empty — every printable `str_out` site is
+rendered as data), wiring the mutation harnesses into CI, and repointing this section.
 
 ## Gate log
 
