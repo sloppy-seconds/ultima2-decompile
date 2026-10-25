@@ -867,11 +867,12 @@ in twenty places and the CP2 differential stops meaning anything. One seam, one 
 **Deferred by the owner on 2026-10-26: do not start E2–E5 now.** They are recorded so the ideas are
 not lost, not queued. E1 is the only one on the critical path, because it is owed to original mode.
 
-**Also open from the Z-page work, small:** the original's Z page wraps its item lists about three
-columns earlier than the engine does (`GREEN GE` / `MS-01` in the original, `GREEN GEMS` / `|-01`
-in the engine). The band collision is fixed; the wrap column is still slightly off, which means
-`asm/4568`'s right margin is not exactly the `0x26` the engine uses. Cosmetic, and now the only
-remaining difference on that page.
+**Claimed and retracted the same day:** an earlier note here said the original wraps its item lists
+about three columns earlier than the engine, and inferred from that that `asm/4568`'s right margin
+is not the `0x26` the engine uses. It is. `asm/456B` does `movb $0x26,0x31`, which is exactly what
+the engine sets. The "three columns" came from counting characters off a 360x400 screenshot, which
+is the eyeball error `AGENTS.md` § 5 exists to prevent. The band collision was real and is fixed;
+the wrap difference is measurement noise and is not a defect.
 
 ---
 

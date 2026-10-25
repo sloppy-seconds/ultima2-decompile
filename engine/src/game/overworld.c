@@ -417,6 +417,14 @@ void u2_death(u2_ctx *ctx)
  *
  * Returns 1 when the subtraction underflowed (the character just died). The
  * caller's job is to hand that to u2_death; this function only subtracts.
+ *
+ * SILENCE IS FAITHFUL HERE, and it is now evidenced rather than assumed. The original prints
+ * nothing when a step costs food: one `Down` took the food triple 996452 -> 996433 and the
+ * command log showed only `CMD: SOUTH`, with no mention of the cost -- see
+ * captures/spice86/food-drain-message/readings.md. So this function emits no message on purpose,
+ * which is what AGENTS.md § 3 requires of a silent effect: cite the bytes or the capture, or do
+ * not be silent. Scope of that claim: one step on foot, and it says nothing about food reaching
+ * zero, which is the death path below and does announce.
  */
 static int food_spend(u2_ctx *ctx, unsigned bcd_sub)
 {
