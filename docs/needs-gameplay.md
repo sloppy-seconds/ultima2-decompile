@@ -518,7 +518,48 @@ something else entirely — which is the answer that actually unblocks the work.
 **Success criterion:** a named capture directory holding the sample table, and a verdict
 on whether `mode_a` is derived from the tile byte.
 
-### G31 — the twelve command letters no capture has ever executed `[ ]` *(agent-drivable, one session)*
+### G31 — the twelve command letters no capture has ever executed `[~]` *(8 of 12 done; the premise was wrong)*
+
+**Ran 2026-10-25. Two named capture directories, and a correction that matters more than the
+captures.**
+
+`captures/spice86/cmd-letters-20261025/` — H, J, Y executed (proved in `ExecutedInstructions`,
+not inferred: offsets `3782`, `37DC`, `4542` present). Screenshots show the CMD log reading
+`HYPER WHAT?`, `JUMP...WHEE...`, `YELL WHAT?`.
+
+`captures/spice86/cmd-letters2-20261025/` — C, M, O, S, T executed (`310B`, `3B92`, `3C2E`,
+`3F25`, `4050`). `M` printed `MAGIC SPELL READY #` and waited for a spell number; `T` printed
+`TRANSACT-` and the turn expired into `TRANSACT--PASS`.
+
+**Three findings the static read could not have produced:**
+
+1. **`cmd_Y` does not return to the command loop.** After `YELL WHAT?`, every subsequent letter
+   accumulated as text on the CMD line and never dispatched — the first run's log ended up
+   reading `M1CS*RT`. That is the fall-through into `asm/4551` being *not* `cmd_done`, observed.
+   It is why the second run excluded Y, and it vindicates leaving N and Y unimplemented: the
+   engine's `cmd_Y` would have had to invent a return that the bytes do not have.
+2. **`cmd_J`'s message overstates its body.** `JUMP...WHEE...` with no jump anywhere in the
+   routine and no tail-call hiding one. Now observed, not inferred.
+3. **The crosswalk was lying.** Checking all 26 entries against the current 141-harvest corpus
+   found 8 grades wrong: C H J M O S Y were recorded against a 60-harvest corpus that grew
+   without the lines being refreshed, and **`cmd_T` had live citations in a format
+   `cmd_handlers.py` cannot parse, so it printed `--` for a handler 24 pre-existing harvests
+   already contained.** The real split is **22 proven / 4 unproven**, and the four are
+   **D, N, V, W** — not 12. Full write-up: `4ad5d81`.
+
+**What remains, and why it is not cheap after all:**
+
+- **D** — needs a dungeon; parked per AGENTS.md § 3.
+- **N** — `NEGATE TIME` falls through into `asm/3BDD` (`mov 0xe3,%al`), not `cmd_done`. Now
+  worth a targeted run: Y's behaviour suggests the fall-through leaves the loop in a text-
+  collecting state, and that is testable headless.
+- **V, W** — need a character seeded to *own* items and armour. `tools/u2_edit.py` can set
+  position, stats and gold but not the item bytes yet; extending it is the prerequisite.
+
+**Follow-up proposed, not built:** derive `cmd_handlers.py`'s `exec` column from `captures/`
+directly instead of from a hand-kept `# provenance:` line. The line is a second copy of a
+derivable fact, which is the thing AGENTS.md § 3 forbids, and it sat wrong across eight files
+while every gate that read it reported faithfully.
 
 **Who can do it: an agent, headless.** This is not an owner item. Every letter below is
 reachable by sending one key to a live emulator, and `tools/spice86_type.py` does that with no
