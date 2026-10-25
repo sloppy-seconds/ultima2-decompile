@@ -346,6 +346,12 @@ Verification, in two independent layers:
   must name it. Silence that is not justified by a cited byte is the failure mode this rule exists
   to stop, because a silent engine looks finished and reads as broken.
 
+  **A sound counts as a message** (owner, 2026-10-26). Where the original's feedback for an effect
+  is a speaker tone rather than text, wiring the tone satisfies the rule and inventing text does
+  not — the melee-wound path is exactly this case, where the contact loop plays a tone and prints
+  nothing. The rule is that the player must be told something happened, not that it must be text.
+  A guessed tone is worse than none: the divisor and duration come from the bytes or not at all.
+
   Known violations and their evidence live in `docs/phase4-state.md`, section "Silent player
   effects". Adding a mutation without a message and without a citation is a review failure.
 
