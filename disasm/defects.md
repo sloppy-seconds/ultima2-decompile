@@ -265,3 +265,28 @@ claims a mostly-zero tail. **The actual defect**: `72A0`, `8387`, `6144`, `48CA`
 `437E_cmd_V`, `3048_vehicle_plane`, `68ED` — spans where the clean wave could not tell code from
 data and rendered everything as bytes, of which `72A0` and `8387` are an order of magnitude
 bigger than the rest.
+
+## 2026-10-28e — `tools/recut_bytes.py` exists; the raw-byte spans are now a review queue, not a wall
+
+`asm/6144` was re-cut the same day: 160 `db` lines became 155 instructions and 5 honest
+forced-keeps, each one accepted only after gas re-assembled it at its own address and produced
+the same bytes. `check_func` and the whole-binary match both pass.
+
+The tool deliberately prints to stdout and writes nothing, because for the other spans a
+generated mnemonic is not the same thing as a verdict:
+
+- **`asm/48CA`** (338 B, 8 zeros, no printable runs) — `recut_bytes` produces decodes like
+  `adc %cx,0x33cc(%bx,%si)` and `mov $0xba00,%ax`, and **nothing anywhere in `asm/` references
+  a label inside its span**: no `call`, no `jmp`, no jump-table entry. Unreachable and
+  nonsense-decoding is the data-island signature, so the generated mnemonics would be a
+  confident wrong answer dressed as a decode. Left as `db`. Candidate for the same treatment
+  `asm/5287` got, once someone finds what reaches it.
+- **`asm/277B`, `asm/3048_vehicle_plane`, `asm/437E_cmd_V`, `asm/68ED`** — mixed spans where
+  some lines are clearly code (these are where three of the newly-found speed-delay slots
+  live) and some are not. Review line by line; `recut_bytes --selftest` proves the tool's own
+  comparison works in both directions.
+- **`asm/72A0` and `asm/8387`** — 6.7 KB together, and the honest answer is a map change, not
+  a re-cut. See the section above.
+
+So the ranking above is now a queue with a named tool attached and a stated reason each entry
+is still open, which is different from an unexplained pile of `db` lines.
