@@ -168,18 +168,18 @@ before starting: a stub that looks implemented is worse than a gap that says wha
 **Owner-independent work that does not need the above.** In rough value order, each with the
 tool that measures it rather than a number copied from a diary:
 
-1. Two forced-keep items that need a **verdict**, not a re-cut — a possible data table at the
-   tail of `asm/0720`, and a `lock` prefix at `asm/5287` that cannot coexist with the
-   register-save prologue documented at `asm/52CA`. Both are byte-consistent either way, so the
-   byte match cannot adjudicate and an agent should not guess. Queue: `--queue`.
-2. What each speed delay slot gates — half the slots still have no caller found
+1. What each speed delay slot gates — half the slots still have no caller found
    (`asm/0711_speed_delay_lookup`).
+2. Two data tables recorded with shape but no meaning: `asm/5287` and `asm/0720`. Naming them
+   needs a read of `asm/4C1E`'s consumers or a capture.
 3. The remaining fragment splits, which are parked deliberately
    (`disasm/fragment-splits.tsv`, `disasm/phase2-summary.md`).
 
-**Closed 2026-10-28e, so nobody re-does it:** the forced-keep correction queue (36 → 2, and the
-2 are the verdicts above), the rendering-gap list (now empty — every printable `str_out` site is
-rendered as data), wiring the mutation harnesses into CI, and repointing this section.
+**Closed 2026-10-28e, so nobody re-does it:** the forced-keep correction queue (**36 → 0**,
+and three of the last five items turned out to be the checker's own desync or a wrong
+disposition rather than work), the rendering-gap list (now empty — every printable `str_out`
+site is rendered as data), the body guard's blindness to renames, wiring the mutation
+harnesses into CI, and repointing this section.
 
 ## Gate log
 

@@ -190,6 +190,27 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28e** — **A content-conservation gate that compares the working tree to a commit
+  cannot see a rename, and a rename is a first-class operation in this pipeline.** The guard
+  required an unchanged canonical stream across every non-comment line, and permitted a changed
+  stream only inside a file carrying a correction marker. Renaming a file while correcting its
+  body — which is what the naming rule demands, since a discovered name belongs in the filename
+  in the same commit that learns it — registered as a permitted new file plus an unpermitted
+  removed file, and because the comparison was against HEAD the whole pair went green the moment
+  it was committed. Two sessions did this before anything caught it. Rule: if a gate permits
+  renames as an operation, it must match removals to additions by identity (an address prefix,
+  here) and require the attribution on the added side; and it must be run *before* committing,
+  because a gate whose verdict changes on commit is measuring the workflow rather than the tree.
+
+* **2026-10-28e** — **A call or jump target is an instruction boundary, and that is a cheap
+  proof a linear decode does not have.** Two spans in this tree were held open by a claimed
+  instruction straddling into the next fragment, and in both cases the target fragment was the
+  destination of a `call` or `jmp` from elsewhere in the binary — which makes the straddle
+  impossible without breaking every caller. The spans turned out to be data. Rule for a
+  harness: before believing a truncation at a fragment's left edge, look up whether that address
+  is a branch target anywhere in the image; it is a whole-image fact that a per-fragment decode
+  cannot see, and it costs one index lookup.
+
 * **2026-10-28e** — **A decode tool's error text describes what it tried to do, not what went
   wrong, and a harness that classifies findings by that text will mis-plan the work.** Every
   truncated instruction in this project's reconstruction carried a marker blaming the assembler
