@@ -840,6 +840,41 @@ Not yet proven, and deliberately not guessed:
 
 ---
 
+## Enhanced mode — feedback effects (owner, 2026-10-26, scoped not built)
+
+The owner's framing: an effect on the player should be **visible as an effect** — a hit animation,
+a sound, a line in the status area, or a small red `-11 HP` popping over the HP readout. Original
+mode stays byte-faithful, so all of that is enhanced-mode work, under the same split already
+ruled for cross-sector attacks.
+
+**The one thing that is NOT enhanced: the contact sound.** The original plays a tone when the player
+takes a wound (`asm/5255`, twice per contact), so wiring it is a fidelity fix owed to *both* modes.
+Do not let it get filed under "enhanced effects" and lost. See "Silent player effects" above.
+
+| id | item | mode | what it needs | honest constraint |
+| --- | --- | --- | --- | --- |
+| **E1** | contact tone on a melee wound | **original + enhanced** | finish the `asm/4C1E` sweep loop (it runs past its declared `4C1E..4C30` fragment), then call `seam_tone`. Known so far: duration `AX>>2` = 36, divisor `BX<<1` = `0xA0`, table at `0x5288` walked 2 bytes at a time | it is a **sweep, not a beep**. A guessed divisor will sound wrong in a way a player notices |
+| **E2** | damage number pop (`-11`) over the HP field | enhanced | per-cell colour exists — `u2_vram_poke(row, col, ch, attr)` — so the pixels are not the problem | **colour is settled, timing is not.** Owner ruled 2026-10-26 that enhanced mode may go full colour, so the CGA 4-colour limit does not bind here and red is available. The remaining blocker is structural: the engine is **turn-driven** — frames advance on player input — so a transient pop needs an animation clock that does not exist yet. That clock is the real work item, not the colour |
+| **E3** | a status-log line for a wound (`YOU ARE HIT FOR 11`) | enhanced | a `u2_feedback()` seam called at each effect site, emitting nothing in original mode | the damage amount is a BCD value from the same subtract that is already computed, so the number is available. The wording is invented — it must be visibly engine-authored, not dressed up as game text |
+| **E4** | hit animation on the monster sprite | enhanced | a per-cell or per-tile flash on the creature's cell | same turn-driven problem as E2 |
+| **E5** | the same treatment for the other silent effects: gold change, item gain/loss, paralysis, stat change, death | enhanced | audit each against "Silent player effects" and give each a `u2_feedback()` call | several of these are currently silent because the original is silent, which is fine in original mode and is exactly what enhanced mode is for |
+
+**The design decision worth making before any of it is built:** put the whole thing behind **one**
+seam, called at the effect site, that resolves to nothing in original mode. If feedback is instead
+sprinkled as `if (ctx->fidelity == U2_FIDELITY_ENHANCED)` at each call site, the two modes diverge
+in twenty places and the CP2 differential stops meaning anything. One seam, one place to audit.
+
+**Deferred by the owner on 2026-10-26: do not start E2–E5 now.** They are recorded so the ideas are
+not lost, not queued. E1 is the only one on the critical path, because it is owed to original mode.
+
+**Also open from the Z-page work, small:** the original's Z page wraps its item lists about three
+columns earlier than the engine does (`GREEN GE` / `MS-01` in the original, `GREEN GEMS` / `|-01`
+in the engine). The band collision is fixed; the wrap column is still slightly off, which means
+`asm/4568`'s right margin is not exactly the `0x26` the engine uses. Cosmetic, and now the only
+remaining difference on that page.
+
+---
+
 ## Silent player effects (owner rule 2026-10-26)
 
 **The rule is in `AGENTS.md` § 3: every action by the player and every effect on the player must
