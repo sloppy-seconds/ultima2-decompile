@@ -411,15 +411,15 @@ void u2_death(u2_ctx *ctx)
  * Returns 1 when the subtraction underflowed (the character just died). The
  * caller's job is to hand that to u2_death; this function only subtracts.
  */
-static int food_spend(u2_ctx *ctx, unsigned amount)
+static int food_spend(u2_ctx *ctx, unsigned bcd_sub)
 {
     u2_state *st = &ctx->state;
     unsigned lo, mid, hi;
     int borrow;
 
-    borrow = bcd_sbb(st->food_lo, amount & 0xFF, 0, &lo);
-    borrow = bcd_sbb(st->food_hi, (amount >> 8) & 0xFF, borrow, &mid);
-    borrow = bcd_sbb(st->food,    (amount >> 16) & 0xFF, borrow, &hi);
+    borrow = bcd_sbb(st->food_lo, bcd_sub & 0xFF, 0, &lo);
+    borrow = bcd_sbb(st->food_hi, (bcd_sub >> 8) & 0xFF, borrow, &mid);
+    borrow = bcd_sbb(st->food,    (bcd_sub >> 16) & 0xFF, borrow, &hi);
 
     st->food_lo = (uint8_t)lo;
     st->food_hi = (uint8_t)mid;
@@ -469,15 +469,23 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 }
 
 /* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low
- * byte of the food triple, with `das` — ten, in packed decimal. */
-#define U2_FOOD_PER_PASS 10u
+ * byte of the food triple, with `das` — ten, in packed decimal.
+ * The constants below are the raw `sbb` immediates, NOT decimal counts: the
+ * argument of food_spend() goes straight into a packed-decimal subtract. Writing
+ * 10 here is safe only because 10 decimal and 0x0A are the same byte; the move
+ * cost is not, which is how asm/2599's $0x19 once got ported as `19u` and
+ * silently charged thirteen. */
+#define U2_FOOD_PER_PASS 0x0Au
 
-/* The food an accepted move costs. Proven twice, inline in the passability
- * routine at runtime 0x2599 and 0x2626: `sbb $0x19` then `das` on the food
- * triple — nineteen, packed decimal. Both the accept arms carry it, so the
- * drain belongs to movement itself and not to any one travel mode.
- * evidence: runtime 0x2599, 0x2626 — confidence: proven */
-#define U2_FOOD_PER_MOVE 19u
+/* The food a step attempt costs, accepted or refused. Proven twice, inline in
+ * the passability routine at runtime 0x2599 and 0x2626: `sbb $0x19` then `das`
+ * on the food triple — nineteen in packed decimal, i.e. the byte 0x19.
+ * Measured live 2026-10-25: 997904 -> 997885 for one arrow, accepted or blocked.
+ * Both the accept and the reject arms carry it, so the drain belongs to movement
+ * itself and not to any one travel mode — and horse and plane pay it twice over
+ * (asm/2626_food_drain_mounted).
+ * evidence: runtime 0x2599, 0x2626; live:stepcost — confidence: proven */
+#define U2_FOOD_PER_MOVE 0x19u
 
 /* The overworld is a torus. The accept path of the passability routine masks
  * both coordinates rather than bounds-checking them: runtime 0x2664 is
@@ -698,10 +706,12 @@ uint8_t u2_unlock_spend_key(uint8_t keys)
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
  * drive it directly. Returns 1 when the subtraction underflowed (death), and
- * runs the death tail in that case, because that is what the borrow-out does. */
-int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount)
+ * runs the death tail in that case, because that is what the borrow-out does.
+ * `bcd_sub` is the packed-decimal immediate the original feeds `sbb`: 0x0A for a
+ * PASS, 0x19 for a step. Not a decimal count. */
+int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub)
 {
-    if (!food_spend(ctx, amount))
+    if (!food_spend(ctx, bcd_sub))
         return 0;
     u2_death(ctx);
     return 1;
@@ -1253,9 +1263,9 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * return fires. Until then the behaviour matches what was seen and the code
          * path is ours, which is the honest state of this branch.
          *
-         * Food cost of a creature-blocked step is unknown — G2 covers blocked steps
-         * generally and is still open — so nothing is charged, same as the terrain
-         * reject. */
+         * A creature-blocked step costs food like any other refusal: the charge is
+         * inside asm/2423 upstream of the verdict (see the blocked branch below), so
+         * whatever rejects, the 19 is already gone. G2, closed 2026-10-25. */
         const int blocked_by_creature = u2_monsters_at(ctx, nx, ny) >= 0;
 
         /* CP5 C3: legs paralysis is a movement rejection, not a combat overlay.
@@ -1273,8 +1283,11 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * --PARALIZED!, not --INVALID MOVE!. If a capture ever shows the terrain word
          * winning, the two branches swap and nothing else here changes.
          *
-         * No food is spent, same as every other refusal, and the turn does not advance —
-         * the reject paths above all `continue` without creature_turn(). */
+         * No food is spent, and that is an address fact rather than a convention:
+         * asm/2520 returns 0xFF from the passability routine ahead of the mode
+         * dispatch at asm/253B, which is where the per-step charge lives. The turn
+         * does not advance either — the reject paths above all `continue` without
+         * creature_turn(). */
         if (ctx->state.paral_legs != 0) {
             seam_str_out(ctx, word);                  /* no CR: same line */
             seam_str_out(ctx, U2_S_MOVE_PARALYZED);
@@ -1296,6 +1309,19 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
              * separate prompt lines.
              */
             seam_str_out(ctx, word);                  /* no CR: same line */
+
+            /* A refused step pays the food. This is the G2 answer, and it is an
+             * ordering fact about asm/2423 rather than a guess about intent: the
+             * subtract at asm/2599 (and asm/2626) sits ahead of the tile verdict, so
+             * the charge lands whether the step is allowed or not. Measured on the
+             * maxed seed in sector 31, one arrow, reads back to back: DS:00/01
+             * unchanged, food 997904 -> 997885, screen `CMD: WEST--INVALID MOVE!`.
+             * u2_overworld_spend_food runs the starvation tail on underflow, and the
+             * original jumps there from inside the call — so the complaint never
+             * prints on a step that kills. */
+            if (u2_overworld_spend_food(ctx, U2_FOOD_PER_MOVE))
+                break;
+
             seam_str_out(ctx, U2_S_INVALID_MOVE);
             seam_char_print(ctx, '\r');               /* the game's newline */
             seam_str_out(ctx, U2_S_CMD_PROMPT);
@@ -1314,11 +1340,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * row always current, completed commands stacked above it. */
         echo_cmd(ctx, word);
 
-        /* The food charge comes after the echo, and that ordering is a choice,
-         * not a byte. Nothing observable moves unless the subtraction kills: the
-         * death tail prints three newlines precisely so the announcement is the
-         * last line on the log, and `death1.png` shows it there. Charging first
-         * would print `CMD: NORTH` underneath a dead character's name. */
+        /* The charge is inside asm/2423, which the original calls after echoing the
+         * direction word and before anything else — so the word is on the line when
+         * the subtraction kills, and the death tail prints three newlines so the
+         * announcement lands below it (`death1.png`). On foot the cost is 19; horse
+         * and plane cost 38 because asm/2626 falls through a second subtract, and the
+         * ship and the rocket pay nothing at all. The engine has no vehicles yet, so
+         * only the on-foot figure is wired here. */
         if (food_spend(ctx, U2_FOOD_PER_MOVE))
             u2_death(ctx);
         creature_turn(ctx, ow);

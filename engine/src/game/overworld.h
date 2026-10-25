@@ -141,13 +141,15 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
 int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay);
 
 /*
- * Spend `amount` food from the packed-decimal triple DS:53/54/55 and return 1
+ * Spend `bcd_sub` food from the packed-decimal triple DS:53/54/55 and return 1
  * if the subtraction underflowed, which is the original's death condition
  * (file 0x0B2E jumps to runtime 0x0E62 on a borrow). On that borrow it runs
  * u2_death, because the borrow-out is a jump into the death tail, not a flag.
+ * `bcd_sub` is the raw immediate the original hands `sbb` — 0x0A for a PASS, 0x19
+ * for a step — not a decimal count.
  * Exposed for tests; the PASS and move arms of the loop are its in-game callers.
  */
-int u2_overworld_spend_food(u2_ctx *ctx, unsigned amount);
+int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub);
 
 /*
  * The death tail: asm/0C62..0C99 as one span. Zeroes DS:51..DS:59, repaints the
