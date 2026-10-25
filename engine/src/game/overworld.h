@@ -160,6 +160,13 @@ int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub);
 void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow);
 
 /*
+ * asm/3389 cmd_E: enter the site on the cell the player stands on, or refuse with
+ * " WHAT?" / ONLY ON FOOT!. Owned here rather than in commands.c because it needs the
+ * sector store and the tile table, which are this file's; cmd_P is the same arrangement.
+ */
+void u2_overworld_enter(u2_ctx *ctx, u2_overworld *ow);
+
+/*
  * The death tail: asm/0C62..0C99 as one span. Zeroes DS:51..DS:59, repaints the
  * status band, scrolls the log and prints `<NAME> IS DEAD!` with no `CMD: `
  * prompt after it. Every kill site in the binary jumps here — the food

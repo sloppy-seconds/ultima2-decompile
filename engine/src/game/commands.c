@@ -136,6 +136,18 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/3389 cmd_E: enter the site on this cell. The body is u2_overworld_enter() in
+   overworld.c, because entering needs the sector store and the tile-to-digit table and
+   those are that file's; what belongs here is that E is a letter the table answers, so
+   u2_cmd_implemented() tells the truth about it. No cmd_done(): every path through the
+   handler prints its own CR and prompt, including the refusals. */
+static u2_cmd_result cmd_E(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    u2_overworld_enter(ctx, ow);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -170,16 +182,17 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * Three observed letters (A, E, U) are still implemented inside
- * u2_overworld_loop, with their evidence in place there. They migrate here one at a time
- * under the existing tests, not in one sweep; Q, P and Z have already made the trip.
+ * Two observed letters (A, U) are still implemented inside
+ * u2_overworld_loop, with their evidence in place there. They are the two that share state
+ * with the loop -- a direction key arriving several turns later -- and they migrate last
+ * for that reason. Q, P, Z and E have already made the trip.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* A  in overworld.c pending migration */
     NULL,  /* B  not implemented: BOARD needs vehicles */
     NULL,  /* C  see the note above */
     NULL,  /* D  see the note above */
-    NULL,  /* E  in overworld.c pending migration */
+    cmd_E, /* E  enter site: asm/3389, body in u2_overworld_enter() */
     NULL,  /* F  not implemented: FIRE is the combat/attack arm */
     NULL,  /* G  not implemented: GET needs ground items */
     cmd_H,

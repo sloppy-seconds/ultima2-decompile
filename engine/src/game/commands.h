@@ -15,7 +15,7 @@
  *   jmp *%bx
  *
  * Two things about that shape are load-bearing for this file and are the reason it exists
- * separately from overworld.c, which still handles three letters inline in a switch.
+ * separately from overworld.c, which still handles two letters inline in a switch.
  *
  * First, the range test happens BEFORE the dispatch, in two pieces: `cmp $0x41,%al ;
  * jae L_000c18` (asm/09FB) and `cmp $0x5a,%al ; jbe L_000c1f` (asm/0A18). A key outside
@@ -35,9 +35,11 @@
  * first, on 2026-10-25, because its entire body was already a call to a public function, so
  * the move tested the dispatch rather than the behaviour; P followed, needing a shared
  * public body because the space bar reaches the same result from a different site; then Z,
- * which needed a new result code because it can end the session from inside itself. A, E
- * and U remain. What lands here alongside them is the letters that were never implemented
- * at all.
+ * which needed a new result code because it can end the session from inside itself; then E,
+ * whose body moved to a public u2_overworld_enter() for the same reason P's did. A and U
+ * remain, and they are last on purpose: they leave the loop waiting for a direction key that
+ * arrives turns later, so they need the pending state to move before they can. What lands
+ * here alongside them is the letters that were never implemented at all.
  */
 
 #include "core/ctx.h"

@@ -744,6 +744,57 @@ void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow)
     creature_turn(ctx, ow);
 }
 
+/*
+ * asm/3389 cmd_E: enter the site standing on this cell.
+ *
+ * Three refusals and one transition, in the original's order:
+ *
+ *   inside a site ([DS:4A] != 0) — the answer is " WHAT?"; doors are a world-map thing.
+ *   not on foot ([DS:13] < 0x78) — ONLY ON FOOT!, from asm/33A6, where [DS:13] is the
+ *      sprite stamped into the cell. The engine has no vehicles yet, so the stamp is 0x78
+ *      at open and this gate cannot fire; it is here so a vehicle implementation finds it
+ *      already in place rather than inventing one.
+ *   nothing on this cell — " WHAT?" again, via the tile-to-sector-digit table.
+ *   otherwise — the label if the site has one, then the transition.
+ *
+ * No food and no creature sweep on any path: entering is not a step and not a turn. That is
+ * the reading the walk loop already had, moved here unchanged.
+ *
+ * evidence: asm/3389 (the handler), asm/33A6 (the on-foot test), asm/341E (the entry point
+ *           stored by site_enter), asm/342A (the street arrival cell) — confidence: the
+ *           refusals are read off the handler, the transition is the CP4 site work.
+ */
+void u2_overworld_enter(u2_ctx *ctx, u2_overworld *ow)
+{
+    seam_str_out(ctx, U2_S_ENTER);
+    if (ctx->state.sector_second != 0) {
+        seam_str_out(ctx, U2_S_ENTER_WHAT);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+    if (ctx->state.player_stamp < 0x78) {
+        seam_str_out(ctx, U2_S_ONLY_ON_FOOT);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+    const char *label = NULL;
+    int ax = 0, ay = 0;
+    const int digit = site_for_tile(u2_world_tile_at(&ow->world, ow->x, ow->y),
+                                    &label, &ax, &ay);
+    if (digit == 0) {
+        seam_str_out(ctx, U2_S_ENTER_WHAT);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+    if (label) seam_str_out(ctx, label);
+    seam_char_print(ctx, '\r');
+    site_enter(ctx, ow, digit, ax, ay);
+    seam_str_out(ctx, U2_S_CMD_PROMPT);
+}
+
 /* Shared loader: everything after the spawn fields are set. */
 static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 {
@@ -1091,42 +1142,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_UNLOCK_DIRECTION);
             pending_cmd = 'U';
             continue;
-        case 'E': {
-            /* asm/3389 cmd_E. Inside a site the answer is " WHAT?"; the doors
-             * only work from the world map, which is [DS:4A] == 0. */
-            seam_str_out(ctx, U2_S_ENTER);
-            if (ctx->state.sector_second != 0) {
-                seam_str_out(ctx, U2_S_ENTER_WHAT);
-                seam_char_print(ctx, '\r');
-                seam_str_out(ctx, U2_S_CMD_PROMPT);
-                continue;
-            }
-            /* asm/33A6: [DS:13] is the sprite stamped into the map cell and the
-             * test is `>= 0x78`, i.e. on foot. The engine has no vehicles yet, so
-             * the stamp is set to 0x78 at open and this arm cannot fire; it is
-             * here so a vehicle implementation finds the gate already in place. */
-            if (ctx->state.player_stamp < 0x78) {
-                seam_str_out(ctx, U2_S_ONLY_ON_FOOT);
-                seam_char_print(ctx, '\r');
-                seam_str_out(ctx, U2_S_CMD_PROMPT);
-                continue;
-            }
-            const char *label = NULL;
-            int ax = 0, ay = 0;
-            const int digit = site_for_tile(u2_world_tile_at(&ow->world, ow->x, ow->y),
-                                            &label, &ax, &ay);
-            if (digit == 0) {
-                seam_str_out(ctx, U2_S_ENTER_WHAT);
-                seam_char_print(ctx, '\r');
-                seam_str_out(ctx, U2_S_CMD_PROMPT);
-                continue;
-            }
-            if (label) seam_str_out(ctx, label);
-            seam_char_print(ctx, '\r');
-            site_enter(ctx, ow, digit, ax, ay);
-            seam_str_out(ctx, U2_S_CMD_PROMPT);
-            continue;
-        }
         case ' ':
             /* Space is PASS from the walk loop's own first arm (cmp $0x20 at file
              * 0x0B3C). 'P' is PASS too, but from the command jump table (asm/3DBC_cmd_P,
