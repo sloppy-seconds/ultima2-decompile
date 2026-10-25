@@ -781,6 +781,33 @@ Newest first. One line per learning; the detail stays in the owning document.
 * **2026-10-22** — Deriving a value from evidence beats hardcoding it; the one tool
   that derives its segment is the only one that would have survived a rebuild of the
   target at a different load address. → § 4 design rule.
+* **2026-10-25** — "String table rendered as machine code" is a detectable *class*, not a
+  one-off. Two independent occurrences were found in one day by the same method: a span that
+  decomposes entirely into printable runs separated by terminators, whose decoded "instructions"
+  are all forced-keeps the assembler could not express. A harness should ship a detector for it
+  rather than waiting for a human to notice a routine that never returns. The confirming check is
+  arithmetic and target-independent: the entry starts must equal the running sums of the entry
+  lengths plus terminators, which cannot hold by accident over a couple of hundred bytes. → Tier 1.
+* **2026-10-25** — A reference scan for "is this region dead data?" gives **false negatives** when
+  the data is reached through a stored cursor. Nothing loaded any entry address as an immediate and
+  there was no offset table, so the obvious verdict was dead — and the region was live, reached by an
+  address-take stored into a memory variable and walked by a selector that skips NULs to an index.
+  A liveness detector that only greps for immediates will therefore delete load-bearing content, the
+  worst possible direction for a gate to fail. It must also look for address-takes and for stores of
+  them into memory. → Tier 1, and a standing warning for any "unused data" cleanup.
+* **2026-10-25** — Typed trace fields break classifiers silently. Parsing an executed-instruction
+  offset as a hex string when the dump stores a decimal number returns "never executed" for every
+  address, including the ones that ran in every single capture. The classifier looked correct and
+  produced a confident, uniformly negative answer. Any executed/not-executed gate must carry a
+  positive control known to have run, and report it. This is the same shape as the lying tool in
+  § 5, arrived at from the parser side instead of the detector side. → Tier 1.
+* **2026-10-25** — A body-conservation guard that pairs old and new files **by filename** makes a
+  clean rename pass or fail depending on commit granularity: alone it is conservation, alongside any
+  marked body edit it is an unmarked change, because a rename is a removal plus an addition and only
+  a marker attributes the pair. The guard's verdict was then also ref-dependent, which it had already
+  been called out for once. Either pair by declared address, or make "rename in its own commit" a
+  documented workflow rule — but do not leave it implicit, because the failure looks like vandalism
+  reported against an innocent file. → Tier 2, gate design.
 
 ---
 
