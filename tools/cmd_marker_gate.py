@@ -70,6 +70,15 @@ DONE_WORDS = ("code-complete", "code complete", "done", "complete", "shipped")
 # actually asserted. Columns are `| CP | name | status | details |`, so the status is group 3;
 # reading group 2 instead asserts completion about every checkpoint whose *name* contains
 # "done", which is a different bug with the same shape.
+# Which claims a standing marker actually blocks. The rule is "no checkpoint, milestone or
+# phase may be called code-complete while any marker stands", and the checkpoints that cannot
+# be true without all 26 handlers proven are CP6 (towns + the full command set) and CP8
+# (endgame + full playthrough). It is NOT retroactive: CP0, CP2 and CP3 are legitimately done
+# and never needed the command loop, so a gate that went red on their `done` cells would be
+# permanently red from the first handler onward -- the mirror image of a gate that cannot fail,
+# and just as useless. A permanently-red gate is ignored within a week, which is exactly how
+# `xref_provenance` rotted.
+GATED_CPS = ("CP6", "CP8")
 ROW_RE = re.compile(r"^\|\s*(CP\d[.\d]*)\s*\|([^|]*)\|([^|]*)\|")
 
 LETTERS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
@@ -138,13 +147,15 @@ def scan_engine(engine_dir):
 
 
 def status_claims(doc_text):
-    """Return [(cp, status_cell)] for checkpoint rows whose status asserts completion."""
+    """Return [(cp, status_cell)] for the GATED checkpoints whose status asserts completion."""
     out = []
     for line in doc_text.splitlines():
         m = ROW_RE.match(line)
         if not m:
             continue
         cp, status = m.group(1), m.group(3).strip()
+        if cp not in GATED_CPS:
+            continue
         low = status.lower()
         if any(w in low for w in DONE_WORDS):
             out.append((cp, status))
@@ -201,6 +212,10 @@ def check(engine_dir, state_doc, handlers_json=None):
     if not implemented and any(cp == "CP6" for cp, _ in claims):
         problems.append("R5 the engine has no command handlers, but the state document's CP6 "
                         "status cell asserts completion")
+    if not implemented and re.search(r"phase 4[^.\n]{0,40}\b(code-complete|complete|done)\b",
+                                     doc_text, re.I):
+        problems.append("R5 the engine has no command handlers, but the state document calls "
+                        "Phase 4 complete")
 
     print(f"crosswalk: {sum(1 for v in prov.values() if v > 0)} proven / "
           f"{sum(1 for v in prov.values() if v == 0)} unproven of 26")
@@ -288,6 +303,15 @@ def selftest():
          _handlers("A"), unprov_src, honest_doc),
         ("C11 zero handlers but CP6 cell claims done -> RED", 1,
          _handlers("A"), "/* no handlers yet */\n", done_doc),
+        # A standing marker blocks the checkpoints that need all 26 handlers. It does not
+        # retroactively un-complete CP0/CP2/CP3, which never needed the command loop; without
+        # this control the gate is red forever from the first handler written.
+        ("C12 unrelated CP0 done + marker stands -> GREEN", 0,
+         _handlers("A"), unprov_src,
+         honest_doc + "\n| CP0 | skeleton | done (owner approved) | x |\n"),
+        ("C13 CP8 (endgame) claims done while markers stand -> RED", 1,
+         _handlers("A"), unprov_src,
+         honest_doc + "\n| CP8 | endgame + full playthrough | complete | x |\n"),
     ]
 
     for name, want, handlers, source, doc in cases:
