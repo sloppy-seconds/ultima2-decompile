@@ -3,6 +3,14 @@
 # func 50F9..51A4  len 00AC B  evidence: seed+call+reko
 # MERGED 2026-10-28d from 25 fragments the Phase 2/3 wave cut out of one routine: 5111 5112 5120 5121 5123 5124 5126 5129 513C 513D 514B 514C 514E 514F 5151 5152 5154 5167 5168 5175 5188 5189 5196 51A4. Body lines are concatenated in address order and none was edited; engine/tests/asm_body_guard.py requires the tree's assemblable content to be conserved, and it is.
 # strings: "H.P.="
+# body corrected: 2026-10-28e -- evidence: five instructions in this merged span were split by
+#           the old fragment boundaries and shown as a forced-keep plus an invented mnemonic. The
+#           bytes force the reading: `c0` always takes an imm8, so `c0 75 03` cannot end at 511D
+#           or 5148; `bc` always takes an imm16, so `bc 02` cannot end at 5121. In each case the
+#           byte the map cut on was an immediate, and the `stop-trunc call` markers on 5120, 5123,
+#           514B and 514E invented calls to 0x55df and 0x53a5 that do not exist. The label lines
+#           are all kept — only the `.byte` lines were merged — so the CP0 label invariant holds.
+#           Found by tools/forced_keep_audit.py.
 # calls: L_0051df (str_out)
 # provenance: live:airport (+50 other harvests), static
 #           entry executed in 51 of 60 harvests; derived by tools/provenance_from_traces.py
@@ -48,16 +56,17 @@ L_00531a:
 L_00531b:
         add    %cl,(%bp,%si)
 L_00531d:
-        .byte 0xc0,0x75,0x03  # forced-kept: gas re-encodes 'shlb   $0xe8,0x3(%di)' differently
+        .byte 0xc0,0x75,0x03,0xe8  # shlb $0xe8,0x3(%di): c0 always takes an imm8, so the
+                                   # instruction spans the old 511D/5120 boundary whatever it
+                                   # means; the `stop-trunc call 0x55df` on the fourth byte was
+                                   # an opcode invented out of an immediate
 sub_5120:
 L_005320:
-        .byte 0xe8  # forced-kept: stop-trunc call   0x55df
 sub_5121:
 L_005321:
-        .byte 0xbc,0x02  # forced-kept: gas re-encodes 'mov    $0xe802,%sp' differently
+        .byte 0xbc,0x02,0xe8  # mov $0xe802,%sp: same shape, spans the old 5121/5123 boundary
 sub_5123:
 L_005323:
-        .byte 0xe8  # forced-kept: stop-trunc call   0x53a5
 sub_5124:
 L_005324:
         jg L_005326
@@ -87,28 +96,25 @@ L_005345:
 L_005346:
         add    %cl,(%bp,%si)
 L_005348:
-        .byte 0xc0,0x75,0x03  # forced-kept: gas re-encodes 'shlb   $0xe8,0x3(%di)' differently
+        .byte 0xc0,0x75,0x03,0xe8  # shlb $0xe8,0x3(%di): spans the old 5148/514B boundary
 sub_514b:
 L_00534b:
-        .byte 0xe8  # forced-kept: stop-trunc call   0x55df
 sub_514c:
 L_00534c:
         xchg   %ax,%cx
 L_00534d:
-        .byte 0x02  # forced-kept: gas re-encodes 'add    %al,%ch' differently
+        .byte 0x02,0xe8  # add %ch,%al: spans the old 514D/514E boundary
 sub_514e:
 L_00534e:
-        .byte 0xe8  # forced-kept: stop-trunc call   0x53a5
 sub_514f:
 L_00534f:
         push   %sp
         db 0x00        # tail-pad
 sub_5151:
 L_005351:
-        .byte 0xe8  # forced-kept: stop-trunc call   0x55d9
+        call L_0055d9  # spans the old 5151/5152 boundary; `test %ax,(%bp,%si)` was the displacement read as code
 sub_5152:
 L_005352:
-        test   %ax,(%bp,%si)
 sub_5154:
 L_005354:
         mov    $0x1e,%al
