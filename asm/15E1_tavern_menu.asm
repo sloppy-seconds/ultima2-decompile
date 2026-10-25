@@ -3,9 +3,27 @@
 # func 15E1..16BC  len 00DC B  evidence: seed+reko; re-cut 2026-10-25
 # strings: "WELCOME TO THE PUB!"; "HERE, HAVE A STRONG ONE!"; "TIP HOW MUCH? "; "THE BARKEEP SAYS:"
 # note: the chatter/hint table this used to contain is now asm/16BD_barkeep_chatter_hints.asm
+# note: TWO ENTRIES, and only the second one is the pub. The declared start 15E1 is a 3-byte
+#           `jmp 0x19AF` trampoline; the pub menu itself begins at 15E4 with a NOP and the
+#           "WELCOME TO THE PUB!,\r1-BUY, 2-TIP --- " string. asm/15D6 chooses between them on
+#           the site kind: DS:4A == 2 (a town) falls through to 15E4 and gets the pub, anything
+#           else takes the trampoline. So the name is right for the body and wrong for the entry
+#           point -- a caller that lands on 15E1 never sees a pub at all.
+# note: the whole door to this routine, measured live 2026-10-26 in sector 82. cmd_T must aim at
+#           a cell holding 0x68 (asm/409F); the vendor dispatcher at asm/1590 then requires the
+#           PLAYER at X >= 0x20 AND Y >= 0x20 -- both tests are `jb 15ba`, so a low X or a low Y
+#           diverts to the other catalogue, which is the weapons shoppe and was seen on screen
+#           from (11,52) -- and only then does asm/15D6's site-kind test pick pub or trampoline.
+#           The pub itself was NOT reached: at both qualifying markers tried, (11,52) and (51,49),
+#           the aim answered `FUNNY.. NO RESPONSE?`, which is the ray failing to find a
+#           transacting NPC, not a wrong branch. That is what is still open.
 # calls: L_000c33, L_00175d, L_001886, L_001baf, L_002228, L_002252, L_0051df (str_out), L_0052d8 (+1 more)
 # provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
+#           entry never appears in ExecutedInstructions of any of the 142 harvests that carry a
+#           flow dump (the earlier "60 harvests" line predates the corpus growth). The vendor
+#           dispatcher upstream of it HAS been observed -- 1590/1591/1594/1596 appear in
+#           ExecutedInstructions per asm/4050_cmd_T's header -- so the door is live and this
+#           threshold is the part still unseen.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 tavern_menu:
