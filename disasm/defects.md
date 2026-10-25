@@ -163,3 +163,35 @@ and CP0 md5s it. The correct decode is recorded in the two file headers and in
 body-freeze for known-wrong decodes is an owner question, and it is a different question from the
 seam-label one in `docs/fragment-splits.md` — that one is about merging, this one is about
 leaving a known falsehood in the tree.
+
+## 2026-10-28e — a third data-island candidate, recorded and deliberately NOT reclassified
+
+`asm/5D58` (span 5D58..5DA8, evidence `seed+reko`, no name) has the signature of the two
+islands corrected the same day — and one piece of missing evidence that makes it a candidate
+rather than a verdict.
+
+What points at data:
+
+- **Nothing enters it.** No `call` or `jmp` anywhere in `asm/` targets 5D58..5DA8, and the
+  fragment before it (`asm/5D50`) ends `add $0x3,%bp ; jmp L_005f22`, so nothing falls through
+  either. A routine nobody can reach is a data block until proven otherwise.
+- **A 55-byte run of 0x00** in the middle, plus eight more at the end. Code does not contain
+  that; the clean wave already renders it as a `db ... # fill` line, which is the tree
+  admitting it is not instructions.
+- **Two decodes that this CPU cannot execute**: `popa` at 5D9D (80186+) and `gs pop %bp` at
+  5D9F. Same absurd-decode test that settled 47BD, 5287 and 0720.
+- **Three stride-4 pointers at 5D9E..5DA3**: as little-endian words they are 0x5D5D, 0x5D61,
+  0x5D65, which in file space are runtime 5B5D, 5B61, 5B65 — three entries four bytes apart
+  inside `asm/5B5D`. A table of equally-spaced entry addresses is a dispatch or vector table.
+
+What is missing: a **positive** reference. 5287 was settled by `lea %cs:0x5288,%cx` two
+instructions earlier and 0720 by `dec %bx ; js L_000920` landing on it. Here nothing takes the
+address of the block, and the first five bytes (`pop bp ; pop cx ; pop bx ; pop ax ; ret`) are a
+textbook epilogue that could be a real routine tail reached by a route the static scan has not
+found. Reclassifying on the negative evidence alone would be exactly the plausible-wrong-answer
+this project has been bitten by twice.
+
+Disposition: left as `sub_5d58`, with this note as the record. To settle it, either find what
+computes an address in 5D58..5DA8 at runtime, or capture a session and check
+`ExecutedInstructions` for any offset in the span — the second is a scripted run, not an
+owner task, and belongs on `docs/needs-gameplay.md` if someone picks it up.
