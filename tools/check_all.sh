@@ -84,6 +84,10 @@ fi
 
 echo "== gates over tracked inputs (CI-runnable) =="
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
+# The derived half. captures/spice86/ is gitignored, so this is optional by declaration and
+# SKIPs in CI rather than pretending to have checked. It is the gate that makes `exec` generated
+# rather than hand-kept: the numbers in each handler header must equal what the captures say.
+opt_run "cmd_provenance_derived" captures/spice86 -- python3 tools/cmd_handlers.py --verify-provenance
 # The owner's command-loop ruling (AGENTS.md § 3) needs teeth: the twelve handlers no capture
 # has seen run must carry an UNPROVEN marker, and nothing may be called code-complete while one
 # stands. Selftest first -- 9 controls, both polarities, including the one that proves the gate
