@@ -5,6 +5,16 @@
 #           coordinates with and 0x3F (the overworld is a torus); reject paths
 #           runtime 0x2538 and 0x25FF both `mov al,0xFF; ret`. The 19-food move
 #           drain is inline inside this routine at runtime 0x2599 and 0x2626.
+# CHARGE ORDER, settled 2026-10-25 (this closes the conflict in docs/needs-gameplay.md
+#           G34 and answers G2): the drain runs BEFORE the verdict is computed, on the
+#           [DS:13] mode dispatch at asm/253B_food_mode_dispatch.asm, so every step
+#           attempt pays — including one that ends in `--INVALID MOVE!`. Measured on
+#           the maxed seed in sector 31 with back-to-back reads around a single arrow:
+#           blocked step -19 with DS:00/01 unchanged, accepted step -19 with DS:00/01
+#           moved, ship/rocket 0, horse and plane -38 (asm/2626_food_drain_mounted
+#           calls the delay tail that falls through the second subtract). CP4b T2's
+#           "no per-step tick, the walk loop calls no drain" is retracted: all four
+#           walk arms call this routine.
 # WARNING: the declared range below is far too small. The routine runs to about
 #           runtime 0x2680, not 0x242C. Reading only this file makes the
 #           function look like it performs no rejection at all, which is exactly
