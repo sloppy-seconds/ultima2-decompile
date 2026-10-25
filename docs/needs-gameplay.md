@@ -201,12 +201,34 @@ the sector grid each time. Compare against both candidate transforms.
 identification. Ordinary walking is already scriptable.
 **Needs owner:** no.
 
-### G2 — food cost of a blocked step `[ ]`
+### G2 — food cost of a blocked step `[ ]` — first attempt failed, and the reason is the finding
 **Action:** stand adjacent to **water** (`0x00`, already proven blocked) and step
 into it; read `DS:53..55` before and after.
 **Why the agent can do it:** water is a known blocked tile, so this does **not**
 depend on settling the mountain first — that dependency was assumed and is wrong.
 **Needs owner:** no.
+
+**Attempted 2026-10-25 (`tmp/20261025-213046`, screenshot
+`captures/spice86/g2-blocked-food-attempt.png`). It did not answer, and both failure modes are
+worth writing down before anyone else runs this:**
+
+1. **The auto-PASS confounds any idle-gap measurement.** First reading looked like a blocked
+   step costing 19 food (999999 → 999980). The control — read food three times with *no input
+   at all* — showed it falling ~10 per window on its own. That is the documented auto-PASS
+   (~7.5 s at `--Cycles 3000`, 10 food each) firing between the reads, not a step cost. Any
+   food measurement must therefore bracket a single keypress with back-to-back reads, or raise
+   `auto_pass_polls` out of the window, or it is measuring the wrong thing while looking right.
+2. **`tmp/seed-townhp/player` is a hostile probe seed.** The character was **`ARMS PARALYZED!`**
+   and ringed by creatures, so every direction returned `EAST--INVALID MOVE!` and the position
+   never moved across six keypresses — a blocked step was never actually attempted, and the
+   tight re-measurement showed food flat across three presses because nothing happened at all.
+   Use `tmp/seed/player` (maxed, unparalysed) and confirm the step *lands* by reading `DS:00/01`
+   before treating any food delta as a cost.
+
+**Protocol for the next attempt:** seed `tmp/seed/player`; pick a water cell by reading the
+sector grid at `DS:1800`; read `DS:00/01` and `DS:53..55`; send the one arrow that steps into
+it; read both again immediately; accept the sample only if the position changed (for the
+control case) or the target was provably blocked (for the blocked case). Repeat three times.
 
 ### G3 — who writes `DS:2CB`/`DS:2DE` `[x]` — closed 2026-10-28d as a DOS-port artefact, unanswered
 **Closed without a capture, and that needs saying plainly because the item's own rule is "only a
@@ -546,6 +568,11 @@ not inferred: offsets `3782`, `37DC`, `4542` present). Screenshots show the CMD 
    `cmd_handlers.py` cannot parse, so it printed `--` for a handler 24 pre-existing harvests
    already contained.** The real split is **22 proven / 4 unproven**, and the four are
    **D, N, V, W** — not 12. Full write-up: `4ad5d81`.
+
+**PARKED by the owner 2026-10-28e, with a redirect.** D, N, V and W stay unimplemented and the
+remaining evidence work on them waits. The owner's instruction was to park the unproven ones and
+use what is already proven instead: **22 of 26 handlers now have execution evidence**, which is
+enough to test a great many mechanics against the original. That is where the effort went.
 
 **What remains, and why it is not cheap after all:**
 
