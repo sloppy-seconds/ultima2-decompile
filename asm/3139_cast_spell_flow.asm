@@ -1,11 +1,45 @@
-# cast_spell_flow — CAST command spell selection + checks
-# name-evidence: strings 'NEED WAND OR STAFF!' / 'NO SPELL!'; cmd_C jumps into this range
+# cast_spell_flow — the CAST gates and the per-spell dispatch. NOT one routine.
+# name-evidence: strings 'NEED WAND OR STAFF!' / 'NO SPELL!' / '-FAILED!'; cmd_C jumps into
+#           this range at runtime 0x3153.
+# BOUNDARY, corrected 2026-10-25: this file's declared start is wrong by design of the bulk
+#           wave and the name covers two unrelated things. Runtime 0x3139..~0x3152 is
+#           `sub_3339`, a SEGMENT helper — the caller passes a segment in AX, it sets ES to
+#           it and works at offset 0x1900 — and its only callers are the dead block in
+#           asm/310B_cmd_C.asm (video segment 0xB800, then 0xBA00). The CAST body starts at
+#           runtime 0x3153, which is where cmd_C actually lands. Splitting them needs a new
+#           row in disasm/function-map.tsv, so it is recorded here rather than done silently;
+#           until then do not read 0x3139 as part of the cast flow.
+# THE GATES, in byte order (all of this is read off the listing, not inferred):
+#           1. print pool[0x24 + DS:63] — the readied spell's NAME, from the SPELLS group of
+#              the indexed name pool (asm/4C55_name_pool.asm: NONE, LIGHT, DOWN LADDER,
+#              UP LADDER, PASSWALL, SURFACE, PRAYER, MAGIC MISSILE, BLINK, KILL at pool[36..45]).
+#           2. DS:D7 + DS:D8 must be non-zero, else 'NEED WAND OR STAFF!'. Neither byte is
+#              modelled in engine/src/core/state.h yet.
+#           3. DS:63 (the readied slot) zero -> return silently, no message at all.
+#           4. DS:B6[DS:63] must be non-zero, else 'NO SPELL!'.
+#           5. decrement DS:B6[DS:63] by 1 in packed decimal — spells are CONSUMABLE counts,
+#              which is the same array the Z screen lists (docs/status-screen-z.md § 7).
+#           6. DS:4A must be >= 4, else '-FAILED!'. DS:4A is the site kind: 0 world map,
+#              1 village, 2 town, 3 castle, 4 tower, 5 dungeon. So CASTING ONLY WORKS IN A
+#              TOWER OR A DUNGEON. That single byte explains the 2026-10-25 capture, whose
+#              seed was standing on the world map.
+#           7. dispatch on DS:63: 1 -> sets DS:26 = 0x96 (150), which is the dungeon light
+#              step counter, and independently corroborates the owner's '~150 on I'
+#              recollection from a completely different direction; 2 and 3 (DOWN/UP LADDER)
+#              move DS:25 against a 0xf bound and additionally require DS:4A == 4; 4..9 branch
+#              on into the rest of the range.
+#           There is no key read, no direction and no cursor anywhere in steps 1-7. CAST aims
+#           at nothing; the spells that need a position are dungeon-side.
 # func 3139..330B  len 01D3 B  evidence: call+reko
-# strings: "-FAILED!"; "-FAILED!"
+# strings: "-FAILED!"; "-FAILED!"; "NEED WAND OR STAFF!"; "NO SPELL!"
 # calls: L_000c33, L_001651, L_0030d1, L_003432, L_0034a2, L_0034a5, L_0034ad, L_0034d2 (+9 more)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+# provenance: static, re-read end to end 2026-10-25
+#           the line here used to read "entry never appears in ExecutedInstructions of any of
+#           the 60 harvests" — that is exactly the hand-kept claim cmd_handlers.py got wrong
+#           eight times, and it has not been re-derived against the 141-harvest corpus. Do not
+#           cite it. cmd_C itself is confirmed executed in 2 harvests.
+# confidence: high for the gate order and the constants (all direct reads); low for what each
+#           per-spell branch beyond 1..3 does, which is dungeon behaviour and parked
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 cast_spell_flow:
 L_003339:
