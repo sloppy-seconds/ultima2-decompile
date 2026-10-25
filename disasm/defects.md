@@ -228,3 +228,40 @@ the `asm/` file set cannot diverge, so every new start is a new file and a new b
 would make it safe to propose: run the existing split detector over the span
 (`tools/fragment_splits.py --tsv --all`) and bring the candidate starts plus the byte histogram
 above. That is the work order; it is not a re-cut.
+
+**The same failure sits immediately after it, and the two together are the largest un-decoded
+area in the tree.** `asm/8387` is one row, `8387..8CCF`, 2377 bytes, **100% of its body lines
+raw-byte `db`**, 34% zeros. So `72A0..8CCF` — about 6.7 KB, 18% of the executable's code
+segment — is rendered as bytes across two rows. `asm/8DCD` sits past it and is already noted
+below as a real 8-byte INT 1Ah wrapper whose row simply claims 563 bytes of mostly-zero tail.
+
+Ranked scan, reproducible in one line (this is what found all of the above):
+
+```python
+# for each asm/ file with span >= 64 B: fraction of body lines that are `db`/`.byte`,
+# and fraction of the span's bytes that are 0x00
+python3 - <<'PY'
+import glob, re
+exe = open("original/ultimaii.exe", "rb").read()
+for p in sorted(glob.glob("asm/*.asm")):
+    t = open(p, errors="replace").read()
+    m = re.search(r"#\s*func\s+([0-9A-Fa-f]{4})\.\.([0-9A-Fa-f]{4})", t)
+    if not m: continue
+    s, e = (int(g, 16) for g in m.groups()); span = e - s + 1
+    body = [l for l in t.splitlines() if l.strip() and not l.lstrip().startswith("#")
+            and not re.match(r"^(L_[0-9A-Fa-f]{6}:|[A-Za-z_$.][\w$.]*:)", l)]
+    if span < 64 or not body: continue
+    raw = sum(1 for l in body if l.strip().startswith(("db ", ".byte"))) / len(body)
+    zero = exe[s + 0x200:e + 0x201].count(0) / span
+    if raw >= 0.6 or zero >= 0.35:
+        print(f"{span:6d} zero={zero:4.2f} raw={raw:4.2f}  {p}")
+PY
+```
+
+Fourteen files come back, and they are three different things. **Correctly raw**: the menu
+string blobs (`15E1_tavern_menu`, `19D7_magic_shop_menu`, `5400_sub_5400`) — those are text, and
+`db` is the right rendering. **Already documented**: `8DCD_sub_8dcd`, whose header says its row
+claims a mostly-zero tail. **The actual defect**: `72A0`, `8387`, `6144`, `48CA`, `277B`,
+`437E_cmd_V`, `3048_vehicle_plane`, `68ED` — spans where the clean wave could not tell code from
+data and rendered everything as bytes, of which `72A0` and `8387` are an order of magnitude
+bigger than the rest.
