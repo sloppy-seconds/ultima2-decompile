@@ -361,7 +361,7 @@ start	end	len	evidence	name_hint
 147F	152D	00AF	call+reko	
 152E	154D	0020	call+reko	
 154E	155C	000F	seed+call+reko	
-155D	1563	0007	call+reko	
+155D	1563	0007	call+reko	chatter_table_selector
 1564	156A	0007	seed+reko	
 156B	156D	0003	seed+reko	
 156E	1570	0003	seed+reko	
@@ -457,7 +457,7 @@ start	end	len	evidence	name_hint
 2340	2351	0012	seed+reko	
 2352	2360	000F	seed+reko	
 2361	2361	0001	seed+reko	
-2362	236F	000E	seed+call+reko	
+2362	236F	000E	seed+call+reko	aim_state_clear
 2370	2372	0003	seed+reko	
 2373	2377	0005	seed+reko	
 2378	2382	000B	seed+reko	
