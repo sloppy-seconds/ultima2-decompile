@@ -201,7 +201,7 @@ the sector grid each time. Compare against both candidate transforms.
 identification. Ordinary walking is already scriptable.
 **Needs owner:** no.
 
-### G2 — food cost of a blocked step `[ ]` — first attempt failed, and the reason is the finding
+### G2 — food cost of a blocked step `[x]` — closed 2026-10-25: **it costs the same 19**
 **Action:** stand adjacent to **water** (`0x00`, already proven blocked) and step
 into it; read `DS:53..55` before and after.
 **Why the agent can do it:** water is a known blocked tile, so this does **not**
@@ -229,6 +229,25 @@ worth writing down before anyone else runs this:**
 sector grid at `DS:1800`; read `DS:00/01` and `DS:53..55`; send the one arrow that steps into
 it; read both again immediately; accept the sample only if the position changed (for the
 control case) or the target was provably blocked (for the blocked case). Repeat three times.
+
+**Closed 2026-10-25 by `captures/spice86/g2-step-food/`** (run `tmp/20261025-213254`, label
+`stepcost`, seed `tmp/seed/player`, sector 31). The protocol worked and the answer is that
+**a refused step costs the full 19**, the same as an accepted one:
+
+- `Left` into the blocked cell at (49,24): `DS:00/01` unchanged, food 997904 -> 997885,
+  and `blocked-west-zoom.png` shows `CMD: WEST--INVALID MOVE!`, which is the proof the
+  keypress landed rather than being dropped. A second refused step gave the same -19.
+- `Down` into an open cell: moved, 997875 -> 997856, also exactly -19.
+- Control: three reads with no input, flat.
+
+The discriminator that makes these safe against the auto-PASS confound is arithmetic:
+the PASS spends 10 and a step spends 19, so a delta of 9 mod 10 is exactly one step
+charge and 8 mod 10 is exactly two, whatever passes fired in between. The mechanism is
+`asm/2423_passability` subtracting at `asm/2599_food_drain_walk.asm` *ahead of* the tile
+verdict, which all four walk arms call. Engine consequence: the reject arm used to charge
+nothing, and the accept arm charged 13 rather than 19 (see G34 and
+`docs/phase4-state.md` CP4). Both are fixed and gated by `CP4 G2` in `engine/tests/run_cp4.sh`
+with `engine/tests/g2_step_food.py`.
 
 ### G3 — who writes `DS:2CB`/`DS:2DE` `[x]` — closed 2026-10-28d as a DOS-port artefact, unanswered
 **Closed without a capture, and that needs saying plainly because the item's own rule is "only a
@@ -561,7 +580,8 @@ live run is the one that outranks this file.
 `--seed-map` it, board with `B`, then step and read `DS:53..55` back-to-back around each keypress.
 Accept a sample only if `DS:00/01` changed — see G2's failure before repeating it.
 
-### G34 — food vs mode of transport, and the gremlin's fixed 100 `[ ]` *(third-party data 2026-10-28e; agent-testable, and one claim contradicts a measured finding)*
+### G34 — food vs mode of transport, and the gremlin's fixed 100 `[~]` *(claim 1 and the
+internal conflict are settled; the gremlin figure is untouched)*
 Third-party wiki data supplied by the owner. Grade: **third-party hypothesis — the bytes get to
 veto**. It is worth more than the last one because it is checkable against code already decoded.
 
@@ -574,6 +594,16 @@ veto**. It is worth more than the last one because it is checkable against code 
    the vehicle byte is `[DS:14]` (`map_byte >> 1`; `0x48` ship, `0x4C` plane, `0x50` rocket, per
    CP5 ticket C7). Look for a guard on `DS:14` around the spend. If the spend is ungated, the
    claim is false in this build or the exemption lives in the caller.
+   **Settled 2026-10-25, `captures/spice86/g2-step-food/`.** The guard exists and it is on
+   `[DS:13]`, the same byte in the `>> 1` domain (`0x24` ship, `0x26` plane, `0x28` rocket),
+   at `asm/253B_food_mode_dispatch.asm` inside the passability routine. The verdict is
+   **half the claim**: the ship and the rocket are exempt (0 food per step, measured), the
+   plane is **not** — it pays, and it pays twice (38), because `asm/2626_food_drain_mounted.asm`
+   calls the delay tail that falls through a second subtract. The horse pays 38 too. On foot
+   it is 19. The claim's `PASS` exception is real and separate: PASS always costs 10 from
+   `asm/090D_sub_090d.asm` whatever the mode. Grade: the exempt/charged split is observed under
+   a forced `DS:13`, and `DS:13` is volatile, so a real boarding capture would still be worth
+   having — but the branch structure is bytes, not inference.
 2. **Food declines while in dungeons.** Dungeons are parked (AGENTS.md § 3), so this is recorded
    and deferred, not testable now.
 3. **Gremlins steal a fixed 100 food units each turn.** `asm/12DB_dungeon_events.asm` carries the
@@ -586,16 +616,22 @@ veto**. It is worth more than the last one because it is checkable against code 
    aboard exemption. Worth keeping the two separate in anything written, because they can look
    like a contradiction when merged.
 
-**And a conflict on our own side, which outranks all of the above:** the step-cost measurement
-taken 2026-10-28e (`tmp/20261025-213254`, maxed seed, sector 31) showed food falling by **19 per
-successful step** across three consecutive moves (`999999 → 999980 → 999961 → 999942`), with the
-first step free. That contradicts the recorded finding that **the walk loop calls no food drain**
-(CP4b T2, "no per-step tick"). One of the two is wrong and it has not been resolved. Do not cite
-either until it is: re-run with the auto-PASS excluded from the window (bracket a single keypress
-with back-to-back reads, and confirm `DS:00/01` moved), and if the per-step drain survives that
-control then T2's conclusion needs retracting and the engine is under-charging every step.
+**And a conflict on our own side, which outranks all of the above: RESOLVED 2026-10-25, and
+T2 was the false one.** The step-cost measurement taken 2026-10-28e (`tmp/20261025-213254`,
+maxed seed, sector 31) showed food falling by **19 per successful step**, and CP4b T2 had
+recorded the opposite: "the walk loop calls no food drain". Re-run with the auto-PASS
+excluded from the window — one arrow, reads back to back, `DS:00/01` confirmed — the drain
+survives at exactly 19, accepted and refused alike, and so does the byte-level explanation:
+all four walk arms `call 0x2423`, and `asm/2599_food_drain_walk.asm` / `asm/2626_food_drain_mounted.asm`
+subtract `0x19` inside it, ahead of the verdict. **T2's "no per-step tick" is retracted**
+(see `docs/phase4-state.md` CP4). The engine was under-charging every step twice over: it
+charged nothing on a refusal, and it charged 13 rather than 19 on an acceptance, because
+`U2_FOOD_PER_MOVE` was written `19u` where the asm's immediate is `0x19` and decimal 19 into
+a packed-decimal subtract is thirteen. Both fixed, both gated.
 
-**Needs owner:** no. All of 1 and 3 and the conflict above are static or headless-testable.
+Still open on this item: **claim 3**, the gremlin's fixed 100 food, untouched.
+
+**Needs owner:** no. Claim 3 is static or headless-testable; 1 and the conflict above are closed.
 
 ### G33 — McDonall's take-out window: can food be stolen without limit? `[ ]` *(owner-recalled; needs a town seed)*
 

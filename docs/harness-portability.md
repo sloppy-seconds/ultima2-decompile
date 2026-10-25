@@ -190,6 +190,24 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-25 (the 28f session)** — **A packed-decimal subtract takes an immediate byte, not a
+  count, and a test that reads only the visible digits cannot tell the difference.** A routine that
+  subtracts `0x19` from a three-byte packed-decimal counter was ported as the decimal number 19,
+  which fed 0x13 into the emulated subtract and charged thirteen where the original charged
+  nineteen. The unit test for that subtraction passed before and after, because it asserted the
+  four digits the status band prints and the band prints only the top two bytes — the difference
+  between thirteen and nineteen lands entirely in the byte nobody displays. Two rules follow for
+  any harness that ports a `cmc ; sbb ; das ; cmc` idiom: emit the immediate verbatim and name the
+  parameter for what it is (a raw subtrahend byte), and make the test assert the invisible low
+  byte, not just the rendered value. The same session produced two more general ones. **When two
+  periodic costs coexist, discriminate by modulus instead of trying to eliminate the confound:**
+  an idle tick spent 10 and an action spent 19, so any delta of 9 mod 10 was exactly one action
+  however many ticks fired in the gap — that arithmetic made a measurement safe that no amount of
+  tightening the timing window would have made safe. And **a byte forced into a live process is
+  volatile**: the program restored the mode byte being poked between the write and the input that
+  was supposed to exercise it, the poke tool's own read-back said the write had landed, and the
+  resulting sample measured the wrong branch while looking clean. Confirm a forced value at the
+  moment of the input, in the same read as the thing being measured.
 * **2026-10-28f** — **Never let a gate read a hand-kept copy of a fact it could derive.** The
   harness had a crosswalk tool that reported whether each command handler had ever executed by
   parsing a provenance comment in that handler's own file. The comment was written when the capture
