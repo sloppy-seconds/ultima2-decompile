@@ -272,6 +272,18 @@ def main():
 
     # The stream changed. That is legal only inside files that carry a correction marker.
     head_raw, work_raw = raw_from_git(base), raw_from_worktree()
+    # A rename is a removal plus an addition, and the whole point of this tree's naming rule is
+    # that a discovered name goes into the filename in the same commit that learns it. Before
+    # this, a rename that also corrected a body was permitted only by accident: the new file
+    # passed on its marker, the removed one was an unconditional offender, and the pair went
+    # green the moment it was committed because the guard compares against HEAD. That is a gate
+    # whose verdict depends on whether you committed before running it, which is not a gate.
+    # A removal is now permitted when the same address reappears as a new file carrying a
+    # marker — i.e. the rename is attributed to a correction, which is the only legitimate
+    # reason for a body to move between filenames.
+    renamed_targets = {os.path.basename(p).split('_')[0]
+                       for p, raw in work_raw.items()
+                       if p not in head_raw and marker_in(raw)}
     offenders, permitted = [], []
     for path in sorted(set(head_raw) | set(work_raw)):
         old, new = head_raw.get(path), work_raw.get(path)
@@ -279,7 +291,12 @@ def main():
             mk = marker_in(new) if new else None
             (permitted if mk else offenders).append((path, mk or 'new file, no marker'))
         elif new is None:          # removed file: its body went somewhere or vanished
-            offenders.append((path, 'file removed'))
+            mk = marker_in(old) if old else None
+            addr = os.path.basename(path).split('_')[0]
+            if addr in renamed_targets:
+                permitted.append((path, 'renamed (body moved to a marked new file at %s)' % addr))
+            else:
+                offenders.append((path, mk or 'file removed'))
         elif head_raw[path] != work_raw[path] and body_lines(old) != body_lines(new):
             mk = marker_in(new)
             (permitted if mk else offenders).append(

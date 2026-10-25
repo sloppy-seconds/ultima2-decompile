@@ -13,6 +13,13 @@
 #   4  body MOVED between files, stream preserved -> guard MUST pass with no marker
 #                                          (merges stay legal -- today's three merges)
 #
+# and two more were added 2026-10-28e when two sessions renamed a file while correcting its
+# body (a discovered name goes in the filename, and the body was provably wrong) and the guard
+# only caught it by accident of ordering:
+#
+#   9  file RENAMED + body changed, WITH marker -> guard MUST pass, and must say 'renamed'
+#  10  file RENAMED + body changed, NO marker   -> guard MUST fail
+#
 # Runs in a throwaway git worktree so the real checkout is never touched. Skips cleanly if
 # git worktree is unavailable.
 set -uo pipefail
@@ -172,6 +179,50 @@ rc8=$( cd "$WT/tmp-empty" && git init -q . && git add README && \
        env -u CI -u GITHUB_ACTIONS python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $? )
 [ "$rc8" = "2" ] && ok "8  an empty asm/ is an error, not a conserved" \
                  || no "8  expected exit 2 on an empty asm/, got $rc8"
+
+# ---- 9: a rename that also corrects a body must be attributed, not waved through -------
+# The guard compares against HEAD, so a rename+correction committed in one commit was invisible
+# to it: the new file passed on its marker and the removed one was an unconditional offender,
+# and the pair went green as soon as it was committed. A verdict that depends on whether you
+# committed before running the gate is not a gate. With a marker on the new file it is permitted
+# and named as a rename.
+REN="asm/0711_speed_delay_lookup.asm"
+REN2="asm/0711_renamed_ctrl.asm"
+
+# strip_body_change_and_marker <file> <with_marker>
+apply_ctrl() {
+    python3 - "$1" "$2" <<'PY'
+import sys
+p, mark = sys.argv[1], sys.argv[2] == "mark"
+lines = open(p).read().splitlines(True)
+out, done = [], False
+for ln in lines:
+    if not done and ln.startswith("        "):
+        out.append("        nop   # CONTROL body change\n")
+        done = True
+        continue
+    if mark and ln.startswith("# confidence:"):
+        out.append("# body corrected: 2026-01-01 -- evidence: guard rename control\n")
+        mark = False
+    out.append(ln)
+open(p, "w").write("".join(out))
+PY
+}
+
+git mv -q "$REN" "$REN2" 2>/dev/null || { mv "$REN" "$REN2"; }
+apply_ctrl "$REN2" mark
+rc9=$(env -u CI -u GITHUB_ACTIONS python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $?)
+[ "$rc9" = "0" ] && ok "9  rename + marked body change is permitted and attributed" \
+                 || no "9  expected exit 0 for a marked rename, got $rc9"
+git reset -q --hard HEAD >/dev/null 2>&1; git clean -qfd asm/ >/dev/null 2>&1
+
+# ---- 10: the same rename with NO marker must go red -------------------------------------
+git mv -q "$REN" "$REN2" 2>/dev/null || { mv "$REN" "$REN2"; }
+apply_ctrl "$REN2" nomark
+rc10=$(env -u CI -u GITHUB_ACTIONS python3 "$ROOT/engine/tests/asm_body_guard.py" >/dev/null 2>&1; echo $?)
+[ "$rc10" != "0" ] && ok "10 unmarked rename + body change still goes red" \
+                   || no "10 guard waved through an unmarked rename -- the exception is too wide"
+git reset -q --hard HEAD >/dev/null 2>&1; git clean -qfd asm/ >/dev/null 2>&1
 
 echo
 echo "caught $pass, MISSED $fail"
