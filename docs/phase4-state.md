@@ -52,9 +52,10 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
   any `STR` line inside a code span in `disasm/redecoded/` must be re-checked
   before being cited. Next step is one breakpoint capture at runtime `0x2423`.
 
-- **Entry point is `docs/handoff-2026-10-23.md`.** It carries today's closures (G1, G8,
-  G18, G20, the dungeon encoding, the price operand) and the triage of yesterday's open
-  list. The 2026-10-22 handoff it supersedes is archived under `docs/archive/`. The CP4b
+- **Entry point is `docs/handoff-2026-10-28d.md`.** The 2026-10-23 handoff named below is
+  superseded; it is kept as the record of what was closed that day (G1, G8,
+  G18, G20, the dungeon encoding, the price operand) and the triage of the open list of the
+  time. The CP4b
   T1 finding and part of T2 were **retracted** on 2026-10-21 — see
   `docs/phase4-implementation.md § CP4b → RETRACTION` and
   `docs/spice86-live-findings.md`.
@@ -144,19 +145,39 @@ Done and green: kickoff § 2 items 1-2 (name = `MAPX` + two digits
 
 ## Next checkpoint
 
-**Overnight queue armed 2026-10-22:** `docs/overnight-harness.md` is an
-owner-independent task queue (H1..H3) and `docs/overnight-harness-prompt.md` is the
-text to paste to a fresh agent to run it. Nothing in it needs the owner; anything that
-would has been left out rather than approximated. The CP5-prep queue this replaces
-(T1..T10) ran 2026-10-21/22 and is **complete** — queue and prompt archived under
-`docs/archive/`, results in `docs/phase4-overnight-cp5-report.md`.
+**This section was stale for a week and pointed at CP4 although CP5 shipped.** Rewritten
+2026-10-28e. It deliberately carries no counts: every number it could name is printed by a
+tool, and a hand-kept number here has gone stale before.
 
-**CP4 — overworld + movement.** Start a fresh session from
-`docs/phase4-kickoff-cp4.md`, which records the one decision that shapes the
-whole checkpoint: the map is **runtime data** (`original/mapxNN`, ~30 files of
-exactly 4224 bytes each), not something the extractor pulls into code, so CP4
-adds a `--data-dir` seam and reads the player's own files the way the original
- did. It also lists the open questions to settle before writing any rendering.
+**Fresh agent: read `AGENTS.md`, then `docs/handoff-2026-10-28d.md`.** That handoff is the
+entry point; the kickoff docs below are historical work orders, not the queue.
+
+**CP5 — combat.** Implemented or resolved ticket by ticket (see § CP5 above and
+`docs/phase4-kickoff-cp5.md` for the build order as executed). What remains is an
+**owner gate**, not code: the acceptance bar for CP5 was never set.
+
+**CP6 — towns + the full command set is the next checkpoint, and it is blocked on one owner
+decision.** The engine has no command loop, and the command loop is upstream of era display,
+speed wiring, towns and time travel. The choice is whether to implement all 26 command
+handlers — marking the ones with no execution evidence as static-inference-only — or only the
+ones a capture has actually observed running, leaving a visible gap where the rest would be.
+`python3 tools/cmd_handlers.py` prints the crosswalk and its `exec` column is that evidence;
+the gate fails when the jump table, the filenames and the provenance lines disagree. Ask
+before starting: a stub that looks implemented is worse than a gap that says what it is.
+
+**Owner-independent work that does not need the above.** In rough value order, each with the
+tool that measures it rather than a number copied from a diary:
+
+1. The outstanding forced-keep body corrections — queue and status from
+   `python3 tools/forced_keep_audit.py`, mechanism in § "the body-correction path" of the
+   current handoff, verification recipe in `AGENTS.md`.
+2. Making `forced_keep_audit`'s `begins-mid-insn` headline defensible instead of known
+   inflated — it must consume `db` lines from `asm/` rather than trusting a linear objdump
+   pass over inline string data.
+3. Wiring the mutation harnesses (`engine/tests/mutate_speed.sh`, `tools/mutate_stepgate.sh`)
+   into CI. A control nobody runs has already failed.
+4. The rendering-gap headers listed in `disasm/str-out-rendering-gap.tsv`, now unblocked by
+   the body-correction marker path.
 
 ## Gate log
 
