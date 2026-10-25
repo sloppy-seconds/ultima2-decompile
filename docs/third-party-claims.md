@@ -29,12 +29,18 @@ and a prediction that fails is a finding in its own right.
 
 ## 2. Claims the binary does not corroborate (yet)
 
-- **"Negate Time needs a strange coin."** No `STRANGE COIN` string exists anywhere in `asm/`, and
-  unlike the skull-key claim below, nothing in the hint table mentions a coin. Either the cheat
-  sheet's item name is a paraphrase, or the name lives in the indexed name pool
-  (`docs/status-screen-z.md` § 7) rather than as a code string — which is certainly where
-  `QUICK SWORD` lives, since `QUICK` is absent from `asm/` while the seeded test character wields
-  item 9 (`QUICK SWORD`). **Check the name pool before treating this as a refutation.**
+- **"Negate Time needs a strange coin."** ~~No `STRANGE COIN` string exists anywhere in `asm/`~~
+  **the absence is explained, 2026-10-25: the name is in the pool.** `STRANGE COIN` is entry 13
+  of the extracted items table and `QUICK SWORD` entry 9 of the weapons table (both 0-based, as
+  `extractor.py` emits them) of the indexed name pool that
+  `docs/status-screen-z.md` § 7 describes — the region `asm/4C50_plane_landing_site.asm` renders
+  as invented instructions, which is why neither string appears in `asm/` as a `db`. The pool is
+  read by `engine/tools/extract/extractor.py` from the exe and asserted against the `HANDS == 19`
+  anchor, so both names are binary text, not walkthrough paraphrase. **So this is not a
+  refutation of the claim and never was.** What the claim still lacks is the other half: that
+  `cmd_N` consults that item at all, which is the parked-handler question in
+  `engine/src/game/commands.c`, and it needs a capture of `N` running (it is one of the four
+  handlers with no execution evidence).
 - **"Launch a plane needs a skull key."** ~~not corroborated~~ **REFUTED AS A GAP — it is
   corroborated.** The first search looked for `SKULL KEY` (singular) and found nothing; the hint
   table says `AVIATORS USE SKULL KEYS!`. Recorded here because the miss was the search's, not the
