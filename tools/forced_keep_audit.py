@@ -249,6 +249,47 @@ def selftest(data: bytes) -> int:
     return 0
 
 
+def tail_attribution(tail_addr: int, tail_bytes: bytes) -> tuple[str, str]:
+    """Has the fragment covering `tail_addr` been told what those bytes really are?
+
+    A partial forced-keep is a CAUSE and it stays forever, correctly: the instruction
+    genuinely starts in the previous fragment's last byte, so the previous fragment's span
+    really does hold only part of it. What we actually want to know is whether the NEXT
+    fragment still pretends the leftover bytes are instructions. So:
+
+      corrected    the fragment opens with a .byte line carrying exactly those tail bytes
+      outstanding  the fragment opens with a mnemonic, i.e. it is still showing invented code
+      unknown      no file covers that address (should not happen)
+
+    Without this the audit's headline number never moves, because it was counting causes.
+    It did exactly that after nine real corrections: 63 before, 63 after, and a reader would
+    reasonably conclude nothing had been done.
+    """
+    import glob
+    fs = tail_addr + BIAS
+    best = None
+    for path in glob.glob("asm/*.asm"):
+        m = re.match(r"^asm/([0-9A-Fa-f]{4})_", path)
+        if not m:
+            continue
+        start = int(m.group(1), 16) + BIAS
+        if start <= fs and (best is None or start > best[0]):
+            best = (start, path)
+    if best is None:
+        return "unknown", ""
+    body = [ln for ln in open(best[1], errors="replace").read().splitlines()
+            if not ln.lstrip().startswith("#")]
+    for ln in body:
+        if ln.strip() and not ln.startswith(("sub_", "L_")) and not ln.rstrip().endswith(":"):
+            bm = BYTE_RE.match(ln)
+            if bm:
+                got = bytes(int(x, 16) for x in HEXB_RE.findall(bm.group(1)))
+                if got.startswith(tail_bytes):
+                    return "corrected", os.path.basename(best[1])
+            return "outstanding", os.path.basename(best[1])
+    return "unknown", os.path.basename(best[1])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tsv", action="store_true")
@@ -285,6 +326,16 @@ def main() -> int:
         all_f.extend(audit_file(p, data, prev.get(p)))
 
     partial = [f for f in all_f if f["kind"] == "partial-forced-keep"]
+    # classify each cause by whether its consequence has been fixed
+    data_full = data
+    for f in partial:
+        m = re.search(r"(\d+) B kept, real insn (\d+) B", f["detail"])
+        kept, real = int(m.group(1)), int(m.group(2))
+        addr = int(f["addr"], 16)
+        f["tail"] = data_full[addr + BIAS + kept: addr + BIAS + real]
+        f["status"], f["where"] = tail_attribution(addr + kept, f["tail"])
+    outstanding = [f for f in partial if f.get("status") == "outstanding"]
+    done = [f for f in partial if f.get("status") == "corrected"]
     inside = [f for f in all_f if f["kind"] == "begins-mid-insn"]
     cascade = [f for f in all_f if f["kind"] == "boundary-inside-insn"]
     files_hit = {f["file"] for f in all_f}
@@ -296,6 +347,9 @@ def main() -> int:
         return 0
 
     print(f"scanned {len(files)} asm/ files")
+    print(f"  partial forced-keeps (CAUSES, permanent by design):       {len(partial)}")
+    print(f"    -> consequence CORRECTED (next fragment names the bytes): {len(done)}")
+    print(f"    -> still OUTSTANDING (next fragment shows invented code): {len(outstanding)}")
     print(f"  BEGINS-MID-INSN   (PROVISIONAL, inflated by inline strings): {len(inside)}")
     print(f"  partial-forced-keep (DEFENSIBLE signal):                     {len(partial)}")
     print(f"  walk divergences    (unreliable: desync cascades):          {len(cascade)}")
