@@ -50,8 +50,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_ENGINE = os.path.join(ROOT, "engine", "src")
 DEFAULT_STATE = os.path.join(ROOT, "docs", "phase4-state.md")
 
-# A handler definition: `void cmd_C(` or `static void cmd_C(` at the start of a line.
-DEF_RE = re.compile(r"^\s*(?:static\s+)?(?:void|int|bool)\s+cmd_([A-Za-z])\s*\(")
+# A handler definition: a function named cmd_<L> at the start of a line. The return type is
+# deliberately NOT matched by name: the first version listed void|int|bool and silently
+# reported zero handlers against a tree that had two, because they return u2_cmd_result.
+# Any identifier followed by cmd_X( is what a definition looks like.
+DEF_RE = re.compile(r"^\s*(?:static\s+)?[A-Za-z_][A-Za-z0-9_]*\s+cmd_([A-Za-z])\s*\(")
 # The marker, matched anywhere in the file that defines the handler.
 MARK_RE = re.compile(r"UNPROVEN:\s*cmd_([A-Za-z])")
 # Matching is file-scoped and letter-specific rather than "the N lines above the definition",
@@ -312,6 +315,17 @@ def selftest():
         ("C13 CP8 (endgame) claims done while markers stand -> RED", 1,
          _handlers("A"), unprov_src,
          honest_doc + "\n| CP8 | endgame + full playthrough | complete | x |\n"),
+        # The bug this control exists for: handlers returning an enum type were invisible to the
+        # definition regex, so the gate reported zero handlers and PASSed over real unmarked
+        # ones. A gate that cannot see the code it guards is the failure this project has now
+        # hit four times.
+        ("C14 handler with an enum return type is seen -> RED", 1,
+         _handlers("A"),
+         "static u2_cmd_result cmd_C(u2_ctx *ctx)\n{\n    return DONE;\n}\n", honest_doc),
+        ("C15 same handler, with the marker -> GREEN", 0,
+         _handlers("A"),
+         ("/* UNPROVEN: cmd_C never seen running in a capture. */\n"
+          "static u2_cmd_result cmd_C(u2_ctx *ctx)\n{\n    return DONE;\n}\n"), honest_doc),
     ]
 
     for name, want, handlers, source, doc in cases:

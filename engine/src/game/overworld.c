@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game/commands.h"
 #include "game/overworld.h"
 #include "game/ai.h"           /* u2_ai_creature_turn: the monsters' turn */
 #include "game/combat.h"      /* u2_combat_attack, u2_attack */
@@ -1131,7 +1132,29 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 u2_death(ctx);
             creature_turn(ctx, ow);
             continue;
-        default: continue;                                  /* not a move key */
+        default:
+            /* The command jump table. asm/0A1F is the only route to the 26 handlers and it
+             * is reached for every letter key, so the engine routes letters through the same
+             * shape rather than growing this switch: range test, table index, dispatch, and
+             * the shared cmd_done epilogue lives in commands.c with the handlers.
+             *
+             * U2_CMD_UNKNOWN deliberately does NOT print anything yet. The original's
+             * out-of-range arm is asm/0A1C -> L_002475, and the illegal-command message is a
+             * different site again; neither is wired, and printing a guess here would be the
+             * invention the project's rules exist to stop. Falling through is the honest
+             * no-op: the key is consumed, nothing happens, no turn passes. */
+            {
+                const u2_cmd_result cr = u2_cmd_dispatch(ctx, ow, k.ch);
+                if (cr == U2_CMD_AWAIT)
+                    continue;
+                if (cr == U2_CMD_DONE) {
+                    /* The handler printed its message and the CR + prompt. Whether the
+                     * post-command sweep runs here is per-handler and unproven for these
+                     * two, so no creature_turn() -- see the note in commands.c. */
+                    continue;
+                }
+                continue;
+            }
         }
 
         /* A direction arriving while UNLOCK DIRECTION- is on the line answers the

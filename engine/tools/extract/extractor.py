@@ -237,6 +237,13 @@ MANIFEST = [
     ("U2_S_UNLOCK_DIRECTION",  "42F1_cmd_U.asm",          0),
     ("U2_S_NO_DOOR_THERE",     "4310_open_no_door.asm",   ("run", 0x4514, 14, "NO DOOR THERE!")),
     ("U2_S_NO_KEYS_FIT",       "4345_open_no_key_fit.asm", ("run", 0x4549, 17, "NO KEYS THAT FIT!")),
+    # The two command handlers whose entire body is one message: asm/3782 cmd_H and
+    # asm/37DC cmd_J each print a literal and `jmp L_000c33` (cmd_done). Added for the
+    # command dispatcher, engine/src/game/commands.c. Both are `high` confidence in their
+    # own headers and both are UNPROVEN in the capture sense -- neither letter has ever
+    # executed in any of the 60 harvests -- so the engine marks them as such.
+    ("U2_S_HYPER_WHAT",        "3782_cmd_H.asm",           0),
+    ("U2_S_JUMP_WHEE",         "37DC_cmd_J.asm",           0),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
