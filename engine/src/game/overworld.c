@@ -1147,13 +1147,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
              * no-op: the key is consumed, nothing happens, no turn passes. */
             {
                 const u2_cmd_result cr = u2_cmd_dispatch(ctx, ow, k.ch);
-                if (cr == U2_CMD_QUIT) {
-                    /* cmd_Z's Escape path. The handler cannot return from this loop from
-                     * inside commands.c, so it says so instead -- see U2_CMD_QUIT for why
-                     * that is an engine affordance and not a byte. */
-                    ctx->frame = NULL;
-                    return 0;
-                }
                 if (cr == U2_CMD_AWAIT)
                     continue;
                 if (cr == U2_CMD_DONE) {

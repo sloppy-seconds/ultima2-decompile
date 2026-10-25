@@ -134,22 +134,22 @@ static u2_cmd_result cmd_P(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
    unmeasured (it needs live monsters on the field), so this handler runs none and does not
    call cmd_done(); inventing either would be exactly the kind of guess the project's rules
    exist to stop.
-   The Escape path returns U2_CMD_QUIT. That is the engine's way out of the --play-map
-   development entry, not a claim about the original: what was measured is that any key
-   returns from the page to the world. */
+   Escape is NOT special here, and must not be made special. An earlier revision of this
+   handler returned a quit code on Escape as a convenience for the --play-map development
+   entry. That was never the original's behaviour -- docs/status-screen-z.md section 4 measured
+   that ANY key closes the page -- and a development affordance living inside a command handler
+   reads as fidelity when it is not. Removed 2026-10-26 at the owner's direction. Runs end on
+   input exhaustion, which is verified to work without it. */
 static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)letter;
     u2_status_draw_full(ctx);
     u2_key dismiss;
-    /* POLARITY FIXED 2026-10-25, found while wiring cmd_M: this read `== 0` for "got a key",
-     * which is the wrong way round — seam_key_wait returns non-zero when it has a key, as
-     * creation.c:159 relies on. So the Escape exit had never once fired, and dismiss was
-     * being read uninitialised on the branch that tested it. The bug predates this file: it
-     * came over verbatim from the case arm in u2_overworld_loop, and no test pressed Escape
-     * from the Z page, so nothing could see it. */
-    if (seam_key_wait(ctx, &dismiss) != 0 && dismiss.ch == 0x1B)
-        return U2_CMD_QUIT;
+    /* seam_key_wait returns NON-ZERO when it has a key (creation.c:159 relies on that). An
+     * earlier revision tested `== 0` here and then read `dismiss` uninitialised, so its
+     * Escape branch never fired. That branch is gone now; the wait itself is the byte, and
+     * which key arrived is deliberately not looked at. */
+    (void)seam_key_wait(ctx, &dismiss);
     u2_overworld_draw(ctx, ow);
     return U2_CMD_DONE;
 }

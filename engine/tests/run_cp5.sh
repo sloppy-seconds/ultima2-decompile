@@ -481,8 +481,7 @@ for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PA
     letter=${pair%%:*}; want=${pair#*:}
     python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
     # Two of these block for a second key inside the handler: Z waits for a dismissing key,
-    # M waits for a spell number. Anything but Escape for Z -- Escape is the engine's way out
-    # of --play-map, not a byte.
+    # M waits for a spell number. Any key closes the Z page -- there is no quit key.
     case "$letter" in
       Z) printf 'Z\nSP\n' > "$WORK/tab-$letter.keys" ;;
       M) printf 'M\n1\n'  > "$WORK/tab-$letter.keys" ;;
@@ -512,6 +511,18 @@ if grep -q "U2_T_SPELLS_N" build/gen_content.h 2>/dev/null; then
     fi
 else
     ok "dispatch: cmd_M pool-name assertion skipped with the pool absent (prompt half already passed)"
+fi
+
+# No quit key, and this is the guard that keeps it that way. docs/status-screen-z.md § 4
+# measured that ANY key closes the Z page; an earlier revision had cmd_Z return a quit code on
+# Escape as a --play-map development convenience, which read as fidelity and was not the
+# original at all. Removed 2026-10-26 at the owner's direction. Runs end on script exhaustion,
+# which is what the CP3 and CP4 scripts above now rely on.
+if grep -rq "U2_CMD_QUIT" src/ 2>/dev/null; then
+    bad "regression: a command-level quit path is back in src/ -- the original has no quit key"
+    grep -rn "U2_CMD_QUIT" src/ | head -3 | sed 's/^/        /'
+else
+    ok "no quit key: no command handler can end the session (matches the original)"
 fi
 
 printf '\n'

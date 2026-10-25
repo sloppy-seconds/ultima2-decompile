@@ -434,7 +434,7 @@ if [ -n "$CONTENT" ]; then
 
     # An abandoned creation must not run the tail at all.
     rm -rf "$WORK/t5ab"; mkdir -p "$WORK/t5ab"
-    printf 'ESC\nC\n0x1b\n' > "$WORK/t5ab.keys"
+    printf 'ESC\nC\n' > "$WORK/t5ab.keys"
     ./u2 --headless --data-dir "$CONTENT" --save-dir "$WORK/t5ab" \
          --script "$WORK/t5ab.keys" --dump-each > "$WORK/t5ab.out" 2>&1
     grep -q "CMD:" "$WORK/t5ab.out" \

@@ -16,8 +16,9 @@ bad() { printf '  FAIL  %s\n' "$1"; fail=1; }
 WORK=$(mktemp -d "${TMPDIR:-/var/tmp}/u2-cp3.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
-# 'P' after a character exists: ESC past the intro, P to load, ESC to leave.
-printf 'ESC\nP\n0x1b\n' > "$WORK/p_after.keys"
+# 'P' after a character exists: ESC past the intro, then P to load. No trailing key: the run
+# ends when the script runs out. There is deliberately no quit key -- the original has none.
+printf 'ESC\nP\n' > "$WORK/p_after.keys"
 
 printf 'engine CP3 test\n'
 
