@@ -326,8 +326,10 @@ def audit_file(path: str, data: bytes, anchor: int | None = None,
             if lbl in ins or lbl >= cur:
                 cur = lbl
             continue
-        if ln.startswith(("sub_", "clock_", "key_", "video_", "dos_", "speaker_")) \
-                and ln.rstrip().endswith(":"):
+        if not ln[:1].isspace() and ln.rstrip().endswith(":"):
+            # Any unindented label line. The first version matched a hand-written list of name
+            # prefixes, so every routine whose discovered name was not on the list (`hyperwarp_`,
+            # `set_year_`, `data_`) had its own label line fall through to the instruction walk.
             continue
         bm = BYTE_RE.match(ln)
         if bm:
@@ -356,9 +358,15 @@ def audit_file(path: str, data: bytes, anchor: int | None = None,
         dm = DB_RE.match(ln)
         if dm:
             cur += max(db_byte_len(ln), 1)
-            continue        # a real instruction line: must sit on an objdump instruction start
-        if cur in ins:
-            cur += ins[cur]
+            continue
+        # a real instruction line: advance by the length AT the cursor, re-decoding locally if
+        # the linear map has no entry there. A missing map entry is a fact about the map — it
+        # desynchronises on inline data upstream — and the old `else` branch jumped the cursor to
+        # the next map start, which is how asm/6DFD came to report a two-byte forced-keep one
+        # byte late and invent a truncation its own labels disprove.
+        n = ins.get(cur) or insn_len_at(data, cur, 4)
+        if n:
+            cur += n
         else:
             nxt = min((o for o in ins if o > cur), default=fe + 1)
             findings.append({
