@@ -46,9 +46,13 @@ REL = re.compile(r"\b(call|jmp|je|jne|ja|jae|jb|jbe|jg|jge|jl|jle|jo|jno|js|jns|
 
 
 def objdump_att(data, addr, raw):
+    # objdump treats a short buffer as trailing padding and prints `...` instead of decoding
+    # it: two bytes of 0x00 came back undecodable, which would have left real instructions as
+    # raw bytes. Padding the buffer with NOPs makes it decode the first instruction normally;
+    # only the first line is ever read back.
     with tempfile.TemporaryDirectory(dir="/var/tmp") as d:
         p = os.path.join(d, "b.bin")
-        open(p, "wb").write(raw)
+        open(p, "wb").write(raw + b"\x90" * 8)
         r = subprocess.run(["objdump", "-D", "-b", "binary", "-mi8086", "-Matt,data16,addr16",
                             f"--adjust-vma={addr + BIAS}", p], capture_output=True, text=True)
     for line in r.stdout.splitlines():
@@ -147,6 +151,10 @@ def selftest() -> int:
     stopped comparing and is guessing.
     """
     bad = 0
+    pad = objdump_att(b"\0" * 64, 0x4ACD, bytes([0x00, 0x00]))
+    ok_pad = pad is not None and pad.startswith("add")
+    print(f"CONTROL  a two-byte 0x00 buffer must decode, not print '...'          -> "
+          f"{'OK' if ok_pad else 'BROKEN'}   ({pad})")
     fwd = gas_bytes("call L_006625", 0x634c - BIAS, {0x6625})
     ok_fwd = fwd is not None and fwd[:3] == bytes([0xE8, 0xD6, 0x02])
     print(f"CONTROL  forward call encodes to e8 d6 02 at its own address -> "
@@ -155,7 +163,7 @@ def selftest() -> int:
     ok_reg = reg is not None and reg[:2] != bytes([0x8B, 0xFB])
     print(f"CONTROL  gas must differ on `mov %bx,%di` (stays a forced-keep) -> "
           f"{'OK' if ok_reg else 'BROKEN'}   ({reg[:2].hex(' ') if reg else None})")
-    if not (ok_fwd and ok_reg):
+    if not (ok_pad and ok_fwd and ok_reg):
         print("SELFTEST: FAIL — the gas comparison is not working; do not trust any output.")
         bad = 1
     else:
