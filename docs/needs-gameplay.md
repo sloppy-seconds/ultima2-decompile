@@ -518,6 +518,40 @@ something else entirely — which is the answer that actually unblocks the work.
 **Success criterion:** a named capture directory holding the sample table, and a verdict
 on whether `mode_a` is derived from the tile byte.
 
+### G31 — the twelve command letters no capture has ever executed `[ ]` *(agent-drivable, one session)*
+
+**Who can do it: an agent, headless.** This is not an owner item. Every letter below is
+reachable by sending one key to a live emulator, and `tools/spice86_type.py` does that with no
+display involved.
+
+`python3 tools/cmd_handlers.py` reports 14 of 26 handlers executed somewhere in the 60-harvest
+corpus and twelve never: **C D H J M N O S T V W Y**. The owner's ruling (AGENTS.md § 3) is that
+the engine implements all 26 and that these twelve may not be called code-complete until a
+capture exercises them, so the capture is the only thing that closes the marker.
+
+What each one needs, in the order that makes the session cheap (group by setup, per the section
+above — one seeded character, one sector, a run down the letters):
+
+- **H, J, Y** — print a message and are done. `HYPER WHAT?`, `JUMP...WHEE...`, `YELL WHAT?` plus
+  one `0x8d` glyph. The interesting part is what they do *not* do: `cmd_J`'s message promises a
+  jump the body never performs, and `cmd_N`/`cmd_Y` fall through into fragments whose end is not
+  established. A capture settles whether the fall-through reaches `cmd_done` at all.
+- **C, S, O, T** — print a prompt ending in a dash and consume a direction, like `U` already does.
+  The direction is the whole question: which cell is aimed at, and what the effect is when the
+  aim lands. `S`'s effect is already modelled in `combat.c` for CP5 ticket C6 and merely unwired.
+- **D** — `DESCEND` then a key-code test whose meaning its own header records as unresolved, and
+  dungeons are parked (AGENTS.md § 3), so this one needs a dungeon-capable session and is
+  therefore last.
+- **M** — `MAGIC SPELL READY #` needs the spell-ready state read alongside it.
+- **V, W** — `VIEW WHAT?` / the helm view, and the armour menu with its ownership and strength
+  gates. Both need a character seeded to *own* something, which `tools/u2_edit.py setpos` cannot
+  do today; extending it to the item bytes is the prerequisite, not the capture.
+
+**An item is closed by a named capture directory**, so the deliverable is
+`captures/spice86/cmd-letters-<date>/` with one screenshot per letter and the `ExecutedInstructions`
+entry proving each handler ran — not a belief about what the letter must do. Blockers worth
+naming up front: `V` and `W` need item seeding, and `D` needs a dungeon.
+
 ## Closed
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.
