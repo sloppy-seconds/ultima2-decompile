@@ -699,8 +699,14 @@ def tail_attribution(tail_addr: int, tail_bytes: bytes) -> tuple[str, str]:
             bm = BYTE_RE.match(ln)
             if bm:
                 got = bytes(int(x, 16) for x in HEXB_RE.findall(bm.group(1)))
-                if got.startswith(tail_bytes):
-                    return "corrected", os.path.basename(best[1])
+            else:
+                # A `db` line names its bytes too, and for a data island it is the only form
+                # the tree uses. The first version recognised only `.byte`, so every fragment
+                # that had already been adjudicated as data and printed the bytes verbatim was
+                # still counted as showing invented code.
+                got = db_line_bytes(ln)
+            if got and got.startswith(tail_bytes):
+                return "corrected", os.path.basename(best[1])
             return "outstanding", os.path.basename(best[1])
     return "unknown", os.path.basename(best[1])
 
