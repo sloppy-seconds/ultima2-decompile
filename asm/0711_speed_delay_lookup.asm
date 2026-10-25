@@ -9,14 +9,33 @@
 #           38B0_cmd_L, 421A, 5F08, 6999_space_status, 6DFD_hyperwarp_flow, 7030_space_collision,
 #           72A0). Whatever the game does at animation pace — the hyperwarp countdown, the space
 #           status crawl, key-wait timeouts — it takes its timing from here.
-# what the value is used as: a duration, not a distance. asm/6DFD_hyperwarp_flow does
-#           `call L_006d3d ; mov $0x16,%bx ; call L_000911` then `decb 0x4c8 ; jne`, and
-#           asm/6999_space_status does the same shape then `call L_00514d ; cmp $0xff,%ah`,
-#           which is a key wait with a timeout. Different slots are different lengths of pause.
-# provenance: static, decoded 2026-10-28d from the listing; bytes proven by tools/check_func.py.
-#           The 14-caller count is measured by grep over asm/, not asserted.
-# confidence: high for the mechanism; the per-slot meaning of each of the 20 offsets is NOT known
-#           and is the next step, not this claim
+# what the value is used as: a KEY-WAIT TIMEOUT, not an animation delay. The tell is what
+#           follows the call at the sites that can be read: `call L_000911` then a wait whose
+#           result is tested with `cmp $0xff,%ah` -- AH=0xFF is this project's own "no key"
+#           marker, and the original's INT 16h AH=01h poll uses ZF the same way. So the slots
+#           bound how long the game waits for input before moving on, which is exactly why the
+#           measured values span 47 to 64,581: a title screen may linger and a collision check
+#           may not.
+# SLOT USAGE, from the 14 callers (bx is a BYTE offset; slot = bx/2):
+#           bx=0x00  slot 0   (47)     asm/08C8, asm/277B (277B then `cmp $0xff,%ah`)
+#           bx=0x04  slot 2   (64581)  asm/421A
+#           bx=0x08  slot 4   (10090)  asm/022E
+#           bx=0x0a  slot 5   (23)     asm/0696
+#           bx=0x10  slot 8   (78)     asm/2557 (then `dec %di`), asm/2587
+#           bx=0x12  slot 9   (32290)  asm/2593
+#           bx=0x14  slot 10  (3784)   asm/6999_space_status, asm/7030_space_collision
+#           bx=0x16  slot 11  (2522)   asm/6DFD_hyperwarp_flow
+#           bx=0x1c  slot 14  (16145)  asm/38B0_cmd_L (two waits)
+#           slots 1,3,6,7,12,13,15..19 have no caller found yet. asm/5F08 and asm/72A0 call
+#           the lookup with a bx set outside the three lines grepped, so their slot is unknown.
+#           This is a START, not an answer: it names which slot each site uses and what the
+#           value is tested against, but not why each site picked that length.
+# provenance: static, decoded 2026-10-28d from the listing; bytes proven by tools/check_func.py after the merge. The
+#           DS:74 value itself is live: 0x3A17, static across 103 samples in
+#           captures/spice86/g30-clockcal/.
+# confidence: high for the mechanism and for the timeout reading of the value; the per-slot meaning of each of the 20
+#           offsets is PARTIALLY known (see SLOT USAGE above) and the reason each site chose
+#           its length is not
 # label: kept as sub_0711 on purpose — labels are body and CP0 md5s them
 # func 0711..0714  len 0004 B  evidence: seed+call+reko
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

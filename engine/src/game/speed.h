@@ -8,10 +8,12 @@
  * MODEL ONLY, DELIBERATELY UNWIRED. Two things are proven and one is not:
  *   proven   the variable, its bounds, the rescale arithmetic, and the 20 outputs
  *            (reproduced 20/20 against a live dump, tests/speed_check.c)
- *   NOT proven what each of the 20 slots gates. The values span 47 .. 64,581, which
- *            is not a set of millisecond delays, and asm/0711's fourteen callers sit in
- *            hyperwarp, space status, space collision and the command layer.
- * So nothing here calls core/timer.c's u2_wait_ms. Wiring a slot to a delay on the
+ *   NOT proven why each site chose its length. What IS known: the values are key-wait
+ *            timeouts, not animation delays -- callers test the wait result with
+ *            `cmp $0xff,%ah` ("no key"), which is why the measured range is 47 .. 64,581.
+ *            The slot-to-caller map is in asm/0711_speed_delay_lookup's header; slots
+ *            1,3,6,7,12,13,15..19 have no caller found at all.
+ * So nothing here calls core/timer.c's u2_wait_ms. Wiring a slot to a timeout on the
  * strength of a guess is the exact failure this project keeps being bitten by.
  */
 #ifndef U2_GAME_SPEED_H
