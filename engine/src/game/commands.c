@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "core/seam.h"
+#include "game/status.h"
 #include "game/overworld.h"
 
 /* Generated at build time from the user's copy (engine/tools/extract/extractor.py). */
@@ -113,6 +114,28 @@ static u2_cmd_result cmd_P(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/4568 cmd_Z: the whole-page status screen, then wait for a key. Migrated out of
+   u2_overworld_loop with its evidence where it was: docs/status-screen-z.md section 4
+   measured that Z costs no food, moves no creature, does not advance the turn, and that the
+   page is a full overwrite rather than an overlay -- which is why the world has to be
+   redrawn on the way out. Whether the post-command sweep runs after Z is explicitly
+   unmeasured (it needs live monsters on the field), so this handler runs none and does not
+   call cmd_done(); inventing either would be exactly the kind of guess the project's rules
+   exist to stop.
+   The Escape path returns U2_CMD_QUIT. That is the engine's way out of the --play-map
+   development entry, not a claim about the original: what was measured is that any key
+   returns from the page to the world. */
+static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    u2_status_draw_full(ctx);
+    u2_key dismiss;
+    if (seam_key_wait(ctx, &dismiss) == 0 && dismiss.ch == 0x1B)
+        return U2_CMD_QUIT;
+    u2_overworld_draw(ctx, ow);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -147,9 +170,9 @@ static u2_cmd_result cmd_P(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * Four observed letters (A, E, U, Z) are still implemented inside
+ * Three observed letters (A, E, U) are still implemented inside
  * u2_overworld_loop, with their evidence in place there. They migrate here one at a time
- * under the existing tests, not in one sweep; Q and P have already made the trip.
+ * under the existing tests, not in one sweep; Q, P and Z have already made the trip.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* A  in overworld.c pending migration */
@@ -177,7 +200,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* W  see the note above */
     NULL,  /* X  not implemented: destroy item */
     NULL,  /* Y  see the note above */
-    NULL,  /* Z  in overworld.c pending migration: status screen */
+    cmd_Z, /* Z  status screen: asm/4568, a full-page overwrite, no turn passes */
 };
 
 u2_cmd_result u2_cmd_dispatch(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)

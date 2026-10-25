@@ -477,10 +477,16 @@ fi
 # handler in the wrong table slot compiles clean, keeps every other gate green, prints
 # nothing, and still reports itself as implemented. One run per letter, so a misfiled slot
 # names itself instead of arriving as a mystery.
-for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PASS"; do
+for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PASS" "Z:A LEVEL"; do
     letter=${pair%%:*}; want=${pair#*:}
     python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
-    printf '%s\n' "$letter" > "$WORK/tab-$letter.keys"
+    # Z waits for a dismissing key inside the handler, so its script needs a second key.
+    # Anything but Escape: Escape is the engine's way out of --play-map, not a byte.
+    if [ "$letter" = "Z" ]; then
+        printf 'Z\nSP\n' > "$WORK/tab-$letter.keys"
+    else
+        printf '%s\n' "$letter" > "$WORK/tab-$letter.keys"
+    fi
     ./u2 --headless --play-map --cleanroom \
          --data-dir "$WORK/tab-$letter/content" --save-dir "$WORK/tab-$letter/save" \
          --script "$WORK/tab-$letter.keys" --dump-state > "$WORK/tab-$letter.out" 2>&1

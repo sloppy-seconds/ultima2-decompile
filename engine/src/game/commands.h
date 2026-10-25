@@ -15,7 +15,7 @@
  *   jmp *%bx
  *
  * Two things about that shape are load-bearing for this file and are the reason it exists
- * separately from overworld.c, which still handles four letters inline in a switch.
+ * separately from overworld.c, which still handles three letters inline in a switch.
  *
  * First, the range test happens BEFORE the dispatch, in two pieces: `cmp $0x41,%al ;
  * jae L_000c18` (asm/09FB) and `cmp $0x5a,%al ; jbe L_000c1f` (asm/0A18). A key outside
@@ -34,8 +34,9 @@
  * move here one at a time under the cover of the existing tests, not in one sweep. Q moved
  * first, on 2026-10-25, because its entire body was already a call to a public function, so
  * the move tested the dispatch rather than the behaviour; P followed, needing a shared
- * public body because the space bar reaches the same result from a different site. A, E, U
- * and Z remain. What lands here alongside them is the letters that were never implemented
+ * public body because the space bar reaches the same result from a different site; then Z,
+ * which needed a new result code because it can end the session from inside itself. A, E
+ * and U remain. What lands here alongside them is the letters that were never implemented
  * at all.
  */
 
@@ -48,8 +49,14 @@ typedef enum {
     U2_CMD_AWAIT,    /* printed a prompt and is waiting for a direction key; the
                         original consumed the next key inside the handler chain, so
                         no turn passes and the sweep does not run yet */
-    U2_CMD_UNKNOWN   /* not a command letter at all -- the asm/0A1C arm, NOT the same
+    U2_CMD_UNKNOWN,  /* not a command letter at all -- the asm/0A1C arm, NOT the same
                         thing as a handler that declined to act */
+    U2_CMD_QUIT      /* the handler ended the session from inside itself. Only cmd_Z does
+                        this today, and it is an engine affordance rather than a byte:
+                        docs/status-screen-z.md section 4 measured that ANY key returns
+                        from the Z page to the world, and the engine additionally treats
+                        Escape as "leave the overworld", because --play-map is a
+                        development entry and needs a way out that is not EOF. */
 } u2_cmd_result;
 
 /*
