@@ -212,6 +212,29 @@ Verification, in two independent layers:
 
 ## 3. Working Rules
 
+* **Command-loop scope is ruled (owner, 2026-10-28e): implement all 26 handlers, and the
+  project is NOT code-complete while any unproven one stands.** Fourteen have execution
+  evidence and are ordinary work: **A B E F G I K L P Q R U X Z**. The other twelve —
+  **C D H J M N O S T V W Y** — have never been seen to run in any capture, and each one gets
+  an in-source marker in the engine implementation:
+
+  ```c
+  /* UNPROVEN: cmd_C (CAST) has never been observed executing in a capture.
+     Behaviour is static inference from asm/310B_cmd_C.asm. This handler is not
+     code-complete until a capture exercises it. See docs/needs-gameplay.md. */
+  ```
+
+  The marker is not a formality and not a TODO. **A checkpoint, a milestone, or the phase may
+  not be declared done, signed off, or "complete" with unproven handlers still carrying it** —
+  say "complete except the N unproven command handlers" instead, or go get the capture. This
+  exists because a stub that looks implemented is worse than a gap that says what it is: the
+  CP5 scope rule already learned that a plausible boolean standing in for a proven distribution
+  passes the tests that do not exist yet and reads as finished. Twelve handlers written from
+  static inference alone are twelve places where that can happen quietly.
+  `python3 tools/cmd_handlers.py` prints the crosswalk and its `exec` column is the evidence;
+  it is the authority for which twelve, and it is a gate that exits non-zero when the jump
+  table, the filenames and the provenance lines disagree.
+
 * **`asm/` is the one lookup table for address → behaviour. There is no second
   one.** The filename carries the discovered name (`asm/0936_walk_loop.asm`) and
   the header carries `# name-evidence:`, `# provenance:` and `# confidence:`.
