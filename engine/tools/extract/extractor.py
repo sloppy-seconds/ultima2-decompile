@@ -244,6 +244,12 @@ MANIFEST = [
     # executed in any of the 60 harvests -- so the engine marks them as such.
     ("U2_S_HYPER_WHAT",        "3782_cmd_H.asm",           0),
     ("U2_S_JUMP_WHEE",         "37DC_cmd_J.asm",           0),
+    # cmd_M: the ready-a-spell prompt and the word that introduces its echo. The echo line
+    # is followed by the pool printer, so what lands after "SPELL READY => " is the spell
+    # NAME, not a number — see the correction in asm/3B92_cmd_M.asm, which used to describe
+    # that call as "numeric out". Both literals are unique in the file.
+    ("U2_S_MAGIC_SPELL_READY", "3B92_cmd_M.asm",           0),
+    ("U2_S_SPELL_READY_TO",    "3B92_cmd_M.asm",           1),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

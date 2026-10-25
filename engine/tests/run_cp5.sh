@@ -477,16 +477,17 @@ fi
 # handler in the wrong table slot compiles clean, keeps every other gate green, prints
 # nothing, and still reports itself as implemented. One run per letter, so a misfiled slot
 # names itself instead of arriving as a mystery.
-for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PASS" "Z:A LEVEL" "E:CMD: ENTER WHAT?" "A:CMD: ATTACK--" "U:CMD: UNLOCK DIRECTION-"; do
+for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PASS" "Z:A LEVEL" "E:CMD: ENTER WHAT?" "A:CMD: ATTACK--" "U:CMD: UNLOCK DIRECTION-" "M:MAGIC SPELL READY #1"; do
     letter=${pair%%:*}; want=${pair#*:}
     python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
-    # Z waits for a dismissing key inside the handler, so its script needs a second key.
-    # Anything but Escape: Escape is the engine's way out of --play-map, not a byte.
-    if [ "$letter" = "Z" ]; then
-        printf 'Z\nSP\n' > "$WORK/tab-$letter.keys"
-    else
-        printf '%s\n' "$letter" > "$WORK/tab-$letter.keys"
-    fi
+    # Two of these block for a second key inside the handler: Z waits for a dismissing key,
+    # M waits for a spell number. Anything but Escape for Z -- Escape is the engine's way out
+    # of --play-map, not a byte.
+    case "$letter" in
+      Z) printf 'Z\nSP\n' > "$WORK/tab-$letter.keys" ;;
+      M) printf 'M\n1\n'  > "$WORK/tab-$letter.keys" ;;
+      *) printf '%s\n' "$letter" > "$WORK/tab-$letter.keys" ;;
+    esac
     ./u2 --headless --play-map --cleanroom \
          --data-dir "$WORK/tab-$letter/content" --save-dir "$WORK/tab-$letter/save" \
          --script "$WORK/tab-$letter.keys" --dump-state > "$WORK/tab-$letter.out" 2>&1
@@ -497,6 +498,21 @@ for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PA
         sed 's/^/        /' "$WORK/tab-$letter.out" | tail -5
     fi
 done
+
+# M's second half: the echo is the spell NAME, not a number. That is the whole point of the
+# 2026-10-25 correction to asm/3B92_cmd_M.asm, so it gets its own assertion — and it is
+# mode-aware, because with no copy of the game the pool names are blank by design (see
+# status.c's Z_NAME) and only the prompt half is checkable.
+if grep -q "U2_T_SPELLS_N" build/gen_content.h 2>/dev/null; then
+    if grep -qF -- "READY => LIGHT" "$WORK/tab-M.out"; then
+        ok "dispatch: cmd_M echoes the spell NAME from the pool (READY => LIGHT, not a digit)"
+    else
+        bad "dispatch: cmd_M did not echo the pool name for slot 1 — expected LIGHT"
+        sed 's/^/        /' "$WORK/tab-M.out" | tail -5
+    fi
+else
+    ok "dispatch: cmd_M pool-name assertion skipped with the pool absent (prompt half already passed)"
+fi
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then

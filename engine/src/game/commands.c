@@ -20,6 +20,14 @@
 /* Generated at build time from the user's copy (engine/tools/extract/extractor.py). */
 #include "gen_content.h"
 
+/* The indexed name pool may be absent (CI has no copy of the game), and the degradation is
+ * deliberate rather than silent -- same rule and same reason as status.c's Z_NAME. */
+#ifdef U2_T_SPELLS_N
+#  define SPELL_NAME(i) (((i) >= 0 && (i) < U2_T_SPELLS_N) ? U2_T_SPELLS[(i)] : "")
+#else
+#  define SPELL_NAME(i) ""
+#endif
+
 /* The letters the original's jump table covers, in table order. cs:0730 holds 26 words and
  * `sbb $0x41,%al` indexes them, so A is entry 0 and Z is entry 25. */
 #define CMD_COUNT 26
@@ -130,7 +138,13 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     (void)letter;
     u2_status_draw_full(ctx);
     u2_key dismiss;
-    if (seam_key_wait(ctx, &dismiss) == 0 && dismiss.ch == 0x1B)
+    /* POLARITY FIXED 2026-10-25, found while wiring cmd_M: this read `== 0` for "got a key",
+     * which is the wrong way round — seam_key_wait returns non-zero when it has a key, as
+     * creation.c:159 relies on. So the Escape exit had never once fired, and dismiss was
+     * being read uninitialised on the branch that tested it. The bug predates this file: it
+     * came over verbatim from the case arm in u2_overworld_loop, and no test pressed Escape
+     * from the Z page, so nothing could see it. */
+    if (seam_key_wait(ctx, &dismiss) != 0 && dismiss.ch == 0x1B)
         return U2_CMD_QUIT;
     u2_overworld_draw(ctx, ow);
     return U2_CMD_DONE;
@@ -176,6 +190,54 @@ static u2_cmd_result cmd_U(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_AWAIT;
 }
 
+/* asm/3B92_cmd_M: ready a spell by number. Print "MAGIC SPELL READY #", read ONE decimal
+   digit, store it at DS:63 as the readied slot, print "SPELL READY => " and the spell's
+   NAME, then cmd_done. The digit reader is asm/2028, which blocks, rejects anything outside
+   '0'..'9' by simply reading again, and echoes the digit it accepted.
+
+   The NAME is the part that used to be wrong here. asm/508C is the indexed name pool printer
+   and the `adc $0x24,%al` in front of it is the SPELLS group base, not an ASCII digit bias:
+   M echoes a WORD (`SPELL READY => UP LADDER`), which is the same constant cmd_C uses to
+   print the spell it is about to try. See asm/3B92_cmd_M.asm's correction of 2026-10-25.
+
+   Two things this deliberately does NOT copy, both from that reader's own DOUBT list in
+   asm/2028_read_decimal_digit.asm, and both recorded rather than settled:
+     * whether a rejected key is consumed or left in the typeahead ring. The engine consumes
+       it. If the original leaves it, a stray key here would be seen by whatever runs next.
+     * the 0x8D the reader echoes after the digit. 0x8D is this binary's newline glyph, and
+       emitting a line break nobody can explain is a worse guess than not emitting one.
+   Neither is testable from the engine side; both need the reader stepped through live. */
+static u2_cmd_result cmd_M(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+    seam_str_out(ctx, U2_S_MAGIC_SPELL_READY);
+
+    int digit = -1;
+    while (digit < 0) {
+        u2_key k;
+        /* seam_key_wait returns NON-ZERO when it got a key and 0 when there is none —
+         * same convention creation.c:159 depends on. Getting this backwards is invisible
+         * in the dispatch gate, which is why the gate for M reads the echoed digit and not
+         * just the prompt. */
+        if (seam_key_wait(ctx, &k) == 0)
+            break;                       /* input exhausted: no original counterpart */
+        if (k.ch >= '0' && k.ch <= '9') {
+            digit = k.ch - '0';
+            seam_char_print(ctx, (char)('0' + digit));
+        }
+    }
+    if (digit < 0) {
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    ctx->state.spell_pick = (uint8_t)digit;
+    seam_str_out(ctx, U2_S_SPELL_READY_TO);
+    seam_str_out(ctx, SPELL_NAME(digit));
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -184,36 +246,50 @@ static u2_cmd_result cmd_U(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  * separately by u2_cmd_implemented() so the marker gate can count what is really there.
  *
  * The letters that are still NULL each lack something specific, and the something is named
- * here rather than left as a gap. Note the correction of 2026-10-25: C, M, O, S and T are no
+ * here rather than left as a gap. Note the correction of 2026-10-25: C, O, S and T are no
  * longer evidence-blocked -- G31 captured them and they now show execution evidence -- so what
- * stops each one below is a missing engine subsystem, not a missing capture.
+ * stops each one below is a missing engine subsystem, not a missing capture. Listed in letter
+ * order, because a list that drifts out of order is how entries get duplicated.
  *
- *   C  cast_spell_flow needs a spell list and a mana/spell-ready state; asm/310B tail-jumps
- *      to 0x3353 for the direction and the flow is asm/3139, neither wired yet.
+ *   B  BOARD needs vehicles.
+ *   C  the gates are decoded and cheap (see asm/3139_cast_spell_flow.asm: spell name from
+ *      pool[0x24+DS:63], the DS:D7+DS:D8 wand/staff test, the DS:B6[pick] count and its
+ *      packed-decimal decrement, and the DS:4A >= 4 rule that makes casting a tower-and-
+ *      dungeon thing). What is missing is every EFFECT, and every effect is dungeon-side in
+ *      a subsystem AGENTS.md § 3 parks. DS:D7/DS:D8 are not even in state.h yet. TODO once
+ *      dungeons open: wire the gates, then the LIGHT / DOWN LADDER / UP LADDER branches.
  *   D  asm/334D prints DESCEND and falls into a key-code test whose meaning is recorded as
  *      unresolved in its own header, and dungeons are parked (AGENTS.md section 3).
- *   M  "MAGIC SPELL READY #" needs the same spell state as C.
+ *   F  FIRE is the combat/attack arm.
+ *   G  GET needs ground items.
+ *   L  LAUNCH needs vehicles.
  *   N  asm/3BCE prints NEGATE TIME and falls through into asm/3BDD (`mov 0xe3,%al`), which
  *      is not cmd_done. Where that fragment ends is not established; guessing a time effect
  *      from the word "NEGATE" is the invention this project's rules exist to stop.
  *   O  the offer flow (asm/3C2E: OFFER GOLD DIRECT- / OFFER TO WHOM? / HOW MUCH (*100))
- *      needs town NPCs, which is CP6.
+ *      needs town NPCs, which is CP6. Owner pointer 2026-10-25, grade `recalled` and not
+ *      yet tested: several NPCs accept an offer, Lord British is the easiest target, and his
+ *      castle is on the same small island as the Port Boniface entrance.
+ *   R  ready weapon.
  *   S  asm/3F25 prints STEAL DIRECT- and falls into the aim gate; the effect is
  *      asm/3F5D_steal_attempt, modelled in combat.c for CP5 ticket C6 but not wired to a
- *      world-map direction.
+ *      world-map direction. Needs a thief playtest to say what the target set really is.
  *   T  asm/4050 TRANSACT aims a ray and needs the street-merchant tables (asm/412C,
  *      asm/41D9), which is CP6.
  *   V  "VIEW WHAT?" and the helm view need an inventory view; the Z screen has the lists but
  *      not the per-item selection cmd_V walks.
  *   W  the armour menu needs armour ownership and the strength gate; asm/43F3's menu is read
  *      but the ownership bytes are not modelled.
+ *   X  destroy item.
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * All six observed letters now live here. A and U came last because they leave the loop
- * waiting for a direction key that arrives turns later, which meant the pending state had to
- * move onto u2_overworld first -- in the original the direction is consumed inside the
- * handler chain, so the pending aim is the command's business and not the loop's.
+ * All six letters that used to live in u2_overworld_loop are here now, and A and U came last
+ * on purpose: they leave the loop waiting for a direction key that arrives turns later, so
+ * the pending state had to move onto u2_overworld first -- in the original the direction is
+ * consumed inside the handler chain, which makes the pending aim the command's business and
+ * not the loop's. M joins them as the readying half of the spell story; C above is the
+ * spending half, and it is the one still waiting on dungeons.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_A, /* A  attack aim: asm/2B8F, prints ATTACK-- and awaits a direction */
@@ -224,11 +300,11 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* F  not implemented: FIRE is the combat/attack arm */
     NULL,  /* G  not implemented: GET needs ground items */
     cmd_H,
-    NULL,  /* I  in overworld.c pending migration (see the loop) */
+    NULL,  /* I  not implemented */
     cmd_J,
     NULL,  /* K  not implemented */
-    NULL,  /* L  in overworld.c pending migration: launch */
-    NULL,  /* M  see the note above */
+    NULL,  /* L  not implemented: LAUNCH needs vehicles */
+    cmd_M, /* M  ready a spell by number: asm/3B92, echoes the spell NAME */
     NULL,  /* N  see the note above */
     NULL,  /* O  see the note above */
     cmd_P, /* P  PASS: asm/3DBC. The space bar is a different site, in overworld.c */
