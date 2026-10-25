@@ -477,7 +477,7 @@ fi
 # handler in the wrong table slot compiles clean, keeps every other gate green, prints
 # nothing, and still reports itself as implemented. One run per letter, so a misfiled slot
 # names itself instead of arriving as a mystery.
-for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!"; do
+for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PASS"; do
     letter=${pair%%:*}; want=${pair#*:}
     python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
     printf '%s\n' "$letter" > "$WORK/tab-$letter.keys"

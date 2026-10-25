@@ -98,6 +98,21 @@ static u2_cmd_result cmd_Q(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/3DBC_cmd_P: PASS as a command letter, reached through cs:0730 entry P. It is a
+   different site from the walk loop's space bar (asm/0936's `cmp $0x20,%al` at file
+   0x0B3C) even though both print the word and both charge 10 food at asm/090D, and the
+   engine keeps them apart for the reason that matters: only one of them is in the jump
+   table, so only one of them belongs in this file's table. The body lives in overworld.c
+   as u2_overworld_pass(), because the food charge and the sweep are that file's
+   primitives; what belongs here is the fact that P is a letter the table answers.
+   Like cmd_Q it does not call cmd_done(): echo_cmd already emits the CR and the prompt. */
+static u2_cmd_result cmd_P(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    u2_overworld_pass(ctx, ow);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -132,9 +147,9 @@ static u2_cmd_result cmd_Q(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * Five observed letters (A, E, P, U, Z) are still implemented inside
+ * Four observed letters (A, E, U, Z) are still implemented inside
  * u2_overworld_loop, with their evidence in place there. They migrate here one at a time
- * under the existing tests, not in one sweep; Q has already made the trip.
+ * under the existing tests, not in one sweep; Q and P have already made the trip.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* A  in overworld.c pending migration */
@@ -152,7 +167,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* M  see the note above */
     NULL,  /* N  see the note above */
     NULL,  /* O  see the note above */
-    NULL,  /* P  in overworld.c pending migration: PASS */
+    cmd_P, /* P  PASS: asm/3DBC. The space bar is a different site, in overworld.c */
     cmd_Q, /* Q  save: asm/3DE4 refuses indoors, asm/3DFA saves outdoors */
     NULL,  /* R  not implemented: ready weapon */
     NULL,  /* S  see the note above */

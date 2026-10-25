@@ -717,6 +717,33 @@ int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub)
     return 1;
 }
 
+/*
+ * One PASS: the echo, the 10-food charge, and the sweep.
+ *
+ * Three call sites in the engine, and they are three sites in the original too, which is
+ * why this is a function and not a copy:
+ *
+ *   the walk loop's own first arm — asm/0936's `cmp $0x20,%al` at file 0x0B3C, the space
+ *   bar, which is NOT a command letter and never touches the jump table;
+ *   asm/3DBC_cmd_P — PASS as a command letter, reached by `jmp *%bx` through cs:0730;
+ *   the idle auto-PASS at asm/08FF, which prints the same word and falls into the same
+ *   10-food subtract at asm/090D.
+ *
+ * All three end at asm/0A33_cmd_done, so all three get the CR and the fresh prompt, and
+ * echo_cmd() supplies that here rather than each caller repeating it.
+ *
+ * evidence: file 0x0B3C, asm/3DBC, runtime 0x08FF/0x090D — confidence: mechanism proven;
+ *           the threshold that decides WHEN the idle arm fires is not (see
+ *           U2_AUTO_PASS_POLLS).
+ */
+void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow)
+{
+    echo_cmd(ctx, U2_S_PASS);
+    if (food_spend(ctx, U2_FOOD_PER_PASS))
+        u2_death(ctx);
+    creature_turn(ctx, ow);
+}
+
 /* Shared loader: everything after the spawn fields are set. */
 static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 {
@@ -1028,10 +1055,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                     /* If a command is half-typed, the PASS closes that same line:
                      * `CMD: ATTACK--PASS`, exactly as the live capture shows. */
                     pending_cmd = 0;
-                    echo_cmd(ctx, U2_S_PASS);
-                    if (food_spend(ctx, U2_FOOD_PER_PASS))
-                        u2_death(ctx);
-                    creature_turn(ctx, ow);
+                    u2_overworld_pass(ctx, ow);
                     /* Not modelled: the original also steps every monster on
                      * this tick, observed live as one cell per auto-PASS while
                      * the player stood still. That is now what creature_turn
@@ -1126,18 +1150,12 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             continue;
         }
         case ' ':
-        case 'P':
             /* Space is PASS from the walk loop's own first arm (cmp $0x20 at file
-             * 0x0B3C). 'P' is PASS from the command jump table: asm/3DBC_cmd_P
-             * prints PASS, reached by `jmp *%bx` through cs:0730 entry P. The two
-             * are separate sites in the original and both reach the same result,
-             * so the engine accepts both. It prints PASS, then spends 10 food
-             * (file 0x0B0D..0x0B33). Underflow is death (asm/0C62). The idle
-             * auto-PASS above reaches the same cost through the same print site. */
-            echo_cmd(ctx, U2_S_PASS);
-            if (food_spend(ctx, U2_FOOD_PER_PASS))
-                u2_death(ctx);
-            creature_turn(ctx, ow);
+             * 0x0B3C). 'P' is PASS too, but from the command jump table (asm/3DBC_cmd_P,
+             * cs:0730 entry P) and it is handled in commands.c as cmd_P — the two are
+             * separate sites in the original and only one of them is a command letter,
+             * so they no longer share an arm here. Both reach u2_overworld_pass(). */
+            u2_overworld_pass(ctx, ow);
             continue;
         default:
             /* The command jump table. asm/0A1F is the only route to the 26 handlers and it

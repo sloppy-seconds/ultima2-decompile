@@ -152,6 +152,14 @@ int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay);
 int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub);
 
 /*
+ * One PASS: echo the word, charge the 10 food, advance the creatures. Shared by the
+ * walk loop's space arm (asm/0936's `cmp $0x20`), by cmd_P in commands.c (asm/3DBC,
+ * a jump-table letter) and by the idle auto-PASS (asm/08FF) — three sites in the
+ * original, only one of which is a command letter.
+ */
+void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow);
+
+/*
  * The death tail: asm/0C62..0C99 as one span. Zeroes DS:51..DS:59, repaints the
  * status band, scrolls the log and prints `<NAME> IS DEAD!` with no `CMD: `
  * prompt after it. Every kill site in the binary jumps here — the food
