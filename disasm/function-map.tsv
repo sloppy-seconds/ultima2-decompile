@@ -963,7 +963,9 @@ start	end	len	evidence	name_hint
 4BE0	4C1D	003E	call+reko	
 4C1E	4C30	0013	seed+call+reko	
 4C31	4C4F	001F	seed+reko	
-4C50	4F10	02C1	seed+reko	
+4C50	4C54	0005	seed+reko	sub_4c31_epilogue
+4C55	4F08	02B4	seed+reko	name_pool
+4F09	4F10	0008	seed+reko	arrow_scancode_table
 4F11	4F1F	000F	seed+call+reko	
 4F20	4F31	0012	seed+reko	
 4F32	4F35	0004	seed+reko	
