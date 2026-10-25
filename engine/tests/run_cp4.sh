@@ -217,6 +217,49 @@ else
     fi
 fi
 
+# --- G2: the per-step charge is inside the passability call, so refusals pay --
+# asm/2599 and asm/2626 subtract 19 from the food triple ahead of the tile verdict
+# inside asm/2423, so `--INVALID MOVE!` is not a free refusal. Measured 2026-10-25
+# on the maxed seed in sector 31: one arrow into a blocked cell, DS:00/01 unchanged,
+# food down exactly 19, screen `CMD: WEST--INVALID MOVE!`.
+#
+# The observable is death, not the FOOD digits: the band is only repainted at the
+# sites asm/5129 is called from, so a quiet one-unit charge never reaches the
+# screen. Thirteen food units and one step makes the charge itself observable — and
+# it discriminates the amount, because the port once passed decimal 19 where the
+# asm's immediate 0x19 was meant and charged thirteen, which survives.
+for arm in water-poor grass-poor water-rich none-poor; do
+    python3 tests/cp5_fight_seed.py "$WORK/g2-$arm" >/dev/null 2>&1
+    python3 tests/g2_step_food.py "$WORK/g2-$arm" "$arm" >/dev/null 2>&1
+    : > "$WORK/g2-$arm.keys"
+    if [ "$arm" != "none-poor" ]; then
+        printf '0xf2\n' > "$WORK/g2-$arm.keys"    # 0xf2 is U2_KEY_LEFT: step west
+    fi
+    ./u2 --headless --play-map --cleanroom \
+         --data-dir "$WORK/g2-$arm/content" --save-dir "$WORK/g2-$arm/save" \
+         --script "$WORK/g2-$arm.keys" --dump-state > "$WORK/g2-$arm.out" 2>&1
+done
+if grep -q "IS DEAD!" "$WORK/g2-water-poor.out"; then
+    if grep -q "IS DEAD!" "$WORK/g2-grass-poor.out"; then
+        if grep -q -- "WEST--INVALID MOVE!" "$WORK/g2-water-rich.out" \
+           && ! grep -q "IS DEAD!" "$WORK/g2-water-rich.out"; then
+            if grep -q "IS DEAD!" "$WORK/g2-none-poor.out"; then
+                bad "CP4 G2 control: the no-input arm died — the gate cannot fail"
+            else
+                ok "step charge: an accepted and a refused step both cost 19 (13 units dies either way); the control survives"
+            fi
+        else
+            bad "CP4 G2: the water arm did not read as a refused-but-surviving step — the reject path is not what the cost arms travelled"
+            sed 's/^/        /' "$WORK/g2-water-rich.out" | tail -6
+        fi
+    else
+        bad "CP4 G2: the accepted step did not kill on 13 food — the move charge is missing or under-sized"
+    fi
+else
+    bad "CP4 G2: a refused step cost no food — asm/2423 charges ahead of the verdict and the engine must too"
+    sed 's/^/        /' "$WORK/g2-water-poor.out" | tail -6
+fi
+
 # --- the map actually renders, when the player has their files ------------
 # The point of the whole CP4 chain: sector + tiles + viewport + framebuffer
 # producing real pixels. Skips without the content, so CI stays honest.

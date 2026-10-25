@@ -53,20 +53,27 @@ int main(void)
 
     /* --- one PASS off a fresh character: 4000 -> 3990, display 0400 -> 0399 */
     set_food(&ctx, 0x04, 0x00, 0x00);
-    CHECK(u2_overworld_spend_food(&ctx, 10) == 0, "first PASS must not kill");
+    CHECK(u2_overworld_spend_food(&ctx, 0x0A) == 0, "first PASS must not kill");
     CHECK(shown(&ctx) == 0x0399, "display must read 0399, got %04d", shown(&ctx));
     CHECK(ctx.state.food_lo == 0x90, "the hidden low byte carries the borrow (0x90)");
 
     /* --- ten PASSes land the hidden byte back on 00, display still 0399 --- */
-    for (int i = 0; i < 9; i++) u2_overworld_spend_food(&ctx, 10);
+    for (int i = 0; i < 9; i++) u2_overworld_spend_food(&ctx, 0x0A);
     CHECK(ctx.state.food_lo == 0x00, "10 passes must clear the low byte");
     CHECK(shown(&ctx) == 0x0399, "10 passes read 0399 on the band, got %04d", shown(&ctx));
 
-    /* --- the vehicle rate: asm/2599 and asm/2626 subtract 19 ------------- */
+    /* --- the step rate: asm/2599 and asm/2626 do `sbb $0x19` ---------------
+     * The argument is the immediate byte, so 0x19 is nineteen, not twenty-five.
+     * The low byte is the half that discriminates: a decimal 19 passed by mistake
+     * subtracts thirteen and leaves 0x87 here, and the four visible digits read
+     * 0999 either way. That is how the port charged 13 per step and still passed
+     * every test written before 2026-10-25. */
     memset(&ctx, 0, sizeof ctx);
     set_food(&ctx, 0x10, 0x00, 0x00);           /* 100000 */
-    CHECK(u2_overworld_spend_food(&ctx, 19) == 0, "100000 - 19 must not kill");
+    CHECK(u2_overworld_spend_food(&ctx, 0x19) == 0, "100000 - 19 must not kill");
     CHECK(shown(&ctx) == 0x0999, "100000 - 19 must show 0999, got %04d", shown(&ctx));
+    CHECK(ctx.state.food_lo == 0x81, "100000 - 19 leaves 0x81 in the low byte, got %02X",
+          ctx.state.food_lo);
 
     /* --- death: a borrow out of DS:53 zeroes every stat byte (asm/0C62) -- */
     memset(&ctx, 0, sizeof ctx);
@@ -74,7 +81,7 @@ int main(void)
     ctx.state.exp_lo = 0x21; ctx.state.exp_hi = 0x35;
     ctx.state.gold_lo = 0x00; ctx.state.gold_hi = 0x38;
     set_food(&ctx, 0x00, 0x00, 0x05);           /* 5 units: one PASS underflows */
-    CHECK(u2_overworld_spend_food(&ctx, 10) == 1, "5 - 10 must underflow");
+    CHECK(u2_overworld_spend_food(&ctx, 0x0A) == 1, "5 - 10 must underflow");
     CHECK(ctx.state.food == 0 && ctx.state.food_hi == 0 && ctx.state.food_lo == 0,
           "death zeroes FOOD");
     CHECK(ctx.state.hp == 0 && ctx.state.unk_52 == 0, "death zeroes HP (DS:51/52)");
@@ -88,7 +95,7 @@ int main(void)
     set_food(&ctx, 0x04, 0x00, 0x00);
     int deaths = 0, died_on = 0;
     for (int i = 1; i <= 5000; i++) {
-        if (u2_overworld_spend_food(&ctx, 10)) { deaths++; died_on = i; break; }
+        if (u2_overworld_spend_food(&ctx, 0x0A)) { deaths++; died_on = i; break; }
     }
     CHECK(deaths == 1, "the run must end in exactly one death");
     CHECK(died_on == 4001, "4000 food units at 10 a pass dies on pass 4001, got %d", died_on);
