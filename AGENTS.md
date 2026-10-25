@@ -333,6 +333,22 @@ Verification, in two independent layers:
   may inherit and what it must re-derive from its own bytes. If a line only makes
   sense for this game, it belongs in `asm/` or the findings doc instead.
 
+* **Every action the player takes, and every effect on the player, must produce a message.**
+  Owner rule, 2026-10-26, after a live session showed HP draining from an adjacent monster while
+  the log printed nothing but `CMD: PASS`. A state change that happens silently is a defect, not
+  a design choice, and it applies in both directions: the player's own commands and anything the
+  world does to them.
+
+  The boundary is fidelity, not taste. Where the original has a message, the engine must print it.
+  Where the original is genuinely silent, the engine stays silent **and says so in a comment at the
+  mutation site**, citing the routine that proves it. "The message is probably elsewhere and I
+  have not read it" is never a licence for silence — that is an open decode task, and the comment
+  must name it. Silence that is not justified by a cited byte is the failure mode this rule exists
+  to stop, because a silent engine looks finished and reads as broken.
+
+  Known violations and their evidence live in `docs/phase4-state.md`, section "Silent player
+  effects". Adding a mutation without a message and without a citation is a review failure.
+
 * **Never write a probe, reader or driver that duplicates an existing tool. Look first.**
   The recurring failure in this project is not a wrong answer, it is an agent building
   something that already exists and getting a *plausible* result from it — a hand-rolled

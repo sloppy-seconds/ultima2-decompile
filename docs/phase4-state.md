@@ -840,6 +840,33 @@ Not yet proven, and deliberately not guessed:
 
 ---
 
+## Silent player effects (owner rule 2026-10-26)
+
+**The rule is in `AGENTS.md` § 3: every action by the player and every effect on the player must
+produce a message.** This section is the audit against it, with the evidence grade per row and the
+routine that has not been read where the grade is not `done`. It came out of a live noVNC session:
+HP fell 9999 → 9952 while a monster stood adjacent, and the log showed nothing but `CMD: PASS`.
+
+| effect on / by the player | engine today | grade | what closes it |
+| --- | --- | --- | --- |
+| monster melee wound | **silent** — damage applied, nothing printed | **VIOLATION** | the contact loop is `asm/0BB2..0BCF`: per contact it calls `asm/60AC` then `asm/5455`, and neither has been read. The loop itself is now decoded — `mov [DS:20],%al` is the contact count, `decb [DS:20]` / `decb [DS:21]` drive it, `js` returns to the top. Read `asm/60AC` and `asm/5455` and wire whatever they print |
+| force-field damage | **not wired at all** — `u2_combat_force_field` is decoded (`asm/24B5`, −1000 HP, ring protects) but only the test calls it | **VIOLATION, different kind** | needs the tile trigger wired into the step path, then its message comes with it. Do not report this as a missing message; it is a missing effect |
+| player death | prints | ok | `asm/0C82` announcement, already in `u2_death` |
+| paralysis on a refused step | prints `--PARALYZED!` | ok | CP5 C3 asserts it |
+| per-step food drain | silent | **needs a citation, not a fix** | the drain is measured (`G2`, 19 per step on foot) and no message was seen in that capture, so silence is probably faithful — but the rule requires the comment at the mutation site to say so and cite the capture. Until it does, this row stays open |
+| player commands (A–Z) | every implemented handler prints | ok | the CP5 dispatch gate asserts a distinct string per letter, which is what makes silence in a command impossible to miss |
+
+**Two live-session bugs this audit turned up, both reproduced headless:**
+
+1. **The Z page overflows into the status band.** With a character owning many items the `ITEMS:`
+   list runs from row 18 past row 19 and overwrites the band — `H.P.`, `FOOD` and `EXP.` vanish
+   and `GOLD=` collides mid-row. The lists also wrap mid-word (`B` / `OWS-01` for BOWS).
+   The CP5 gate missed it because it asserts `A LEVEL` at the top of the page and never looked at
+   the bottom, and the test character owns nothing. Fix needs `asm/4568`'s real row budget.
+2. **The silent melee wound above**, seen directly: a monster adjacent, HP dropping, no message.
+
+---
+
 ## `--dev` — the sanctioned home for development affordances (decided 2026-10-26, owner)
 
 **The rule: `--dev` may add observation and an exit path. It may never change game behaviour.**
