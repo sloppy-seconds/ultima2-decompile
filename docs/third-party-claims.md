@@ -20,8 +20,8 @@ and a prediction that fails is a finding in its own right.
 | --- | --- | --- |
 | `V` (View) requires a **helm** | `asm/437E_cmd_V.asm` prints `VIEW<0x8d>WITH MAGICAL HELM!` | corroborated — the string exists in the handler that the cheat sheet says needs the item |
 | `L` (Launch) a plane requires a **brass button** | `asm/38B0_cmd_L.asm` prints `FUNNY THIS PLANE IS<0x8d>MISSING A BRASS BUTTON!` | corroborated — a refusal message for exactly that absence |
-| `B` (Board) a frigate requires a **blue tassle** | `asm/4C50_plane_landing_site.asm` holds `db "UE TASSLE"` | corroborated *and* defective — see § 3 |
-| `L` (Launch) a rocket consumes a **tri-lithium** | `asm/363B_cmd_G.asm` prints `TRI-LITHIUM!`; `asm/4C50` holds `db "I-LITHIUM"` | corroborated *and* defective — see § 3 |
+| `B` (Board) a frigate requires a **blue tassle** | `asm/4C55_name_pool.asm` holds `db "BLUE TASSLE",0x00` at pool[58] | corroborated — and the item name is binary text, not a walkthrough paraphrase |
+| `L` (Launch) a rocket consumes a **tri-lithium** | `asm/363B_cmd_G.asm` prints `TRI-LITHIUM!`; `asm/4C55_name_pool.asm` holds `db "TRI-LITHIUM",0x00` at pool[61] | corroborated from two independent sites |
 | `W` (Wear) offers an armour menu with a strength gate | `asm/43F3_cmd_W.asm` prints `WEAR ARMOUR:` + `1-CLOTH, 2-LEATHER, 3-CHAIN, 4-PLATE, 5-RE...` | corroborated as a menu; the gate itself is the unresolved part (see `commands.c`) |
 | the **force field** needs the ring | CP5 ticket C5: ring gate `[DS:D6]`, exactly −1000 via `stc; sbb al,0x10; das`, both branches executed in `captures/spice86/g29-field` | **proven**, and the cheat sheet independently agrees |
 | Charisma affects **prices** | `asm/20AB_bcd_price_from_stats` derives a price from `[DS:50] + [DS:4E]`, and higher stats give a *lower* number; the grocery table's 52 gp is the 6th value the loop can produce | corroborated twice from two third-party sources; still not proof, and the `DS:4E` charisma-vs-wisdom dispute is untouched |
@@ -33,8 +33,8 @@ and a prediction that fails is a finding in its own right.
   **the absence is explained, 2026-10-25: the name is in the pool.** `STRANGE COIN` is entry 13
   of the extracted items table and `QUICK SWORD` entry 9 of the weapons table (both 0-based, as
   `extractor.py` emits them) of the indexed name pool that
-  `docs/status-screen-z.md` § 7 describes — the region `asm/4C50_plane_landing_site.asm` renders
-  as invented instructions, which is why neither string appears in `asm/` as a `db`. The pool is
+  `docs/status-screen-z.md` § 7 describes — `asm/4C55_name_pool.asm`, which is why neither string
+  appears in `asm/` as a `db` at a call site. The pool is
   read by `engine/tools/extract/extractor.py` from the exe and asserted against the `HANDS == 19`
   anchor, so both names are binary text, not walkthrough paraphrase. **So this is not a
   refutation of the claim and never was.** What the claim still lacks is the other half: that
@@ -51,8 +51,10 @@ and a prediction that fails is a finding in its own right.
 ## 3. The real find: an in-game hint table in the binary, and a decode defect on top of it
 
 Chasing the cheat sheet's item names turned up a contiguous NUL-separated **hint table** in
-`original/ultimaii.exe` at file `0x18xx..0x1990`, which states several of these requirements from
-the binary itself rather than from a walkthrough:
+`original/ultimaii.exe`, which states several of these requirements from
+the binary itself rather than from a walkthrough. Measured 2026-10-25, the seven run file
+`0x18E8..0x1997` (runtime `0x16E8..0x1797`), preceded in the same blob by three pieces of NPC
+chatter (`"CAUGH..."`, `"ISN'T THIS A GREAT GAME?"`, `"HHMMM..."`) from file `0x18BD`:
 
 ```
 SOME FIGHTERS WEAR MAGIC HELMS!
@@ -69,24 +71,36 @@ buttons for launching a plane, blue tassles for a frigate, keys carried by guard
 says exactly that: "to get keys, kill guards"), and ankhs opening space. It is the strongest
 third-party-independent corroboration in this file, because the strings are the game's own.
 
-**And the defect, stated correctly after a first version of this section got it wrong.** The
-strings are complete in the binary. What is broken is the reconstruction: `asm/4C50_plane_landing_site.asm`
-renders this region as alternating `db` fragments with **invented instructions between them** —
+**And the defect, stated correctly after a first version of this section got it wrong twice.**
+The strings are complete in the binary; what was broken was the reconstruction. The first error
+was location: the fragments quoted below were attributed to this hint table, and they are not
+from it — `db "UE TASSLE"` is the tail of the **name pool's** `BLUE TASSLE` item entry, and the
+hint table is a different region entirely, at file `0x18BD..0x1997` (runtime `0x16BD..0x1797`),
+tucked at the tail of `asm/15E1_tavern_menu.asm` where the clean wave left it as honest
+`.byte` forced-keeps rather than invented mnemonics. The second error was thinking the two were
+one problem.
+
+What the old listing looked like, in the region this section first pointed at:
 
 ```
 L_00506f:  add    %al,0x4c(%bp,%si)      # these are string bytes, not code
-L_005072:  db "UE TASSLE"                # tail of "SAYLORS WEAR BLUE TASSLES!"
+L_005072:  db "UE TASSLE"                # tail of pool[58] "BLUE TASSLE", NOT the hint table
 ...
 L_005093:  add    %dl,0x52(%si)          # also string bytes
-L_005096:  db "I-LITHIUM"
+L_005096:  db "I-LITHIUM"                # tail of pool[61] "TRI-LITHIUM"
 ```
 
-— so the clean wave decoded text as machine code and cut the strings mid-word. `asm/4C50`'s own
-`# strings:` line already admits fragments like `"GGER"`, `"CE"`, `"ORD"` alongside 48 others.
-This is the same class as the G22 splits and the `asm/353A`/`asm/353D` forced-keep swallow, and it
-means `asm/4C50`'s span is not trustworthy as code. `tools/fragment_splits.py` nominates it;
-`tools/recut_bytes.py` can re-cut once the boundary is agreed. **A walkthrough read led to a
-decode-tree bug** — a route nobody here had tried.
+— the clean wave decoded text as machine code and cut the strings mid-word, and its own
+`# strings:` line admitted fragments like `"GGER"`, `"CE"`, `"ORD"` alongside 48 others. Same
+class as the G22 splits and the `asm/353A`/`asm/353D` forced-keep swallow.
+
+**The name-pool half is fixed as of 2026-10-25**: it is `asm/4C55_name_pool.asm` now, one entry
+per line with its index tagged, byte-identical under `assemble_clean.sh`. **The hint table is
+not**, and it is the obvious next cut: ten entries, `"CAUGH..."`, `"ISN'T THIS A GREAT GAME?"`,
+`"HHMMM..."` and then the seven claims this file is about, sitting in one contiguous
+NUL-separated run with code ending in a `jmp` immediately before it. `tools/fragment_splits.py`
+nominates the tavern file; the method is already written down in `asm/4C55_name_pool.asm`'s
+header. **A walkthrough read led to a decode-tree bug** — a route nobody here had tried.
 
 ## 4. Claims that are out of scope or parked
 

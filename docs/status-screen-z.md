@@ -244,10 +244,19 @@ splits the pool and **asserts** that anchor instead of trusting the split.
 ### What blocked the screen, and what the answer turned out to be
 
 The engine builds in CI with no `original/ultimaii.exe`, from the `db` lines of `asm/`. The
-pool is the one piece of text the asm tree cannot supply: the bulk wave disassembled the
-region after `HANDS` as code, so `asm/4C50_plane_landing_site.asm` has `db "GGER"`,
-`db "CE"`, `db "ORD"` where `DAGGER`, `MACE` and `SWORD` live. The strings are recoverable
-— `assemble_clean.sh` rebuilds those bytes exactly — but not by reading the listing.
+pool used to be the one piece of text the asm tree could not supply: the bulk wave
+disassembled the region after `HANDS` as code, so `asm/4C50_plane_landing_site.asm` had
+`db "GGER"`, `db "CE"`, `db "ORD"` where `DAGGER`, `MACE` and `SWORD` live — the strings were
+recoverable, because `assemble_clean.sh` rebuilt those bytes exactly, but not by reading the
+listing.
+
+**That is fixed as of 2026-10-25.** The region is now `asm/4C55_name_pool.asm`, one entry per
+`db` line, each tagged with the index the code uses (`db "DAGGER",0x00   # pool[20]`), and the
+split is confirmed twice over: every group base in the table above lands on the right entry, and
+`extractor.py` now reads the exe path and the asm path and gets byte-identical 76-entry lists.
+The extractor's fallback used to parse one enormous `db` operand and could only hope the split
+landed; it now requires the `pool[N]` tags to run 0..N with no gap, so a drift fails the build
+instead of putting PHASER where QUICK SWORD belongs.
 
 This was first written up as a decision for the owner between a CI content fixture, a
 skipping test, or a committed generated table. **That framing was wrong and those options
