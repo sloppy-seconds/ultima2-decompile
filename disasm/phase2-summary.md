@@ -14,7 +14,7 @@ Owner approved CP6 2026-10-19; CP7 artifacts signed off same day.
 | Reko on true boundaries | 1299/1299 emitted + 44 discovered (`decompiled/reko-map/`) |
 | Bytecheck v2 (`disasm/bytecheck-map.tsv`) | 537 verified · 199 mismatch (drift/lowering) · 563 no-claims |
 | Genuine Reko fabrications | **1 in 1299** (0A5F); 5 of 6 flagged were bytecheck FPs — see `disasm/defects.md` |
-| Reko failures | 3, all non-functions (2395/35DD nop-pads, 531B string site) |
+| Reko failures | 3, all boundary artefacts (2395/35DD are the tail byte of an instruction the map cut in half — the `nop-pad` reading in `disasm/defects.md` was retracted 2026-10-28e; 531B string site) |
 
 ## What a row in `function-map.tsv` actually means
 
@@ -86,7 +86,8 @@ Function classes and handling:
 - **Normal (verified/mismatch-drift)**: standard loop above.
 - **No-claims (563)**: mostly tiny fragments; lift from asm slice directly (draft adds little).
 - **Known defects**: 0A5F (ignore Reko frame math), 47BD-family (data islands — reclassify,
-  don't lift), 2395/35DD (nop-pads — skip), 531B (string site — data + 3-byte stub).
+  don't lift), 2395/35DD (tail bytes of instructions the map cut in half — not nop-pads, see
+  `disasm/defects.md`), 531B (string site — data + 3-byte stub).
 - **Self-modifying cluster 0x5120–0x5151**: exclude from C lifting; document as runtime-patched.
 
 Suggested Phase 3 order: command handlers first (26, high-value, well-understood), then

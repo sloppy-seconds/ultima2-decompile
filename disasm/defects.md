@@ -23,16 +23,26 @@ absent-from-file test needs the derived-constant caveat; every fab is human-adju
 
 | Start | Symptom | Verdict |
 | --- | --- | --- |
-| 2395 | rewrite failure; no aligned label in linear asm (CP1) | Slice = single `nop` (0x90). A NOP-padding seed, not a real function. Harmless; keep as trivial 1-byte function, no Reko output needed. |
-| 35DD | rewrite failure | Same: single `nop` padding seed. Same disposition. |
+| 2395 | rewrite failure; no aligned label in linear asm (CP1) | **Retracted 2026-10-28e.** Recorded as a single `nop` (0x90) and a NOP-padding seed. It is not padding: the map cut `out %al,$0x90` (`e6 90`) after its opcode at asm/2393, so 2395 is the operand of a real instruction. Reko failed because a one-byte tail is not a procedure, which is a fact about the boundary, not about the byte. |
+| 35DD | rewrite failure | **Retracted 2026-10-28e.** Same shape: the map cut `aam $0x90` (`d4 90`) after its opcode at asm/35DB. Not padding. |
 | 531B | unbounded-recursion SSA exception | Slice: `call str_out` followed by a run of 0x20 (space) string bytes. A string-display site, not a control-flow function; Reko's recursion on the shared routine blows up. Phase 3: treat as code-prefix + string data. |
+
+**The two retractions are the same mistake as the rendering gaps, one layer down.** A byte was
+read out of context, a plausible story was formed about it (`nop` = padding), and that story then
+appeared in three documents and a disposition, which made it look adjudicated. The bytes had been
+saying otherwise since the map was drawn; nobody re-read them after the boundary was placed.
+`tools/forced_keep_audit.py` finds both now, because a forced-keep whose instruction is longer
+than the bytes kept is the boundary admitting it cut something.
 
 ## Follow-ups recorded (not hidden)
 
 1. Bytecheck v3 (if ever built): whitelist folded/complement/negated forms before flagging fab.
 2. Data-island candidates inside seed ranges: 47BD/4815/486D family — CP2 kind said unclassified;
    Phase 3 data-separation pass should absorb them.
-3. NOP-padding seeds (2395, 35DD family): consider `kind=nop-pad` in the map for Phase 3.
+3. ~~NOP-padding seeds (2395, 35DD family): consider `kind=nop-pad` in the map for Phase 3.~~
+   **Dropped 2026-10-28e: there are no NOP-padding seeds.** Both bytes are the tail of an
+   instruction the map cut in half, so a `kind=nop-pad` would have encoded a wrong reading into
+   the map, where it would have been harder to correct than the prose was.
 
 ## 2026-10-28d — the misclassification direction nobody could check until now
 

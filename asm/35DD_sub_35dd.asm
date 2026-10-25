@@ -1,9 +1,13 @@
 # sub_35dd — mechanical clean (bulk wave); behavior not yet reviewed
 # func 35DD..35DD  len 0001 B  evidence: seed+reko
-# notes: NOP-pad seed (defects.md): single 0x90 padding byte, not a real
-#        function. Disposition: clean (marked nop-pad).
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: this byte is not padding. The map cut `aam $0x90`
+#           (`d4 90`) after its opcode at asm/35DB, so 35DD is the operand of a real instruction
+#           and `nop` was that operand read as code. The old header, disasm/defects.md and
+#           disasm/phase2-summary.md all recorded this as a NOP-padding seed and a Reko failure
+#           to be skipped; the disposition was a plausible story about a byte nobody had
+#           re-read after the boundary was drawn. Found by tools/forced_keep_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_35dd:
 L_0037dd:
-        nop
+        .byte 0x90   # tail of `aam $0x90` started at asm/35DB
