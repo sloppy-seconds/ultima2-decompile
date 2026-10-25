@@ -148,6 +148,34 @@ static u2_cmd_result cmd_E(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/2B8F_cmd_A: print "ATTACK--" with no CR and fall into the gate chain, whose last step
+   reads a direction. The direction arrives turns later, so the handler leaves the pending
+   command on the overworld and returns U2_CMD_AWAIT: no turn passes and no sweep runs until
+   the aim is answered, which is what the loop's direction arms then do. If the turn expires
+   first, the waiting PASS lands on this same line -- `CMD: ATTACK--PASS`, captured live
+   (docs/spice86-live-findings.md section 18), and that is why the word is printed without a
+   CR rather than through echo_cmd. */
+static u2_cmd_result cmd_A(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_ATTACK);
+    ow->pending_cmd = 'A';
+    return U2_CMD_AWAIT;
+}
+
+/* asm/42F1 cmd_U: print "UNLOCK DIRECTION-" and fall into the same kind of aim gate. The
+   prompt is answered by a direction key, and only a sideways one can ever work -- see
+   u2_unlock_rule and asm/4309_unlock_aim_gate. Same AWAIT shape as cmd_A, and for the same
+   reason: the original consumed the next key inside the handler chain, so the engine must
+   not treat the letter itself as a completed turn. */
+static u2_cmd_result cmd_U(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_UNLOCK_DIRECTION);
+    ow->pending_cmd = 'U';
+    return U2_CMD_AWAIT;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -182,13 +210,13 @@ static u2_cmd_result cmd_E(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * Two observed letters (A, U) are still implemented inside
- * u2_overworld_loop, with their evidence in place there. They are the two that share state
- * with the loop -- a direction key arriving several turns later -- and they migrate last
- * for that reason. Q, P, Z and E have already made the trip.
+ * All six observed letters now live here. A and U came last because they leave the loop
+ * waiting for a direction key that arrives turns later, which meant the pending state had to
+ * move onto u2_overworld first -- in the original the direction is consumed inside the
+ * handler chain, so the pending aim is the command's business and not the loop's.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
-    NULL,  /* A  in overworld.c pending migration */
+    cmd_A, /* A  attack aim: asm/2B8F, prints ATTACK-- and awaits a direction */
     NULL,  /* B  not implemented: BOARD needs vehicles */
     NULL,  /* C  see the note above */
     NULL,  /* D  see the note above */
@@ -208,7 +236,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* R  not implemented: ready weapon */
     NULL,  /* S  see the note above */
     NULL,  /* T  see the note above */
-    NULL,  /* U  in overworld.c pending migration: unlock */
+    cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */
     NULL,  /* V  see the note above */
     NULL,  /* W  see the note above */
     NULL,  /* X  not implemented: destroy item */

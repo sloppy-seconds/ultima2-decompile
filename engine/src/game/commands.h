@@ -15,7 +15,8 @@
  *   jmp *%bx
  *
  * Two things about that shape are load-bearing for this file and are the reason it exists
- * separately from overworld.c, which still handles two letters inline in a switch.
+ * separately from overworld.c, which no longer handles any command letter inline: all six
+ * that were there (A, E, P, Q, U, Z) have moved.
  *
  * First, the range test happens BEFORE the dispatch, in two pieces: `cmp $0x41,%al ;
  * jae L_000c18` (asm/09FB) and `cmp $0x5a,%al ; jbe L_000c1f` (asm/0A18). A key outside

@@ -39,6 +39,12 @@ typedef struct u2_overworld {
     u2_view  view;
     u2_frame frame;
     int      x, y;                 /* position inside the sector, DS:00/01 */
+    /* A command that printed a prompt and is waiting for a direction key several
+     * turns later: 'A' (ATTACK--) or 'U' (UNLOCK DIRECTION-), 0 when nothing is
+     * pending. It lives here rather than as a local in u2_overworld_loop so the
+     * handlers in commands.c can set it -- the original consumes the direction inside
+     * the handler chain, so the state is the command's, not the loop's. */
+    uint8_t  pending_cmd;
     uint8_t  view_mode;            /* the DS:12 analogue: 0xFF in-world, 4 in a site */
     int      sector_hi, sector_lo;
     /* Turn counter for --debug cli. `turns` advances once per resolved player

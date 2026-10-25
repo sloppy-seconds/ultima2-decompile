@@ -1073,7 +1073,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
     ctx->frame = &ow->frame;
 
     int idle_polls = 0;     /* polls since the last key, for the auto-PASS */
-    int pending_cmd = 0;    /* 'A' printed ATTACK-- and is awaiting a direction */
 
     for (;;) {
         u2_overworld_draw(ctx, ow);
@@ -1105,7 +1104,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                     idle_polls = 0;
                     /* If a command is half-typed, the PASS closes that same line:
                      * `CMD: ATTACK--PASS`, exactly as the live capture shows. */
-                    pending_cmd = 0;
+                    ow->pending_cmd = 0;
                     u2_overworld_pass(ctx, ow);
                     /* Not modelled: the original also steps every monster on
                      * this tick, observed live as one cell per auto-PASS while
@@ -1127,21 +1126,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         case U2_KEY_DOWN:  dy =  1; word = U2_S_DIR_SOUTH; break;
         case U2_KEY_RIGHT: dx =  1; word = U2_S_DIR_EAST;  break;
         case U2_KEY_LEFT:  dx = -1; word = U2_S_DIR_WEST;  break;
-        case 'A':
-            /* asm/2B8F_cmd_A: print "ATTACK--" with no CR and fall into the gate
-             * chain, whose last step reads a direction. If the turn expires first
-             * the waiting PASS lands on this same line, which is exactly the live
-             * `CMD: ATTACK--PASS` (docs/spice86-live-findings.md § 18). */
-            seam_str_out(ctx, U2_S_ATTACK);
-            pending_cmd = 'A';
-            continue;
-        case 'U':
-            /* asm/42F1 cmd_U: print "UNLOCK DIRECTION-" and fall into the aim gate.
-             * The prompt is answered by a direction key, and only a sideways one can
-             * ever work -- see u2_unlock_rule and asm/4309_unlock_aim_gate. */
-            seam_str_out(ctx, U2_S_UNLOCK_DIRECTION);
-            pending_cmd = 'U';
-            continue;
         case ' ':
             /* Space is PASS from the walk loop's own first arm (cmp $0x20 at file
              * 0x0B3C). 'P' is PASS too, but from the command jump table (asm/3DBC_cmd_P,
@@ -1188,8 +1172,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * post-command sweep runs on the refusal as well as on the success -- the same
          * consequence § 15.2 of docs/monster-spawn.md derives for the command path in
          * general. The player does not move. */
-        if (pending_cmd == 'U' && word != NULL) {
-            pending_cmd = 0;
+        if (ow->pending_cmd == 'U' && word != NULL) {
+            ow->pending_cmd = 0;
             const int tx = ow->x + dx;
             const int ty = ow->y;
             const int off = tx < 0 || tx >= U2_SECTOR_EDGE || ty < 0 || ty >= U2_SECTOR_EDGE;
@@ -1223,8 +1207,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * direction, not a step: the original consumed it inside the cmd_A chain
          * and never moved the player. Live: `ATTACK--EAST--HIT!!!` with the
          * player standing still. */
-        if (pending_cmd == 'A' && word != NULL) {
-            pending_cmd = 0;
+        if (ow->pending_cmd == 'A' && word != NULL) {
+            ow->pending_cmd = 0;
             attack_dir(ctx, ow, word, dx, dy);
             /* The swing is the turn: the original's monsters advance on the
              * expiry of a half-typed `A` too (`ATTACK--PASS`), so an attack that
