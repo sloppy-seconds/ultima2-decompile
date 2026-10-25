@@ -121,14 +121,15 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     u2_status_draw(ctx);
     /* Nothing is printed for a melee wound, and the reason is now read rather than assumed.
      * The contact loop is runtime 0x0BB2..0x0BCF: it takes the count from [DS:20], and per
-     * contact calls 0x5EAC (monster position bookkeeping -- masks with 0x3f and writes the
-     * sector grid), 0x5255 (a SPEAKER tone: AX/BX frequency-and-duration pairs into the tone
-     * seam, called twice), and 0x5EF2 (a map-cell write at DS:1800). None of them prints text.
-     * So the original's feedback for taking a wound is a SOUND, not a message, and silence here
-     * is faithful -- the gap is that the engine has no sound on this path, not that it has no
-     * text. An earlier note here cited "asm/5455, asm/60AC and asm/60F2" as "almost certainly
-     * the message"; those were file-offset labels read as runtime addresses, wrong by 0x200, and
-     * the routine they pointed at is the disk/save code ("PLAYER DISK", "NOT A BLANK"). */
+     * contact calls 0x5EAC (a map-block write, DS:1000), 0x5255 (a SPEAKER tone: AX/BX pairs
+     * into the tone seam, called twice) and 0x5EF2 (a map-block write, DS:1800). None of them
+     * prints text, so the original's feedback for taking a wound is the sound plus the HP number
+     * moving in the status band. The engine has neither on this path.
+     * Note on the addresses: the earlier version of this comment named asm/5455, asm/60AC and
+     * asm/60F2. Those are FILE offsets and they were CORRECT -- file 0x5455/0x60ac/0x60f2 are
+     * exactly runtime 0x5255/0x5eac/0x5ef2, the three callees. What was wrong was the guess that
+     * they print a message; a follow-up edit here then claimed the addresses were off by 0x200,
+     * which was itself mistaken. The asm/ tree labels by file offset; runtime dumps do not. */
 }
 
 /*
