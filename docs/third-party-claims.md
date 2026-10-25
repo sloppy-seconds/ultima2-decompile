@@ -71,6 +71,21 @@ buttons for launching a plane, blue tassles for a frigate, keys carried by guard
 says exactly that: "to get keys, kill guards"), and ankhs opening space. It is the strongest
 third-party-independent corroboration in this file, because the strings are the game's own.
 
+**How they are reached, because an address search alone says the opposite.** Nothing in the
+executable loads any of these addresses: there is no `mov reg, imm16` to any entry, no word
+anywhere equal to one, and no offset table — so a reference scan concludes the blob is dead data
+and the corroboration claim collapses. It is not dead. The tavern menu's tail stores a **cursor**
+into it: at runtime `0x16a8..0x16af`, `lea ax,cs:0x16bc ; mov ds:0x27,ax`, then a call to
+`asm/155D`, which sets `ES=CS`, loads `DI` from `[DS:27:28]`, skips `SI` NULs and emits the entry
+it lands on. The cursor is set one byte early, to the NUL that ends the menu's own code, because
+the walker skips to the next NUL before it starts counting. Recorded in the headers of
+`asm/16BD_barkeep_chatter_hints.asm` and `asm/155D_chatter_table_selector.asm`.
+
+Two consequences worth stating. `DS:27:28` is shared scratch — `docs/commerce.md` § 3b measured the
+same two bytes as the shop price operand, so it has at least two unrelated jobs, the same hazard as
+`DS:1F`. And the range runs to file `0x1998`, not `0x1997`: the last byte is the terminator of
+`PLANES NEED BRASS BUTTONS!`, which an earlier line of this section cut off.
+
 **And the defect, stated correctly after a first version of this section got it wrong twice.**
 The strings are complete in the binary; what was broken was the reconstruction. The first error
 was location: the fragments quoted below were attributed to this hint table, and they are not
