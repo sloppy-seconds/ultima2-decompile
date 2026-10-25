@@ -84,8 +84,9 @@ def render(rows):
              "# str_out calling convention. Generated; do not hand-edit.",
              "#   python3 tools/str_out_audit.py --emit",
              "# Offsets are FILE offsets (runtime + 0x200). No game text: len is the byte count.",
-             "# Fixing one means editing body lines, which engine/tests/asm_body_guard.py",
-             "# forbids — see disasm/defects.md for why that is a decision and not a cleanup.",
+             "# An empty list is the goal and it is now the state: every printable str_out site is",
+             "# rendered as data by asm/. A message the map boundary cut in two counts as rendered",
+             "# — strings_atlas reunites the halves — see disasm/defects.md.",
              "file_off\truntime\tlen\tasm_owner_claiming_this_range\tatlas_source"]
     for r in sorted(rows, key=lambda x: x["foff"]):
         lines.append("%05X\t%05X\t%d\t%s\t%s"
@@ -106,8 +107,8 @@ def selftest():
         fails.append(f"{len(missing)} print sites are in NEITHER source — the atlas lost them "
                      f"entirely, e.g. file {missing[0]['foff']:05X}")
     if len(g) > 40:
-        fails.append(f"{len(g)} rendering gaps — asm/ has lost more renderings than the nine "
-                     f"on record; check what re-rendered the tree")
+        fails.append(f"{len(g)} rendering gaps — asm/ has lost far more renderings than the "
+                     f"list on record accounts for; check what re-rendered the tree")
     # The control that makes this a gate: hide a string that asm/ DOES render as data and the
     # gap list must grow. If it does not, the comparison is not reading the atlas it was given.
     atlas = sa.build(exe)

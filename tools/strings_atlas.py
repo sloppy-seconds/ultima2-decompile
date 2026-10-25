@@ -344,39 +344,73 @@ def parse(path, exe=None):
     return fname, start, end, evidence, out
 
 
+def _reunite_split(cands, exe):
+    """Reunite a message a map boundary cut in two.
+
+    A `call str_out / db text` pair whose call the boundary split leaves the text across two
+    fragments, and each fragment renders its own half honestly: `db "ANOS:"` in one and
+    `db " 9,000,000 B.C.",0x00` in the next. Neither half passes the terminator test alone, so
+    the atlas reported the whole message as something `asm/` fails to render — true of the
+    bytes as listed, false of the tree, and the difference matters because the gap list is what
+    someone reads to decide what is left to fix.
+
+    Join only on exact evidence: the second run starts at the byte immediately after the first,
+    the first is genuinely unterminated (otherwise two neighbouring complete messages would
+    merge into one wrong one), they come from different files (a run inside one file is already
+    one run, see `_data_line_runs`), and the concatenation is checked byte-for-byte against the
+    executable by the caller's existing filter.
+    """
+    out = []
+    for c in sorted(cands, key=lambda c: (c['foff'], c['file'])):
+        if out:
+            prev = out[-1]
+            prev_end = prev['foff'] + len(prev['text'])
+            if (c['file'] != prev['file'] and prev_end == c['foff']
+                    and prev_end < len(exe)
+                    and exe[prev_end] not in (0x00, 0x8D, 0x0D)):
+                prev['text'] += c['text']
+                prev['file'] = f"{prev['file']}+{c['file']}"
+                continue
+        out.append(dict(c))
+    return out
+
+
 def build(exe=None):
     rows = []
     ranges = []
     if exe is None:
         exe = open(EXE, 'rb').read()
+    cands = []
     for p in sorted(glob.glob('asm/*.asm')):
         fname, start, end, evidence, strings = parse(p, exe)
         if start is not None:
             ranges.append((start + BIAS, end + BIAS, fname, evidence))
         for foff, text in strings:
-            end = foff + len(text)
-            # A real inline message is terminated by a control byte. This filter is
-            # not cosmetic: without it the tool reports 474 "strings" of which 235 are
-            # mis-decoded data -- the clean wave rendered string blobs as `.byte`
-            # instruction sequences (asm/15E1 lines 196+ and asm/0720 are the worst),
-            # and each printable fragment inside them looks like a short message.
-            # The terminator set is {0x00, 0x8D, 0x0D}: 0x00 ends a message, and
-            # 0x8D/0x0D separate the lines *inside* one multi-line message, so
-            # `4-PASS 5-SURFACE, 6-PRAYER.` is followed by 0x8D and not by 0x00.
-            # Accepting all three keeps 336 strings and every one of them verifies
-            # byte-exactly against the exe; 0x00 alone would keep 239 and silently
-            # lose both spell catalogues, which is the exact regression --selftest
-            # is there to catch. Unproven entries are dropped, not flagged: a tool
-            # that prints a plausible wrong string is the failure mode this file
-            # exists to avoid.
-            if end >= len(exe) or exe[end] not in (0x00, 0x8D, 0x0D):
-                continue
-            if exe[foff:end].decode('latin1', 'replace') != text:
-                continue
-            rows.append({'file': fname, 'start': start, 'end': end,
-                         'evidence': evidence, 'foff': foff,
-                         'runtime': foff - BIAS, 'text': text,
-                         'source': 'db-line'})
+            cands.append({'file': fname, 'start': start, 'end': end,
+                          'evidence': evidence, 'foff': foff, 'text': text})
+    for c in _reunite_split(cands, exe):
+        foff, text = c['foff'], c['text']
+        end = foff + len(text)
+        # A real inline message is terminated by a control byte. This filter is
+        # not cosmetic: without it the tool reports 474 "strings" of which 235 are
+        # mis-decoded data -- the clean wave rendered string blobs as `.byte`
+        # instruction sequences (asm/15E1 lines 196+ and asm/0720 are the worst),
+        # and each printable fragment inside them looks like a short message.
+        # The terminator set is {0x00, 0x8D, 0x0D}: 0x00 ends a message, and
+        # 0x8D/0x0D separate the lines *inside* one multi-line message, so
+        # `4-PASS 5-SURFACE, 6-PRAYER.` is followed by 0x8D and not by 0x00.
+        # Accepting all three keeps 336 strings and every one of them verifies
+        # byte-exactly against the exe; 0x00 alone would keep 239 and silently
+        # lose both spell catalogues, which is the exact regression --selftest
+        # is there to catch. Unproven entries are dropped, not flagged: a tool
+        # that prints a plausible wrong string is the failure mode this file
+        # exists to avoid.
+        if end >= len(exe) or exe[end] not in (0x00, 0x8D, 0x0D):
+            continue
+        if exe[foff:end].decode('latin1', 'replace') != text:
+            continue
+        c.update({'runtime': foff - BIAS, 'end': end, 'source': 'db-line'})
+        rows.append(c)
     # Second source: the printer's own calling convention. Nine messages sit in spans `asm/`
     # renders as instructions, so no amount of parsing listings will ever report them -- and
     # `asm_body_guard` forbids editing those body lines to make them visible, which is a
@@ -478,20 +512,26 @@ def selftest():
         print('SELFTEST FAIL: only %d strings extracted -- the filter is eating real '
               'messages, not just mis-decoded data' % len(build()))
         bad += 1
-    # The contract source must be live. Nine messages sit in spans asm/ renders as instructions,
-    # and asm_body_guard forbids editing those body lines, so the contract is the ONLY thing
-    # that carries them. If it contributes nothing the atlas is blind to them again -- and this
-    # time nothing downstream would notice, which is the whole reason for the control.
+    # The contract source must be live. It used to be asserted by requiring nine rows, which
+    # meant the control could only pass while the defect it describes still existed: render the
+    # last message as data and the atlas reports itself broken for having nothing left to
+    # rescue. So test the mechanism, not the symptom — take messages asm/ DOES render as data
+    # and prove the calling convention alone would have found the same bytes. If the contract
+    # path is broken, no `db` line survives to be rescued either and this goes red.
     contract = [r for r in rows if r.get('source') == 'str-out-contract']
-    if not contract:
-        print('SELFTEST FAIL: the str-out contract source contributes nothing -- the atlas is '
-              'blind to every message asm/ does not render as data')
+    exe = open(EXE, 'rb').read()
+    sites = set(str_out_sites(exe))
+    reachable = {message_at(exe, s) for s in sites} - {None}
+    proven = [r for r in rows if r.get('source') == 'db-line'
+              and (r['foff'], r['text']) in reachable]
+    if len(proven) < 50:
+        print(f'SELFTEST FAIL: only {len(proven)} db-line messages are also reachable through '
+              'the str-out contract — the second source is not demonstrating that it works, '
+              'so a future gap would not be caught by it')
         bad += 1
     # Every contract row must be a real print site, not a guess: the byte range has to be
     # adjacent to a `call str_out`, and it has to hold its own bytes (verify() covers the
     # second half for all rows).
-    exe = open(EXE, 'rb').read()
-    sites = set(str_out_sites(exe))
     stray = [r for r in contract if not any(abs(r['foff'] - s) <= 2 for s in sites)]
     if stray:
         print('SELFTEST FAIL: %d contract rows are not adjacent to a str_out call site' % len(stray))

@@ -2,8 +2,7 @@
 # str_out calling convention. Generated; do not hand-edit.
 #   python3 tools/str_out_audit.py --emit
 # Offsets are FILE offsets (runtime + 0x200). No game text: len is the byte count.
-# Fixing one means editing body lines, which engine/tests/asm_body_guard.py
-# forbids — see disasm/defects.md for why that is a decision and not a cleanup.
+# An empty list is the goal and it is now the state: every printable str_out site is
+# rendered as data by asm/. A message the map boundary cut in two counts as rendered
+# — strings_atlas reunites the halves — see disasm/defects.md.
 file_off	runtime	len	asm_owner_claiming_this_range	atlas_source
-0377D	0357D	20	3577_sub_3577	str-out-contract
-03A08	03808	6	37F2_sub_37f2	str-out-contract

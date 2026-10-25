@@ -52,14 +52,25 @@ rendered as data by `asm/`, 5 not.** Those 5 are in `disasm/str-out-rendering-ga
 lengths and the owning `asm/` file — no game text, per `AGENTS.md`), and `--check` goes red on
 drift in either direction: a new gap, or a listed one that got fixed and left the list stale.
 
-**Update, 2026-10-28e: four of the nine were fixed, and the reason they were open is gone.** The
+**Update, 2026-10-28e: the list is empty, and the reason it was open is gone.** The
 paragraph below is kept because it is the accurate record of why the tree was left this way, but
 its premise no longer holds: `asm_body_guard` now permits a marked body correction
 (`# body corrected: DATE -- evidence: ...`), so "the fix is a body edit, which the guard
-forbids" stopped being true. Four files were re-cut — `asm/02A3`, `asm/02E6`, `asm/3566` and
-`asm/3596`, plus the two halves of the era string in `asm/3577` and `asm/3582` — each verified
-by `check_func`, by `str_out_audit --check` and by the whole-binary byte match. What remains is
-`asm/3795`, `asm/37F2` and `asm/464E`.
+forbids" stopped being true. Every one of the nine was re-cut — `asm/02A3`, `asm/02E6`,
+`asm/3566`, `asm/3577` + `asm/3582`, `asm/3596`, `asm/3795`, `asm/37F2` + `asm/380B` and
+`asm/464E` — each verified by `check_func`, by `str_out_audit --check` and by the whole-binary
+byte match. 238 of 238 printable print sites are now rendered as data.
+
+Two things fell out that were not in the original diagnosis. The first is that a message the map
+cut in two is still rendered as data, just in two pieces: `db "ANOS:"` in one fragment and
+`db " 9,000,000 B.C.",0x00` in the next. Neither half passes the terminator test alone, so the
+atlas was calling a fixed file a gap. `strings_atlas` now reunites halves on exact evidence
+(adjacent addresses, the first genuinely unterminated, different files, byte-checked afterwards)
+and its selftest stopped requiring the contract source to have work to do — a control that can
+only pass while the defect exists is not a control, and it went red the moment the last gap
+closed. The second is that a four-byte forced-keep in `asm/37F2` was not a gas limitation at
+all: gas encodes `movb 0x4a,%al` as `a0 4a 00` perfectly well, and the keep existed because the
+byte before it was the NUL of a string nobody had rendered as one.
 
 The era table turned out to be worth the grind on its own account. All five `ANOS:` lines are
 now visible in `asm/` as data, and the table's real shape came out with them: five entries of
