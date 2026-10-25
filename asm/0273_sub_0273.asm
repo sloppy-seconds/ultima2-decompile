@@ -4,13 +4,12 @@
 # calls: L_0051df (str_out)
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# body corrected: 2026-10-28d -- evidence: bytes 0273..0276 are `06 2f 00 05`, the tail of
+#           `movb $0x5,0x2f` whose opcode 0xc6 is the forced-keep in asm/0272. The three
+#           mnemonics shown here were those four bytes decoded as code.
 sub_0273:
 L_000473:
-        push   %es
-L_000474:
-        das
-L_000475:
-        add    %al,(%di)
+        .byte 0x06, 0x2f, 0x00, 0x05   # tail of `movb $0x5,0x2f` started at asm/0272
 L_000477:
         mov    $0x10,%al
 L_000479:
