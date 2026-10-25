@@ -47,10 +47,25 @@ from `original/ultimaii.exe` alone, with no reference to how `asm/` chose to ren
 Compare that set against what `strings_atlas.py` reports and the gap is exactly "the game prints
 this and `asm/` draws it as instructions".
 
-**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 229
-rendered as data by `asm/`, 9 not.** Those 9 are in `disasm/str-out-rendering-gap.tsv` (offsets,
+**Measured: 334 near calls to the printer, 238 of them carrying a printable message, 233
+rendered as data by `asm/`, 5 not.** Those 5 are in `disasm/str-out-rendering-gap.tsv` (offsets,
 lengths and the owning `asm/` file — no game text, per `AGENTS.md`), and `--check` goes red on
 drift in either direction: a new gap, or a listed one that got fixed and left the list stale.
+
+**Update, 2026-10-28e: four of the nine were fixed, and the reason they were open is gone.** The
+paragraph below is kept because it is the accurate record of why the tree was left this way, but
+its premise no longer holds: `asm_body_guard` now permits a marked body correction
+(`# body corrected: DATE -- evidence: ...`), so "the fix is a body edit, which the guard
+forbids" stopped being true. Four files were re-cut — `asm/02A3`, `asm/02E6`, `asm/3566` and
+`asm/3596`, plus the two halves of the era string in `asm/3577` and `asm/3582` — each verified
+by `check_func`, by `str_out_audit --check` and by the whole-binary byte match. What remains is
+`asm/3795`, `asm/37F2` and `asm/464E`.
+
+The era table turned out to be worth the grind on its own account. All five `ANOS:` lines are
+now visible in `asm/` as data, and the table's real shape came out with them: five entries of
+`call str_out / db text / jmp dispatcher` with no padding, whose boundaries the map had cut in
+three places, which is why three of the five were invisible and why `asm/3596_show_year_1990`
+was named for the second-to-last thing in its own range.
 
 **The 9 are documented, not fixed, and that is a deliberate limit rather than a leftover.** The
 only way to make `asm/` render them as data is to replace instruction body lines with `db` lines.
@@ -83,7 +98,7 @@ assumes the `db` is the last thing emitted before that label. `asm/334D_cmd_D` a
 
 What is in the list is still the argument for the gate. Three of the five `ANOS:` era lines,
 including one claimed by `asm/3596_show_year_1990` whose declared range swallows a neighbouring
-string. The title screen's copyright line. `KLIMB`, `IGNITE TORCH`, `SPELL-`. And the fact that
+string — both now fixed, see the update above. `KLIMB`, `IGNITE TORCH`, `SPELL-`. And the fact that
 the audit was right about *which offsets* were invisible even while the explanation for why was
 wrong twice — the number held, the story did not.
 

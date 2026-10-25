@@ -1,38 +1,18 @@
 # sub_3566 — mechanical clean (bulk wave); behavior not yet reviewed
 # func 3566..3576  len 0011 B  evidence: reko
-# RENDERING GAP: prints 'ANOS: LEGENDS!' at file 0x03768, but these bytes are rendered as
-#           instructions, so the atlas knows the message only from the str_out calling
-#           convention. One of three invisible lines in the five-entry ANOS era table — see
-#           asm/3577 and asm/3596. Listed in disasm/str-out-rendering-gap.tsv; the fix is a
-#           body edit, which engine/tests/asm_body_guard.py forbids — see disasm/defects.md.
+# strings: "ANOS: LEGENDS!"
+# calls: L_0051df (str_out)
 # confidence: low (bytes proven by check_func.py)
+# body corrected: 2026-10-28e -- evidence: this is the second of five era-table entries at
+#           asm/3546, and the table is `call str_out / db text / jmp dispatcher` with no
+#           padding. The map boundary cut the `call` at asm/3565 after its opcode, so this
+#           fragment opened on `77 1a` decoded as `ja`, and every line after it was the string
+#           `ANOS: LEGENDS!` read as code. Re-cut from the call target (file 004FDF, str_out)
+#           and the NUL terminator, which fix both ends exactly. Found by
+#           tools/forced_keep_audit.py and tools/str_out_audit.py.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_3566:
 L_003766:
-        ja L_003782
+        .byte 0x77, 0x1a   # tail of `call L_0051df` (stop-trunc) started at asm/3565
 L_003768:
-        inc    %cx
-L_003769:
-        dec    %si
-L_00376a:
-        dec    %di
-L_00376b:
-        push   %bx
-L_00376c:
-        cmp    (%bx,%si),%ah
-L_00376e:
-        dec    %sp
-L_00376f:
-        inc    %bp
-L_003770:
-        inc    %di
-L_003771:
-        inc    %bp
-L_003772:
-        dec    %si
-L_003773:
-        inc    %sp
-L_003774:
-        push   %bx
-L_003775:
-        and    %ax,(%bx,%si)
+        db "ANOS: LEGENDS!",0x00        # string
