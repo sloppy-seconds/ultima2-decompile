@@ -498,6 +498,19 @@ for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PA
     fi
 done
 
+# Z takes the WHOLE screen. asm/4568 opens with `call L_004c1c`, a full clear, so the original's
+# Z page has no status band on it at all -- proven against the original with the same maxed save
+# in captures/spice86/z-page-maxed/readings.md. The engine used to leave the band in place, so a
+# character owning many items had its ITEMS list run into GOLD= and overwrite H.P./FOOD/EXP..
+# The old Z assertion only checked "A LEVEL" at the top, which is why it shipped: the defect was
+# entirely below the line the test looked at.
+if grep -qE "H\.P\.=|FOOD=|EXP\.=" "$WORK/tab-Z.out"; then
+    bad "regression: the Z page still draws the status band -- asm/4568 clears the whole screen"
+    grep -nE "H\.P\.=|FOOD=|EXP\.=" "$WORK/tab-Z.out" | head -3 | sed 's/^/        /'
+else
+    ok "Z page is a full-screen takeover: no status band, matching asm/4568's clear"
+fi
+
 # M's second half: the echo is the spell NAME, not a number. That is the whole point of the
 # 2026-10-25 correction to asm/3B92_cmd_M.asm, so it gets its own assertion — and it is
 # mode-aware, because with no copy of the game the pool names are blank by design (see

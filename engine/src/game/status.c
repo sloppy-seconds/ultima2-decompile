@@ -204,6 +204,16 @@ void u2_status_draw_full(u2_ctx *ctx)
     char name[17];
     char b[48];
 
+    /* asm/4568 opens with `call L_004c1c` -- the full screen clear, not a row clear. That is
+     * the whole difference between the original's Z page and this function's old behaviour:
+     * the original takes the entire screen, so there is no status band on it and the item
+     * lists may flow all the way down to row 24. The engine was leaving the band in place and
+     * printing the page above it, so a character owning many items had its ITEMS list collide
+     * with GOLD= and overwrite H.P., FOOD and EXP. Proven against the original with the same
+     * maxed save: captures/spice86/z-page-maxed/readings.md -- no band anywhere on its Z page.
+     * The mid-word wrapping the capture also shows is faithful and is deliberately left alone. */
+    seam_clear_screen(ctx);
+
     /* asm/4568 sets DS:31 = 0x26 before drawing anything. That is the right margin, and
      * it matters: the default 0x1d (col 29) makes TORCHES- at column 29 overflow and
      * wrap onto the ARMOUR row, which is exactly what the first version of this function
