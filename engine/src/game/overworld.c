@@ -119,10 +119,16 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     st->unk_52 = (uint8_t)lo;
     st->hp     = (uint8_t)hi;
     u2_status_draw(ctx);
-    /* Nothing is printed for a melee wound. asm/0BB2..0BCF runs a loop over the
-     * contact count calling asm/5455, asm/60AC and asm/60F2, which is almost
-     * certainly the message, and none of it has been read. Silence here is a known
-     * gap, not a decision that the original says nothing. */
+    /* Nothing is printed for a melee wound, and the reason is now read rather than assumed.
+     * The contact loop is runtime 0x0BB2..0x0BCF: it takes the count from [DS:20], and per
+     * contact calls 0x5EAC (monster position bookkeeping -- masks with 0x3f and writes the
+     * sector grid), 0x5255 (a SPEAKER tone: AX/BX frequency-and-duration pairs into the tone
+     * seam, called twice), and 0x5EF2 (a map-cell write at DS:1800). None of them prints text.
+     * So the original's feedback for taking a wound is a SOUND, not a message, and silence here
+     * is faithful -- the gap is that the engine has no sound on this path, not that it has no
+     * text. An earlier note here cited "asm/5455, asm/60AC and asm/60F2" as "almost certainly
+     * the message"; those were file-offset labels read as runtime addresses, wrong by 0x200, and
+     * the routine they pointed at is the disk/save code ("PLAYER DISK", "NOT A BLANK"). */
 }
 
 /*
