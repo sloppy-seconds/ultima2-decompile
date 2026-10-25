@@ -25,3 +25,15 @@ jobs:
         run: make -C engine
       - name: Acceptance tests (CP0..CP4)
         run: make -C engine test
+
+      # Mutation harnesses. `make test` proves the models agree with their controls; these
+      # prove the tests can still go RED, which is the half that rots silently: a table test
+      # whose clauses were all deleted still passes. A control nobody runs has already
+      # failed — both of these exited 0 while printing FAIL, and mutate_stepgate.sh cd'd into
+      # a hardcoded absolute path that does not exist on a runner, so on CI it checked nothing
+      # and reported PASS. Fixed, and now enforced here rather than by someone remembering.
+      # They need the build tree `make -C engine` just produced.
+      - name: Speed model mutations (prove speed_check can fail)
+        run: bash engine/tests/mutate_speed.sh
+      - name: Step gate mutations (prove ai_check can fail)
+        run: bash tools/mutate_stepgate.sh

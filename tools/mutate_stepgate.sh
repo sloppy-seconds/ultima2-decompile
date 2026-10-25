@@ -6,7 +6,7 @@
 # under /var/tmp (the repo file is never touched), rebuilds, and requires ai_check to go red.
 # A mutation that leaves the test green means the table is not actually covering that clause.
 set -uo pipefail
-cd /var/home/paul/Projects/decompile-u2-v2/engine
+cd "$(dirname "$0")/../engine"
 
 SRCS=$(ls src/core/*.c src/game/*.c src/debug/*.c | grep -v 'game/ai.c')
 pass=0; fail=0
@@ -26,7 +26,14 @@ PY
     [ $? -ne 0 ] && { echo "  SKIP  $name (pattern not found)"; fail=$((fail+1)); return; }
     if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o /var/tmp/ai_mut \
             tests/ai_check.c /var/tmp/ai_mutant.c $SRCS 2>/dev/null; then
-        echo "  SKIP  $name (would not compile)"; return
+        # A mutant that will not compile tested nothing, and a mutation that tests nothing is
+        # a miss, not a skip. The first version returned here without counting it, so a
+        # missing build/gen_content.h — the normal state of a fresh checkout or a CI runner,
+        # where the hardcoded path this script used to cd into does not exist either — made
+        # every mutation "skip", the totals came out `caught 0, MISSED 0`, and the harness
+        # printed PASS while checking nothing at all.
+        echo "  MISSED  $name (mutant would not compile — is engine/build built?)"
+        fail=$((fail+1)); return
     fi
     if /var/tmp/ai_mut >/var/tmp/ai_mut.out 2>&1; then
         echo "  NOT CAUGHT  $name — the table does not cover this clause"
@@ -71,4 +78,12 @@ mutate "guard ignores row 0" \
 
 echo
 echo "caught $pass, MISSED $fail"
-[ "$fail" -eq 0 ] && echo "MUTATION TEST: PASS" || echo "MUTATION TEST: FAIL"
+# The verdict has to be the exit status, not a word on stdout. Both mutation harnesses used
+# to end on `[ $fail -eq 0 ] && echo PASS || echo FAIL`, and `echo` always succeeds: the
+# script exited 0 while printing FAIL, so nothing downstream could ever go red on it.
+if [ "$fail" -eq 0 ] && [ "$pass" -gt 0 ]; then
+    echo "MUTATION TEST: PASS ($pass mutations caught)"
+    exit 0
+fi
+echo "MUTATION TEST: FAIL (caught $pass, missed $fail)"
+exit 1

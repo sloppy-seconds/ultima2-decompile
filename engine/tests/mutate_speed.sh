@@ -22,10 +22,13 @@ if old not in s:
     print("MUTATION-NOT-APPLIED"); sys.exit(2)
 open(p,'w').write(s.replace(old,new,1))
 PY
-    if [ $? -ne 0 ]; then echo "  SKIP  $name (pattern not found)"; fail=$((fail+1)); return; fi
+    if [ $? -ne 0 ]; then echo "  MISSED  $name (pattern not found)"; fail=$((fail+1)); return; fi
     if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o /var/tmp/speed_mut \
             tests/speed_check.c /var/tmp/speed_mut.c $SRCS 2>/dev/null; then
-        echo "  SKIP  $name (would not compile)"; fail=$((fail+1)); return
+        # Not a skip: a mutant that will not compile checked nothing. Usual cause is an
+        # unbuilt engine — `make -C engine content` produces build/gen_content.h.
+        echo "  MISSED  $name (mutant would not compile — is engine/build built?)"
+        fail=$((fail+1)); return
     fi
     if /var/tmp/speed_mut >/var/tmp/speed_mut.out 2>&1; then
         echo "  NOT CAUGHT  $name — the table does not cover this clause"; fail=$((fail+1))
@@ -66,4 +69,12 @@ mutate "index not halved in the accessor" \
 
 echo
 echo "caught $pass, MISSED $fail"
-[ "$fail" -eq 0 ] && echo "SPEED MUTATION TEST: PASS" || echo "SPEED MUTATION TEST: FAIL"
+# The verdict has to be the exit status, not a word on stdout. Both mutation harnesses used
+# to end on `[ $fail -eq 0 ] && echo PASS || echo FAIL`, and `echo` always succeeds: the
+# script exited 0 while printing FAIL, so nothing downstream could ever go red on it.
+if [ "$fail" -eq 0 ] && [ "$pass" -gt 0 ]; then
+    echo "SPEED MUTATION TEST: PASS ($pass mutations caught)"
+    exit 0
+fi
+echo "SPEED MUTATION TEST: FAIL (caught $pass, missed $fail)"
+exit 1

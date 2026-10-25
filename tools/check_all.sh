@@ -104,6 +104,18 @@ else
     run "guard_selftest" engine/tests/asm_body_guard_selftest.sh -- bash engine/tests/asm_body_guard_selftest.sh
 fi
 
+echo "== mutation harnesses (prove the model tests can go red) =="
+if [ "$FAST" = 1 ]; then
+    # Deliberate: these compile the engine nine times each and need build/gen_content.h, which
+    # only a build produces. Their CI home is engine-tests.yml, where `make -C engine` has
+    # already run — not gate-suite, which has no build and would only ever skip them.
+    echo "  SKIP  mutate_speed               (--fast: needs the engine build; runs in engine-tests.yml)"
+    echo "  SKIP  mutate_stepgate            (--fast: needs the engine build; runs in engine-tests.yml)"
+else
+    run "mutate_speed" engine/build/gen_content.h -- bash engine/tests/mutate_speed.sh
+    run "mutate_stepgate" engine/build/gen_content.h -- bash tools/mutate_stepgate.sh
+fi
+
 echo "== DOS string atlas (needs original/, gitignored by policy) =="
 opt_run "strings_atlas selftest" original/ultimaii.exe asm -- python3 tools/strings_atlas.py --selftest
 opt_run "str_out_audit selftest" original/ultimaii.exe asm -- python3 tools/str_out_audit.py --selftest
