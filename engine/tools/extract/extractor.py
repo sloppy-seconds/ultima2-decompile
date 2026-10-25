@@ -415,33 +415,15 @@ def collect(source, exe, exe_path, warn):
 # a compressed picture that happens to be NUL-terminated before the pool begins — and
 # it is counted because the code counts it. POOL_ANCHOR makes that explicit instead of
 # leaving it to a lucky split.
-POOL_FILE = "4C50_plane_landing_site.asm"
+POOL_FILE = "4C55_name_pool.asm"
 POOL_ANCHOR_STRING = "IN THE WATER."   # pool index 1
 POOL_ANCHOR_INDEX = 1
-# The pool sits on ONE db line with every entry quoted and separated by ,0x00,, which
-# DB_RE deliberately does not match (it wants a single string per line). This reads the
-# whole operand instead, so a build with no exe still gets the same table the exe does.
-POOL_DB_RE = re.compile(r'^\s*db\s+(.*?)\s*#\s*string\s*$')
-POOL_ITEM_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
-
-
-def parse_asm_db_items(path):
-    """Every quoted string on every `db ... # string` line of one asm file.
-
-    parse_asm's DB_RE deliberately wants a single string per line, which is right for
-    code and wrong for the data blobs — the bulk wave wrote the Z screen's separators as
-    `db "S",0x00,"-",0x00` on one line and DB_RE sees none of it. This reads the whole
-    operand. Returns [] when the file does not exist, so a caller can fall back.
-    """
-    items = []
-    if not os.path.exists(path):
-        return items
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            m = POOL_DB_RE.match(line.rstrip("\n"))
-            if m:
-                items += [decode_gas_string(q) for q in POOL_ITEM_RE.findall(m.group(1))]
-    return items
+# One entry per db line, each tagged with the index the code uses: `db "DAGGER",0x00` tagged
+# `# pool[20]`, and the empty entry as `db 0x00` tagged `# pool[0]`. The tags are what make the
+# no-exe fallback checkable — the parser requires the indices to run 0..N with no gap and no
+# duplicate, instead of hoping a split of one enormous db operand landed in the right places.
+# That older form (every entry on one line, no tags) died with the asm/4C50 re-cut on 2026-10-25.
+POOL_ENTRY_RE = re.compile(r'^\s*db\s+(?:"((?:[^"\\]|\\.)*)",0x00|0x00)\s+#\s*pool\[(\d+)\]')
 NAME_TABLES = [
     ("U2_T_WEAPONS", 0x13, 10),
     ("U2_T_ARMOUR",  0x1d, 8),
@@ -451,6 +433,15 @@ NAME_TABLES = [
     ("U2_T_RACES",   0x44, 4),
     ("U2_T_CLASSES", 0x48, 4),
 ]
+
+# The pool is exactly as long as the tables that index it: the last group is classes at
+# 0x48 with four entries, so entry 75 (THIEF) is the last one and 76 is the count. The exe
+# split used to run to a hard 96, which read straight past THIEF into the arrow scancode
+# table at file 0x5109 and returned junk nobody looked at — harmless, but it made the exe
+# path and the asm/ path disagree, and "they disagree" is the only warning a silent
+# mis-split ever gives. Deriving the bound from NAME_TABLES is what makes the two sources
+# comparable; engine/tests/status_check.c is what fails the build if either one drifts.
+POOL_ENTRY_COUNT = max(base + count for _, base, count in NAME_TABLES)
 
 
 def pool_from_exe(exe):
@@ -464,7 +455,7 @@ def pool_from_exe(exe):
     first = exe.index(POOL_ANCHOR_STRING.encode("latin-1") + b"\0")
     ents = [b""] * POOL_ANCHOR_INDEX
     i = first
-    while i < len(exe) and len(ents) < 96:
+    while i < len(exe) and len(ents) < POOL_ENTRY_COUNT:
         if exe[i] == 0:
             i += 1
             continue
@@ -474,26 +465,36 @@ def pool_from_exe(exe):
     return ents
 
 def pool_from_asm(asm_dir):
-    """The same pool from the db line of asm/POOL_FILE, for a build with no exe.
+    """The same pool from asm/POOL_FILE, for a build with no exe.
 
-    The db list begins at pool index 1, so index 0 is filled with a placeholder: it is
-    never displayed, and pool_anchor_check is what stops a drift here from becoming a
-    wrong name on screen.
+    Every entry carries its own index in a comment, so the split is verified rather than
+    assumed: the indices must run 0..N with no gap and no duplicate, and the anchor entry has
+    to sit where the code says it does. pool_anchor_check is the last line of defence; a drift
+    fails the build instead of putting PHASER where QUICK SWORD belongs.
     """
-    items = []
+    by_index = {}
     with open(os.path.join(asm_dir, POOL_FILE), encoding="utf-8") as f:
         for line in f:
-            m = POOL_DB_RE.match(line.rstrip("\n"))
+            m = POOL_ENTRY_RE.match(line.rstrip("\n"))
             if not m:
                 continue
-            items = [decode_gas_string(q) for q in POOL_ITEM_RE.findall(m.group(1))]
-            break
+            idx = int(m.group(2))
+            if idx in by_index:
+                raise SystemExit(f"extractor: {POOL_FILE} tags pool[{idx}] twice")
+            by_index[idx] = decode_gas_string(m.group(1)) if m.group(1) else b""
+    if not by_index:
+        raise SystemExit(f"extractor: {POOL_FILE} has no tagged pool entries — did the "
+                         f"re-cut lose the pool[N] tags this parser depends on?")
+    top = max(by_index)
+    if sorted(by_index) != list(range(top + 1)):
+        raise SystemExit(f"extractor: {POOL_FILE} pool indices are not contiguous "
+                         f"(0..{top} expected, {len(by_index)} found)")
+    ents = [by_index[i] for i in range(top + 1)]
     anchor = POOL_ANCHOR_STRING.encode("latin-1")
-    try:
-        k = items.index(anchor)
-    except ValueError:
-        raise SystemExit(f"extractor: {POOL_FILE} has no {POOL_ANCHOR_STRING!r} db entry")
-    return [b""] * POOL_ANCHOR_INDEX + items[k:]
+    if len(ents) <= POOL_ANCHOR_INDEX or ents[POOL_ANCHOR_INDEX] != anchor:
+        raise SystemExit(f"extractor: {POOL_FILE} has no {POOL_ANCHOR_STRING!r} at "
+                         f"pool[{POOL_ANCHOR_INDEX}]")
+    return ents
 
 
 def pool_anchor_check(ents, source):
