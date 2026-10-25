@@ -15,7 +15,7 @@
  *   jmp *%bx
  *
  * Two things about that shape are load-bearing for this file and are the reason it exists
- * separately from overworld.c, which currently handles six letters inline in a switch.
+ * separately from overworld.c, which still handles five letters inline in a switch.
  *
  * First, the range test happens BEFORE the dispatch, in two pieces: `cmp $0x41,%al ;
  * jae L_000c18` (asm/09FB) and `cmp $0x5a,%al ; jbe L_000c1f` (asm/0A18). A key outside
@@ -29,10 +29,12 @@
  * every command (docs/monster-spawn.md section 15.2). The epilogue is shared and
  * unconditional, which is why this dispatcher owns it rather than each caller.
  *
- * The migration is deliberate and partial. Six letters (A, E, P, Q, U, Z) are already
+ * The migration is deliberate and partial. Six letters (A, E, P, Q, U, Z) were already
  * implemented inside u2_overworld_loop with hard-won evidence in their comments, and they
- * move here one at a time under the cover of the existing tests, not in one sweep. What
- * lands here first is the letters that were never implemented at all.
+ * move here one at a time under the cover of the existing tests, not in one sweep. Q moved
+ * first, on 2026-10-25, because its entire body was already a call to a public function, so
+ * the move tested the dispatch rather than the behaviour. A, E, P, U and Z remain. What
+ * lands here alongside them is the letters that were never implemented at all.
  */
 
 #include "core/ctx.h"

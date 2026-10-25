@@ -84,6 +84,20 @@ static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* CAPTURE-CONFIRMED: cmd_Q saves. It was one of the six letters implemented inside
+   u2_overworld_loop, and it moves here first because it is the only one of the six whose
+   whole body is a call to something already public — so the migration tests the dispatch
+   rather than the behaviour. asm/3DE4 refuses indoors with ONLY OUTDOORS! and asm/3DFA saves
+   outdoors echoing ONE MOMENT PLEASE!; both live in u2_overworld_save(), which owns the
+   printing, so this handler adds nothing and must not: the original's Q arm prints no CR and
+   no prompt of its own, which is why it does not call cmd_done(). */
+static u2_cmd_result cmd_Q(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    (void)u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -118,9 +132,9 @@ static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
- * Six observed letters (A, E, P, Q, U, Z) are still implemented inside
+ * Five observed letters (A, E, P, U, Z) are still implemented inside
  * u2_overworld_loop, with their evidence in place there. They migrate here one at a time
- * under the existing tests, not in one sweep.
+ * under the existing tests, not in one sweep; Q has already made the trip.
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* A  in overworld.c pending migration */
@@ -139,7 +153,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* N  see the note above */
     NULL,  /* O  see the note above */
     NULL,  /* P  in overworld.c pending migration: PASS */
-    NULL,  /* Q  in overworld.c pending migration: save */
+    cmd_Q, /* Q  save: asm/3DE4 refuses indoors, asm/3DFA saves outdoors */
     NULL,  /* R  not implemented: ready weapon */
     NULL,  /* S  see the note above */
     NULL,  /* T  see the note above */

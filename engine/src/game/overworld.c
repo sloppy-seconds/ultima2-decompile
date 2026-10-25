@@ -1125,9 +1125,6 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_CMD_PROMPT);
             continue;
         }
-        case 'Q':
-            u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
-            continue;
         case ' ':
         case 'P':
             /* Space is PASS from the walk loop's own first arm (cmp $0x20 at file

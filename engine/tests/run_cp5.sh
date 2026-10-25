@@ -471,6 +471,27 @@ else
     sed 's/^/        /' "$WORK/c3-daemon.out" | tail -6
 fi
 
+# --- the jump table is reachable: a letter key must land in its handler ------
+# u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
+# loop routes a letter into it at all. The Q migration is what exposed the gap: putting a
+# handler in the wrong table slot compiles clean, keeps every other gate green, prints
+# nothing, and still reports itself as implemented. One run per letter, so a misfiled slot
+# names itself instead of arriving as a mystery.
+for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!"; do
+    letter=${pair%%:*}; want=${pair#*:}
+    python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
+    printf '%s\n' "$letter" > "$WORK/tab-$letter.keys"
+    ./u2 --headless --play-map --cleanroom \
+         --data-dir "$WORK/tab-$letter/content" --save-dir "$WORK/tab-$letter/save" \
+         --script "$WORK/tab-$letter.keys" --dump-state > "$WORK/tab-$letter.out" 2>&1
+    if grep -qF -- "$want" "$WORK/tab-$letter.out"; then
+        ok "dispatch: letter $letter reaches its handler in cmd_table ($want on screen)"
+    else
+        bad "dispatch: $letter printed nothing — the slot is empty, misfiled, or the loop is not calling u2_cmd_dispatch"
+        sed 's/^/        /' "$WORK/tab-$letter.out" | tail -5
+    fi
+done
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP5 SPEC: PASS\n'
