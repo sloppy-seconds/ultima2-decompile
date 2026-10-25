@@ -839,6 +839,41 @@ Not yet proven, and deliberately not guessed:
 
 ---
 
+## `--dev` — the sanctioned home for development affordances (decided 2026-10-26, owner)
+
+**The rule: `--dev` may add observation and an exit path. It may never change game behaviour.**
+Not a damage number, not a spawn, not a message, not which tile is passable. Anything that would
+alter play is a fidelity question and belongs in a decision about fidelity, not behind this flag.
+
+Why it exists. The engine had two behaviours nobody asked for and the game does not have: the
+overworld loop broke on Escape outright, and `cmd_Z` returned a quit code on Escape. Both were
+development conveniences for `--play-map`, and both read as fidelity because there was nowhere
+legitimate for a convenience to live. The owner's response to that was the useful one — give it a
+flag rather than argue about each instance.
+
+The shape:
+
+- `ctx.dev`, set by `--dev`, off by default. Without it the engine implements the game and nothing
+  else, and that is what every test and the CP2 baseline run against.
+- **Independent of `--play-map` on purpose.** Entering the world directly is not the same as
+  accepting development keys; implying one from the other would make every play-map test silently
+  run under different rules.
+- Dev behaviour is checked in the loop or the seam, **never in a command handler**. A handler that
+  can end a session is the specific mistake being undone, and it is why the handler cannot be the
+  place a quit lives.
+- First tenant is **Ctrl-Q (`0x11`)**, chosen by the owner because the game does not use it. That
+  is confirmed rather than trusted: nothing in `asm/` compares against `0x11`, and for the record
+  nothing compares against `0x1b` either, which is the same evidence that said Escape was never
+  special.
+
+What enforces it, all in `run_cp5.sh`, all behavioural rather than greps because `--dump-each`
+makes "did the run survive this key" countable: Escape is an ordinary key in the overworld in
+both modes; Ctrl-Q is inert without `--dev` and ends the run with it; and no command handler can
+end the session in any mode. The `--dev` leak control was run — dropping the `ctx->dev` test made
+"Ctrl-Q is inert without --dev" go red, then restored.
+
+---
+
 ## Invariants (checked at every checkpoint)
 
 | Check | Command | CP0 result |
