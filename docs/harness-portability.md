@@ -190,6 +190,36 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-28e** — **A decode tool's error text describes what it tried to do, not what went
+  wrong, and a harness that classifies findings by that text will mis-plan the work.** Every
+  truncated instruction in this project's reconstruction carried a marker blaming the assembler
+  ("the assembler re-encodes this differently"). Re-asking the assembler at the real address,
+  with the real context, showed the majority of those markers are false: the assembler encodes
+  the instruction byte-for-byte and was only refusing because the fragment ended mid-instruction.
+  The cause was the function-boundary detector all along, and the two marker wordings that
+  looked like two kinds of fix were one kind of fix. Rule for a harness: where a tool records
+  *why* it gave up, re-derive the cause from the bytes rather than grouping on the message, and
+  make the re-derivation a mode of the tool so the number is reproducible instead of a claim.
+
+* **2026-10-28e** — **A control that can only pass while the defect exists is not a control, it
+  is a second copy of the defect.** A string atlas carried a selftest assertion that its
+  fallback source must contribute rows, written when nine messages needed rescuing. Fixing the
+  last one made the assertion fail, so the harness reported itself broken for succeeding, and
+  the honest-looking response would have been to leave nine messages unfixed. Rule: assert the
+  *mechanism* (feed the fallback path something the primary path also sees, and require it to
+  agree) rather than the *symptom* (a non-zero count of the thing you intend to eliminate).
+
+* **2026-10-28e** — **A verification script's exit status is part of its output, and mutation
+  harnesses get this wrong in three ways at once.** Two mutation harnesses — break one clause of
+  a model, require the test to go red — ended on a shell idiom whose last command was `echo`, so
+  they exited 0 while printing FAIL; one of them also `cd`'d to a hardcoded absolute path, so on
+  any other checkout it tested a different tree, and on a runner the `cd` failed and it tested
+  nothing; and one treated "the mutant would not compile" as a skip that was not tallied, so an
+  unbuilt tree produced zero mutants and a PASS. Rule: a harness that reports a verdict must
+  exit non-zero on it, must count "checked nothing" as a failure rather than a skip, and must
+  resolve its own paths; and the control that proves it can go red has to be run from the same
+  directory and ref position CI will use.
+
 * **2026-10-28d** — **A second implementation of the same logic in a different ISA is a
   tiebreaker for static ambiguity, and it must be built as a gated lookup rather than a
   reading habit.** Where a port and its ancestor share a string verbatim, the routines around

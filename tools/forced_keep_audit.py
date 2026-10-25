@@ -67,8 +67,25 @@ a second sighting of an anchor's partial keep, i.e. one defect counted twice, an
 residual count of unexplained boundaries is printed separately and has to be read as the
 number of things still needing a hand.
 
+WHAT THE MARKERS DO NOT MEAN — measured 2026-10-28e
+---------------------------------------------------
+`gas re-encodes 'X' differently` on a PARTIAL forced-keep is usually a false statement about
+gas and a true statement about the map. The decode tool was asked for X inside a fragment whose
+span ends before X does, gas could not emit a five-byte instruction into a one-byte fragment,
+and the tool reported its own truncation as a dialect problem. `--verify-markers` re-asks gas
+at the real address with the real context: of the 59 gas-worded partial keeps in this tree, 48
+are encoded by gas byte-for-byte (marker false), 10 genuinely differ (marker true — the
+register-to-register moves like `mov %di,%bx`, where the binary has `8b df` and gas emits
+`89 fb`), and 1 does not assemble at all. The two controls at the bottom of --selftest pin both
+polarities: asm/025D must come back false, asm/47BC must come back true.
+
+The consequence for the queue is that the fix is the same for every row regardless of wording:
+the tail bytes go into the next fragment as `.byte`, because the instruction straddles a
+boundary and no mnemonic can be written for half of one. Do not plan around the marker text.
+
 Usage:
     tools/forced_keep_audit.py [--tsv] [--verbose] [--selftest] [--limit N]
+                               [--queue] [--verify-markers]
 """
 from __future__ import annotations
 
@@ -87,6 +104,7 @@ EXE = "original/ultimaii.exe"
 BIAS = 0x200
 FUNC_RE = re.compile(r"^#\s*func\s+([0-9A-Fa-f]{4})\.\.([0-9A-Fa-f]{4})", re.M)
 LABEL_RE = re.compile(r"^L_([0-9a-fA-F]{6}):")
+LABEL_REF = re.compile(r"\bL_([0-9a-fA-F]{6})\b")
 BYTE_RE = re.compile(r"^\s*\.byte\s+([0-9A-Fa-fx,\s]+?)\s*(?:#.*)?$")
 DB_RE = re.compile(r"^\s*db\s+(.*)$")
 FORCED_RE = re.compile(r"forced-kept:.*?re-encodes\s+'(.*?)'\s+differently")
@@ -464,6 +482,108 @@ def scan(files: list[str], data: bytes) -> tuple[dict[str, list[dict]], int]:
     return per, suppressed
 
 
+def gas_encodes(mnemonic: str, addr: int) -> bytes | None:
+    """What gas actually emits for `mnemonic`, assembled at file offset `addr`.
+
+    WHY THIS EXISTS. A `.byte` marked `forced-kept: gas re-encodes 'X' differently` claims gas
+    cannot reproduce the original encoding of X. On a PARTIAL forced-keep that claim is usually
+    false: gas was never given a chance, because the map boundary left fewer bytes in the
+    fragment than the instruction needs, and the tool that wrote the marker reported its own
+    truncation as a gas limitation. Measured over the 60 gas-marked partial keeps in this tree:
+    48 of them gas encodes byte-for-byte, 11 genuinely differ, 1 does not assemble. The real
+    discriminator is the truncation, which is what `partial-forced-keep` already detects.
+
+    Labels are stubbed at their real addresses so a relative operand encodes against the same
+    PC, which is the same context `check_func.py` builds. Returns None if gas refuses, which is
+    reported as 'no verdict' rather than guessed.
+    """
+    refs = sorted(set(LABEL_REF.findall(mnemonic)))
+    body = [".code16", ".text"]
+    for r in refs:
+        body.append(f".org 0x{r}")
+        body.append(f"L_{r}:")
+    body.append(f".org 0x{addr + BIAS:06X}")
+    body.append(mnemonic)
+    with tempfile.TemporaryDirectory(prefix="u2gas-") as d:
+        src = os.path.join(d, "t.s")
+        open(src, "w").write("\n".join(body) + "\n")
+        p = subprocess.run(["as", "-o", os.path.join(d, "t.o"), src],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            return None
+        p = subprocess.run(["objcopy", "-O", "binary", "--only-section=.text",
+                            os.path.join(d, "t.o"), os.path.join(d, "t.bin")],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            return None
+        raw = open(os.path.join(d, "t.bin"), "rb").read()
+    return raw[(addr + BIAS):] if len(raw) > addr + BIAS else raw
+
+
+def marker_for(path: str, data: bytes, addr: int) -> str | None:
+    """The mnemonic named by the forced-keep marker on the `.byte` line at runtime `addr`."""
+    text = open(path, errors="replace").read()
+    fm = FUNC_RE.search(text)
+    if not fm:
+        return None
+    s, e = int(fm.group(1), 16), int(fm.group(2), 16)
+    fs, fe = s + BIAS, e + BIAS
+    ins = objdump_lengths(data, fs, min(len(data), fe + 1 + 24))
+    cur = fs
+    for ln in text.splitlines():
+        lm = LABEL_RE.match(ln)
+        if lm:
+            lbl = int(lm.group(1), 16)
+            if lbl >= cur:
+                cur = lbl
+            continue
+        if ln.lstrip().startswith("#") or not ln.strip() or ln.rstrip().endswith(":"):
+            continue
+        bm = BYTE_RE.match(ln)
+        if bm:
+            if cur - BIAS == addr:
+                m = FORCED_RE.search(ln)
+                return m.group(1).strip() if m else None
+            cur += max(len(HEXB_RE.findall(bm.group(1))), 1)
+            continue
+        if db_line_bytes(ln) is not None:
+            cur += max(db_byte_len(ln), 1)
+            continue
+        n = ins.get(cur) or insn_len_at(data, cur, 4)
+        if not n:
+            return None
+        cur += n
+    return None
+
+
+def verify_markers(partial: list[dict], files: list[str], data: bytes) -> int:
+    """Re-ask gas about every gas-marked partial forced-keep. Slow: one `as` per marker."""
+    by_name = {os.path.basename(p): p for p in files}
+    agree = differ = unknown = 0
+    for f in partial:
+        if "gas said" not in f["detail"]:
+            continue
+        mnem = marker_for(by_name[f["file"]], data, int(f["addr"], 16))
+        if mnem is None:
+            continue
+        kept, real = re.search(r"(\d+) B kept, real insn (\d+) B", f["detail"]).groups()
+        orig = data[int(f["addr"], 16) + BIAS: int(f["addr"], 16) + BIAS + int(real)]
+        got = gas_encodes(mnem, int(f["addr"], 16))
+        if got is None:
+            unknown += 1
+            tag = "NO-VERDICT"
+        elif got[:int(real)] == orig:
+            agree += 1
+            tag = "MARKER FALSE (gas encodes it exactly; the boundary is the cause)"
+        else:
+            differ += 1
+            tag = "marker true (gas really does differ)"
+        print(f"  {tag:60s} {f['file']} @{f['addr']} `{mnem}`")
+    print(f"\ngas-marked partial forced-keeps: marker false {agree}, marker true {differ}, "
+          f"no verdict {unknown}")
+    return 0
+
+
 def selftest(data: bytes) -> int:
     """The control that should have existed from the start.
 
@@ -520,7 +640,23 @@ def selftest(data: bytes) -> int:
     ok6 = "begins-mid-insn" not in kinds("02CB_sub_02cb.asm")
     print("CONTROL  asm/02CB must stay quiet (anchor ends in a tail-pad byte)   -> "
           f"{'OK' if ok6 else 'FALSE POSITIVE'}   ({kinds('02CB_sub_02cb.asm')})")
-    if not (ok and ok2 and ok3 and ok4 and ok5 and ok6):
+    # The marker-verification needs both polarities or it is just a machine that agrees with
+    # itself. asm/025D is the false-marker case (`movb $0x3,0x2f` is c6 06 2f 00 03 and gas
+    # emits exactly that); asm/47BC is the genuine one (`mov %di,%bx` — gas emits 89 fb, the
+    # binary has 8b df, the documented dialect case).
+    p25 = next(p for p in files if p.endswith("025D_sub_025d.asm"))
+    m25 = marker_for(p25, data, 0x025D)
+    g25 = gas_encodes(m25, 0x025D) if m25 else None
+    ok7 = g25 is not None and g25[:5] == data[0x025D + BIAS:0x025D + BIAS + 5]
+    print("CONTROL  gas must encode asm/025D's marker exactly (marker is false) -> "
+          f"{'OK' if ok7 else 'BROKEN'}   ({m25} -> {g25.hex(' ') if g25 else None})")
+    pbc = next(p for p in files if p.endswith("47BC_sub_47bc.asm"))
+    mbc = marker_for(pbc, data, 0x47BC)
+    gbc = gas_encodes(mbc, 0x47BC) if mbc else None
+    ok8 = gbc is not None and gbc[:2] != data[0x47BC + BIAS:0x47BC + BIAS + 2]
+    print("CONTROL  gas must differ on asm/47BC's marker (marker is true)        -> "
+          f"{'OK' if ok8 else 'BROKEN'}   ({mbc} -> {gbc.hex(' ') if gbc else None})")
+    if not (ok and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8):
         print("SELFTEST: FAIL — the detector does not match the cases proven by hand. "
               "Do not trust any count from this tool.")
         return 1
@@ -574,6 +710,8 @@ def main() -> int:
     ap.add_argument("--tsv", action="store_true")
     ap.add_argument("--queue", action="store_true",
                     help="print the outstanding corrections, one line per fix")
+    ap.add_argument("--verify-markers", action="store_true",
+                    help="re-ask gas about every gas-marked partial keep (slow: one `as` each)")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
@@ -608,20 +746,31 @@ def main() -> int:
         f["status"], f["where"] = tail_attribution(addr + kept, f["tail"])
     outstanding = [f for f in partial if f.get("status") == "outstanding"]
 
+    if a.verify_markers:
+        return verify_markers(partial, files, data)
+
     if a.queue:
         # The queue, not the census. `partial` is a list of causes and causes are permanent by
         # design, so printing them as if they were work is how a queue of 36 started looking
-        # like a queue of 63 that nobody could finish. One line per fix, grouped by the shape
-        # of fix it needs, because the two kinds are done by different operations.
-        def shape(f):
+        # like a queue of 63 that nobody could finish. One line per fix.
+        #
+        # The `marker` column names the WORDING of the forced-keep comment, not the cause of
+        # the defect. Every partial forced-keep is the same cause — the map boundary cut an
+        # instruction — and the two wordings are just what the decode tool happened to blame.
+        # `--verify-markers` measures that: most `gas re-encodes` markers on a truncated
+        # instruction are false, gas encodes them exactly, so nobody should plan a fix around
+        # the wording.
+        def marker(f):
             return ("stop-trunc" if "marker `stop-trunc" in f["detail"]
-                    else "body-swap" if "gas said" in f["detail"] else "other")
-        print("file\taddr\tkept\treal\ttail\tshape\tfixes")
-        for f in sorted(outstanding, key=lambda f: (shape(f), f["file"])):
+                    else "gas-re-encode" if "gas said" in f["detail"] else "other")
+        print("file\taddr\tkept\treal\ttail\tmarker\tfixes")
+        for f in sorted(outstanding, key=lambda f: (marker(f), f["file"])):
             m = re.search(r"(\d+) B kept, real insn (\d+) B", f["detail"])
             kept, real = int(m.group(1)), int(m.group(2))
             print(f"{f['file']}\t{f['addr']}\t{kept}\t{real}\t"
-                  f"{f['tail'].hex(' ')}\t{shape(f)}\t{f['where']}")
+                  f"{f['tail'].hex(' ')}\t{marker(f)}\t{f['where']}")
+        print("# every row above is a boundary truncation; the fix is the tail bytes as .byte")
+        print("# in the `fixes` fragment. Run --verify-markers to test the marker wording.")
         return 0
     done = [f for f in partial if f.get("status") == "corrected"]
     inside = [f for f in all_f if f["kind"] == "begins-mid-insn"]
@@ -638,14 +787,12 @@ def main() -> int:
     print(f"  partial forced-keeps (CAUSES, permanent by design):       {len(partial)}")
     print(f"    -> consequence CORRECTED (next fragment names the bytes): {len(done)}")
     print(f"    -> still OUTSTANDING (next fragment shows invented code): {len(outstanding)}")
-    kinds = Counter(("stop-trunc: the map boundary itself cut an instruction, so this is a "
-                     "re-decode or a merge, not a body swap"
-                     if "marker `stop-trunc" in f["detail"] else
-                     "gas re-encode: one line in the previous fragment, then the tail bytes"
-                     if "gas said" in f["detail"] else
-                     "other marker") for f in outstanding)
+    kinds = Counter(("stop-trunc wording" if "marker `stop-trunc" in f["detail"] else
+                     "gas-re-encode wording" if "gas said" in f["detail"] else
+                     "other wording") for f in outstanding)
     for k, n in sorted(kinds.items(), key=lambda x: -x[1]):
-        print(f"       {n:3d}  {k}")
+        print(f"       {n:3d}  {k} — all of them are the map boundary cutting an instruction;"
+              " --verify-markers tests the wording")
     print(f"  BEGINS-MID-INSN   ({suppressed} suppressed as decode artefacts): {len(inside)}")
     if inside:
         graded = Counter(h.get("cause", "unexplained") for h in inside)
