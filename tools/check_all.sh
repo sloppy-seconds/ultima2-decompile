@@ -124,6 +124,12 @@ opt_run "str_out_audit check" original/ultimaii.exe disasm/str-out-rendering-gap
 # Until now nothing ran them, which is how `begins-mid-insn` shipped a headline number the
 # tool's own docstring called inflated.
 opt_run "forced_keep_audit selftest" original/ultimaii.exe asm -- python3 tools/forced_keep_audit.py --selftest
+# recut_bytes turns `db`-rendered code spans back into mnemonics by re-assembling each one
+# with gas and comparing bytes. Its two controls pin both answers: a forward call must encode
+# (it silently did not, first time, because .org cannot seek backwards) and `mov %bx,%di` must
+# NOT (gas emits different bytes for it). A verifier that always says yes and one that always
+# says no look identical until you test one of each.
+opt_run "recut_bytes selftest" original/ultimaii.exe -- python3 tools/recut_bytes.py --selftest
 
 echo "== Apple II 6502 side (needs gitignored inputs) =="
 opt_run "apple2_seeds selftest" references/apple decompiled/apple2 -- python3 tools/apple2_seeds.py --selftest
