@@ -64,6 +64,8 @@ mutate "rescale even when the key was rejected" \
             u2_speed_rescale(ctx);
             return 0;
         }'
+mutate "overflow sentinel is not the clamp value" \
+       '            q = 0xFFFFu;' '            q = 0xFFFEu;'
 mutate "index not halved in the accessor" \
        'return ctx->state.speed_delay[index];' 'return ctx->state.speed_delay[index ? index - 1 : 0];'
 

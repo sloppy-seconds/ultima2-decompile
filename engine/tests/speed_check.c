@@ -65,6 +65,24 @@ int main(void)
     CHECK(faults == 0, "no slot should overflow a 16-bit DIV at the measured speed (%d did)",
           faults);
 
+    /* --- the DIVW overflow branch: asm/06ED's `divw` faults on a real 8086 ------ */
+    /* Found by the mutation harness, not by reading: at the measured speed no slot
+     * overflows, so nothing in this file ever reached the `q > 0xFFFF` branch and a
+     * mutation of it was invisible. Speed 0xFFFF with the measured multiplier table puts
+     * slots 2, 9 and 14 past the 16-bit quotient limit (312514, 156257, 78128) and leaves
+     * the rest in range; the in-range values below were computed, not guessed.
+     * The original would take #DE here. The model records a fault and stores a sentinel,
+     * and both halves are asserted so the branch cannot rot into dead code. */
+    load(&ctx, 0xFFFFu);
+    faults = u2_speed_rescale(&ctx);
+    CHECK(faults == 3, "three slots overflow a 16-bit DIV at speed 0xFFFF, got %d", faults);
+    CHECK(ctx.state.speed_delay[2] == 0xFFFFu && ctx.state.speed_delay[9] == 0xFFFFu
+          && ctx.state.speed_delay[14] == 0xFFFFu,
+          "an overflowing slot stores the fault sentinel, not a truncated quotient");
+    CHECK(ctx.state.speed_delay[0] == 228u && ctx.state.speed_delay[1] == 28001u
+          && ctx.state.speed_delay[3] == 48830u,
+          "a slot that does not overflow is still computed normally at speed 0xFFFF");
+
     /* --- the clamp: a speed below the baseline zeroes every slot (asm/06F9) ----- */
     load(&ctx, MEASURED_BASELINE - 1);
     u2_speed_rescale(&ctx);
