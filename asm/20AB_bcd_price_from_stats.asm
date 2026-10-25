@@ -47,6 +47,30 @@
 #   of direction, not proof of the arithmetic.
 #
 # DOUBT -- read this before citing the routine, and note two retractions inside it
+#   * THIRD-PARTY CORROBORATION, 2026-10-28e, and it is the strongest support this file has.
+#     The owner supplied grocery data from the Ultima II wiki: every grocery sells
+#     "Provisions (100)" for **52 gp**, that 52 is the MAXIMUM price (charged when Charisma and
+#     Intelligence are both at their minimum of 10), and that **the higher both stats, the lower
+#     the price**. Two independent things about that match this routine, and neither was known
+#     when the routine was decoded:
+#       - the DIRECTION agrees. Higher int+cha shortens the shift count, which lengthens DI,
+#         which walks the Fibonacci pair further -- wait, the opposite: a larger sum has a
+#         LONGER bit length, so DI = (AL+8+CF) - bitlength gets SMALLER and the price gets
+#         LOWER. The wiki says exactly that, from a source that never saw these bytes.
+#       - the NUMBER agrees. The values this loop can produce are
+#             4, 8, 12, 20, 32, 52, 84, 136, 220, 356, 576, 932, ...
+#         and **52 is the 6th of them**. Worked at the wiki's minimum stats (int=cha=0x10, so
+#         adc gives 0x20, bit length 6): DI = (AL+8+CF) - 6, and AL=4 yields DI=6 -> DS:27/28
+#         = 0052. A caller with AL=4 on a minimum-stat character prints 52.
+#     This does NOT close the DOUBT above: the tavern observation of '0200' is still
+#     unreproduced, and 200 is still not in the sequence. What it does do is make "this routine
+#     computes a quoted price" considerably harder to dismiss, and it suggests the tavern quote
+#     and the grocery price may not consume the same call at all -- different callers pass
+#     different AL (17B2 passes 3), so comparing the tavern's printed number against the
+#     grocery's expected 52 may have been a category error.
+#     Grade: corroboration of direction and of one reachable value, from a third-party source.
+#     Still not bytes. The DS:4E charisma-vs-wisdom dispute is untouched by it -- the wiki names
+#     charisma, which is a second reason to hope the label is right, and still not proof.
 #   * WHICH STAT IS [DS:4E] IS NOT SETTLED, and this file's name leans on it.
 #     tools/u2_edit.py records the dispute: engine/src/core/state.h labels DS:4E
 #     charisma and DS:4F wisdom, docs/spice86-live-findings.md lists them the other way

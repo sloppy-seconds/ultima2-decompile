@@ -540,7 +540,82 @@ something else entirely — which is the answer that actually unblocks the work.
 **Success criterion:** a named capture directory holding the sample table, and a verdict
 on whether `mode_a` is derived from the tile byte.
 
-### G31 — the twelve command letters no capture has ever executed `[~]` *(8 of 12 done; the premise was wrong)*
+### G32 — is food consumed while sailing? `[ ]` *(owner-recalled 2026-10-28e; agent-testable)*
+**Owner recollection, recorded as `recalled` and treated as a pointer, not a conclusion:** food
+is **not** consumed while sailing on a ship, and because killing enemies with cannons is still
+possible at sea, this drastically lowers total food consumption.
+
+**Why it matters to the engine:** if true, food spend is gated on the vehicle byte, and the
+engine currently spends food on the same terms whether the player is on foot, aboard, or in a
+rocket. That is a whole class of wrongness in the survival model, and it is the difference between
+sea travel being an escape and being a slow suicide.
+
+**How to test it, statically first:** the walk loop's food site is the one T2 settled (PASS spends
+10 via `DS:53/54/55`, underflow zeroes `DS:51..59`). Read the instructions guarding that spend and
+look for a test on `[DS:13]` (the stamped sprite, `>= 0x78` means on foot) or `[DS:14]` (vehicle
+code, `map_byte >> 1`, CP5 ticket C7: `0x48` is the ship). If the spend is guarded, the recollection
+is confirmed without a capture. If it is not, the recollection is still worth a live run — and the
+live run is the one that outranks this file.
+
+**Live protocol, if needed:** `tools/u2_mkprobe.py` a sector with a ship tile under the player,
+`--seed-map` it, board with `B`, then step and read `DS:53..55` back-to-back around each keypress.
+Accept a sample only if `DS:00/01` changed — see G2's failure before repeating it.
+
+### G34 — food vs mode of transport, and the gremlin's fixed 100 `[ ]` *(third-party data 2026-10-28e; agent-testable, and one claim contradicts a measured finding)*
+Third-party wiki data supplied by the owner. Grade: **third-party hypothesis — the bytes get to
+veto**. It is worth more than the last one because it is checkable against code already decoded.
+
+**Claims, in the order they can be settled:**
+
+1. **Food is not consumed while aboard a frigate, a bi-plane or a rocket — except when `PASS`
+   (SPACE) is used.** This refines the owner's own earlier recollection ("food is not consumed
+   while sailing"), which was directionally right and missed the PASS exception. **Testable
+   statically right now:** the food-spend site is `DS:53/54/55` under the routine T2 settled, and
+   the vehicle byte is `[DS:14]` (`map_byte >> 1`; `0x48` ship, `0x4C` plane, `0x50` rocket, per
+   CP5 ticket C7). Look for a guard on `DS:14` around the spend. If the spend is ungated, the
+   claim is false in this build or the exemption lives in the caller.
+2. **Food declines while in dungeons.** Dungeons are parked (AGENTS.md § 3), so this is recorded
+   and deferred, not testable now.
+3. **Gremlins steal a fixed 100 food units each turn.** `asm/12DB_dungeon_events.asm` carries the
+   string `A GREMLIN STOLE SOME FOOD!`, so the site exists and is named. **Check the subtract
+   against 100** — a fixed 100 versus a random amount changes the engine's survival model, and
+   CP5 ticket C6 already learned once that a "fixed" theft in this game was actually a BCD
+   decrement of 1 on a rolled slot. Same trap, worth re-measuring rather than assuming.
+4. **"Mode of transportation no longer affects the rate of food consumption"** (vs Ultima I).
+   Read against claim 1 this is about *rate while moving* (foot vs horse = same), not about the
+   aboard exemption. Worth keeping the two separate in anything written, because they can look
+   like a contradiction when merged.
+
+**And a conflict on our own side, which outranks all of the above:** the step-cost measurement
+taken 2026-10-28e (`tmp/20261025-213254`, maxed seed, sector 31) showed food falling by **19 per
+successful step** across three consecutive moves (`999999 → 999980 → 999961 → 999942`), with the
+first step free. That contradicts the recorded finding that **the walk loop calls no food drain**
+(CP4b T2, "no per-step tick"). One of the two is wrong and it has not been resolved. Do not cite
+either until it is: re-run with the auto-PASS excluded from the window (bracket a single keypress
+with back-to-back reads, and confirm `DS:00/01` moved), and if the per-step drain survives that
+control then T2's conclusion needs retracting and the engine is under-charging every step.
+
+**Needs owner:** no. All of 1 and 3 and the conflict above are static or headless-testable.
+
+### G33 — McDonall's take-out window: can food be stolen without limit? `[ ]` *(owner-recalled; needs a town seed)*
+
+**Owner recollection:** McDonall's is special because it is ridiculously easy to steal amazing
+amounts of food from its **take-out window**, so a player never has to pay for food at all.
+
+**Why it matters:** CP5 ticket C6 measured theft as *one* item per attempt, BCD-decremented by 1,
+with a silent failure and `A THIEF STOLE SOMETHING!` on success — 8 items stolen, 0 returned, in
+`captures/spice86/`. If one shop can yield unbounded food, then either the decrement is per-call
+rather than per-stock for that NPC, or the window is a different site from the general steal, or
+the food stock is large enough that "amazing amounts" is what a decrement of 1 looks like over
+many calls. All three are checkable and they imply different engine behaviour.
+
+**What blocks it:** needs a town sector with McDonall's in it and a character positioned at the
+window. `tools/u2_edit.py setpos` can move sector and cell but the shop/NPC adjacency state is not
+something the editor sets today. So: identify the shop record first (static, `tlkxNN` dialogue and
+the `street_*`/`list_header_*` routines), then decide whether a seed is cheap.
+
+**Needs owner:** no, but it is the more expensive of the two.
+
 
 **Ran 2026-10-25. Two named capture directories, and a correction that matters more than the
 captures.**
