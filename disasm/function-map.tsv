@@ -384,7 +384,8 @@ start	end	len	evidence	name_hint
 15D3	15D5	0003	seed+reko	
 15D6	15DD	0008	seed+reko	
 15DE	15E0	0003	seed+reko	
-15E1	1798	01B8	seed+reko	
+15E1	16BC	00DC	seed+reko	tavern_menu
+16BD	1798	00DC	seed+reko	barkeep_chatter_hints
 1799	17B1	0019	seed+reko	
 17B2	17B6	0005	seed+reko	
 17B7	17C4	000E	seed+reko	
