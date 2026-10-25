@@ -98,6 +98,21 @@ typedef struct u2_ctx {
     int save_seeded;         /* set when the blank PLAYER file was created here */
     int use_sdl;             /* --sdl: bitmap backends (make sdl build only) */
     int play_map;            /* --play-map: enter the CP4 overworld directly */
+    int dev;                 /* --dev: development affordances, off by default.
+                              * THE RULE, and it is the reason the flag exists: --dev may add
+                              * observation and an exit path, and may NEVER change game
+                              * behaviour -- not a damage number, not a spawn, not a message,
+                              * not which tile is passable. If something would alter play, it
+                              * is a fidelity question and belongs in a decision about that,
+                              * not behind this flag.
+                              * Deliberately independent of --play-map. Entering the world
+                              * directly is not the same as accepting development keys, and
+                              * implying one from the other would make every play-map test
+                              * silently run under different rules.
+                              * Background: cmd_Z used to quit on Escape and the overworld loop
+                              * broke on Escape outright. Neither was the original -- nothing
+                              * in asm/ compares against 0x1b or 0x11 -- they were dev
+                              * conveniences with no sanctioned home, which is what this is. */
     int cleanroom;           /* --cleanroom: use the engine's own independently
                               * created assets instead of the game's — tiles now,
                               * sound and other media as they land. One axis, so a

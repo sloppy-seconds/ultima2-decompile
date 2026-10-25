@@ -1117,7 +1117,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_wait_ms(ctx, 16); continue;               /* ~60 fps cadence */
         }
         idle_polls = 0;                                    /* any key resets it */
-        if (k.ch == 0x1B) break;                           /* ESC leaves */
+        /* No quit key by default. The original has none anywhere in the overworld -- nothing
+         * in asm/ compares against 0x1b -- and this line was a development convenience that
+         * read as fidelity. --dev is the sanctioned home for that, and Ctrl-Q is the byte:
+         * nothing in asm/ compares against 0x11 either, so it cannot collide with play. The
+         * check lives in the loop and not in a command handler, which is the exact mistake
+         * being undone. */
+        if (ctx->dev && k.ch == 0x11) break;
 
         int dx = 0, dy = 0;
         const char *word = NULL;

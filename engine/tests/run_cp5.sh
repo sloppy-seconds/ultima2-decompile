@@ -513,16 +513,54 @@ else
     ok "dispatch: cmd_M pool-name assertion skipped with the pool absent (prompt half already passed)"
 fi
 
-# No quit key, and this is the guard that keeps it that way. docs/status-screen-z.md § 4
-# measured that ANY key closes the Z page; an earlier revision had cmd_Z return a quit code on
-# Escape as a --play-map development convenience, which read as fidelity and was not the
-# original at all. Removed 2026-10-26 at the owner's direction. Runs end on script exhaustion,
-# which is what the CP3 and CP4 scripts above now rely on.
+# --- no quit key, and --dev is the only thing allowed to add one -------------------------
+# The original has no quit key anywhere: nothing in asm/ compares against 0x1b (Escape) or
+# 0x11 (Ctrl-Q). An earlier revision broke the loop on Escape and had cmd_Z return a quit code
+# on it, both as --play-map conveniences, which read as fidelity and were not the game. Those
+# are gone; --dev is the sanctioned home, and the rule on it is that it may add observation and
+# an exit and may NEVER change game behaviour.
+#
+# These are behavioural, not greps. --dump-each prints one dump per key, so "did the run
+# survive this key" is countable: two PASS lines means both P's ran, one means the key between
+# them ended the loop.
+quit_count() {   # $1 = extra flags, $2 = key script
+    ./u2 --headless $1 --play-map --cleanroom \
+         --data-dir "$WORK/quit/content" --save-dir "$WORK/quit/save" \
+         --script "$2" --dump-each 2>&1 | grep -c "CMD: PASS"
+}
+python3 tests/cp5_fight_seed.py "$WORK/quit" >/dev/null 2>&1
+printf 'P\nESC\nP\n'     > "$WORK/quit-esc.keys"
+printf 'P\n0x11\nP\n'    > "$WORK/quit-ctrlq.keys"
+
+if [ "$(quit_count '' "$WORK/quit-esc.keys")" = "2" ]; then
+    ok "no quit key: Escape in the overworld is an ordinary key, the run continues"
+else
+    bad "regression: Escape ended the overworld run -- the original has no quit key"
+fi
+if [ "$(quit_count '--dev' "$WORK/quit-esc.keys")" = "2" ]; then
+    ok "--dev does not make Escape special either"
+else
+    bad "--dev must not restore the Escape quit; only Ctrl-Q is gated on --dev"
+fi
+if [ "$(quit_count '' "$WORK/quit-ctrlq.keys")" = "2" ]; then
+    ok "Ctrl-Q is inert without --dev: default mode implements the game and nothing else"
+else
+    bad "Ctrl-Q ended the run without --dev -- dev affordance leaked into the default path"
+fi
+if [ "$(quit_count '--dev' "$WORK/quit-ctrlq.keys")" = "1" ]; then
+    ok "--dev: Ctrl-Q ends the run (the development exit the owner asked for, on a free byte)"
+else
+    bad "--dev: Ctrl-Q did not end the run -- the dev exit is not wired"
+fi
+
+# Structural half: a command HANDLER must never be able to end the session at all, in any mode.
+# That is where the Escape version went wrong, and a behaviour test would not catch it coming
+# back inside cmd_Z if the loop grew another path.
 if grep -rq "U2_CMD_QUIT" src/ 2>/dev/null; then
-    bad "regression: a command-level quit path is back in src/ -- the original has no quit key"
+    bad "regression: a command-level quit path is back in src/ -- handlers must not end sessions"
     grep -rn "U2_CMD_QUIT" src/ | head -3 | sed 's/^/        /'
 else
-    ok "no quit key: no command handler can end the session (matches the original)"
+    ok "no command handler can end the session, in any mode"
 fi
 
 printf '\n'

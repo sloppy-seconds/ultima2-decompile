@@ -42,6 +42,9 @@ static void usage(const char *argv0)
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
         "  --sdl           bitmap window instead of the text grid (make sdl build)\n"
         "  --play-map      enter the overworld screen directly (CP4 development entry)\n"
+        "  --dev           development affordances only (Ctrl-Q ends the run). Off by\n"
+        "                  default, and it never changes game behaviour: without it the\n"
+        "                  engine implements the game and nothing else.\n"
         "  --enhanced      enhanced fidelity: same rules and state as the original, but\n"
         "                  dead ends the original could not avoid are removed. Today that\n"
         "                  means finishing character creation enters the world instead of\n"
@@ -148,6 +151,10 @@ int main(int argc, char **argv)
             ctx.use_sdl = 1;
         } else if (strcmp(a, "--play-map") == 0) {
             ctx.play_map = 1;
+        } else if (strcmp(a, "--dev") == 0) {
+            /* Development affordances. May add observation and an exit path; may never
+             * change game behaviour. See u2_ctx::dev. */
+            ctx.dev = 1;
         } else if (strcmp(a, "--enhanced") == 0) {
             /* Same rules and state as the original; dead ends the original
              * could not avoid are removed. Default is original, which is what
