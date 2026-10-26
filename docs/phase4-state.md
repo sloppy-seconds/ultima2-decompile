@@ -706,6 +706,14 @@ rule, and the four specials behind `asm/0AAA`'s proximity-plus-1-in-8 gate.
 > `ai_check` 44 → 49 with three controls that each go red. The plan and the measured outcome, including
 > the negative result on the thief, are in **`docs/plan-role3-wander.md`**.
 
+> **Highest-value item on the board (owner, 2026-10-26):** **`docs/plan-cross-game-replay.md`** —
+> record the original's starting save, RNG register, key sequence and per-turn DS segment, replay the
+> same inputs on our engine, and diff the two state mirrors turn by turn. It is feasible here and
+> usually is not, because `state.h` is a byte-for-byte mirror of the original's DS block and the
+> original's PRNG is a clock-free 6-byte shift register seeded from `0x40:6C`. Phase 0 is a
+> one-afternoon determinism probe that de-risks everything else. The CP2 digest-scope decision (§ 5)
+> is a prerequisite, not a side quest.
+
 `u2_ai_alarm()` is `asm/113A`: a landed hit inside a site sets role 1 on slots 7..0,
 which is § 16's sector-wide guard response found in the static tree eight days after
 it was measured. W9 is a gate that runs in CI with no game files at all —
