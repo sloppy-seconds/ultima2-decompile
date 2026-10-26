@@ -190,6 +190,20 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-26 — Enumerate every array in a sidecar data file, not just the ones already named.**
+  When a data file's size is an exact multiple of a stride you have already established, the
+  unaccounted remainder is not padding — it is more arrays, and one of them may be the thing you are
+  hunting. Here a code fragment had been labelled "behaviour not yet reviewed" for weeks, and the
+  static read kept coming back inconclusive because the fragment loaded its operands from two arrays
+  the harness had never named. Mapping the whole file onto the runtime segment, rather than only the
+  offsets already in use, located them; reading their live value domain then identified what they were
+  **without reading any more code at all**. Two corollaries worth encoding as defaults: check the
+  value *domain* of a candidate array before its meaning is asserted (a domain of three signed values
+  is a direction, and that is a much cheaper test than decoding its writer), and treat a data file's
+  zeros as evidence — a field that ships zero but is non-zero at runtime is written by the program,
+  which makes it a runtime state variable and not configuration, and that distinction changes what it
+  can be used to prove.
+
 * **2026-10-26 — With a vision model available, the rendered screen is a first-class evidence
   channel, not a display convenience.** A harness that can read memory and an execution trace will
   otherwise drift into treating those as the whole of the evidence, and a claim about what the

@@ -784,7 +784,7 @@ saying what the values mean. They mean this, and it is all in one fragment chain
 | `0x00` | nothing at all | 6–11 slots in a town, and **every slot** in `monx00` |
 | `0x01` | the full pass: proximity gate, special, unit step, retreat, move | 7–11 slots |
 | `0x02` | the unit step toward the player and the move routine. No gate, no special, **no retreat test** | 4–6 slots |
-| `0x03` | `asm/1086`, a wander off a per-slot pair at `DS:1F7`/`DS:217` — **not decoded** | 10–24 slots, usually the majority |
+| `0x03` | `asm/1086_creature_wander_step`, a wander off a per-slot step vector at `DS:1F7`/`DS:217` — **vector semantics measured 2026-10-26; the writer and the move site still not found** | 10–24 slots, usually the majority (census of all 33 shipped `monx`: 179 role-3 slots) |
 | `0x81..0x85` | excluded by the `js` at `asm/1033`; these are the scripted townsfolk `asm/3C2E_cmd_O` enumerates one by one | exactly 4–5 slots, always the same low values |
 
 ### Which sweep the gate belongs to — a correction (2026-10-28)
