@@ -153,24 +153,26 @@ turn 37  slot 31 (type 0xFC, role 3)
 plus a summary line per field so a run reports *"creature positions diverge from turn 12; hp agrees
 throughout"* rather than a wall of diffs.
 
-## 5. The digest-scope decision is a prerequisite, not a side quest
+## 5. The digest-scope decision — **RESOLVED 2026-10-26, and no re-record was needed**
 
-`replay.c` hashes `u2_state_json()` into CP2's committed evidence:
+`replay.c` hashed `u2_state_json()` into CP2's committed evidence, so the debug serializer and the
+behavioural evidence digest were the same function. Adding a diagnostic field invalidated every
+recorded replay — which happened during this session when the creature table was added.
 
-```c
-u2_state_json(ctx, state, (int)sizeof state);
-sha256_hex(state, strlen(state), r->state_sha[i]);
-```
+**Resolution: split the two serializers.** `u2_state_digest_json()` is the frozen evidence scope
+(scope version 1, byte-identical to the pre-split output) and `replay.c` hashes that;
+`u2_state_json()` remains the diagnostics serializer and may grow freely. The report now carries
+`digest_version: 1`, and verification treats an absent field as scope 1 so pre-split evidence still
+verifies.
 
-So the debug serializer and the behavioural evidence digest are the same function. Adding a
-diagnostic field invalidates every recorded replay — which happened during this session when the
-creature table was added, and is why CP2 is currently red pending an owner decision.
+**This deliberately avoided a baseline move.** Because the frozen scope reproduces the original output
+byte for byte, `evidence/cp2-playthrough.json` still verifies unchanged — no re-record, no owner
+approval needed, and the CP2 gate log records *why* no baseline moved. Changing
+`u2_state_digest_json()` is now itself a baseline move, and the comment on it says so.
 
-**For this plan, the digest must be a defined, versioned scope** (screen text plus an explicit list of
-state fields, `digest_version: 1`). Otherwise every telemetry addition rots existing recordings, and
-a demo feature built on recordings cannot survive an engine release. This is the same decision as
-option (c) in `docs/phase4-state.md`; it should be settled as part of this work, with the reason
-logged in the CP2 gate log.
+Why this mattered for the plan rather than being housekeeping: a recorder that emits per-turn telemetry
+would have invalidated CP2 on every schema change, and a demo feature built on recordings could not
+survive an engine release.
 
 ## 6. Determinism hazards — be honest about what is not proven
 
