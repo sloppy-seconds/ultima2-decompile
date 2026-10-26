@@ -1076,6 +1076,51 @@ end the session in any mode. The `--dev` leak control was run — dropping the `
 
 ---
 
+## Z page teardown + mid-command observability — OPEN DEFECT (owner-found, 2026-10-26)
+
+Two halves, and the second one is the blocker.
+
+**Half 1, fixed and committed:** the Z page drew over the map instead of replacing it. Cause is the
+compositor: `u2_overworld_draw` owns pixel rows 0..159 for the map window and composites only vram
+rows `U2_MSG_TOP`..24 into the frame, so a full-screen text page had its top twenty rows painted
+over by the tile view. Fixed by having `cmd_Z` compose its own whole-grid frame (black, all
+`U2_ROWS`, no map) before it blocks on the key. Verified by the owner from the SDL build.
+
+The mid-word wrapping that remains on the page is **not** a defect. The original wraps at 40 columns
+in exactly the same places — `AXES-01 B`/`OWS-01`, `TRI-L`/`ITHIUMS-01`, `GREEN GE`/`MS-01` — see
+`captures/spice86/z-page-maxed/Z-maxed-G23MAX.png` and its `readings.md`. Left alone on purpose.
+
+**Half 2, open:** after dismissing Z the page is not taken back down. `u2_overworld_draw` composites
+vram rows 20..24 and never clears them, so the tail of the ITEMS list stays printed over the status
+band and the band itself vanishes. Owner's screenshot shows `UMS-01 PASS` / `TRI-LITHI` stuck under
+the map with no `H.P.` line anywhere.
+
+The fix is small — on a real keypress, `seam_clear_screen(ctx)` then `u2_status_draw(ctx)` before
+the overworld draw, and only on a real keypress, because `seam_key_wait` returning 0 means "script
+exhausted" and has no counterpart in a game that blocks. It was written and it worked.
+
+**It is not committed, because it cannot be gated from where the tests sit.** Three CP5 gates read
+the *final* screen of a run, and the Z page exists only *inside* one command: it is drawn, it blocks,
+and it is gone before the next turn boundary. `--dump-each` captures turn boundaries, so there is no
+state in which the page is on screen and also observable. Patching the gates to look at the restored
+screen instead would mean deleting the assertion that the page has no status band — trading a real
+regression guard for a weaker one, which is the wrong trade.
+
+**So the prerequisite is observability, not the teardown.** What is needed is a way to capture the
+screen at an arbitrary point inside command handling. Two candidates, both rejected for now:
+
+* `--dump-screen-at N` in the SDL renderer (dump the Nth presented frame). Built it; it broke sector
+  loading in a way that was never explained — bisected to the plumbing, not the Z fix, and dropped
+  rather than diagnosed. An unexplained regression is not something to re-introduce blind.
+* `--sdl` cannot take `--script` at all: backend selection runs before argument parsing sets
+  `ctx.script_path`, so the SDL build cannot be driven headlessly. A note records this in
+  `wire_backends()`. Until that is fixed, no SDL visual bug can be gated in CI, and every claim about
+  what the SDL build looks like comes from a human screenshot.
+
+Fix the second one first. It closes a whole class — "a behavioural claim needs a frame" — and then
+the Z teardown becomes a three-line change with a gate behind it.
+
+
 ## Invariants (checked at every checkpoint)
 
 | Check | Command | CP0 result |

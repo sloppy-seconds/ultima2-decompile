@@ -14,6 +14,8 @@
 #include <string.h>
 
 #include "core/seam.h"
+#include "core/frame.h"
+#include "core/font.h"
 #include "game/status.h"
 #include "game/overworld.h"
 
@@ -163,11 +165,36 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)letter;
     u2_status_draw_full(ctx);
+
+    /* Present the page as a WHOLE-GRID frame, not through the overworld compositor.
+     *
+     * u2_overworld_draw owns pixel rows 0..159 for the map window and composites only vram rows
+     * U2_MSG_TOP..24 into the game frame. That is right for the play screen and completely wrong
+     * for a full-screen page: the map was painted over the top twenty rows of the Z page, so in
+     * the SDL build the player saw the tile view with the tail of the item list underneath it —
+     * the owner's "it still shows the stats in the 4 line cmd section". Headless could never show
+     * this, because the null renderer has no map layer to paint over anything.
+     *
+     * So a full-screen text page composes its own frame: black, all U2_ROWS of the grid, no map.
+     * The overworld compositor is restored by the u2_overworld_draw() at the end of this handler.
+     */
+    if (ctx->frame) {
+        u2_frame_clear(ctx->frame, U2_CGA_BLACK);
+        u2_font_draw_vram_rows(ctx->frame, &ctx->vram, 0, U2_ROWS - 1);
+        seam_present_frame(ctx);
+    }
+
     u2_key dismiss;
     /* seam_key_wait returns NON-ZERO when it has a key (creation.c:159 relies on that). An
      * earlier revision tested `== 0` here and then read `dismiss` uninitialised, so its
      * Escape branch never fired. That branch is gone now; the wait itself is the byte, and
      * which key arrived is deliberately not looked at. */
+    /* NOTE: the page is not taken back down here. u2_overworld_draw composites vram rows
+     * U2_MSG_TOP..24 and never clears them, so the tail of the Z page stays printed over the
+     * status band after dismissal -- reported by the owner from the SDL build. The fix needs a
+     * way to observe a screen that exists inside one command, which the engine does not have
+     * yet. Tracked in docs/phase4-state.md; the attempted fix is in git history as a patch.
+     */
     (void)seam_key_wait(ctx, &dismiss);
     u2_overworld_draw(ctx, ow);
     return U2_CMD_DONE;
