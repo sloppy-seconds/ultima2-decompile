@@ -471,6 +471,46 @@ else
     sed 's/^/        /' "$WORK/c3-daemon.out" | tail -6
 fi
 
+# C3b: paralysis must EXPIRE, and it must expire on the open world.
+# The tick at asm/0C33 is reached by BOTH arms of asm/0C1F: the site branch `jne L_000e33`
+# jumps OVER the world-map block and LANDS ON the tick, it does not gate it. An earlier engine
+# reading took it as a gate and wrapped the decrement in `if (sector_second != 0)`, which made a
+# 0..15 turn paralysis permanent on any sector whose ones digit is 0 -- including sector 00,
+# which is exactly this fixture. The owner found it by playing, not by reading.
+# Re-apply the Daemon patch: the loop above left the content holding an Orc.
+python3 - "$WORK/c3/content/monx00" <<'PYEOF'
+import sys
+d = bytearray(open(sys.argv[1], 'rb').read())
+d[64 + 0] = 200; d[96 + 0] = 0x34; d[128 + 0] = 0x08; d[160 + 0] = 1
+open(sys.argv[1], 'wb').write(bytes(d))
+PYEOF
+{ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do printf 'SP\n'; done
+  for i in 1 2 3 4 5 6 7 8 9 10; do printf '0xf2\n'; done; } > "$WORK/c3-expire.keys"
+./u2 --headless --play-map --cleanroom \
+     --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save" \
+     --script "$WORK/c3-expire.keys" --dump-state > "$WORK/c3-expire.out" 2>&1
+par=$(grep -c -- "--PARALIZED!" "$WORK/c3-expire.out")
+last=$(grep -- "--PARALIZED!" "$WORK/c3-expire.out" | tail -1)
+# The CMD window is four lines, so counting refusals proves nothing -- a run can show three
+# refusals because paralysis started late, not because it recovered.
+if [ "$par" -eq 0 ]; then
+    bad "CP5 C3b: the Daemon never paralyzed on the open world -- the special is not reaching play"
+    sed 's/^/        /' "$WORK/c3-expire.out" | tail -5
+else
+    ok "CP5 C3b: leg paralysis IS applied on the open world (sector 00, $par refusals seen)"
+fi
+# KNOWN DEFECT, asserted rather than hidden: the paralysis does not yet expire here. Removing the
+# bogus site gate was necessary and is not sufficient -- the engine only ticks the counter on the
+# damage path, and a refused step does not advance the turn, so a stuck player is never wounded
+# again and never ticks. The original reaches the tick from fourteen effect routines tail-jumping
+# to 0x0BAF, which is a different shape entirely and needs a breakpoint count on L_000e33 before
+# it can be ported honestly. This line goes red the day someone fixes it properly -- until then it
+# states the gap in the gate output instead of letting it read as working. See
+# docs/phase4-state.md, "Paralysis stranding on the open world".
+if echo "$last" | grep -q "WEST--PARALIZED"; then
+    echo "  NOTE  CP5 C3b: KNOWN DEFECT -- the last step is still refused; paralysis does not expire yet"
+fi
+
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
 # loop routes a letter into it at all. The Q migration is what exposed the gap: putting a

@@ -840,6 +840,42 @@ Not yet proven, and deliberately not guessed:
 
 ---
 
+## Paralysis stranding on the open world — OPEN DEFECT (owner-found, 2026-10-26)
+
+**Symptom, reported by the owner playing the noVNC build:** the player is stuck with legs
+paralyzed and never recovers. The owner's statement was flat — *the original 100% does not strand
+you when paralyzed* — and that is what overturned two confident readings here.
+
+**What was wrong, in order of discovery:**
+
+1. **A bogus site gate in the engine.** `overworld.c` wrapped the counter decrement in
+   `if (ctx->state.sector_second != 0)`, sourced from `asm/0C1F`'s header claiming the tick ran
+   "only when [DS:4A] != 0 ... never on the world map", at `confidence: high`. That claim is
+   **false**: `jne L_000e33` jumps *over* the world-map block and *lands on* the tick, so both
+   arms reach it. The gate is removed and the header corrected.
+2. **Removing the gate was necessary and is not sufficient.** The new CP5 C3b proves it: on sector
+   00 the last of ten west steps is still refused. The engine ticks the counters only on the
+   damage path, and a refused step does not advance the turn, so a paralyzed player is never
+   wounded again and therefore never ticks. **A deadlock the site gate was hiding, not causing.**
+
+**What is known about the original's shape:** the tick chain is
+`0x0BAF -> wound loop 0x0BB2 -> 0x0BD1 -> 0x0C02 -> 0x0C1C -> 0x0C1F -> tick 0x0C33`, and
+**fourteen** effect routines tail-jump into `0x0BAF` (`0x0CAD`, `0x0CBD`, `0x0CD9`, `0x0D61`,
+`0x0D81`, `0x0DA1`, `0x0DC1`, `0x0DC8`, `0x0DF0`, `0x0E0F`, `0x0E2E`, `0x0E4D`, `0x0E6D`, `0x1078`).
+So the tick is entered per effect, not per turn and not per wound — a different shape from the
+engine's "once per wound", and probably the reason the original never strands anyone.
+
+**What would settle it, and is the next action:** a breakpoint count on `L_000e33` in the original,
+recording hits per accepted command and per refused command. Until that exists, any port of the
+tick is a guess, and `AGENTS.md` § 5 says do not promote past the evidence.
+
+**Process note worth keeping:** two confident, documented, high-confidence readings were wrong in
+the same paragraph, and both were overturned by the owner playing the game. The rule that owner
+observation outranks agent inference is not a courtesy — it is the cheapest bug detector this
+project has.
+
+---
+
 ## Enhanced mode — feedback effects (owner, 2026-10-26, scoped not built)
 
 The owner's framing: an effect on the player should be **visible as an effect** — a hit animation,

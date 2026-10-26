@@ -1036,18 +1036,26 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
      * (a landed blow alerts the sector, a missed swing alerts nothing). */
     u2_ai_alarm(ctx);
 
-    /* asm/0C1F: the status counters tick on the damage path, and only inside a
-     * site. This is the caller CP5 had been calling undiscovered — the search had
-     * looked for L_000c33, which is cmd_done, when the tick's label is L_000e33.
-     * How many times one turn reaches it is NOT proven, so the engine ticks each
-     * counter exactly once per wound and says so: a per-turn decrement wired on
-     * this note alone would be a promotion past the evidence. asm/0C33 skips a
-     * counter that is already zero, which is why sleeping does not go negative. */
-    if (ctx->state.sector_second != 0) {
-        if (ctx->state.paral_legs)  ctx->state.paral_legs--;
-        if (ctx->state.paral_arms)  ctx->state.paral_arms--;
-        if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
-    }
+    /* asm/0C33: the status counters tick here, on the damage path.
+     * THE SITE GATE THAT USED TO WRAP THIS WAS WRONG, and it stranded the player.
+     * An earlier reading of asm/0C1F took `cmp [DS:4A],0 ; jne L_000e33` as a gate on the tick,
+     * so the engine only decremented inside a village/town/castle/tower/dungeon. On the open
+     * world -- sector ones digit 0, which is where the noVNC build drops you -- a 0..15 turn
+     * paralysis then never expired. The owner caught it by playing, not by reading.
+     * The branch is the opposite of a gate. Read the layout:
+     *     c29  jne 0xc33          ; in a site: jump OVER the world-map block, LAND ON the tick
+     *     c2b  mov al,0xff ; mov [DS:12],al
+     *     c30  call 0x26f9        ; world-map-only work
+     *     c33  <tick>             ; <-- BOTH paths arrive here, one by jump, one by fall-through
+     * The DS:4A test only picks DS:12 = 4 versus 0xFF and whether 0x26f9 runs. Every path reaches
+     * the tick, so the counters always decay.
+     * Still not proven: how many times one turn enters this path. One entry is one decrement, and
+     * the only measurement ever taken saw 15 decrements in ~0.7 s inside a castle, which is
+     * consistent with repeated entries per turn. The engine ticks once per wound and says so.
+     * asm/0C33 skips a counter that is already zero, which is why sleeping does not go negative. */
+    if (ctx->state.paral_legs)  ctx->state.paral_legs--;
+    if (ctx->state.paral_arms)  ctx->state.paral_arms--;
+    if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
     /* The reward lands on its OWN line, prompt and all — live frame reads
      *   CMD: ATTACK--EAST--HIT!!!
      *   CMD: KILLED--GOLD+1--EXP.+02
