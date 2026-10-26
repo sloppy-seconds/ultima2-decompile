@@ -737,6 +737,31 @@ naming up front: `V` and `W` need item seeding, and `D` needs a dungeon.
 
 *Nothing yet.* Opened 2026-10-22 with thirteen items.
 
+### G37 — does a placed town thief steal from the player in the original
+
+**Grade: measured (capture `captures/spice86/linda-thief`, 2026-10-26) — no, it does not.**
+
+Filed from the owner's report that the engine's thief by LINDA's entrance robs them as they pass and
+that the original never did this. The engine reaches the steal from the contact branch
+(`asm/0FCD_combat_thief_steal`), and the only execution evidence the steal had ever was
+`castle-03-live`, so the town path was uncorroborated rather than known-wrong.
+
+Driven: seeded into sector 22 at (6,47) with all 16 items ×1, then 108+ turns of adjacency including
+20 turns with thief slot 20 **pinned** at (7,47) by `--poke`, i.e. forced orthogonal contact. Items
+never changed and HP never dropped. `tools/cfg_printed.py` on the harvest reports **0 executed print
+sites** containing `THIEF`, and `asm/0FCD`'s offset range has **0 hits** in `ExecutedInstructions`
+while the creature step gate has 42 — so the sweep was live and the steal routine was not.
+
+**What is still open, and it is a different question:** what actually gates the steal. This capture
+says *not here*; it does not say where yes. The castle context is the only positive and dungeons are
+parked, so that stays with a person.
+
+**The capture's real find was not the question it was sent to answer.** Role-3 creatures **do** move
+in the original — `monx22` places thief slot 21 at (8,47) and live it was seen at (9,48), (7,48) and
+(8,48) — while the engine has `moves = (role == 1 || role == 2)` and therefore freezes role 3. That
+is what the owner meant by "it never moves", and it is an engine defect with a named owner decision
+attached, not a gameplay unknown. See `docs/phase4-state.md`.
+
 ### G30 — what tile is underneath an unlocked door
 
 **Grade: recalled (owner, 2026-10-27) — "when you open a door it disappears, I don't

@@ -996,6 +996,7 @@ and its gate `asm/0AAA` — the dispatch table, the four specials with their res
 | **E3** | a status-log line for a wound (`YOU ARE HIT FOR 11`) | enhanced | a `u2_feedback()` seam called at each effect site, emitting nothing in original mode | the damage amount is a BCD value from the same subtract that is already computed, so the number is available. The wording is invented — it must be visibly engine-authored, not dressed up as game text |
 | **E4** | hit animation on the monster sprite | enhanced | a per-cell or per-tile flash on the creature's cell | same turn-driven problem as E2 |
 | **E5** | the same treatment for the other silent effects: gold change, item gain/loss, paralysis, stat change, death | enhanced | audit each against "Silent player effects" and give each a `u2_feedback()` call | several of these are currently silent because the original is silent, which is fine in original mode and is exactly what enhanced mode is for |
+| **E6** | the melee **range asymmetry**: a creature can hit you from a diagonal, you cannot hit it back | enhanced | owner ruled 2026-10-26 to park this here rather than "fix" it, because the bytes say the original is lopsided and original mode must stay that way | **measured, not inferred.** A creature's contact test is Chebyshev: `asm/0B25/0B39` stages the unit step toward the player — which for diagonal adjacency *is* the diagonal — and a candidate cell equal to the player routes to `asm/0B4D`, swing instead of step. The player's `cmd_A` prints `ATTACK--` and awaits a **direction**, then `asm/23E6_find_creature_at_cursor` scans the single cell at `player + delta` — one of four orthogonal cells. So a diagonally adjacent monster is in range against you and out of range for you. Two candidate fixes, both engine-authored: let ATTACK accept a diagonal aim, or make a diagonally-adjacent creature close to an orthogonal cell instead of swinging. **Pick one; do not do both** — doing both silently removes the asymmetry instead of softening it |
 
 **The design decision worth making before any of it is built:** put the whole thing behind **one**
 seam, called at the effect site, that resolves to nothing in original mode. If feedback is instead
@@ -1004,6 +1005,8 @@ in twenty places and the CP2 differential stops meaning anything. One seam, one 
 
 **Deferred by the owner on 2026-10-26: do not start E2–E5 now.** They are recorded so the ideas are
 not lost, not queued. E1 is the only one on the critical path, because it is owed to original mode.
+E6 was added the same day, also parked, and it is a ruling rather than a task: the asymmetry is
+faithful and stays faithful until enhanced mode takes it.
 
 **Claimed and retracted the same day:** an earlier note here said the original wraps its item lists
 about three columns earlier than the engine, and inferred from that that `asm/4568`'s right margin
