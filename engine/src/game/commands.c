@@ -28,6 +28,25 @@
 #  define SPELL_NAME(i) ""
 #endif
 
+/* The armour pool, same degradation rule. The WEAR ARMOUR menu number indexes it directly:
+ * 0 = SKIN (bare), 1 = CLOTH ... 6 = POWER, and 7 = NONE is the pool's own spare entry. */
+#ifdef U2_T_ARMOUR_N
+#  define ARMOUR_NAME(i) (((i) >= 0 && (i) < U2_T_ARMOUR_N) ? U2_T_ARMOUR[(i)] : "")
+#else
+#  define ARMOUR_NAME(i) ""
+#endif
+
+/* asm/45B8: `stc ; cmc ; sbb $0x1,%al ; das ; cmc` — a packed-decimal subtract of one, so the
+ * nibble borrows in decimal and not in hex: 0x10 becomes 0x09, not 0x0F. Item counts are BCD
+ * everywhere in this binary; treating them as binary is the same class of mistake as reading the
+ * strength byte as its displayed number. */
+static uint8_t bcd_dec1(uint8_t v)
+{
+    if (v == 0) return 0;
+    if ((v & 0x0Fu) == 0) return (uint8_t)(v - 0x07u);
+    return (uint8_t)(v - 1u);
+}
+
 /* The letters the original's jump table covers, in table order. cs:0730 holds 26 words and
  * `sbb $0x41,%al` indexes them, so A is entry 0 and Z is entry 25. */
 #define CMD_COUNT 26
@@ -242,6 +261,133 @@ static u2_cmd_result cmd_M(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/43F3_cmd_W: WEAR ARMOUR.
+ *
+ * The menu is ONE static string printed before anything is read, so the original always shows all
+ * six types and only tells you afterwards whether you own one. Verified live 2026-10-26 with
+ * DS:97..9C read as all zero — owning nothing — and the full list still on screen
+ * (captures/spice86/wonly/). That is why there is no filtered-list logic in fidelity mode: the
+ * filtering is in the post-choice refusal branches, not in the menu.
+ *
+ * Order, straight off the bytes:
+ *   print menu
+ *   read a digit into DS:1F; 7 or above is forced to 0 (0 = SKIN, going bare)
+ *   print the armour NAME from the pool (`adc $0x1d,%al` + the printer at L_00528c), so a
+ *     successful line reads "CLOTH READY." — observed on screen, not inferred
+ *   ownership: DS:0x96[digit] == 0 and digit != 0  ->  " NOT OWNED!"
+ *   strength gate: digit*8 < DS:4B, the PACKED byte, else the refusal
+ *   success: " READY." and DS:62 = digit
+ * All three exits tail-jump to L_000c33, the status tick.
+ *
+ * The strength gate is the BCD trap again: agility/strength 40 is stored 0x40 = 64, so digit*8
+ * tops out at 48 and a starting character passes every armour. Reading the decimal 40 instead
+ * would refuse things the original allows.
+ *
+ * ENHANCED MODE, owner's call 2026-10-26: list only armour actually owned, keeping each type's
+ * original number so the digit still indexes the same table. The point is to stop the player
+ * guessing; fidelity mode keeps the guessing because the original does it. Composed from the
+ * original's own header and "WHICH? " pieces plus the pool names, not hand-copied text.
+ */
+static u2_cmd_result cmd_W(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+
+    if (ctx->fidelity == U2_FIDELITY_ENHANCED) {
+        seam_str_out(ctx, U2_S_WEAR_HEADER);
+        seam_char_print(ctx, '\r');
+        int shown = 0;
+        for (int n = 1; n <= 6; n++) {
+            if (ctx->state.armour_owned[n - 1] == 0) continue;
+            char line[24];
+            snprintf(line, sizeof line, "%d-%s, ", n, ARMOUR_NAME(n));
+            seam_str_out(ctx, line);
+            shown++;
+        }
+        if (shown == 0) {
+            /* Nothing to wear. The original never asks this question, so it has no words for it;
+             * reuse its own refusal rather than inventing a sentence nobody wrote. */
+            seam_str_out(ctx, U2_S_NOT_OWNED);
+            cmd_done(ctx);
+            return U2_CMD_DONE;
+        }
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_WHICH);
+    } else {
+        seam_str_out(ctx, U2_S_WEAR_ARMOUR_MENU);
+    }
+
+    int digit = -1;
+    while (digit < 0) {
+        u2_key k;
+        if (seam_key_wait(ctx, &k) == 0)
+            break;                       /* input exhausted: no original counterpart */
+        if (k.ch >= '0' && k.ch <= '9') {
+            digit = k.ch - '0';
+            seam_char_print(ctx, (char)('0' + digit));
+        }
+    }
+    if (digit < 0) { cmd_done(ctx); return U2_CMD_DONE; }
+
+    if (digit >= 7) digit = 0;                       /* asm/464B: cmp $0x7 ; jb, else zeroed */
+    seam_str_out(ctx, ARMOUR_NAME(digit));           /* the pool echo */
+
+    const int owned = (digit == 0) ||
+                      (digit >= 1 && digit <= 6 && ctx->state.armour_owned[digit - 1] != 0);
+    if (!owned) {
+        seam_str_out(ctx, U2_S_NOT_OWNED);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    if ((unsigned)(digit * 8) >= (unsigned)ctx->state.stat_str) {
+        seam_str_out(ctx, U2_S_NOT_STRONG_ENOUGH);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    seam_str_out(ctx, U2_S_ARMOUR_READY);
+    ctx->state.worn_armour = (uint8_t)digit;         /* DS:62 */
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* asm/437E_cmd_V: VIEW.
+ *
+ * DS:DB is items_held[5], and U2_T_ITEMS[5] is "HELM" — so the gate is literally "do you hold a
+ * HELM", with no inference left in it. Second gate is DS:4A (the sector's second decimal digit)
+ * below 4; at or above 4 it prints the same VIEW WHAT? refusal.
+ *
+ * Observed live 2026-10-26 (captures/spice86/vhelm/): with DS:DB = 01 read BEFORE the press and
+ * DS:4A = 00, pressing V replaced the whole play field with a WORLD MAP — continents in white on
+ * black — and DS:DB read 00 afterwards, so the view costs one helm. A second press with none left
+ * prints VIEW WHAT?.
+ *
+ * WHAT IS NOT MODELLED, and deliberately not faked: the map itself. The original sets DS:23/24 to
+ * 0x20,0x20, calls L_002bd2, waits on L_00514d until AH == 0xFF, then clears two 256-byte tables
+ * at 0x272 and 0x372. Where the continent art comes from is unidentified — it is not the sector
+ * grid and not the tile atlas — so the engine prints the message and spends the helm, and the
+ * overlay is an open gap rather than an invented approximation. Spending the charge without
+ * showing the view is a known wrongness of enhanced and fidelity alike; a plausible fake map
+ * would be worse, because it would look finished.
+ */
+static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+
+    if (ctx->state.items_held[5] == 0 || ctx->state.sector_second >= 4) {
+        seam_str_out(ctx, U2_S_VIEW_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    seam_str_out(ctx, U2_S_VIEW_HELM_A);
+    seam_char_print(ctx, '\r');            /* the original's 0x8d newline glyph */
+    seam_str_out(ctx, U2_S_VIEW_HELM_B);
+    ctx->state.items_held[5] = bcd_dec1(ctx->state.items_held[5]);
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -321,8 +467,8 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* S  see the note above */
     NULL,  /* T  see the note above */
     cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */
-    NULL,  /* V  see the note above */
-    NULL,  /* W  see the note above */
+    cmd_V, /* V  view: asm/437E, needs a HELM held and sector digit < 4; the map overlay is NOT modelled */
+    cmd_W, /* W  wear armour: asm/43F3, full menu then digit then ownership and strength gates */
     NULL,  /* X  not implemented: destroy item */
     NULL,  /* Y  see the note above */
     cmd_Z, /* Z  status screen: asm/4568, a full-page overwrite, no turn passes */

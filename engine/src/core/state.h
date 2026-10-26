@@ -247,7 +247,15 @@ typedef struct u2_state {
                                         * reserved_80: the display site is the citation
                                         * that was missing. docs/status-screen-z.md § 7. */
     /* 0x88 */ uint8_t reserved_88[0x0E];
-    /* 0x96 */ uint8_t reserved_96[0x20];   /* 0x96..0xB5 */
+    /* 0x96 */ uint8_t reserved_96;        /* DS:96 itself: G8 found nothing reads it */
+    /* 0x97 */ uint8_t armour_owned[6];    /* owned count per armour type, indexed by the WEAR
+                                        * ARMOUR menu number MINUS ONE: [0]=CLOTH .. [5]=POWER.
+                                        * Proven by captures/spice86/armour-buy/: buying CLOTH
+                                        * (menu item 1) took DS:97 from 00 to 01 and gold 9999 to
+                                        * 9987. cmd_W reads it as `mov 0x96(%di),%al` with di set
+                                        * to the raw digit, so the C index is one lower than the
+                                        * asm index. Do not apply the digit at face value. */
+    /* 0x9D */ uint8_t reserved_9D[0x19];  /* 0x9D..0xB5 */
     /* 0xB6 */ uint8_t spell_counts[10];   /* the SPELLS: list counts, `mov al,[di+0xB6]`,
                                         * bounds 1..9. New finding from the same read; no
                                         * other reader or writer is identified yet, so
@@ -422,6 +430,7 @@ _Static_assert(U2_OFF(counter_26A)    == 0x26A, "counter_26A moved");
 /* The creature table: six parallel arrays, each exactly 32 slots, contiguous in
  * the order asm/22D5 lays them out in monx. Any drift here silently reassigns
  * every monster's x/y/hp/type/kind/role, so all six are pinned. */
+_Static_assert(U2_OFF(armour_owned) == 0x097, "armour_owned moved");
 _Static_assert(U2_OFF(mon_x)    == 0x137, "mon_x moved");
 _Static_assert(U2_OFF(mon_y)    == 0x157, "mon_y moved");
 _Static_assert(U2_OFF(mon_hp)   == 0x177, "mon_hp moved");

@@ -618,6 +618,93 @@ else
     ok "no command handler can end the session, in any mode"
 fi
 
+# --- W and V: wear armour and view, all three refusal branches --------------
+# cmd_W was static-only until 2026-10-26 and cmd_V's render is still not modelled, so the gate
+# asserts the parts that ARE established: the menu, the armour-name echo, and each exit. The name
+# echo matters — the original prints "CLOTH READY." as one line, and an engine that skipped the
+# pool print would still print "READY." and look fine to a test that only greps for it.
+python3 tests/cp5_fight_seed.py "$WORK/wv" >/dev/null 2>&1
+patch_player() {   # patch_player FILE OFFSET VALUE   (file[i] == DS[0x36+i])
+    python3 - "$1" "$2" "$3" <<'PYEOF'
+import sys
+p, off, val = sys.argv[1], int(sys.argv[2], 0), int(sys.argv[3], 0)
+d = bytearray(open(p, 'rb').read())
+d[off] = val
+open(p, 'wb').write(bytes(d))
+# Verify the write landed. A helper that fails and exits non-zero while the shell carries on is the
+# exact silent-failure shape this project keeps recording: the first version of this function used
+# int() on a 0x-prefixed value, raised ValueError, patched nothing, and the strength-gate assertion
+# below failed for a reason that had nothing to do with the engine.
+if bytearray(open(p, 'rb').read())[off] != val:
+    sys.exit(f'patch_player: write to {off} did not land')
+PYEOF
+}
+PLAYER="$WORK/wv/save/PLAYER"
+run_wv() {   # run_wv EXTRA_FLAGS SCRIPT OUTFILE
+    ./u2 --headless $1 --play-map --cleanroom --data-dir "$WORK/wv/content" \
+         --save-dir "$WORK/wv/save" --script "$2" --dump-each > "$3" 2>&1
+}
+
+# (a) own CLOTH, strong enough -> name then READY.   DS:97 -> file 0x61, DS:4B -> file 0x15
+patch_player "$PLAYER" $((0x61)) 1
+patch_player "$PLAYER" $((0x15)) 0x40
+printf 'W\n1\n' > "$WORK/wv-ok.keys"
+run_wv "" "$WORK/wv-ok.keys" "$WORK/wv-ok.out"
+if grep -q "CLOTH READY\." "$WORK/wv-ok.out"; then
+    ok "CP5 W/V: WEAR ARMOUR echoes the armour NAME from the pool before READY."
+else
+    bad "CP5 W/V: expected 'CLOTH READY.' — the pool echo or the success path is broken"
+    sed 's/^/        /' "$WORK/wv-ok.out" | tail -5
+fi
+
+# (b) own nothing -> the menu still lists all six, and the refusal names the type
+patch_player "$PLAYER" $((0x61)) 0
+printf 'W\n2\n' > "$WORK/wv-no.keys"
+run_wv "" "$WORK/wv-no.keys" "$WORK/wv-no.out"
+if grep -q "LEATHER NOT OWNED!" "$WORK/wv-no.out"; then
+    ok "CP5 W/V: unowned armour is refused AFTER the choice, naming the type"
+else
+    bad "CP5 W/V: expected 'LEATHER NOT OWNED!'"
+    sed 's/^/        /' "$WORK/wv-no.out" | tail -5
+fi
+
+# (c) own it but too weak. digit*8 vs the PACKED byte: 1*8 >= 0x08 refuses.
+patch_player "$PLAYER" $((0x61)) 1
+patch_player "$PLAYER" $((0x15)) 0x08
+printf 'W\n1\n' > "$WORK/wv-weak.keys"
+run_wv "" "$WORK/wv-weak.keys" "$WORK/wv-weak.out"
+if grep -q "STRONG ENOUGH TO WEAR!" "$WORK/wv-weak.out"; then
+    ok "CP5 W/V: the strength gate refuses against the packed strength byte, not the decimal"
+else
+    bad "CP5 W/V: expected 'STRONG ENOUGH TO WEAR!' with DS:4B = 0x08"
+    sed 's/^/        /' "$WORK/wv-weak.out" | tail -5
+fi
+patch_player "$PLAYER" $((0x15)) 0x40
+
+# (d) enhanced lists only what is owned; fidelity lists all six.
+printf 'W\n1\n' > "$WORK/wv-enh.keys"
+run_wv "--enhanced" "$WORK/wv-enh.keys" "$WORK/wv-enh.out"
+if grep -q "6-POWER" "$WORK/wv-enh.out"; then
+    bad "CP5 W/V: enhanced mode still lists unowned armour (found 6-POWER)"
+else
+    ok "CP5 W/V: enhanced mode lists only owned armour, keeping the original numbering"
+fi
+if grep -q "1-CLOTH" "$WORK/wv-enh.out"; then
+    ok "CP5 W/V: the owned entry keeps menu number 1, so the digit still indexes the table"
+else
+    bad "CP5 W/V: enhanced mode dropped the owned CLOTH entry or renumbered it"
+fi
+
+# (e) V with no helm held -> VIEW WHAT?. items_held[5] is DS:DB; U2_T_ITEMS[5] is HELM.
+printf 'V\n' > "$WORK/wv-v.keys"
+run_wv "" "$WORK/wv-v.keys" "$WORK/wv-v.out"
+if grep -q "VIEW WHAT?" "$WORK/wv-v.out"; then
+    ok "CP5 W/V: VIEW with no HELM held prints VIEW WHAT?"
+else
+    bad "CP5 W/V: expected 'VIEW WHAT?' with an empty inventory"
+    sed 's/^/        /' "$WORK/wv-v.out" | tail -5
+fi
+
 printf '\n'
 if [ "$fail" -eq 0 ]; then
     printf 'CP5 SPEC: PASS\n'

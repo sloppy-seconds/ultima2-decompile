@@ -264,6 +264,27 @@ MANIFEST = [
     ("U2_S_NOT_OWNED",         "43F3_cmd_W.asm",           0),
     ("U2_S_ARMOUR_READY",      "43F3_cmd_W.asm",           1),
     ("U2_S_VIEW_WHAT",         "437E_cmd_V.asm",           0),
+    # The three multi-segment lines, via run locators. Each offset was read back from
+    # original/ultimaii.exe rather than derived: the runtime label minus 0x200 gives the file
+    # address of the `call`, and the string starts three bytes later. Verified 2026-10-26:
+    #   0x45F6 len 78  'WEAR ARMOUR:\r1-CLOTH, 2-LEATHER, 3-CHAIN,\r4-PLATE, 5-REFLECT,
+    #                  6-POWER,\rWHICH? '
+    #   0x4696 len 38  ' <-THOU ART NOT\rSTRONG ENOUGH TO WEAR!'
+    #   0x45A0 len 23  'VIEW\x8dWITH MAGICAL HELM!'   (0x8d is this binary's newline glyph,
+    #                  mid-string, not the leading line-marker convention)
+    # The helm line is stored as TWO entries because the engine emits the newline itself rather
+    # than passing a raw 0x8d through str_out — the same convention already used for KILLED--GOLD+
+    # and --PARALIZED!. 0x45A4 is the glyph byte, so the halves are 0x45A0+4 and 0x45A5+18.
+    ("U2_S_VIEW_HELM_A",       "437E_cmd_V.asm", ("run", 0x45A0, 4)),
+    ("U2_S_VIEW_HELM_B",       "437E_cmd_V.asm", ("run", 0x45A5, 18)),
+    ("U2_S_WEAR_ARMOUR_MENU",  "43F3_cmd_W.asm", ("run", 0x45F6, 78)),
+    ("U2_S_NOT_STRONG_ENOUGH", "43F3_cmd_W.asm", ("run", 0x4696, 38)),
+    # Two slices of the WEAR ARMOUR menu, so enhanced mode can compose a filtered list from the
+    # original's own pieces instead of hand-copying game text into C. Offsets read back from the
+    # exe: the header is the first 12 bytes of the menu run at 0x45F6, and "WHICH? " is the last 7
+    # at 0x463D. The entry names themselves come from U2_T_ARMOUR, which is the pool at 0x501D.
+    ("U2_S_WEAR_HEADER",       "43F3_cmd_W.asm", ("run", 0x45F6, 12)),
+    ("U2_S_WHICH",             "43F3_cmd_W.asm", ("run", 0x463D, 7)),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
