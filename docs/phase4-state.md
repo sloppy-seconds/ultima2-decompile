@@ -699,6 +699,12 @@ sense.** `engine/src/game/ai.c` is the creature turn: the `mon_role` dispatch
 deliberately nothing at 3 because `asm/1086` is unread), the unit step from
 `asm/4F11` with its torus sign trick, the retreat at 14 HP, the per-species tile
 rule, and the four specials behind `asm/0AAA`'s proximity-plus-1-in-8 gate.
+
+> **Stale as of 2026-10-26, and the fix is planned not built:** `asm/1086` **is** read now — it is the
+> role-3 wander, a sticky random walk, and the engine freezing those slots is a defect rather than a
+> deliberate gap. Role 3 is 179 of the shipped `monx` role bytes, so this is the majority of town
+> creatures. The build plan, with its traps and its test controls, is **`docs/plan-role3-wander.md`**.
+
 `u2_ai_alarm()` is `asm/113A`: a landed hit inside a site sets role 1 on slots 7..0,
 which is § 16's sector-wide guard response found in the static tree eight days after
 it was measured. W9 is a gate that runs in CI with no game files at all —
