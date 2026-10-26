@@ -119,26 +119,23 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     st->unk_52 = (uint8_t)lo;
     st->hp     = (uint8_t)hi;
     u2_status_draw(ctx);
-    /* NO MESSAGE IS PRINTED HERE, AND THAT IS AN OPEN QUESTION, NOT A VERIFIED FACT.
-     * What is proven: the arithmetic. asm/0B62 is the hit roll (armour is a 1-in-8-per-point
-     * dodge against the worn-armour index at DS:62) and asm/0B79 is the damage pool, which
-     * scales on the creature's OWN remaining HP -- a wounded monster hits weaker. The BCD
-     * subtract above is a faithful port of those.
-     * What is NOT proven is what feedback the original gives, if any. There are no strings in
-     * runtime 0x0BD1..0x0C62, which is suggestive and is not proof: the print could live in a
-     * callee, or on a path this range does not cover.
-     * Two earlier versions of this comment are retracted here rather than left to rot:
-     *   (1) it claimed the "contact loop" at 0x0BB2..0x0BCF was this damage path and that its
-     *       callees were the message. That identification was inherited from a guess in this
-     *       file's own history, and reading the callees refutes it -- 0x5EAC and 0x5EF2 reach a
-     *       speaker routine via 0x5DA9 (gated on the sound flag at DS:54D) and 0x5255 is an
-     *       XOR-decode routine via 0x4C1E, not a tone and not a print. 0x0BB2 is not the melee
-     *       path at all, so nothing about wound feedback can be concluded from it.
-     *   (2) it then asserted the original "plays a sound plus the HP number moving". The sound
-     *       half came from (1) and is unsupported. The HP number moving IS real -- the band is
-     *       redrawn above -- but whether a tone accompanies it is unknown.
-     * Tracing asm/0B62/0B79 forward to find the actual feedback is the open task; until it is
-     * done, do not treat this silence as established faithful behaviour, and do not invent text. */
+    /* NO TEXT IS PRINTED HERE, AND THAT IS NOW ESTABLISHED RATHER THAN ASSUMED.
+     * The original's feedback for a wound is a tone plus a screen flash:
+     *   - the wound loop is runtime 0x0BB2..0x0BCF, driven by DS:20 (contacts) and DS:21 (hits),
+     *     both set upstream at 0x0B4D and 0x0B79;
+     *   - per iteration it calls 0x5EAC (a tone, divisor 0x300, about 1.5 kHz) and, while hits
+     *     remain, asm/5255 twice with 0x5EF2 (a tone, divisor 0x800, about 580 Hz) between them;
+     *   - asm/5255 -> asm/4C1E XORs a pattern table into CGA video (the segment table holds
+     *     0xB8C8, 0xBAC8, 0xB8CD ... all inside 0xB800). XOR is its own inverse, which is why it
+     *     is called twice -- the second call restores the screen. That is a flash.
+     * So the silence is faithful. What the engine is missing is the tone and the flash, not a
+     * message. Owner ruled 2026-10-26 that a sound substitutes for a message, so wiring the tone
+     * satisfies the rule; the flash is the nicer half and can follow.
+     * Provenance of this comment: two earlier versions were wrong and are gone. One claimed the
+     * loop's callees printed a message; another claimed asm/5255 was the tone. Neither was true --
+     * 0x5255 is the video XOR and the tones are 0x5EAC/0x5EF2 via asm/5DA9. The arithmetic
+     * (asm/0B62 hit roll, asm/0B79 damage pool scaling on the creature's own remaining HP) was
+     * never in doubt and the port above is unchanged. */
 }
 
 /*
