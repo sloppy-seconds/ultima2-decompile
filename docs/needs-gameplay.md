@@ -763,6 +763,15 @@ in the original — `monx22` places thief slot 21 at (8,47) and live it was seen
 is what the owner meant by "it never moves", and it is an engine defect with a named owner decision
 attached, not a gameplay unknown. See `docs/phase4-state.md`.
 
+**Follow-up, measured 2026-10-26 after the role-3 fix shipped (`e1db4f2`): the freeze was not what made
+the engine steal.** With wanderers loitering like the original's, a fresh seeded save in sector 22
+still loses an item inside ten `PASS` turns — `WANDS-01` present with no turns spent, gone after ten.
+So the contact-steal for a town role-3 thief is a genuine divergence, not an artefact of the statue
+behaviour, and G37's residue ("what actually gates the steal") is now G38's problem rather than this
+one's. Measurement note, because it nearly produced a wrong answer: the engine rewrites the save in
+place, so every run must start from a fresh copy of the seed or thefts compound across runs and the
+numbers look like a trend.
+
 ### G30 — what tile is underneath an unlocked door
 
 **Grade: recalled (owner, 2026-10-27) — "when you open a door it disappears, I don't

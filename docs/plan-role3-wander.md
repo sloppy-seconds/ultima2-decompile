@@ -1,7 +1,25 @@
-# Plan — implement the role-3 wander (build when asked)
+# Plan — implement the role-3 wander
 
-**Status: planned, not built.** Owner asked for a plan to request later, 2026-10-26.
-Nothing here is started. To invoke: "build the role-3 wander plan".
+**Status: BUILT 2026-10-26.** Engine commit `e1db4f2`. Suite green, `ai_check` 44 → 49 checks, three
+controls run and all three went red (§ 7 items 1, 2 and 4). Byte proof unchanged at 37344 identical.
+
+**The § 8 re-measurement came back negative, and that is the interesting result: the freeze was NOT
+what made the thief steal.** With the wander implemented, a fresh seeded save in sector 22 still loses
+an item within ten `PASS` turns — `WANDS-01` is on the Z page with no turns spent and gone after ten.
+Measured on the engine, not the original, with a fresh copy of the seed before every run because the
+engine rewrites the save in place and a naive repeat compounds thefts across runs.
+
+So G37's open question gets sharper rather than closing: the engine's contact-steal for a town role-3
+thief is a real divergence from the original, and it is not an artefact of the statue behaviour. The
+steal branch needs its own investigation, which is G38 (the aggro precondition). Do not fold that into
+this change; it was kept out on purpose.
+
+What the fix did achieve: role-3 creatures now loiter like the original's instead of standing still,
+which was the owner-reported defect and is 179 of the shipped `monx` role bytes.
+
+Two things this plan flagged and the build honoured: `sign_of_al` is not uniform (the distribution test
+catches a `rand()%3-1` implementation at 1416/4000 zeros against the faithful ~1.6%), and the three
+range guards at `asm/10CE` were deliberately not implemented.
 
 Owner decisions already given, do not re-litigate:
 * The diagonal melee range asymmetry is **parked as E6** in `docs/phase4-state.md`. Not part of this work.

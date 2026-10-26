@@ -700,10 +700,11 @@ deliberately nothing at 3 because `asm/1086` is unread), the unit step from
 `asm/4F11` with its torus sign trick, the retreat at 14 HP, the per-species tile
 rule, and the four specials behind `asm/0AAA`'s proximity-plus-1-in-8 gate.
 
-> **Stale as of 2026-10-26, and the fix is planned not built:** `asm/1086` **is** read now — it is the
-> role-3 wander, a sticky random walk, and the engine freezing those slots is a defect rather than a
-> deliberate gap. Role 3 is 179 of the shipped `monx` role bytes, so this is the majority of town
-> creatures. The build plan, with its traps and its test controls, is **`docs/plan-role3-wander.md`**.
+> **Corrected 2026-10-26, and now fixed:** `asm/1086` **is** read — it is the role-3 wander, a sticky
+> random walk re-rolled one turn in four — and the engine was freezing those slots. Role 3 is 179 of
+> the shipped `monx` role bytes, so this was the majority of town creatures. Implemented in `e1db4f2`;
+> `ai_check` 44 → 49 with three controls that each go red. The plan and the measured outcome, including
+> the negative result on the thief, are in **`docs/plan-role3-wander.md`**.
 
 `u2_ai_alarm()` is `asm/113A`: a landed hit inside a site sets role 1 on slots 7..0,
 which is § 16's sector-wide guard response found in the static tree eight days after
