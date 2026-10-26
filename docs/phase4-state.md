@@ -901,9 +901,20 @@ assumed: tick the counters once per turn, and let a paralyzed reject still advan
 monsters act as they demonstrably did. The food-charge evidence (asm/2520 returning before the
 mode dispatch) is untouched by that — no food on a reject, but the turn still passes.
 
-**What would settle it, and is the next action:** a breakpoint count on `L_000e33` in the original,
-recording hits per accepted command and per refused command. Until that exists, any port of the
-tick is a guess, and `AGENTS.md` § 5 says do not promote past the evidence.
+**Tried and rejected, so the next reader does not repeat it:** moving the tick from per-wound to
+**per turn** was attempted on the strength of the table above. It does not fix the stranding — a
+paralyzed reject still never reaches `creature_turn()`, so nothing ticks — and it breaks CP5 C3,
+whose script applies paralysis early and checks it many turns later, so a faster decay makes the
+assertion vanish before the step. Reverted. The corpus proves what the tick is **not** (not
+wound-triggered, not site-gated); it does not pin what it **is**, because the recorder's notion of
+a "turn" is not the game's and the samples-per-decrement varies from 4 to 24.
+
+**So the honest open item is unchanged, and it is two questions, not one:** (1) does a paralyzed
+reject advance the turn in the original — the corpus says monsters kept acting while the player was
+pinned, which strongly suggests yes; and (2) what is the decrement rate per turn. Both need the
+breakpoint count on `L_000e33` with a live fight, which is the experiment this section kept
+deferring. It is now clearly the only way forward, and it is bigger than the "few minutes" it was
+two estimates ago.
 
 **Process note worth keeping:** two confident, documented, high-confidence readings were wrong in
 the same paragraph, and both were overturned by the owner playing the game. The rule that owner
