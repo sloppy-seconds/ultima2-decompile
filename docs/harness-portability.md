@@ -190,6 +190,24 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-26 — A probe that paces input on real-time sleeps will manufacture nondeterminism in a
+  timer-driven target and then blame the target.** A determinism check injected a fixed key sequence
+  with a fixed wall-clock pause after each key, got runs that diverged from the very first sample, and
+  the write-up concluded the *game* was time-nondeterministic and the replay idea was dead. That
+  conclusion was wrong, and the cost of having written it down would have been redesigning a feature
+  around a phantom. Two measurements settled it: read the target's own time base over a known real
+  interval (here the BIOS tick counter, which came back at 0.997 of nominal, so the emulator was not
+  varying at all), and then re-run pacing on **counts of that time base** instead of seconds — after
+  which two fresh boots reproduced a 37-turn combat session field for field, full RNG trace included.
+  The general shape: **before declaring a target nondeterministic, prove the harness is not the source
+  of the variance**, and express input pacing in the target's clock rather than the host's. A fixed
+  real-time sleep spans a variable number of target ticks, and in a game where a tick can move a
+  hostile NPC, one tick of jitter cascades. Two related traps surfaced in the same investigation: a
+  null result sampled from a terminal state (the player was dead, so nothing ticked) looks exactly like
+  evidence of absence — check the state before concluding "no change"; and a determinism probe that
+  passes on a quiet, empty scenario proves almost nothing, because the nondeterministic paths were
+  never exercised, so load it with the busiest case available.
+
 * **2026-10-26 — Enumerate every array in a sidecar data file, not just the ones already named.**
   When a data file's size is an exact multiple of a stride you have already established, the
   unaccounted remainder is not padding — it is more arrays, and one of them may be the thing you are

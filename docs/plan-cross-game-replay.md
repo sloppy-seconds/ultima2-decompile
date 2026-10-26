@@ -247,10 +247,12 @@ fixed sleeps is not reproducible across boots, because it depends on emulator th
 
 ### What this does to the plan
 
-**"Record the seed and the key sequence, replay it" does not work.** It cannot, and no amount of
-pinning `--cycles` fixes it, because the coupling is to real time. Anyone who built phases 1-4 on the
-§ 6a reading would have shipped a differ that reported a false divergence on some fraction of every
-session and got distrusted for it.
+> **RETRACTED by § 6c — the mechanism below is wrong and so is the conclusion.** Kept because the
+> measurements in it are real and the reasoning error is the lesson. The runs did not diverge because
+> the game is time-nondeterministic; they diverged because *the probe* paced input on real-time sleeps.
+
+~~**"Record the seed and the key sequence, replay it" does not work.**~~ It does work, with input paced
+on emulated ticks. See § 6c.
 
 **The fix is better than the original design.** The replay unit is not `(seed, keys)`; it is
 `(DS checkpoint, one key)`. Record the RNG register — and ideally the whole compared field set — at
@@ -275,14 +277,64 @@ reproduces the *idle* drain is unexamined, and this is the first measurement sho
 drain to reproduce. **Check it before assuming the engine is faithful here.** Grade: the idle tick is
 `observed` in the original; the engine's behaviour is `unexamined`.
 
+## 6c. PHASE 0 RESOLVED — measured 2026-10-26: **the original IS reproducible; § 6b's diagnosis was wrong**
+
+Two direct measurements overturned § 6b.
+
+**1. The emulator does not vary in speed.** Reading the BIOS free-running timer at `0040:6C` over a
+10 s window: **182 ticks in 10.03 s = 18.15 ticks/s against a nominal 18.2 — ratio 0.997.** So runs
+did *not* have different wall-clock speeds, and `--Cycles 3000` was pinned in all of them anyway.
+
+**2. The real cause was the probe's own input pacing.** The game advances on the BIOS timer. A fixed
+*real-time* sleep spans a slightly different number of 18.2 Hz ticks on each run depending on phase
+alignment and host hiccups. With four hostile thieves standing adjacent to the entry point, one extra
+tick is one more steal-and-hit, and that cascades. The nondeterminism was in our sampling, not in the
+game.
+
+**The fix: pace on the tick counter, not on wall time.** `probe3.py` waits for 18 BIOS ticks after
+each key instead of sleeping a second. Two fresh boots, same seed, same 37-turn combat script:
+
+| field | turns differing |
+| --- | --- |
+| pos, sector, hp, food, exp, gold | **0** |
+| mon_x, mon_y, mon_hp, mon_type, mon_kind, mon_role | **0** |
+| wander_x, wander_y, paralysis | **0** |
+| **rng** | **0 — full 37-turn trace identical, `bc bc aa dd 3e fc` …** |
+| items | 1 (see below) |
+| speed (`DS:74`) | 37 — the known startup calibration, excluded |
+
+**16 of 18 fields bit-identical, including the entire RNG trace.** The single `items` difference is a
+sampling-boundary artifact, not a logic divergence: T2 lost item slot 1 one turn earlier than T1, both
+converge by the next turn, and the RNG trace is identical throughout — so the theft decision was the
+same and only its position relative to the sample boundary differed.
+
+### Consequences, corrected
+
+- **The plan's original premise stands**: seed + key sequence + **tick-counted pacing** reproduces an
+  original session. § 6b's "checkpoint-per-turn is mandatory" is withdrawn.
+- **Tick pacing becomes a hard requirement on the recorder**, not an optimisation. Any recorder that
+  sleeps in real seconds will reproduce § 6b's fake nondeterminism and blame the game. This is the
+  single most important design constraint to come out of phase 0.
+- **Checkpoint-per-turn is still worth having**, but for a different reason than § 6b claimed: it
+  localises divergence to one turn instead of cascading, and it makes a session resumable from any
+  point. A convenience, not a rescue.
+- `DS:74` stays on the exclusion list, for the reason in § 6a.
+
+### The idle-tick finding survives, unchanged
+
+§ 6b's observation that the game ticks while idle — RNG advanced and food fell 10 with no input — is
+real and stands. A later 30 s sample showing zero changes was taken on a **dead player** (`hp=00 00`),
+so it is not a counter-example. The engine's food drain is per-step; whether it reproduces the idle
+drain remains unexamined.
+
 ## 7. Build order
 
 Each phase is independently useful and has an acceptance test that can fail.
 
 | # | deliverable | acceptance |
 | --- | --- | --- |
-| **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE 2026-10-26 — the naive premise FAILED.** § 6a passed on an empty sector; § 6b refuted it under combat. Replay must be checkpoint-per-turn, not seed-plus-keys |
-| **1** | Original-side recorder: per turn, key + **full DS checkpoint** + frame. Not seed-plus-keys; see § 6b. | N commands in, exactly N turns out, including no-op turns |
+| **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE — reproducible, with a condition.** § 6a passed vacuously, § 6b mis-diagnosed, § 6c settled it: input must be paced on emulated ticks, not real seconds |
+| **1** | Original-side recorder: per turn, key + DS snapshot + frame, **paced on BIOS tick counts**. | N commands in, exactly N turns out, including no-op turns; two boots agree on every field except `DS:74` |
 | **2** | `u2_rng_load` + `--rng-state`. | load-and-match control in § 4.1 |
 | **3** | Checkpoint format: save + sector + RNG + turn index, and engine resume-from-checkpoint. | resume at turn 200 and match a from-boot run's turn 200 state |
 | **4** | `tools/replay_diff.py` with the allowlist. | **mutation control:** break something known in the engine (e.g. revert the contact gate) and confirm the differ names it, at the right turn |
