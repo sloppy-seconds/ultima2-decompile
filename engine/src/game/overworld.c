@@ -627,7 +627,15 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
      * treats 0x04 as terrain the PLAYER crosses and a land monster will not — which is
      * what distinguishes shallows from open sea (0x00, impassable to both, proven by 22
      * live rejects) and from ordinary ground (0x08, 0x0C, accepted by both).
-     * Grade: measured walk, plus a byte-level asymmetry that agrees with it. */
+     * Grade: measured walk, plus a byte-level asymmetry that agrees with it.
+     *
+     * RE-PROVEN LIVE 2026-10-26 with controls, in sector 10 against real mapx10 cells: stepping
+     * East from (20,12) onto the 0x04 at (21,12) was ACCEPTED, while grass passed and both open
+     * sea (0x00) and mountain (0x10) were refused from adjacent walkable ground. The controls are
+     * what make the answer usable — a harness that also passed mountain would have passed this and
+     * proved nothing, which is how an earlier probe sweep reported forest as impassable. Each step
+     * spent 19 food including the refused pair, re-confirming the charge-before-verdict finding.
+     * Write-up: docs/map-format.md § 3a. */
     if (art == 0x01) return 1;
     if (art == 0x03) return 1;   /* map 0x0C forest   — proven: five steps, F11     */
     /* Town paving. Owner report 2026-10-27, standing in a town: "the terrain I'm not

@@ -86,6 +86,31 @@ unknown - only instances of it.
 Note `0x08` grass renders as nearly nothing. A "blank" cell in a screenshot is
 real terrain, not a missing tile.
 
+### 3a. `0x04` re-proven live, with controls (2026-10-26)
+
+`0x04` came back into question because the engine's default-deny passability table had no row for
+art `0x01` and so silently blocked it, contradicting the row above. Rather than argue from that row,
+the verdict was re-measured against real cells in `mapx10`, with the tile read back from the live
+grid *before* each step so no verdict could be cast against a cell the game does not contain:
+
+| target | cell | step | result | food spent |
+| --- | --- | --- | --- | --- |
+| `0x04` shallow | (21,12) from (20,12) | East | **PASSABLE** | 19 |
+| `0x08` grass (positive control) | (14,4) from (14,5) | North | **PASSABLE** | 19 |
+| `0x00` open sea (control) | (14,3) from (14,4) | North | **BLOCKED** | 19 |
+| `0x10` mountain (control) | (35,5) from (35,6) | North | **BLOCKED** | 19 |
+
+The controls are the reason the shallow answer is usable. A harness that returns PASSABLE for
+mountain and open sea would also have returned PASSABLE for `0x04` and proved nothing, which is
+exactly how an earlier probe sweep managed to report forest as impassable. Method: player position
+poked to the stand-spot, one arrow press, position and the food odometer read either side.
+
+Two things fall out for free. `0x04` is confirmed passable on foot, and the asymmetry with the
+creature step gate stands - `asm/2199` refuses `{0x10, 0x04, 0x00}` for land creatures, so the
+player wades `0x04` and a land monster will not, which is what makes it shallows rather than sea.
+And every step above spent exactly 19 food including the two refused ones, which independently
+re-confirms the charge-before-verdict finding in `asm/2423_passability.asm`.
+
 ## 4. The world wraps
 
 The viewport is toroidal, not clamped. With the player at `x=0`, the left edge
