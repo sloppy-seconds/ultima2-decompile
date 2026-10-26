@@ -901,6 +901,36 @@ assumed: tick the counters once per turn, and let a paralyzed reject still advan
 monsters act as they demonstrably did. The food-charge evidence (asm/2520 returning before the
 mode dispatch) is untouched by that — no food on a reject, but the turn still passes.
 
+### THE MECHANISM, settled by a 90-second probe rather than a daemon fight
+
+The tick fires **on the main loop**. `bp_read --ip 0C33 --samples 6` against a running game with
+**no input at all** produced six stops. Capture: `captures/spice86/tick-idle/readings.md`.
+
+Every competing hypothesis is now eliminated by evidence rather than argument:
+
+| hypothesis | verdict | what killed it |
+| --- | --- | --- |
+| gated on site (`DS:4A != 0`) | false | `asm/0C1F`'s `jne` skips *over* the world block and lands *on* the tick |
+| once per wound | false | castle corpus: counters decay on samples where HP did not change |
+| once per turn | false | castle corpus: **0 of 203** decrements fell on a food-changing sample |
+| once per effect | false | the idle run has no effects and still ticks |
+| **main loop** | **supported** | six stops with zero input; matches the old ~15 decrements in ~0.7 s |
+
+Auto-pass is ruled out as the driver: a pass spends 10 food, and no decrement coincided with a
+food-changing sample.
+
+**Consequence, and it is the whole bug in one line:** a maximum paralysis is 15 (`rand & 0xF`), and
+at main-loop rate that clears in about a second of wall-clock time whether the player can move or
+not. **Paralysis in this game is nearly momentary.** Every turn-based model tried here felt like a
+trap because it was modelling a wall-clock effect as a turn effect.
+
+**The engine cannot copy this directly, and that is a design decision, not an oversight.** The
+engine is deliberately turn-driven in headless mode so scripted tests stay byte-exact; it has no
+wall-clock main loop there. Options: (a) tick on the interactive idle poll only — faithful, but
+invisible to scripted tests; (b) approximate by ticking once per input attempt including rejects
+— fixes the stranding in both modes but is not the original's mechanism; (c) both, (a)
+interactive and (b) as the documented scripted approximation.
+
 **Tried and rejected, so the next reader does not repeat it:** moving the tick from per-wound to
 **per turn** was attempted on the strength of the table above. It does not fix the stranding — a
 paralyzed reject still never reaches `creature_turn()`, so nothing ticks — and it breaks CP5 C3,
