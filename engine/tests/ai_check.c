@@ -272,12 +272,107 @@ int main(void)
     CHECK(rep.moved == 0 && ctx.state.mon_x[14] == 5,
           "control: the identical role-0 creature in a digit-1..3 sector stays put");
 
+    /* --- role 3: the wander (asm/1086..asm/10CE), decoded 2026-10-26 ----------------------
+     * This replaces a test that asserted role-3 creatures do NOT move, with the stated reason
+     * "asm/1086 is undecoded and the engine under-moves rather than guess". That was honest when it
+     * was written and is now the regression being retired: the chain stages a per-slot step vector,
+     * re-rolls it when rand_byte < 0x40 (one turn in four), and moves the single staged cell through
+     * the same asm/2199 gate the pursuit paths use. Freezing those slots was the owner-reported bug —
+     * the LINDA thief standing like a statue — and role 3 is 179 of the shipped monx role bytes.
+     */
+    uint8_t keep = 0, reroll = 0;
+    while (keep < 255 && first_roll(keep) < 0x40) keep++;
+    while (reroll < 255 && first_roll(reroll) >= 0x40) reroll++;
+    CHECK(first_roll(keep) >= 0x40 && first_roll(reroll) < 0x40,
+          "seeds exist for both branches of asm/10A0 (keep the direction / re-roll)");
+
+    /* 1. A fresh sector has zero vectors (monx ships zeros), so a role-3 creature has not started
+          moving until the first re-roll. Faithful, not a gap. */
     arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
-    ctx.state.sector_second = 1;         /* the gated sweep, where role means something */
+    ctx.state.sector_second = 1;
     ctx.state.mon_role[13] = 3;
+    u2_rng_seed(&ctx, keep);
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5,
-          "role 3 is undecoded (asm/1086) and the engine under-moves rather than guess");
+          "role 3 with a zero vector and a keep-roll stays put (asm/10A0 jae)");
+
+    /* 2. THE CONTROL FOR THE BUG ITSELF: a stored vector MUST move the creature. Under the old
+          `moves = (role == 1 || role == 2)` gate this goes red, which is the point. */
+    arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 3;
+    ctx.state.mon_wander_x[13] = 1;
+    ctx.state.mon_wander_y[13] = 1;
+    u2_rng_seed(&ctx, keep);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 1 && ctx.state.mon_x[13] == 6 && ctx.state.mon_y[13] == 6,
+          "role 3 moves on its stored vector (asm/1086 -> asm/10CE stages it as the candidate)");
+
+    /* 3. The re-roll branch writes a UNIT vector, not a raw random byte. */
+    arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 3;
+    u2_rng_seed(&ctx, reroll);
+    (void)u2_ai_creature_turn(&ctx, &w, 8, 8);
+    const int8_t wx = (int8_t)ctx.state.mon_wander_x[13];
+    const int8_t wy = (int8_t)ctx.state.mon_wander_y[13];
+    CHECK(wx >= -1 && wx <= 1 && wy >= -1 && wy <= 1 && (wx != 0 || wy != 0),
+          "the re-roll branch writes a unit vector in {-1,0,+1}, not a raw byte");
+
+    /* 4. THE DISTRIBUTION TRAP, and the reason this block exists. asm/50D8_sign_of_al is NOT a
+          uniform draw over {-1,0,+1}: it returns 0 only when the byte is exactly 0x00, so 0 happens
+          1/256 of the time and a wander step is almost always a diagonal. Driven through the real
+          path rather than a helper, because the helper is static and the path is what matters. A
+          `rand()%3-1` implementation gives 0 about a third of the time and this goes red — and it
+          would still pass any test that only asks whether the creature eventually moved. */
+    arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 3;
+    u2_rng_seed(&ctx, 7);
+    int wz = 0, wnz = 0;
+    for (int i = 0; i < 4000; i++) {
+        ctx.state.mon_x[13] = 5; ctx.state.mon_y[13] = 5;
+        (void)u2_ai_creature_turn(&ctx, &w, 8, 8);
+        if ((int8_t)ctx.state.mon_wander_x[13] == 0) wz++; else wnz++;
+    }
+    CHECK(wz * 4 < wnz,
+          "wander x is zero in only %d of %d turns — sign_of_al, not a uniform -1/0/+1 draw",
+          wz, wz + wnz);
+
+    /* 5. ONE candidate, no fallback. Block the diagonal only. A wanderer must stay put; a role-1
+          pursuer must NOT, because it has the diagonal -> y-only -> x-only ladder. The pair is the
+          control: if someone routes the wander through creature_step, the first CHECK goes red. */
+    arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    u2_world_tile_put(&w, 6, 6, WATER);        /* the diagonal is impassable, the orthogonals are not */
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 3;
+    ctx.state.mon_wander_x[13] = 1;
+    ctx.state.mon_wander_y[13] = 1;
+    u2_rng_seed(&ctx, keep);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5 && ctx.state.mon_y[13] == 5,
+          "wander refuses a blocked candidate and does NOT fall back to an orthogonal");
+
+    arm(&ctx, &w, GRASS, 13, 5, 5, 40, 0x30);
+    u2_world_tile_put(&w, 6, 6, WATER);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 1;
+    u2_rng_seed(&ctx, keep);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 1 && ctx.state.mon_x[13] == 5 && ctx.state.mon_y[13] == 6,
+          "control: the same blocked diagonal, a role-1 pursuer takes the y-only fallback (asm/2155)");
+
+    /* 6. The wander goes through the SAME step gate: a land creature on an all-water grid cannot
+          wander anywhere, no matter what vector it holds. */
+    arm(&ctx, &w, WATER, 13, 5, 5, 40, 0x30);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[13] = 3;
+    ctx.state.mon_wander_x[13] = 1;
+    ctx.state.mon_wander_y[13] = 0;
+    u2_rng_seed(&ctx, keep);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.moved == 0 && ctx.state.mon_x[13] == 5,
+          "the wander is refused by the same asm/2199 tile gate the pursuit paths use");
 
     /* --- the melee pool and the armour dodge (asm/0B62 / asm/0B79) ----------- */
     /* A role-2 creature in contact draws exactly one roll, the melee roll, so the

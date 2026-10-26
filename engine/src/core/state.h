@@ -310,7 +310,15 @@ typedef struct u2_state {
                                        * every capture so far, so their half of the reading is
                                        * inferred, not observed. Do not treat it as a cause
                                        * without a test that proves it. */
-    /* 0x1F7 */ uint8_t reserved_1F7[0x42];  /* 0x1F7..0x238 */
+    /* 0x1F7 */ uint8_t mon_wander_x[32]; /* role-3 wander step, x component. Signed byte in
+                                         * {-1,0,+1}, written by asm/10AA as sign_of_al(rand_byte)
+                                         * and read back by asm/1086 into DS:19. Non-zero ONLY in
+                                         * role-3 slots; the shipped monx files carry zeros here
+                                         * (monx[192]), so this is runtime state, not data. NOT
+                                         * persisted: it sits outside the 256-byte save block at
+                                         * DS:36..0x135, so a save/load legitimately resets it. */
+    /* 0x217 */ uint8_t mon_wander_y[32]; /* the y component, written by asm/10BF into DS:1A. */
+    /* 0x237 */ uint8_t reserved_237[2];  /* 0x237..0x238 */
     /* 0x239 */ uint8_t story_flag;   /* "story/poem shown"; cleared at asm/0133_sub_0133.asm,
                                          set at asm/03AC_sub_03ac.asm, branched on in the
                                          same region */
@@ -439,7 +447,15 @@ _Static_assert(U2_OFF(mon_kind) == 0x1B7, "mon_kind moved");
 _Static_assert(U2_OFF(mon_role) == 0x1D7, "mon_role moved");
 _Static_assert(sizeof(((u2_state *)0)->mon_x)    == 32, "mon_x is 32 slots");
 _Static_assert(sizeof(((u2_state *)0)->mon_role) == 32, "mon_role is 32 slots");
-_Static_assert(U2_OFF(mon_role) + 32 == 0x1F7, "mon_role must end where reserved_1F7 starts");
+_Static_assert(U2_OFF(mon_role) + 32 == 0x1F7, "mon_role must end where the wander arrays start");
+_Static_assert(U2_OFF(mon_wander_x) == 0x1F7, "mon_wander_x moved");
+_Static_assert(U2_OFF(mon_wander_y) == 0x217, "mon_wander_y moved");
+_Static_assert(sizeof(((u2_state *)0)->mon_wander_x) == 32, "mon_wander_x is 32 slots");
+_Static_assert(sizeof(((u2_state *)0)->mon_wander_y) == 32, "mon_wander_y is 32 slots");
+_Static_assert(U2_OFF(mon_wander_x) + 32 == U2_OFF(mon_wander_y),
+               "the two wander arrays must be adjacent 32-slot pairs");
+_Static_assert(U2_OFF(reserved_237) == 0x237 && sizeof(((u2_state *)0)->reserved_237) == 2,
+               "the split of the old reserved_1F7 block must still cover 0x1F7..0x238");
 _Static_assert(sizeof(((u2_state *)0)->weapons_owned) == 10,
                "weapons_owned is 10 entries");
 _Static_assert(sizeof(((u2_state *)0)->items_held) == 16,

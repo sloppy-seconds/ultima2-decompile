@@ -45,6 +45,21 @@ int u2_monsters_spawn(u2_ctx *ctx, u2_world *w)
     memcpy(s->mon_kind, w->mon + MON_OFF_KIND, U2_MON_SLOTS);
     memcpy(s->mon_role, w->mon + MON_OFF_ROLE, U2_MON_SLOTS);
 
+    /* The role-3 wander vectors are deliberately ZERO-FILLED, not copied from the sector file.
+     *
+     * monx does have bytes at the offsets these map to (monx[192] and monx[224] under the established
+     * monx[0] -> DS:137 mapping), and in every shipped file they are all zero. They are not data that
+     * happens to be empty: the original WRITES them at runtime. asm/10AA and asm/10BF store
+     * sign_of_al(rand_byte) into them, and asm/1086 reads them back into the step pair. A fresh
+     * sector therefore starts with a zero vector and the creature does not move until the first re-roll
+     * on the 25% branch — which is faithful behaviour, not a gap.
+     *
+     * Zero-filling rather than memcpy-ing is the visible signal at the call site that this is runtime
+     * state with a data-shaped address. See asm/1086_creature_wander_step.asm for the whole chain.
+     */
+    memset(s->mon_wander_x, 0, U2_MON_SLOTS);
+    memset(s->mon_wander_y, 0, U2_MON_SLOTS);
+
     int occupied = 0;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_x[i] || s->mon_y[i])

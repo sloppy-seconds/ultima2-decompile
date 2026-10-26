@@ -236,6 +236,86 @@ static int creature_step(u2_ctx *ctx, u2_world *w, int slot, int dx, int dy,
     return 0;
 }
 
+/* asm/50D8_sign_of_al: AL := -1 / 0 / +1 by the sign of AL.
+ *
+ * NOT a uniform draw over the three values, and this is the easiest way to get the wander wrong.
+ * Over a uniform random byte: `0` only when the byte is exactly 0x00 (1/256), `+1` for 0x01..0x7F
+ * (127/256), `-1` for 0x80..0xFF (128/256). A wander step is therefore almost always a DIAGONAL.
+ * Writing `rand() % 3 - 1` here looks reasonable, moves wrong, and passes any test that only asks
+ * whether the creature eventually moved. engine/tests/ai_check.c has the distribution test and its
+ * control for exactly this reason.
+ */
+static int sign_of_al(uint8_t al)
+{
+    if (al == 0) return 0;
+    return (al & 0x80) ? -1 : 1;
+}
+
+/* asm/1086..asm/10CE — the role-3 wander.
+ *
+ * asm/1086..asm/10E8 is ONE routine that the bulk wave cut into eight files. Read as the straight
+ * line it actually is:
+ *   1086  DS:19 := wander_x[slot] ; DS:1A := wander_y[slot] ; call rand_byte
+ *   10A0  cmp $0x40,%al ; jae 10CE   -> 75% keep the stored direction, 25% re-roll
+ *   10A4..10BF  rand -> sign_of_al -> store into the slot vector AND the step pair, per axis
+ *   10CE  clc ; al := mon_x[slot] ; adc DS:19,al ; and $0x3f ; DS:23 := al   (the staged candidate)
+ *
+ * So the direction is STICKY: it persists and is re-rolled about one turn in four. That is what makes
+ * a role-3 creature loiter near its post rather than scatter, and it is what was seen live in
+ * captures/spice86/linda-thief, where thief slot 20 drifted between (7,47), (7,49) and (8,48).
+ *
+ * ONE candidate, no fallback. The pursuit path (creature_step) tries diagonal, then y-only, then
+ * x-only; the wander stages exactly one cell and accepts or refuses it. Do not route this through
+ * creature_step — ai_check has a control that goes red if someone does.
+ *
+ * DELIBERATELY NOT IMPLEMENTED: the three range guards at asm/10CE (`cmp $0x4`, `cmp $0x3c`,
+ * `cmp $0`) that exit to next-slot. asm/2199 already carries an edge guard on DS:4A and the engine
+ * models it in creature_may_enter, so these are redundant as far as is known. If a wanderer is ever
+ * seen crossing an edge it should not, look here first.
+ *
+ * ALSO NOT MODELLED, and this one is a genuine open question rather than a decision: asm/2122's
+ * low-HP regen (+1 per turn below 16 HP) is in the PURSUIT move routine's entry. This chain stages
+ * its own candidate and does not obviously enter asm/2122, so whether a role-3 creature regenerates
+ * is unproven either way. Omitting regen matches the chain as read; it is not evidence of absence.
+ *
+ * The y staging is mirrored from the x staging rather than read to the end (fragments after asm/10CE
+ * were not finished). Grade: inferred, and it is the first thing to check if y ever behaves oddly.
+ */
+static int creature_wander_step(u2_ctx *ctx, u2_world *w, int slot, int px, int py)
+{
+    u2_state *st = &ctx->state;
+
+    /* asm/10A0: the re-roll gate. rand_byte < 0x40 is the 25% branch. */
+    if (u2_rand_byte(ctx) < 0x40) {
+        st->mon_wander_x[slot] = (uint8_t)sign_of_al(u2_rand_byte(ctx));
+        st->mon_wander_y[slot] = (uint8_t)sign_of_al(u2_rand_byte(ctx));
+    }
+
+    const int dx = (int)(int8_t)st->mon_wander_x[slot];
+    const int dy = (int)(int8_t)st->mon_wander_y[slot];
+
+    /* A zero vector means "never re-rolled yet". The shipped monx bytes are zero, so a fresh sector
+     * genuinely has still creatures until the first re-roll. That is faithful, not a gap. */
+    if (dx == 0 && dy == 0) return 0;
+
+    const int nx = (st->mon_x[slot] + dx) & U2_AI_GRID_MASK;
+    const int ny = (st->mon_y[slot] + dy) & U2_AI_GRID_MASK;
+
+    if (!creature_may_enter(ctx, w, st->mon_type[slot], nx, ny)) return 0;
+    /* Same rule as the pursuit path: a creature does not step onto the player. */
+    if (nx == px && ny == py) return 0;
+
+    const int ox = st->mon_x[slot], oy = st->mon_y[slot];
+    st->mon_x[slot] = (uint8_t)nx;
+    st->mon_y[slot] = (uint8_t)ny;
+    /* Per-move stamp, the rule established in creature_step: the type byte stamped into the grid IS
+     * the occupancy rule, so it must be current for the next creature's gate test, not refreshed
+     * once after the pass. */
+    u2_world_tile_put(w, ox, oy, w->map_base[u2_world_tile_index(ox, oy)]);
+    u2_world_tile_put(w, nx, ny, st->mon_type[slot]);
+    return 1;
+}
+
 u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
 {
     u2_ai_report rep;
@@ -293,14 +373,19 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
          *                   AGENTS.md § 5 names. Decoding asm/1086 is the open item.
          */
         const int gated_sweep = (st->sector_second >= 1 && st->sector_second <= 3);
-        int casts = 1, retreat = 1, moves = 1;   /* the ungated world-map pass */
+        int casts = 1, retreat = 1, moves = 1, wander = 0;   /* the ungated world-map pass */
         if (gated_sweep) {
             const uint8_t role = st->mon_role[slot];
             if (role == 0 || (role & 0x80)) continue;
-            if (role > 3) continue;
+            /* The original's dispatch is `cmp $0x3,%al ; jae L_001286` (asm/1035): role >= 3 goes to
+             * the wander. There is no "role > 3" skip. The old `if (role > 3) continue;` could never
+             * fire — a census of all 33 shipped monx files finds no role above 3 — but it was the
+             * wrong shape, and a sector that ever shipped a 4 would have been frozen where the
+             * original wanders it. */
             casts   = (role == 1);   /* asm/0AAA is only on the role-1 path */
             retreat = (role == 1);   /* asm/0B07 likewise                   */
             moves   = (role == 1 || role == 2);
+            wander  = (role >= 3);
         }
 
         /* asm/4F36: the raw pursuit vector, player minus creature, signed byte.
@@ -371,6 +456,8 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
         }
 
         if (moves && creature_step(ctx, w, slot, sx, sy, px, py))
+            rep.moved++;
+        else if (wander && creature_wander_step(ctx, w, slot, px, py))
             rep.moved++;
     }
 
