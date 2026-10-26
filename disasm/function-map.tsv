@@ -962,7 +962,7 @@ start	end	len	evidence	name_hint
 4B76	4BA9	0034	call+reko	
 4BAA	4BDF	0036	call+reko	
 4BE0	4C1D	003E	call+reko	
-4C1E	4C30	0013	seed+call+reko	
+4C1E	4C30	0013	seed+call+reko	video_xor_patch
 4C31	4C4F	001F	seed+reko	
 4C50	4C54	0005	seed+reko	sub_4c31_epilogue
 4C55	4F08	02B4	seed+reko	name_pool
@@ -1059,7 +1059,7 @@ start	end	len	evidence	name_hint
 5246	5249	0004	seed+reko	
 524A	5250	0007	seed+reko	
 5251	5254	0004	seed+reko	
-5255	525D	0009	seed+call+reko	
+5255	525D	0009	seed+call+reko	wound_video_flash
 525E	5266	0009	seed+reko	
 5267	526F	0009	seed+reko	
 5270	5278	0009	seed+reko	
@@ -1151,7 +1151,7 @@ start	end	len	evidence	name_hint
 5D50	5D54	0005	seed+reko	
 5D55	5D57	0003	seed+reko	
 5D58	5DA8	0051	seed+reko	
-5DA9	5DAF	0007	seed+call+reko	
+5DA9	5DAF	0007	seed+call+reko	tone_player
 5DB0	5DB2	0003	seed+reko	
 5DB3	5DCC	001A	seed+reko	
 5DCD	5DD6	000A	seed+reko	
