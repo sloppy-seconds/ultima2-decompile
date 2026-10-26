@@ -75,6 +75,21 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
 {
     ow->turns++;   /* one resolved turn; --debug cli keys off this */
 
+    /* asm/0C33: the status counters tick ONCE PER TURN.
+     * Measured, not inferred. A multi-shot breakpoint on the tick with the food odometer dumped at
+     * every stop shows food falling by exactly 10 each time -- a PASS -- so the tick is one per
+     * turn and an auto-pass counts as a turn. Capture: captures/spice86/tick-idle/readings.md.
+     * Two earlier models are dead and were both wrong in the same direction:
+     *   - per wound: the corpus shows the counters decaying on samples where HP never changed;
+     *   - per site: asm/0C1F's `jne L_000e33` skips OVER the world-map block and LANDS ON the
+     *     tick, so both arms reach it and the open world is not exempt.
+     * A "main loop / wall clock" reading was also tried and is retracted: the idle tick hits were
+     * auto-passes spending food, not a free-running loop. Ultima II is turn-based, as it should be.
+     * asm/0C33 skips a counter that is already zero, which is why sleeping does not go negative. */
+    if (ctx->state.paral_legs)  ctx->state.paral_legs--;
+    if (ctx->state.paral_arms)  ctx->state.paral_arms--;
+    if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
+
     const u2_ai_report rep = u2_ai_creature_turn(ctx, &ow->world, ow->x, ow->y);
     if (rep.moved)
         u2_monsters_restamp(ctx, &ow->world);
@@ -1053,9 +1068,9 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
      * the only measurement ever taken saw 15 decrements in ~0.7 s inside a castle, which is
      * consistent with repeated entries per turn. The engine ticks once per wound and says so.
      * asm/0C33 skips a counter that is already zero, which is why sleeping does not go negative. */
-    if (ctx->state.paral_legs)  ctx->state.paral_legs--;
-    if (ctx->state.paral_arms)  ctx->state.paral_arms--;
-    if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
+    /* (the status counters used to tick here, once per wound. They live in creature_turn() now:
+     * a breakpoint on asm/0C33 shows one tick per turn, food -10 each time, so a wound is not the
+     * trigger. See the note there.) */
     /* The reward lands on its OWN line, prompt and all — live frame reads
      *   CMD: ATTACK--EAST--HIT!!!
      *   CMD: KILLED--GOLD+1--EXP.+02

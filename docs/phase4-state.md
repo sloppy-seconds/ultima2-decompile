@@ -901,35 +901,41 @@ assumed: tick the counters once per turn, and let a paralyzed reject still advan
 monsters act as they demonstrably did. The food-charge evidence (asm/2520 returning before the
 mode dispatch) is untouched by that — no food on a reject, but the turn still passes.
 
-### THE MECHANISM, settled by a 90-second probe rather than a daemon fight
+### THE MECHANISM, measured directly — once per turn, and an auto-pass is a turn
 
-The tick fires **on the main loop**. `bp_read --ip 0C33 --samples 6` against a running game with
-**no input at all** produced six stops. Capture: `captures/spice86/tick-idle/readings.md`.
+**A previous version of this section said the tick ran on the main loop, i.e. wall-clock. That was
+wrong, and the owner's scepticism is what caught it.** Ultima II is turn-based, and the direct test
+agrees. Arming a multi-shot breakpoint on the tick and dumping the food odometer at every stop:
 
-Every competing hypothesis is now eliminated by evidence rather than argument:
+```
+STOP 1 at 017D:0C33   DS:53..55 = 99 64 52
+STOP 2 at 017D:0C33   DS:53..55 = 99 64 42      -10
+STOP 3 at 017D:0C33   DS:53..55 = 99 64 32      -10
+... every stop, -10
+```
 
-| hypothesis | verdict | what killed it |
+Food −10 is a PASS. So **the tick fires exactly once per turn**, and the "idle" hits were the
+game auto-passing, not a free-running loop. Capture: `captures/spice86/tick-idle/readings.md`
+(corrected) and the run labelled `tickfood`.
+
+**Why the corpus analysis misled me.** The recorder writes a snapshot on *signature change*, at
+about 2.9 effective samples per second. A burst of auto-passes between two samples collapses into
+one food delta and one counter delta, so "0 of 203 decrements fell on a food-changing sample" was
+a **sampling artifact, not a finding**. The breakpoint resolves it exactly because it stops at
+every tick rather than sampling the result. Lesson: a change-triggered recorder cannot answer
+per-event questions, and concluding "not per turn" from it was reading the instrument as the world.
+
+| hypothesis | verdict | what settled it |
 | --- | --- | --- |
 | gated on site (`DS:4A != 0`) | false | `asm/0C1F`'s `jne` skips *over* the world block and lands *on* the tick |
-| once per wound | false | castle corpus: counters decay on samples where HP did not change |
-| once per turn | false | castle corpus: **0 of 203** decrements fell on a food-changing sample |
-| once per effect | false | the idle run has no effects and still ticks |
-| **main loop** | **supported** | six stops with zero input; matches the old ~15 decrements in ~0.7 s |
+| once per wound | false | counters decay with no HP change |
+| **once per turn** | **true** | food −10 at every tick stop; auto-pass is a turn |
+| main loop / wall clock | false | the idle hits were auto-passes, each spending food |
 
-Auto-pass is ruled out as the driver: a pass spends 10 food, and no decrement coincided with a
-food-changing sample.
-
-**Consequence, and it is the whole bug in one line:** a maximum paralysis is 15 (`rand & 0xF`), and
-at main-loop rate that clears in about a second of wall-clock time whether the player can move or
-not. **Paralysis in this game is nearly momentary.** Every turn-based model tried here felt like a
-trap because it was modelling a wall-clock effect as a turn effect.
-
-**The engine cannot copy this directly, and that is a design decision, not an oversight.** The
-engine is deliberately turn-driven in headless mode so scripted tests stay byte-exact; it has no
-wall-clock main loop there. Options: (a) tick on the interactive idle poll only — faithful, but
-invisible to scripted tests; (b) approximate by ticking once per input attempt including rejects
-— fixes the stranding in both modes but is not the original's mechanism; (c) both, (a)
-interactive and (b) as the documented scripted approximation.
+**The practical consequence stands, but for the right reason now:** a maximum paralysis is 15
+(`rand & 0xF`) and the original auto-passes roughly 15 times a second, so a pinned player clears it
+in a second or two of real time without doing anything. The engine also auto-passes when idle — but
+only in non-headless mode, by design, so scripted tests stay byte-exact.
 
 **Tried and rejected, so the next reader does not repeat it:** moving the tick from per-wound to
 **per turn** was attempted on the strength of the table above. It does not fix the stranding — a

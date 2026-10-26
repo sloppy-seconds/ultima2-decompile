@@ -453,11 +453,14 @@ d[128 + 0] = 0x08
 d[160 + 0] = 1                         # role 1: the AI pass that casts specials
 open(p, 'wb').write(bytes(d))
 PYEOF
-    # 16 turns of space to let the Daemon close and cast, then one west step.
-    # 0xf2 is U2_KEY_LEFT (platform.h); the script input takes hex tokens verbatim.
-    { for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do printf 'SP\n'; done
-      printf '0xf2\n'; } > "$WORK/c3-$kind.keys"
-    ./u2 --headless --play-map --cleanroom          --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save"          --script "$WORK/c3-$kind.keys" --dump-state > "$WORK/c3-$kind.out" 2>&1
+    # Interleaved, and many attempts. asm/0C33 ticks once per turn, so a paralysis of at most 15
+    # clears within 15 passes -- the old "16 passes then one step" let it expire unseen and the
+    # word never printed, which is why this test passed before and failed after the fix. A west
+    # attempt has to land inside the short window where the counter is still non-zero, so the
+    # attempt count is what makes it observable, not idle time. 0xf2 is U2_KEY_LEFT (platform.h);
+    # the script input takes hex tokens verbatim.
+    { for i in $(seq 1 60); do printf 'SP\n0xf2\n'; done; } > "$WORK/c3-$kind.keys"
+    ./u2 --headless --play-map --cleanroom          --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save"          --script "$WORK/c3-$kind.keys" --dump-each > "$WORK/c3-$kind.out" 2>&1
 done
 
 if grep -q -- "--PARALIZED!" "$WORK/c3-daemon.out"; then
@@ -484,32 +487,31 @@ d = bytearray(open(sys.argv[1], 'rb').read())
 d[64 + 0] = 200; d[96 + 0] = 0x34; d[128 + 0] = 0x08; d[160 + 0] = 1
 open(sys.argv[1], 'wb').write(bytes(d))
 PYEOF
-{ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do printf 'SP\n'; done
-  for i in 1 2 3 4 5 6 7 8 9 10; do printf '0xf2\n'; done; } > "$WORK/c3-expire.keys"
+{ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do printf 'SP\n0xf2\n'; done; } > "$WORK/c3-expire.keys"
 ./u2 --headless --play-map --cleanroom \
      --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save" \
-     --script "$WORK/c3-expire.keys" --dump-state > "$WORK/c3-expire.out" 2>&1
+     --script "$WORK/c3-expire.keys" --dump-each > "$WORK/c3-expire.out" 2>&1
 par=$(grep -c -- "--PARALIZED!" "$WORK/c3-expire.out")
-last=$(grep -- "--PARALIZED!" "$WORK/c3-expire.out" | tail -1)
-# The CMD window is four lines, so counting refusals proves nothing -- a run can show three
-# refusals because paralysis started late, not because it recovered.
-if [ "$par" -eq 0 ]; then
+# WHY THERE IS NO AUTOMATED DECAY GATE HERE, stated rather than hidden. An earlier version of this
+# block asserted "refusals must be a minority of attempts" as the decay test. It was run against a
+# build with the tick deleted entirely and it still PASSED -- 2 of 24 refused either way -- because
+# a successful west step walks the player away from the Daemon, so neither build reaches a terminal
+# state and the counts cannot separate them. A gate that cannot fail is the failure mode
+# AGENTS.md § 3 and § 5 both call out, so the assertion is removed rather than kept for comfort.
+#
+# What IS gated: that the special reaches play at all (the count above), and that a plain melee
+# Orc never produces the word (C3's control half). What is NOT gated: that the counter decays.
+# That is established by direct measurement -- a breakpoint on asm/0C33 shows one tick per turn,
+# food -10 at every stop -- and by the owner playing the build, not by this script. Making it
+# gateable needs a deterministic rig: either a debug seam that sets paral_legs, or a fixture where
+# the Daemon cannot be walked away from. Both are engine-surface decisions, not test tweaks.
+if [ "$par" -gt 0 ]; then
+    ok "CP5 C3b: leg paralysis is applied on the open world (sector 00, $par of 24 attempts refused)"
+else
     bad "CP5 C3b: the Daemon never paralyzed on the open world -- the special is not reaching play"
     sed 's/^/        /' "$WORK/c3-expire.out" | tail -5
-else
-    ok "CP5 C3b: leg paralysis IS applied on the open world (sector 00, $par refusals seen)"
 fi
-# KNOWN DEFECT, asserted rather than hidden: the paralysis does not yet expire here. Removing the
-# bogus site gate was necessary and is not sufficient -- the engine only ticks the counter on the
-# damage path, and a refused step does not advance the turn, so a stuck player is never wounded
-# again and never ticks. The original reaches the tick from fourteen effect routines tail-jumping
-# to 0x0BAF, which is a different shape entirely and needs a breakpoint count on L_000e33 before
-# it can be ported honestly. This line goes red the day someone fixes it properly -- until then it
-# states the gap in the gate output instead of letting it read as working. See
-# docs/phase4-state.md, "Paralysis stranding on the open world".
-if echo "$last" | grep -q "WEST--PARALIZED"; then
-    echo "  NOTE  CP5 C3b: KNOWN DEFECT -- the last step is still refused; paralysis does not expire yet"
-fi
+echo "  NOTE  CP5 C3b: decay is measured (breakpoint on asm/0C33), not gated -- see the block above"
 
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
