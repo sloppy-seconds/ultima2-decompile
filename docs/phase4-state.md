@@ -847,13 +847,20 @@ a sound, a line in the status area, or a small red `-11 HP` popping over the HP 
 mode stays byte-faithful, so all of that is enhanced-mode work, under the same split already
 ruled for cross-sector attacks.
 
-**The one thing that is NOT enhanced: the contact sound.** The original plays a tone when the player
-takes a wound (`asm/5255`, twice per contact), so wiring it is a fidelity fix owed to *both* modes.
-Do not let it get filed under "enhanced effects" and lost. See "Silent player effects" above.
+**Correction to an earlier version of this section.** It said the contact sound was "the one thing
+that is NOT enhanced", citing `asm/5255` played twice per wound. That was wrong — `asm/5255` is an
+XOR-decode routine and the loop it was attributed to is not the melee path. Whether the original
+plays anything when you are hit is **open**, and E1 below is blocked on that trace rather than on a
+decode. The instinct behind the paragraph still stands: if the original does have feedback for a
+wound, it is owed to original mode and must not get lost by being filed under "enhanced effects".
+
+For what enemies can actually do to the player, the authority is `asm/0AD3_combat_special_attack_dispatch.asm`
+and its gate `asm/0AAA` — the dispatch table, the four specials with their resistances, and the
+12.5% attempt roll are all recorded there and are not duplicated in this document on purpose.
 
 | id | item | mode | what it needs | honest constraint |
 | --- | --- | --- | --- | --- |
-| **E1** | contact tone on a melee wound | **original + enhanced** | finish the `asm/4C1E` sweep loop (it runs past its declared `4C1E..4C30` fragment), then call `seam_tone`. Known so far: duration `AX>>2` = 36, divisor `BX<<1` = `0xA0`, table at `0x5288` walked 2 bytes at a time | it is a **sweep, not a beep**. A guessed divisor will sound wrong in a way a player notices |
+| **E1** | whatever the original's real melee-wound feedback turns out to be | **original + enhanced** | blocked on the trace above, not on a decode of `asm/4C1E` | **re-scoped 2026-10-26.** This item was written as "wire the contact tone, finish the `asm/4C1E` sweep loop". `asm/4C1E` turns out to be an XOR-decode routine (`es:[di] ^= cs:[si]`, 16 iterations, gated on nothing to do with audio), so the premise was wrong. Kept as a row rather than deleted because the underlying need is real: the player currently gets no feedback at all for being hit |
 | **E2** | damage number pop (`-11`) over the HP field | enhanced | per-cell colour exists — `u2_vram_poke(row, col, ch, attr)` — so the pixels are not the problem | **colour is settled, timing is not.** Owner ruled 2026-10-26 that enhanced mode may go full colour, so the CGA 4-colour limit does not bind here and red is available. The remaining blocker is structural: the engine is **turn-driven** — frames advance on player input — so a transient pop needs an animation clock that does not exist yet. That clock is the real work item, not the colour |
 | **E3** | a status-log line for a wound (`YOU ARE HIT FOR 11`) | enhanced | a `u2_feedback()` seam called at each effect site, emitting nothing in original mode | the damage amount is a BCD value from the same subtract that is already computed, so the number is available. The wording is invented — it must be visibly engine-authored, not dressed up as game text |
 | **E4** | hit animation on the monster sprite | enhanced | a per-cell or per-tile flash on the creature's cell | same turn-driven problem as E2 |
@@ -885,7 +892,7 @@ HP fell 9999 → 9952 while a monster stood adjacent, and the log showed nothing
 
 | effect on / by the player | engine today | grade | what closes it |
 | --- | --- | --- | --- |
-| monster melee wound | **silent text, and no sound either** | **re-framed: the original is silent too** | the contact loop is runtime `0x0BB2..0x0BCF`: count from `[DS:20]`, and per contact it calls `0x5EAC` (a map-block write at `DS:1000`), `0x5255` (a **SPEAKER tone**, called twice) and `0x5EF2` (a map-block write at `DS:1800`). **None prints text** — the original's feedback is the sound plus the HP number moving in the band, and the engine currently has neither. Owner ruled 2026-10-26 that **a sound substitutes for a message**, so the fix is the tone, not invented text. What is decoded: `asm/5255` entry sets `AX=0x90, BX=0x50` and passes a table pointer at `0x5288`; `asm/4C1E` computes duration `= AX>>2` (36) and divisor `= BX<<1` (0xA0) and walks the table two bytes at a time, and `asm/5CD2` latches BX to PIT channel 2 — so this is a **frequency sweep, not a single beep**. What remains: finish `asm/4C1E`'s loop (it runs past its declared `4C1E..4C30` fragment boundary) to get the sweep's step and timing, then wire it through `seam_tone`. A guessed divisor is worse than silence |
+| monster melee wound | **prints nothing** | **unverified — open question, not established faithful** | What is proven is only the arithmetic: `asm/0B62` is the hit roll (armour is a 1-in-8-per-point dodge against the worn-armour index at `DS:62`) and `asm/0B79` is the damage pool, which scales on the creature's own remaining HP. **Two earlier claims on this row are retracted.** (a) The "contact loop" at `0x0BB2..0x0BCF` is NOT this damage path — that identification was inherited from a guess, and reading its callees refutes it: `0x5EAC`/`0x5EF2` reach a speaker routine via `0x5DA9` (gated on the sound flag at `DS:54D`) and `0x5255` is an XOR-decode routine via `0x4C1E`. (b) So "the original plays a tone on a wound" was never established. What survives: no strings exist in runtime `0x0BD1..0x0C62`, which is suggestive, not proof. **The task is to trace `asm/0B62`/`0B79` forward and find the real feedback** — text, tone, or genuinely nothing. Owner ruled 2026-10-26 that a sound substitutes for a message, so any of the three is an acceptable answer; inventing text is not |
 | force-field damage |**not wired at all** — `u2_combat_force_field` is decoded (`asm/24B5`, −1000 HP, ring protects) but only the test calls it | **VIOLATION, different kind** | needs the tile trigger wired into the step path, then its message comes with it. Do not report this as a missing message; it is a missing effect |
 | player death | prints | ok | `asm/0C82` announcement, already in `u2_death` |
 | paralysis on a refused step | prints `--PARALYZED!` | ok | CP5 C3 asserts it |

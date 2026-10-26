@@ -119,17 +119,26 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     st->unk_52 = (uint8_t)lo;
     st->hp     = (uint8_t)hi;
     u2_status_draw(ctx);
-    /* Nothing is printed for a melee wound, and the reason is now read rather than assumed.
-     * The contact loop is runtime 0x0BB2..0x0BCF: it takes the count from [DS:20], and per
-     * contact calls 0x5EAC (a map-block write, DS:1000), 0x5255 (a SPEAKER tone: AX/BX pairs
-     * into the tone seam, called twice) and 0x5EF2 (a map-block write, DS:1800). None of them
-     * prints text, so the original's feedback for taking a wound is the sound plus the HP number
-     * moving in the status band. The engine has neither on this path.
-     * Note on the addresses: the earlier version of this comment named asm/5455, asm/60AC and
-     * asm/60F2. Those are FILE offsets and they were CORRECT -- file 0x5455/0x60ac/0x60f2 are
-     * exactly runtime 0x5255/0x5eac/0x5ef2, the three callees. What was wrong was the guess that
-     * they print a message; a follow-up edit here then claimed the addresses were off by 0x200,
-     * which was itself mistaken. The asm/ tree labels by file offset; runtime dumps do not. */
+    /* NO MESSAGE IS PRINTED HERE, AND THAT IS AN OPEN QUESTION, NOT A VERIFIED FACT.
+     * What is proven: the arithmetic. asm/0B62 is the hit roll (armour is a 1-in-8-per-point
+     * dodge against the worn-armour index at DS:62) and asm/0B79 is the damage pool, which
+     * scales on the creature's OWN remaining HP -- a wounded monster hits weaker. The BCD
+     * subtract above is a faithful port of those.
+     * What is NOT proven is what feedback the original gives, if any. There are no strings in
+     * runtime 0x0BD1..0x0C62, which is suggestive and is not proof: the print could live in a
+     * callee, or on a path this range does not cover.
+     * Two earlier versions of this comment are retracted here rather than left to rot:
+     *   (1) it claimed the "contact loop" at 0x0BB2..0x0BCF was this damage path and that its
+     *       callees were the message. That identification was inherited from a guess in this
+     *       file's own history, and reading the callees refutes it -- 0x5EAC and 0x5EF2 reach a
+     *       speaker routine via 0x5DA9 (gated on the sound flag at DS:54D) and 0x5255 is an
+     *       XOR-decode routine via 0x4C1E, not a tone and not a print. 0x0BB2 is not the melee
+     *       path at all, so nothing about wound feedback can be concluded from it.
+     *   (2) it then asserted the original "plays a sound plus the HP number moving". The sound
+     *       half came from (1) and is unsupported. The HP number moving IS real -- the band is
+     *       redrawn above -- but whether a tone accompanies it is unknown.
+     * Tracing asm/0B62/0B79 forward to find the actual feedback is the open task; until it is
+     * done, do not treat this silence as established faithful behaviour, and do not invent text. */
 }
 
 /*
