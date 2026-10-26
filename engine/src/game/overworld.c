@@ -71,24 +71,37 @@ static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out);
  * The frame itself needs no redraw here: the loop composites at the top of each
  * iteration.
  */
+/* asm/0C33. One decrement per non-zero counter. Called from creature_turn() AND from the refused
+ * step path, because the original reaches the tick on a refused input as well as on a turn — see
+ * the long note in creature_turn(). Kept separate so both call sites share one body. */
+static void status_tick(u2_ctx *ctx)
+{
+    if (ctx->state.paral_legs)  ctx->state.paral_legs--;
+    if (ctx->state.paral_arms)  ctx->state.paral_arms--;
+    if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
+}
+
 static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
 {
     ow->turns++;   /* one resolved turn; --debug cli keys off this */
 
-    /* asm/0C33: the status counters tick ONCE PER TURN.
-     * Measured, not inferred. A multi-shot breakpoint on the tick with the food odometer dumped at
-     * every stop shows food falling by exactly 10 each time -- a PASS -- so the tick is one per
-     * turn and an auto-pass counts as a turn. Capture: captures/spice86/tick-idle/readings.md.
-     * Two earlier models are dead and were both wrong in the same direction:
-     *   - per wound: the corpus shows the counters decaying on samples where HP never changed;
-     *   - per site: asm/0C1F's `jne L_000e33` skips OVER the world-map block and LANDS ON the
-     *     tick, so both arms reach it and the open world is not exempt.
-     * A "main loop / wall clock" reading was also tried and is retracted: the idle tick hits were
-     * auto-passes spending food, not a free-running loop. Ultima II is turn-based, as it should be.
-     * asm/0C33 skips a counter that is already zero, which is why sleeping does not go negative. */
-    if (ctx->state.paral_legs)  ctx->state.paral_legs--;
-    if (ctx->state.paral_arms)  ctx->state.paral_arms--;
-    if (ctx->state.paral_sleep) ctx->state.paral_sleep--;
+    /* asm/0C33: the status counters tick once per HANDLED INPUT EVENT, not once per turn.
+     * Measured two ways against the original, and the second measurement refuted the first.
+     *
+     * (1) A multi-shot breakpoint on the tick while the game sat idle showed food -10 at every
+     *     stop. Read alone that looks like one tick per turn, because an idle game auto-passes and
+     *     a pass spends 10 food. It is not proof of turn-coupling; it is a coincidence of cause.
+     * (2) Forcing DS:26B=15 and then pressing a direction key repeatedly, sampling the counter and
+     *     the food odometer together: 15 decrements, EVERY ONE of them with food UNCHANGED, and the
+     *     same force with no input gave 15 held. A refused step is not a turn and does not spend
+     *     food, and it still ticks. Capture: /var/tmp/para runs, recorded in
+     *     captures/spice86/paralysis-two-arm/readings.md.
+     *
+     * So the tick sits on the input-handling path, reached whether the input moved, was refused,
+     * or passed. The engine's refused steps `continue` without creature_turn(), so the tick is
+     * called here as well as in creature_turn(); see status_tick(). asm/0C33 skips a counter that
+     * is already zero, which is why sleeping does not go negative. */
+    status_tick(ctx);
 
     const u2_ai_report rep = u2_ai_creature_turn(ctx, &ow->world, ow->x, ow->y);
     if (rep.moved)
@@ -1335,6 +1348,12 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_MOVE_PARALYZED);
             seam_char_print(ctx, '\r');
             seam_str_out(ctx, U2_S_CMD_PROMPT);
+            /* The original ticks here. Proven, not assumed: with DS:26B forced to 15, pressing a
+             * direction key repeatedly drove the counter to 0 while food never moved, so the
+             * refused step reached the tick without being a turn. Without this line a player who
+             * keeps pressing directions is stranded forever, which is the bug the owner reported.
+             * The reason this reads as a trap in the engine and not in the original. */
+            status_tick(ctx);
             continue;
         }
 

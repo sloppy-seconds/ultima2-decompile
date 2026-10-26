@@ -487,7 +487,7 @@ d = bytearray(open(sys.argv[1], 'rb').read())
 d[64 + 0] = 200; d[96 + 0] = 0x34; d[128 + 0] = 0x08; d[160 + 0] = 1
 open(sys.argv[1], 'wb').write(bytes(d))
 PYEOF
-{ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do printf 'SP\n0xf2\n'; done; } > "$WORK/c3-expire.keys"
+{ for i in $(seq 1 60); do printf 'SP\n0xf2\n'; done; } > "$WORK/c3-expire.keys"
 ./u2 --headless --play-map --cleanroom \
      --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save" \
      --script "$WORK/c3-expire.keys" --dump-each > "$WORK/c3-expire.out" 2>&1
@@ -506,12 +506,12 @@ par=$(grep -c -- "--PARALIZED!" "$WORK/c3-expire.out")
 # gateable needs a deterministic rig: either a debug seam that sets paral_legs, or a fixture where
 # the Daemon cannot be walked away from. Both are engine-surface decisions, not test tweaks.
 if [ "$par" -gt 0 ]; then
-    ok "CP5 C3b: leg paralysis is applied on the open world (sector 00, $par of 24 attempts refused)"
+    ok "CP5 C3b: leg paralysis is applied on the open world (sector 00, $par of 60 attempts refused)"
 else
     bad "CP5 C3b: the Daemon never paralyzed on the open world -- the special is not reaching play"
     sed 's/^/        /' "$WORK/c3-expire.out" | tail -5
 fi
-echo "  NOTE  CP5 C3b: decay is measured (breakpoint on asm/0C33), not gated -- see the block above"
+echo "  NOTE  CP5 C3b: decay is measured (two-arm run on the original), not gated -- see above"
 
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the

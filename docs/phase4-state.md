@@ -901,41 +901,53 @@ assumed: tick the counters once per turn, and let a paralyzed reject still advan
 monsters act as they demonstrably did. The food-charge evidence (asm/2520 returning before the
 mode dispatch) is untouched by that — no food on a reject, but the turn still passes.
 
-### THE MECHANISM, measured directly — once per turn, and an auto-pass is a turn
+### THE MECHANISM, measured twice and corrected twice — the tick is on the input path, not the turn
 
-**A previous version of this section said the tick ran on the main loop, i.e. wall-clock. That was
-wrong, and the owner's scepticism is what caught it.** Ultima II is turn-based, and the direct test
-agrees. Arming a multi-shot breakpoint on the tick and dumping the food odometer at every stop:
+**Three readings have now been made of this one counter, and two of them were wrong.** Recorded in
+full because the errors are the instructive part.
 
-```
-STOP 1 at 017D:0C33   DS:53..55 = 99 64 52
-STOP 2 at 017D:0C33   DS:53..55 = 99 64 42      -10
-STOP 3 at 017D:0C33   DS:53..55 = 99 64 32      -10
-... every stop, -10
-```
-
-Food −10 is a PASS. So **the tick fires exactly once per turn**, and the "idle" hits were the
-game auto-passing, not a free-running loop. Capture: `captures/spice86/tick-idle/readings.md`
-(corrected) and the run labelled `tickfood`.
-
-**Why the corpus analysis misled me.** The recorder writes a snapshot on *signature change*, at
-about 2.9 effective samples per second. A burst of auto-passes between two samples collapses into
-one food delta and one counter delta, so "0 of 203 decrements fell on a food-changing sample" was
-a **sampling artifact, not a finding**. The breakpoint resolves it exactly because it stops at
-every tick rather than sampling the result. Lesson: a change-triggered recorder cannot answer
-per-event questions, and concluding "not per turn" from it was reading the instrument as the world.
+1. *Once per wound.* Dead: the corpus shows the counters decaying on samples where HP never changed.
+2. *Once per turn.* Dead, and this is the one to learn from. A multi-shot breakpoint on the tick
+   while the game sat idle showed **food −10 at every stop**, and −10 is a PASS, so it looked like
+   one tick per turn. The observation was right and the inference was not: **an idle game
+   auto-passes, so the tick coincided with the pass without being caused by it.**
+3. *On the input-handling path.* Current, and it separates the two cases directly. Forcing
+   `DS:26B=15` and pressing a direction key repeatedly — where **every press is refused and a
+   refusal spends no food** — gave **15 decrements, every one with food unchanged**. The same force
+   with no input gave 15 held and one decay, that one coinciding with a real auto-pass.
 
 | hypothesis | verdict | what settled it |
 | --- | --- | --- |
 | gated on site (`DS:4A != 0`) | false | `asm/0C1F`'s `jne` skips *over* the world block and lands *on* the tick |
-| once per wound | false | counters decay with no HP change |
-| **once per turn** | **true** | food −10 at every tick stop; auto-pass is a turn |
-| main loop / wall clock | false | the idle hits were auto-passes, each spending food |
+| once per wound | false | counters decay with HP unchanged |
+| once per turn | false | **15 decrements with food unchanged** while every press was refused |
+| **once per handled input** | **current** | refused steps tick (no food spent); idle passes tick (food −10) |
 
-**The practical consequence stands, but for the right reason now:** a maximum paralysis is 15
-(`rand & 0xF`) and the original auto-passes roughly 15 times a second, so a pinned player clears it
-in a second or two of real time without doing anything. The engine also auto-passes when idle — but
-only in non-headless mode, by design, so scripted tests stay byte-exact.
+Capture on disk at `captures/spice86/paralysis-two-arm/readings.md` (gitignored, like all
+captures — the method is therefore written out here as well). Run label `paratwo`. Method: no daemon
+and no RNG — `spice86_type.py --poke 8be:26b=0f` forces the counter and reads the write back, and
+food is the discriminator (move 19, pass 10, refusal 0).
+
+One instrument trap worth keeping: the first probe parsed the tool's whole stdout for any two-char
+hex token and so read the keyboard typeahead ring (`ring=e0 4d e0 4d`) out of an unrelated status
+line as the counter value, reporting 1 and 77. 77 is outside the documented 0..15 range, which is
+the only reason that was noticed instead of believed.
+
+**Why the corpus analysis misled me, which is a general lesson.** The recorder writes a snapshot on
+*signature change* at about 2.9 effective samples per second, so a burst of auto-passes between two
+samples collapses into one food delta and one counter delta. "0 of 203 decrements fell on a
+food-changing sample" was an artifact of the instrument. A change-triggered recorder cannot answer
+per-event questions; the breakpoint and the forced-poke probe can.
+
+**Engine consequence, and it is the owner's bug.** The engine's refused step does `continue` without
+`creature_turn()`, so a per-turn tick left a mashing player stranded — which is exactly what was
+reported. The tick now runs in `creature_turn()` **and** on the paralysis reject path, via
+`status_tick()`. With the per-turn version alone the stranding survived; that is how the second
+error was caught.
+
+**Still unproven, and deliberately not guessed:** whether a terrain-blocked INVALID MOVE reject also
+ticks. Two attempts to measure it were confounded (all four directions passable; then the player
+drifted and spent food). The engine ticks the paralysis reject only. See the capture's "Not settled".
 
 **Tried and rejected, so the next reader does not repeat it:** moving the tick from per-wound to
 **per turn** was attempted on the strength of the table above. It does not fix the stranding — a
