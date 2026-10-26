@@ -2,7 +2,7 @@
 #         at DS:004A; keys 4/5 pass, anything else prints "-WHAT?" and re-reads
 # func 334D..3380  len 052 B  evidence: seed+reko (jump table cs:0730 entry D)
 # provenance: static
-#           entry never appears in ExecutedInstructions of any of the 152 harvests; derived by tools/provenance_from_traces.py
+#           entry never appears in ExecutedInstructions of any of the 153 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (structure read; key-code meaning of 4/5 not proven)
 # notes: 0x356d..0x356f are unreached filler bytes (not a jmp: displacement
 #        underflows); two je sites resume at 0x3570 mid-mis-decode (Phase 2
