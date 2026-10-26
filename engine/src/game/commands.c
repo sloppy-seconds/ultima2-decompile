@@ -164,6 +164,22 @@ static u2_cmd_result cmd_P(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)letter;
+
+    /* Z is an OVERLAY, not an edit of the screen.
+     *
+     * The page is drawn into the persistent text grid, which is also what the overworld compositor
+     * reads back for the status band and the CMD prompt. So the page has to be taken out again
+     * rather than painted over, and the way to take it out is to never have changed anything the
+     * game still needs: snapshot the grid, draw the page, and put the snapshot back on dismissal.
+     * The map and the command band are then untainted by construction, not by reconstruction --
+     * nothing has to be redrawn correctly, because nothing was written.
+     *
+     * u2_vram is a plain struct (fixed cell array plus cursor and flags), so the copy is the whole
+     * state. `writes` is a diagnostic counter of cells actually written, and the page really did
+     * write them, so it is kept rather than rolled back.
+     */
+    const u2_vram saved = ctx->vram;
+    const uint64_t writes = ctx->vram.writes;
     u2_status_draw_full(ctx);
 
     /* Present the page as a WHOLE-GRID frame, not through the overworld compositor.
@@ -189,13 +205,21 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
      * earlier revision tested `== 0` here and then read `dismiss` uninitialised, so its
      * Escape branch never fired. That branch is gone now; the wait itself is the byte, and
      * which key arrived is deliberately not looked at. */
-    /* NOTE: the page is not taken back down here. u2_overworld_draw composites vram rows
-     * U2_MSG_TOP..24 and never clears them, so the tail of the Z page stays printed over the
-     * status band after dismissal -- reported by the owner from the SDL build. The fix needs a
-     * way to observe a screen that exists inside one command, which the engine does not have
-     * yet. Tracked in docs/phase4-state.md, which names the fix and the prerequisite.
+    const int got_key = seam_key_wait(ctx, &dismiss);
+
+    /* The original BLOCKS here: no timeout, no path out without a keypress. So the page is on
+     * screen until a key actually arrives, and only then does it come down. seam_key_wait
+     * returning 0 means "scripted input exhausted", which has no counterpart in the original --
+     * tearing the page down on that condition made it vanish in the same command that drew it,
+     * and left the CP5 gates reading a screen that had already been restored.
+     *
+     * Restoring the snapshot is the whole teardown. The cursor goes back with it, so the CMD
+     * prompt resumes at the column it was interrupted at.
      */
-    (void)seam_key_wait(ctx, &dismiss);
+    if (got_key) {
+        ctx->vram = saved;
+        ctx->vram.writes = writes;
+    }
     u2_overworld_draw(ctx, ow);
     return U2_CMD_DONE;
 }

@@ -523,9 +523,13 @@ for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PA
     letter=${pair%%:*}; want=${pair#*:}
     python3 tests/cp5_fight_seed.py "$WORK/tab-$letter" >/dev/null 2>&1
     # Two of these block for a second key inside the handler: Z waits for a dismissing key,
-    # M waits for a spell number. Any key closes the Z page -- there is no quit key.
+    # M waits for a spell number. Z is given NO dismiss key on purpose: the original blocks with
+    # the page on screen, so an undismissed Z leaves the page as the final state and that is the
+    # only moment the page is observable from a scripted run. The dismiss path is gated separately
+    # below, where the assertion is that the screen comes back clean.
     case "$letter" in
-      Z) printf 'Z\nSP\n' > "$WORK/tab-$letter.keys" ;;
+      Z) printf 'Z
+' > "$WORK/tab-$letter.keys" ;;
       M) printf 'M\n1\n'  > "$WORK/tab-$letter.keys" ;;
       *) printf '%s\n' "$letter" > "$WORK/tab-$letter.keys" ;;
     esac
@@ -551,6 +555,44 @@ if grep -qE "H\.P\.=|FOOD=|EXP\.=" "$WORK/tab-Z.out"; then
     grep -nE "H\.P\.=|FOOD=|EXP\.=" "$WORK/tab-Z.out" | head -3 | sed 's/^/        /'
 else
     ok "Z page is a full-screen takeover: no status band, matching asm/4568's clear"
+fi
+
+# ...and the overlay has to come back DOWN clean. Z draws into the persistent text grid, which is
+# the same grid the compositor reads for the status band and the CMD prompt, so the handler snapshots
+# the grid and puts the snapshot back on a real keypress. Before that, u2_overworld_draw composited
+# vram rows 20..24 without clearing them and the tail of the ITEMS list stayed printed over the band
+# -- the owner saw `UMS-01 PASS` / `TRI-LITHI` stuck under the map with no H.P. line anywhere.
+# Headless could not show the layering, and this is the half that leaves the screen sane.
+python3 tests/cp5_fight_seed.py "$WORK/z-restore" >/dev/null 2>&1
+printf 'Z\nSP\n' > "$WORK/z-restore.keys"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/z-restore/content" \
+     --save-dir "$WORK/z-restore/save" --script "$WORK/z-restore.keys" \
+     --dump-state > "$WORK/z-restore.out" 2>&1
+if grep -qE "H\.P\.=|FOOD=" "$WORK/z-restore.out"; then
+    ok "a keypress dismisses the Z page and the status band comes back"
+else
+    bad "regression: after dismissing Z the status band never returns"
+    sed 's/^/        /' "$WORK/z-restore.out" | tail -6
+fi
+# The stronger property, and the one the owner actually asked for: the overlay leaves NO trace.
+# Comparing against a run that never opened Z proves the screen is restored rather than plausibly
+# re-drawn. This is the gate that survives the failure mode the text-grep version did not: with the
+# teardown removed the leftover shows up as the page still being up, not as stray item text, so
+# grepping for item names passed a broken build. Verified as a control -- with the restore removed
+# this diff goes non-empty.
+printf 'S\n' > "$WORK/z-baseline.keys"
+printf 'Z\nx\nS\n' > "$WORK/z-trace.keys"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/z-restore/content" \
+     --save-dir "$WORK/z-restore/save" --script "$WORK/z-baseline.keys" \
+     --dump-state 2>&1 | grep '^|' > "$WORK/z-baseline.out"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/z-restore/content" \
+     --save-dir "$WORK/z-restore/save" --script "$WORK/z-trace.keys" \
+     --dump-state 2>&1 | grep '^|' > "$WORK/z-trace.out"
+if diff -q "$WORK/z-baseline.out" "$WORK/z-trace.out" >/dev/null; then
+    ok "Z leaves no trace: post-dismiss screen is byte-identical to a run that never opened Z"
+else
+    bad "regression: the Z overlay is still visible after dismissal"
+    diff "$WORK/z-baseline.out" "$WORK/z-trace.out" | head -8 | sed 's/^/        /'
 fi
 
 # M's second half: the echo is the spell NAME, not a number. That is the whole point of the

@@ -1076,7 +1076,7 @@ end the session in any mode. The `--dev` leak control was run — dropping the `
 
 ---
 
-## Z page teardown + mid-command observability — OPEN DEFECT (owner-found, 2026-10-26)
+## Z page: a full-screen overlay that leaves no trace (owner-found, 2026-10-26)
 
 Two halves, and the second one is the blocker.
 
@@ -1090,35 +1090,41 @@ The mid-word wrapping that remains on the page is **not** a defect. The original
 in exactly the same places — `AXES-01 B`/`OWS-01`, `TRI-L`/`ITHIUMS-01`, `GREEN GE`/`MS-01` — see
 `captures/spice86/z-page-maxed/Z-maxed-G23MAX.png` and its `readings.md`. Left alone on purpose.
 
-**Half 2, open:** after dismissing Z the page is not taken back down. `u2_overworld_draw` composites
-vram rows 20..24 and never clears them, so the tail of the ITEMS list stays printed over the status
-band and the band itself vanishes. Owner's screenshot shows `UMS-01 PASS` / `TRI-LITHI` stuck under
+**Half 2, fixed:** after dismissing Z the page was not taken back down. `u2_overworld_draw` composites
+vram rows 20..24 and never clears them, so the tail of the ITEMS list stayed printed over the status
+band and the band itself vanished. Owner's screenshot showed `UMS-01 PASS` / `TRI-LITHI` stuck under
 the map with no `H.P.` line anywhere.
 
-The fix is small — on a real keypress, `seam_clear_screen(ctx)` then `u2_status_draw(ctx)` before
-the overworld draw, and only on a real keypress, because `seam_key_wait` returning 0 means "script
-exhausted" and has no counterpart in a game that blocks. It was written and it worked.
+The fix is an **overlay, not an edit**. `cmd_Z` snapshots `ctx->vram` (a plain struct: fixed cell
+array plus cursor and flags, so a struct copy is the whole state), draws the page, and on a real
+keypress puts the snapshot back. Nothing the game still needs was ever written, so there is nothing
+to reconstruct — the map and the command band are untainted by construction. The cursor comes back
+with the snapshot, so the `CMD:` prompt resumes where it was interrupted.
 
-**It is not committed, because it cannot be gated from where the tests sit.** Three CP5 gates read
-the *final* screen of a run, and the Z page exists only *inside* one command: it is drawn, it blocks,
-and it is gone before the next turn boundary. `--dump-each` captures turn boundaries, so there is no
-state in which the page is on screen and also observable. Patching the gates to look at the restored
-screen instead would mean deleting the assertion that the page has no status band — trading a real
-regression guard for a weaker one, which is the wrong trade.
+The restore fires only on a real keypress. `seam_key_wait` returning 0 means "scripted input
+exhausted", which has no counterpart in a game that blocks; tearing the page down on that condition
+made it vanish in the same command that drew it.
 
-**So the prerequisite is observability, not the teardown.** What is needed is a way to capture the
-screen at an arbitrary point inside command handling. Two candidates, both rejected for now:
+**The observability problem dissolved rather than being solved.** The earlier note here claimed the Z
+page could not be observed because it exists inside one command and `--dump-each` only catches turn
+boundaries — which is true, and was the wrong conclusion. Two probes replaced it:
 
-* `--dump-screen-at N` in the SDL renderer (dump the Nth presented frame). Built it; it broke sector
-  loading in a way that was never explained — bisected to the plumbing, not the Z fix, and dropped
-  rather than diagnosed. An unexplained regression is not something to re-introduce blind.
-* `--sdl` cannot take `--script` at all: backend selection runs before argument parsing sets
-  `ctx.script_path`, so the SDL build cannot be driven headlessly. A note records this in
-  `wire_backends()`. Until that is fixed, no SDL visual bug can be gated in CI, and every claim about
-  what the SDL build looks like comes from a human screenshot.
+* Send `Z` with **no** dismiss key. The original blocks with the page on screen, so an undismissed Z
+  leaves the page as the final state, and the existing "no status band" gate keeps its teeth.
+* Assert **no trace** by comparison: the final screen of `Z`, dismiss, `S` must be byte-identical to
+  the final screen of `S` alone. That is the property the owner asked for, stated directly.
 
-Fix the second one first. It closes a whole class — "a behavioural claim needs a frame" — and then
-the Z teardown becomes a three-line change with a gate behind it.
+Both are gated in CP5 and both were run as controls. The first text-based version of the no-trace gate
+was worthless — with the restore removed the leftover shows as the page still being up, not as stray
+item text, so grepping for item names passed a broken build. The diff gate goes non-empty in exactly
+that case.
+
+**Still open, and no longer a blocker for Z:** `--sdl` cannot take `--script` at all, because backend
+selection runs before argument parsing sets `ctx.script_path`. A note records this in
+`wire_backends()`. Until it is fixed the SDL build cannot be driven headlessly, so no SDL *pixel*
+bug can be gated in CI and every claim about what the SDL build looks like still comes from a human
+screenshot. `--dump-screen-at N` was built to help here and broke sector loading for a reason never
+found; it was dropped, not diagnosed, and should not be re-introduced blind.
 
 
 ## Invariants (checked at every checkpoint)
