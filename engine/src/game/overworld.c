@@ -613,6 +613,22 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
 
     /* --- ground: the only entries proven walkable by an actual step --- */
     if (art == 0x02) return 1;   /* map 0x08 grass    — proven: walked across, F11 */
+    /* Shallow water. map 0x04 / art 0x01, "sparse cyan and white single pixels"
+     * (disasm/tile-art.tsv), 1602 cells across the pack.
+     *
+     * This was never a new ruling; it was a regression. docs/map-format.md § 3 records
+     * `0x04 | 1 | faint sparse dots | passes` from the F11 walk measurements, and the
+     * default-deny rewrite of 2026-10-27 — which sealed every town in the game for the
+     * same reason — silently blocked it by simply having no row. The engine contradicted
+     * its own documented measurement until the owner reported being unable to wade it.
+     *
+     * The corroboration is the creature gate, and it is a good one: asm/2199 refuses
+     * {0x10, 0x04, 0x00} for land creatures (asm/21BD, 21C5, 21C9). So the original
+     * treats 0x04 as terrain the PLAYER crosses and a land monster will not — which is
+     * what distinguishes shallows from open sea (0x00, impassable to both, proven by 22
+     * live rejects) and from ordinary ground (0x08, 0x0C, accepted by both).
+     * Grade: measured walk, plus a byte-level asymmetry that agrees with it. */
+    if (art == 0x01) return 1;
     if (art == 0x03) return 1;   /* map 0x0C forest   — proven: five steps, F11     */
     /* Town paving. Owner report 2026-10-27, standing in a town: "the terrain I'm not
      * standing on (cobblestone) should be passable". The tile is art 0x1C, map byte

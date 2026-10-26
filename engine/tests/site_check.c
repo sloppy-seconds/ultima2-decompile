@@ -138,6 +138,11 @@ int main(int argc, char **argv)
     CHECK(!u2_tile_walkable_byte(0x00), "water 0x00 stays impassable on foot");
     CHECK(!u2_tile_walkable_byte(0x10), "mountain 0x10 stays impassable on foot");
     CHECK(u2_tile_walkable_byte(0x08),  "grass 0x08 stays passable");
+    /* Shallow water. docs/map-format.md § 3 records 0x04 as passing from the F11 walks, and
+     * the default-deny rewrite of 2026-10-27 blocked it by omission — the same failure mode
+     * that sealed every town. asm/2199 refuses 0x04 for land creatures, so the asymmetry
+     * (player wades, land monster will not) is what marks it shallows rather than sea. */
+    CHECK(u2_tile_walkable_byte(0x04),  "shallow water 0x04 is passable on foot");
     CHECK(u2_tile_walkable_byte(0x0C),  "forest 0x0C stays passable");
     CHECK(!u2_tile_walkable_byte(0xA0), "door 0xA0 stays impassable until unlocked");
     CHECK(!u2_tile_walkable_byte(0x78), "solid-white wall 0x78 stays impassable");
