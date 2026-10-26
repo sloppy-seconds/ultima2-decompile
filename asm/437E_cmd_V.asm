@@ -1,8 +1,25 @@
 # cmd_V — command handler 'V' (VIEW): "VIEW WHAT?"; with magical helm shows
 #           "VIEW\x8dWITH MAGICAL HELM!" variant.
 # func 437E..43F2  len 0075 B  evidence: seed+reko (jump table cs:0730 entry V)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 154 harvests; derived by tools/provenance_from_traces.py
+# provenance: live: cmd_V executed in captures/spice86/wvcap/ and wvcap-live/, observed 2026-10-26.
+#           entry executed in 2 of 158 harvests; derived by tools/provenance_from_traces.py
+#           Entry 0x437E is present in both harvests' ExecutedInstructions, and so is 0x4396 — the
+#           MAGICAL HELM branch, not just the refusal. The screen corroborates it: one frame shows
+#           the tail of "VIEW\rWITH MAGICAL HELM!" and a later frame shows "VIEW WHAT?", and DS:DB
+#           read 00 afterwards. That is the whole helm path running once and consuming its charge
+#           (`stc; mov 0xDB,al; cmc; sbb $1,al; das; cmc; mov al,0xDB` at 0x45B8 takes DS:DB from 01
+#           to 00), then a second press with no helm left taking the 0x4585 refusal. The maxout
+#           seed owns exactly one helm, which is why the first press succeeded.
+#           NOT ESTABLISHED: what the view itself renders. The body calls L_002bd2, waits on
+#           L_00514d until AH == 0xFF, then clears two 256-byte tables at 0x272 and 0x372 and jumps
+#           to the tick. The owner's recollection is that it shows the whole sector rather than the
+#           viewport, and the shape is consistent with that (DS:23/24 are set to 0x20,0x20 — the
+#           centre of a 64x64 sector — then a render, then a wait-for-key, then a teardown) but no
+#           frame was captured of it. Treat the render as undecoded.
+#           The gate is `cmp $0x4,%al; jae` on DS:4A, i.e. the sector's second decimal digit must
+#           be below 4. That is NOT the same axis as "towns and castles", which the engine derives
+#           from the tile under the player (site_kind). Recorded as an open discrepancy rather than
+#           resolved in favour of the recollection.
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
