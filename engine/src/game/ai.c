@@ -202,8 +202,35 @@ static int creature_step(u2_ctx *ctx, u2_world *w, int slot, int dx, int dy,
             continue;
         if (nx == px && ny == py)
             return 0;                    /* asm/2201: accepted, but it is the player */
+        const int ox = st->mon_x[slot], oy = st->mon_y[slot];
         st->mon_x[slot] = (uint8_t)nx;
         st->mon_y[slot] = (uint8_t)ny;
+        /* Commit the stamp HERE, per creature, not once after the pass.
+         *
+        *  The original has no occupancy clause in the step gate — asm/2199 tests the
+         *  candidate cell's TILE and nothing else. It does not need one: a creature's type
+         *  byte is stamped into the sector grid, and no creature type is in the gate's
+         *  accept set {0x08, 0x0C, 0x5C, 0x70, and 0x00 for the two water kinds}, so an
+         *  occupied cell simply is not a cell a creature may enter. The stamp is the
+         *  occupancy rule.
+         *
+         *  That only works if the stamp is current. Restamping after the whole pass left
+         *  the grid one creature stale, so the second creature in a pass walked into the
+         *  cell the first had just vacated, or into the one it had just entered, and two
+         *  creatures shared a cell. The renderer draws one sprite per cell, so the stack
+         *  was invisible and the symptom was the owner's: `KILLED`, the orc still standing
+         *  there, and another kill required.
+         *  Evidence that the original never stacks: 91,851 occupied slot-samples across
+         *  the 3000 per-turn dumps of captures/spice86/fight-20261021-castle03 contain
+         *  ZERO stacked cells, and the shipped monx data has one stacked cell in 33
+         *  sectors (monx61 at (31,44)).
+         *
+         *  The caller still restamps after the pass; that is now redundant rather than
+         *  wrong, and it is left because a move that this function returns without
+         *  touching still has to converge.
+         */
+        u2_world_tile_put(w, ox, oy, w->map_base[u2_world_tile_index(ox, oy)]);
+        u2_world_tile_put(w, nx, ny, st->mon_type[slot]);
         return 1;
     }
     return 0;

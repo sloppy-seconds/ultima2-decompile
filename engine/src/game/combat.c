@@ -277,7 +277,22 @@ int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
      * DEATH branch. Note the inverted sense, and that hp == damage falls through
      * and stores 0, leaving a live creature at zero hp. */
     unsigned hp = ctx->state.mon_hp[slot];
-    if (dmg > hp) {
+    /* Fidelity split, owner's call 2026-10-26.
+     *
+     * The original's `stc; cmc; sbb [DS:20],al; cmc; jae` kills only when damage EXCEEDS hp.
+     * A blow exactly equal to hp falls through, stores 0, and leaves a live creature at zero
+     * hit points: still drawn, because the stamp keys on mon_type and not on hp, but invisible
+     * to the attack scan, which skips hp 0. That is a zombie that can be looked at forever and
+     * never killed. The owner has not seen it in the original either, and asked for it gone in
+     * the enhanced game rather than silently in both — fidelity mode keeps the original's
+     * exact, bad, byte-proven behaviour.
+     *
+     * Enhanced mode kills on equality. Nothing else changes: the reward, the record clear and
+     * the message are the same path either way.
+     */
+    const int lethal = (ctx->fidelity == U2_FIDELITY_ENHANCED)
+                     ? (dmg >= hp) : (dmg > hp);
+    if (lethal) {
         /* Death clears hp, type and kind — and NOT x/y (file 0x30D2..0x30DC). */
         ctx->state.mon_hp[slot]   = 0;
         ctx->state.mon_type[slot] = 0;

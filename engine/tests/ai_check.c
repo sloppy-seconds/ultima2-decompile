@@ -438,6 +438,47 @@ int main(void)
               "control: inside a site a step onto row 1 is fine");
     }
 
+    /* --- two creatures may not finish a pass on one cell -------------------- */
+    /* The original has no occupancy clause in asm/2199: the step gate tests the candidate
+     * cell's TILE only. It needs none, because a creature's type byte is stamped into the
+     * grid and no creature type is in the gate's accept set — the stamp IS the occupancy
+     * rule. That depends on the stamp being CURRENT, and the engine used to restamp once
+     * after the whole pass, leaving the grid one creature stale. Two creatures then landed
+     * on one cell; the renderer draws one sprite per cell, so the stack was invisible and
+     * the symptom was a `KILLED` with the creature still standing there, needing a second
+     * kill. The owner reported exactly that.
+     *
+     * Evidence the original never stacks: 91,851 occupied slot-samples across the 3000
+     * per-turn dumps of captures/spice86/fight-20261021-castle03 contain zero stacked
+     * cells, and the shipped monx data has one stacked cell in 33 sectors. */
+    arm(&ctx, &w, GRASS, 3, 17, 17, 40, 0x30);      /* wants (18,18) */
+    ctx.state.mon_role[3] = 1;
+    ctx.state.mon_x[4] = 17; ctx.state.mon_y[4] = 18;/* also reaches (18,18) */
+    ctx.state.mon_hp[4] = 40; ctx.state.mon_type[4] = 0x30;
+    ctx.state.mon_role[4] = 1;
+    /* Force the collision: slot 4's diagonal (18,19) and its y-only fallback (17,19) are
+     * mountains, so its only remaining candidate is the cell slot 3 is about to take.
+     * Both creatures sit 3 cells out on at least one axis, which is outside the ring where
+     * asm/0AB6 rolls a proximity gate — otherwise the roll, not the stamp, decides. */
+    for (int k = 0; k < 2; k++) {
+        const int bx = k ? 17 : 18, by = 19;
+        w.map[by * U2_SECTOR_EDGE + bx] = w.map_base[by * U2_SECTOR_EDGE + bx] = 0x10;
+    }
+    u2_monsters_restamp(&ctx, &w);
+    u2_ai_creature_turn(&ctx, &w, 20, 20);
+    CHECK(!(ctx.state.mon_x[3] == ctx.state.mon_x[4]
+            && ctx.state.mon_y[3] == ctx.state.mon_y[4]),
+          "two creatures ended one AI pass on the same cell (%d,%d) — the stamp is stale again",
+          ctx.state.mon_x[4], ctx.state.mon_y[4]);
+    /* NOT asserted, and deliberately so: which of the two cells each creature ends on. The
+     * pass turned out not to resolve in ascending slot order — the pair swapped (17,17)/(17,18)
+     * for (18,18)/(17,19) is refused — and whether the original scans slots upward is not
+     * established anywhere. Asserting a specific cell here would freeze an unproven ordering,
+     * which is the mistake this project keeps writing down. What is asserted is the invariant
+     * the owner's bug report is actually about: one creature per cell. */
+    CHECK(ctx.state.mon_x[3] != ctx.state.mon_x[4] || ctx.state.mon_y[3] != ctx.state.mon_y[4],
+          "control: the two creatures occupy distinct cells");
+
     printf("ai_check: %d checks, %d failures\n", checks, fails);
     return fails != 0;
 }
