@@ -27,6 +27,14 @@
 #   nothing here counts entries, and wiring a per-turn decrement on the strength of
 #   this note would be exactly the promotion AGENTS.md § 5 forbids. What would settle
 #   it: a breakpoint on L_000e33 counting hits per accepted command.
+#   ANSWERED 2026-10-26 WITHOUT A NEW CAPTURE, and the answer is not what this note assumed.
+#     captures/spice86/fight-20261021-castle03/turns/ holds 3000 per-turn DS dumps of a real
+#     fight, and the counters are plain bytes at DS:26B/26C/26D. Reading the series shows them
+#     decaying on turns where HP did NOT change (legs 4->3 with hp delta 0; arms and sleep
+#     stepping down with delta 0). So the tick is NOT confined to the damage path, and the
+#     once-per-wound model built on this note is wrong. The player also recovered while pinned at
+#     one cell for the whole capture with HP still falling, so turns advance even when the player
+#     cannot move. Full table: docs/phase4-state.md, section on paralysis stranding.
 # func 0C1F..0C2A  len 000C B  evidence: seed+reko
 # provenance: static, read 2026-10-27; branch semantics corrected 2026-10-26 by disassembly
 # confidence: high for the branch and its target (re-read and corrected); the entry count is open

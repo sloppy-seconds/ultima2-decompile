@@ -865,6 +865,42 @@ you when paralyzed* — and that is what overturned two confident readings here.
 So the tick is entered per effect, not per turn and not per wound — a different shape from the
 engine's "once per wound", and probably the reason the original never strands anyone.
 
+### ANSWERED FROM THE EXISTING CORPUS — the engine's model is wrong in a third way
+
+No new capture was needed. `captures/spice86/fight-20261021-castle03/turns/` holds **3000 per-turn
+full DS dumps** from a real castle fight, and the paralysis counters are plain bytes in them
+(`DS:26B` legs, `DS:26C` arms, `DS:26D` sleep). Reading the series settles it:
+
+| turn | counter transition | HP delta | player moved |
+| --- | --- | --- | --- |
+| 59 | legs 0→2 | 0 | no |
+| 63 | legs 2→1 | −43 | no |
+| 87 | legs 1→0 | −1 | **yes, 30→31** |
+| 103 | legs 0→4 | 0 | no |
+| 110 | legs 4→3 | **0** | no |
+| 125 | legs 3→2 | −1 | no |
+| 253 | arms 1→0, sleep 9→8 | **0** | no |
+| 279 | arms 1→0, sleep 4→3 | **0** | no |
+
+Three conclusions, all measured rather than inferred:
+
+1. **The counters decay with no wound at all.** Turns 110, 253 and 279 decrement while HP is
+   unchanged. So the tick is *not* on the damage path, and the engine's "once per wound" model is
+   wrong — as is the "once per effect" theory put in its place earlier today.
+2. **The player recovered while unable to move.** `legs` reached 0 at turns 87 and 146; max `legs`
+   seen across the fight was 15; the player sat at `(30,32)` for essentially the whole capture and
+   shook it off anyway. This is the owner's claim, confirmed by bytes.
+3. **Monsters kept acting while the player was stuck** — HP falls at 63, 125, 135 and 146 with the
+   position never changing. So turns advance even when the player's own step is refused.
+
+**The remaining divergence, and it is a turn-semantics question:** the engine's paralysis reject
+`continue`s without calling `creature_turn()`, so a stuck player never advances a turn and never
+ticks — the deadlock. The corpus says the original does advance turns while the player is pinned.
+Changing that is a turn-semantics change, not a constant tweak, so it is proposed rather than
+assumed: tick the counters once per turn, and let a paralyzed reject still advance the turn so the
+monsters act as they demonstrably did. The food-charge evidence (asm/2520 returning before the
+mode dispatch) is untouched by that — no food on a reject, but the turn still passes.
+
 **What would settle it, and is the next action:** a breakpoint count on `L_000e33` in the original,
 recording hits per accepted command and per refused command. Until that exists, any port of the
 tick is a guess, and `AGENTS.md` § 5 says do not promote past the evidence.
