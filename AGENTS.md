@@ -397,6 +397,18 @@ Verification, in two independent layers:
   screen-invert routine touches, and no renderer reconstructs a view from it; read the
   `.ds` dump for state instead, and screenshot live for pixels. This has been gotten wrong
   three times, each looking like a partial success.
+* **A behavioural claim needs a frame.** The bullet above is about *how* to read the screen; this
+  one is about *whether to look at all*. Memory and `ExecutedInstructions` answer **what changed**
+  and **whether it ran**. Only a screenshot answers **what the player saw**, and the two can
+  disagree. `cmd_V`'s helm branch executed, its counter decremented, and the render turned out to be
+  a whole world map — nothing the code shape or the memory trace suggested, and the claim had already
+  been written into an `asm/` header before anyone looked. So: when a finding describes something
+  visible — a message, a screen, a sprite, a mode change — the capture that proves it **includes a
+  frame**, and the header names it. A claim about visible behaviour backed only by bytes is graded
+  `inferred`, however solid the trace is. Screenshots are cheap and the vision model is already
+  here; cost is never the reason one was skipped. Read state *before* the action too — the `cmd_V`
+  confusion started with a counter read only after the press, which made a consumed item look like an
+  absent one.
 * **Headless play is a solved loop; do not reinvent it.** `spice86_start.sh --headless
   --patch-arrows --player <file> --auto-play` loads a seeded character into the world
   unattended, `tools/spice86_type.py --keys A,Right` drives it (arrows only work because

@@ -214,6 +214,14 @@ Check it before writing anything new against a live session.
 | stop the CPU at an address and read state there | `tools/bp_read.py --ip 0CEE --cs 17D --state --ret --stack 40` | no — RSP on the gdb port |
 | **read a live byte/word/block** | `tools/spice86_type.py --peek 8be:60:1` (hex `SEG:OFF[:LEN]`) | no — HTTP |
 | **force a live value to build a scenario** | `tools/spice86_type.py --poke 8be:60=00` (hex `SEG:OFF=BYTES`, always prints the read-back) | no — MCP |
+| **prove what the player saw** | `tools/spice86_screenshot.py NAME.png`, **before and after** the action | no — MCP |
+
+**Pair the frame with the claim.** A memory read and a trace say what changed and whether it ran;
+only a frame says what the player saw, and the two can disagree — `cmd_V`'s helm branch executed and
+consumed its charge while rendering something nothing in the bytes predicted. So a capture that
+establishes visible behaviour names its frame, and the state that gates the action is read *before*
+the press as well as after: a post-hoc reading of a consumed counter looks exactly like a reading of
+an absent one. See AGENTS.md § 3, "A behavioural claim needs a frame".
 
 `bp_read` is the only thing that speaks `monitor` for capture purposes, and the monitor
 surface is bigger than the HTTP API: `help` lists `dumpAll`, `breakCycles`, `breakCsIp`,

@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-26 — With a vision model available, the rendered screen is a first-class evidence
+  channel, not a display convenience.** A harness that can read memory and an execution trace will
+  otherwise drift into treating those as the whole of the evidence, and a claim about what the
+  player experiences then gets assembled from state deltas plus a text fragment and written down as
+  though it had been watched. Here: a command's branch was confirmed executed by the trace, its
+  resource counter was observed to decrement, and the render was inferred from the code shape — and
+  the inference was wrong, in a way one screenshot would have caught instantly. Memory state and
+  on-screen state are independent observations; disagreement between them is itself a finding, and
+  it is invisible to a harness that only ever reads memory. Two rules follow: pair every visible
+  behaviour claim with a captured frame, and read the relevant state *before* the action as well as
+  after it, because a post-hoc reading of a consumed resource is indistinguishable from a reading of
+  an absent one.
+
 * **2026-10-26 — A derived view used as a gate must be refreshed per mutation, not per batch.**
   A movement legality test read a grid that was rebuilt once after a whole pass over the entities,
   rather than as each one moved. Within a pass the grid was one entity stale, so two entities ended
