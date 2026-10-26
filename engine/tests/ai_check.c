@@ -86,6 +86,17 @@ static uint8_t first_roll(uint8_t seed)
     return u2_rand_byte(&p);
 }
 
+/* The second roll a seeded context yields. The role-1 contact path spends one roll on asm/0AAA's
+ * special gate before the melee roll, so anything running on that path must search on this. */
+static uint8_t second_roll(uint8_t seed)
+{
+    u2_ctx p;
+    memset(&p, 0, sizeof p);
+    u2_rng_seed(&p, seed);
+    (void)u2_rand_byte(&p);
+    return u2_rand_byte(&p);
+}
+
 int main(void)
 {
     u2_ctx ctx;
@@ -375,25 +386,26 @@ int main(void)
           "the wander is refused by the same asm/2199 tile gate the pursuit paths use");
 
     /* --- the melee pool and the armour dodge (asm/0B62 / asm/0B79) ----------- */
-    /* A role-2 creature in contact draws exactly one roll, the melee roll, so the
-       seed controls it directly — which is why these run on the gated (interior)
-       sweep: on the world map the same creature also rolls for a special first and
-       the seed would be spent on the wrong thing. Find a seed whose first roll is
-       non-negative and whose low three bits are 0: with armour 0 the blow lands,
-       with armour 1 it is dodged. That is the whole of what armour does in the
-       original, and it is the only damage a plain melee creature can ever do. */
+    /* These run on the role-1 path, because asm/0AA7's contact test is only reachable from role 1
+       inside a town (see the `contact` gate in ai.c). Role 1 means asm/0AAA's special gate rolls
+       FIRST, so the melee roll is the SECOND roll of the turn. An earlier revision used role 2
+       precisely to dodge that extra roll — which was only valid because the engine's contact test
+       was ungated, and gating it correctly is what moved the roll. Find a seed whose second roll is
+       non-negative with low three bits 0: with armour 0 the blow lands, with armour 1 it is dodged.
+       That is the whole of what armour does in the original, and it is the only damage a plain
+       melee creature can ever do. */
     uint8_t mseed = 0;
     while (mseed < 255) {
-        const uint8_t r = first_roll(mseed);
+        const uint8_t r = second_roll(mseed);
         if (r < 0x80 && (r & 7) == 0) break;
         mseed++;
     }
-    const uint8_t mr = first_roll(mseed);
-    CHECK(mr < 0x80 && (mr & 7) == 0, "a seed exists whose first roll is hit-able at SKIN");
+    const uint8_t mr = second_roll(mseed);
+    CHECK(mr < 0x80 && (mr & 7) == 0, "a seed exists whose second roll is hit-able at SKIN");
 
     arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
     ctx.state.sector_second = 1;
-    ctx.state.mon_role[14] = 2;
+    ctx.state.mon_role[14] = 1;
     ctx.state.worn_armour = 0;                      /* SKIN */
     u2_rng_seed(&ctx, mseed);
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
@@ -402,12 +414,53 @@ int main(void)
 
     arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
     ctx.state.sector_second = 1;
-    ctx.state.mon_role[14] = 2;
+    ctx.state.mon_role[14] = 1;
     ctx.state.worn_armour = 1;                      /* one step of armour */
     u2_rng_seed(&ctx, mseed);
     rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
     CHECK(rep.contacts == 1 && rep.damage_pool == 0,
           "control: the same roll against armour index 1 is dodged (asm/0B71)");
+
+    /* --- the contact gate: only role 1 touches you inside a town -----------------
+     * asm/0AA7 holds the candidate-vs-player test (asm/0B25/0B39) and the thief branch (asm/0B4D).
+     * The town sweep enters asm/0AA7 only from asm/1082, the role-1 branch: asm/1035 sends role >= 3
+     * to the wander and asm/1039 sends role 2 to the move-only path, and neither returns.
+     *
+     * Measured against the ORIGINAL in sector 21 ("forrest town"), whose thieves are all role 3:
+     * many turns adjacent to slot 31 at (34,58) left DS:D6..DF byte-identical and HP at 9990, while
+     * the thief wandered to (35,59). The engine had been stealing there on film (turn 342) because
+     * this test ran before the role gate. Forrest town ships no role-1 creature at all.
+     */
+    for (int role = 2; role <= 3; role++) {
+        arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+        ctx.state.sector_second = 1;
+        ctx.state.mon_role[14] = (uint8_t)role;
+        ctx.state.worn_armour = 0;
+        u2_rng_seed(&ctx, mseed);
+        rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+        CHECK(rep.contacts == 0 && rep.damage_pool == 0,
+              "town: role %d in contact makes no contact and pools no damage (asm/0AA7 unreachable)", role);
+    }
+
+    /* CONTROL for that loop: the identical setup one role number up MUST make contact, so the two
+       checks above cannot pass by never reaching anything at all. */
+    arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.sector_second = 1;
+    ctx.state.mon_role[14] = 1;
+    ctx.state.worn_armour = 0;
+    u2_rng_seed(&ctx, mseed);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.contacts == 1, "control: role 1 in the same town cell DOES make contact");
+
+    /* And the world map is ungated: asm/0A6D..0AB5 never reads mon_role, so a role-3 creature out
+       there really can hit you. That asymmetry is the original's, not ours — see E6. */
+    arm(&ctx, &w, GRASS, 14, 7, 7, 40, 0x30);
+    ctx.state.sector_second = 0;
+    ctx.state.mon_role[14] = 3;
+    ctx.state.worn_armour = 0;
+    u2_rng_seed(&ctx, mseed);
+    rep = u2_ai_creature_turn(&ctx, &w, 8, 8);
+    CHECK(rep.contacts == 1, "world map: role 3 in contact DOES make contact (asm/0A6D has no role test)");
 
     /* --- the alarm (asm/113A): violence inside a site wakes slots 0..7 -------- */
     arm(&ctx, &w, GRASS, 3, 5, 5, 40, 0x30);

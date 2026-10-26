@@ -373,7 +373,7 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
          *                   AGENTS.md § 5 names. Decoding asm/1086 is the open item.
          */
         const int gated_sweep = (st->sector_second >= 1 && st->sector_second <= 3);
-        int casts = 1, retreat = 1, moves = 1, wander = 0;   /* the ungated world-map pass */
+        int casts = 1, retreat = 1, moves = 1, wander = 0, contact = 1;
         if (gated_sweep) {
             const uint8_t role = st->mon_role[slot];
             if (role == 0 || (role & 0x80)) continue;
@@ -386,6 +386,18 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
             retreat = (role == 1);   /* asm/0B07 likewise                   */
             moves   = (role == 1 || role == 2);
             wander  = (role >= 3);
+            /* The contact test lives INSIDE asm/0AA7's body, and that body is entered from exactly
+             * two places: asm/0A7C/asm/0A83 (the ungated world-map sweep, where `contact` stays 1)
+             * and asm/1082, which is the role-1 branch. asm/1035 sends role >= 3 to the wander and
+             * asm/1039 sends role 2 to the move-only path, and neither returns to asm/0AA7. So in a
+             * town only role 1 can ever make contact, swing, or steal.
+             *
+             * Confirmed against the original, 2026-10-26, in sector 21 ("forrest town"): its thief
+             * at (18,15) is role 3, it did NOT steal, and it walked away from the player. The engine
+             * had been stealing there on film (turn 342) precisely because this test ran ungated.
+             * Forrest town ships no role-1 creature at all — 24 slots at role 3, 4 at role 2 — so
+             * nothing in it should ever touch the player. */
+            contact = (role == 1);
         }
 
         /* asm/4F36: the raw pursuit vector, player minus creature, signed byte.
@@ -421,10 +433,14 @@ u2_ai_report u2_ai_creature_turn(u2_ctx *ctx, u2_world *w, int px, int py)
 
         /* asm/0B25/0B39: the candidate cell is tested against the player before
          * the move routine is entered at all, and landing on the player routes to
-         * the thief test at asm/0B4D instead of to a step. */
+         * the thief test at asm/0B4D instead of to a step.
+         *
+         * Gated on `contact`, because that test is inside asm/0AA7 and the town sweep reaches
+         * asm/0AA7 only on the role-1 path. Ungated here is what made town thieves steal and made
+         * every adjacent creature park itself instead of moving. */
         const int cx = (st->mon_x[slot] + sx) & U2_AI_GRID_MASK;
         const int cy = (st->mon_y[slot] + sy) & U2_AI_GRID_MASK;
-        if (cx == px && cy == py) {
+        if (contact && cx == px && cy == py) {
             /* asm/0B4D: the creature does not step onto the player. It stays where
              * it was and takes a swing, and this is the ONLY way a plain melee
              * creature can hurt the player — there is no separate attack action in
