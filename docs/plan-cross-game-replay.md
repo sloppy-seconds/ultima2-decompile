@@ -186,13 +186,43 @@ logged in the CP2 gate log.
 **Do step 0 before anything else:** record the same scripted original session twice and diff the two
 recordings. If they are not identical, stop and report — the whole plan rests on it.
 
+## 6a. PHASE 0 RESULT — measured 2026-10-26: the original IS deterministic
+
+Two fresh boots of the original under Spice86 (container `u2-spice86`, cycles pinned at 3000), same
+seeded character, same 16-key scripted walk, DS segment sampled after every key. Recorder:
+`/var/tmp/determinism/probe.py`, recordings `R1.json` / `R2.json`.
+
+| field | turns differing | verdict |
+| --- | --- | --- |
+| pos, sector, hp_food_exp, items | 0 | **deterministic** |
+| mon_x, mon_y, mon_hp, mon_type, mon_role | 0 | **deterministic** (see caveat) |
+| wander_x, wander_y | 0 | **deterministic** |
+| **rng** (`DS:23F..244`) | **0** | **deterministic — ends `71 71 0d 66 ed 9e` in both** |
+| paralysis | 0 | deterministic |
+| **speed** (`DS:74`) | **16 of 16** | **NOT deterministic** — `0x3977` vs `0x3966` |
+
+**13 of 14 fields bit-identical. The single divergence is the startup speed calibration, and it is not
+gameplay state** — `asm/06AC` counts how many 100-iteration busy passes fit in a 20-tick BIOS
+window, so it depends on emulator timing. It feeds `DS:580[]`, animation delays and key-wait timeouts
+read by `asm/0711_speed_delay_lookup`. Creature motion is turn-based on player commands, not on a
+timer (`docs/contract-creature-tick.md`), so this does not threaten the plan — but **the differ must
+exclude `DS:74`** or it will report a false divergence on every turn.
+
+**Caveat, stated rather than buried:** the walk was in sector 20, which ships zero placed creatures,
+so only one wandering spawn appeared across the whole run. Creature-array agreement is therefore weak
+evidence, not strong. **The follow-up probe is the same test in sector 21 with its 32 placed
+creatures**, where the wander re-roll and the spawn selector actually exercise the RNG.
+
+Consequence: the premise holds, proceed to phase 1, and put `DS:74` on the differ's exclusion list
+with this reason attached.
+
 ## 7. Build order
 
 Each phase is independently useful and has an acceptance test that can fail.
 
 | # | deliverable | acceptance |
 | --- | --- | --- |
-| **0** | **Determinism probe.** Record one scripted original session twice; diff. | identical, or the plan is revised and this doc says so |
+| **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE 2026-10-26 — passes.** Only `DS:74` diverges; excluded. See § 6a |
 | **1** | Original-side recorder: per turn, key + DS snapshot + frame. | N commands in, exactly N turns out, including no-op turns |
 | **2** | `u2_rng_load` + `--rng-state`. | load-and-match control in § 4.1 |
 | **3** | Checkpoint format: save + sector + RNG + turn index, and engine resume-from-checkpoint. | resume at turn 200 and match a from-boot run's turn 200 state |
