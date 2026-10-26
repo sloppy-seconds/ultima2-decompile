@@ -190,6 +190,63 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-26 — A derived view used as a gate must be refreshed per mutation, not per batch.**
+  A movement legality test read a grid that was rebuilt once after a whole pass over the entities,
+  rather than as each one moved. Within a pass the grid was one entity stale, so two entities ended
+  up on the same cell, and because the renderer draws one sprite per cell the collision was
+  invisible: the symptom was a kill that did not remove the thing on screen, requiring a second
+  kill. The general shape is a legality predicate whose only enforcement of some property is that a
+  derived index is current — if nothing forces it to be current, the property is unenforced and the
+  failure is silent. Two transferable rules: when a gate's power to enforce a property depends on a
+  derived structure being up to date, refresh that structure at the mutation site and not at the
+  end of the loop; and when a display collapses several states into one image, absence of a visual
+  anomaly is not evidence the states are distinct.
+
+* **2026-10-26 — A default-deny classification table silently contradicts whatever it previously
+  measured, whenever a row is missing.** A passability table was rewritten from allow-deny to
+  default-deny on the sound reasoning that an unclassified tile should stop the player and get
+  reported rather than let them walk into a mountain. What the rewrite did not do was consult the
+  walk measurements already recorded for the same tiles, so several tiles that had been measured
+  passing were silently blocked by omission — including the ground inside every town in the game,
+  which sealed them, and a shallow-water tile the player is meant to wade. A missing row in a
+  default-deny table is a wall, and it looks exactly like terrain. The rule for any harness that
+  regenerates a classification table: gate the rewrite against the prior measured verdicts, so a
+  row that contradicts a recorded measurement fails the build rather than shipping as a wall.
+  Corollary: prefer a table where each row carries its evidence grade, because an omitted row is
+  then visibly an omission and not an inference.
+
+* **2026-10-26 — A memory-read tool that clamps the requested length to a minimum silently returns
+  more bytes than were asked for, and the over-read looks like a data anomaly rather than a tool
+  bug.** Asking for a 32-slot array from a tool with a 50-byte floor returned 50 bytes; counting
+  occupied entries over the result produced "48 occupied" from a 32-slot array, which reads as an
+  impossible finding about the game rather than as the tool having handed back the adjacent field.
+  It cost a detour before anyone noticed the returned length did not match the requested one. Two
+  rules: assert that a read tool returned exactly the length requested before interpreting any of
+  it, and treat an out-of-range count as an instrument fault first, since a genuinely impossible
+  number is far more likely to be a framing error than a discovery.
+
+* **2026-10-26 — A change-triggered recorder cannot answer per-event questions, and the negative
+  result it produces is indistinguishable from a real one.** A recorder that writes a snapshot only
+  when a state signature changes collapses a burst of events between two samples into a single
+  delta. Analysing that corpus for "does event X coincide with counter Y" therefore returns a
+  confident negative — zero coincidences out of hundreds — when the truth is that the recorder could
+  not resolve them. That false negative drove two wrong models of a decay rule before a
+  stop-at-every-execution breakpoint settled it in ninety seconds. The general rule: pick the
+  instrument by the question's granularity, not by convenience; a sampled or change-triggered
+  record can answer *whether* something happened but not *how many times* or *in what order*, and a
+  negative from it is not evidence of absence.
+
+* **2026-10-26 — A cost odometer cannot establish that an effect is turn-coupled; coincidence of
+  cause is not coupling.** A breakpoint on a status-decrement routine showed the game's food counter
+  falling by exactly the pass cost at every stop, which reads as "one tick per turn". It was wrong:
+  the idle game auto-passes, so the tick and the pass shared a cause without either causing the
+  other. The observation was perfectly correct and only the inference was bad. The fix is to find an
+  action that advances the suspected effect while spending nothing, and the way to find one is to
+  enumerate what the odometer does *not* charge for — a refused action, a cancelled input, a failed
+  check. Any harness that infers scheduling from a resource counter should state which action
+  distinguishes coupling from coincidence, and if none does, the question is not answerable from
+  that counter.
+
 * **2026-10-25 (the 28f session)** — **A packed-decimal subtract takes an immediate byte, not a
   count, and a test that reads only the visible digits cannot tell the difference.** A routine that
   subtracts `0x19` from a three-byte packed-decimal counter was ported as the decimal number 19,

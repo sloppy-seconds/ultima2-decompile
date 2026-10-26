@@ -15,6 +15,20 @@
 # this instruction additionally requires a free slot and a passing coordinate roll --
 # measured DS:60 = 22 -> 23 across 80 arrow steps with all 32 mon_type slots occupied,
 # i.e. the free-slot scan is what refuses, not the cadence. docs/monster-spawn.md § 15.2.
+#           CORROBORATED 2026-10-26 by a direct rate measurement, and it disposes of a "spawns
+#           should be off-screen" report at the same time. 100 arrow commands on the world map in
+#           sector 00 produced ZERO 0 -> non-zero mon_type transitions, because sector 00 ships
+#           31 of 32 slots occupied and slot 0 is unreachable to the scan (`dec di ; jne` stops at
+#           1) — so the spawner is structurally unable to fire until a creature dies. Counting the
+#           shipped data: 16 of 33 sectors have no free slot in 1..31 at all. The consequence is
+#           that killing a creature is precisely what opens the gate, which is why a spawn landing
+#           a turn after a kill is the original's mechanism and not a divergence. There is no
+#           viewport or distance test anywhere in the cluster: asm/0CB6..0CD4 rolls two bytes,
+#           masks to 0x3F, and the only placement constraints are a free slot and the rolled cell's
+#           terrain matching the arm's want_tile. Note also that death clears hp, type and kind but
+#           NOT x/y, so a freed slot keeps the dead creature's coordinates until the next roll
+#           overwrites them — the one mechanism that could have made a spawn appear on the corpse,
+#           and it does not survive the store at asm/0CC0.
 # Registers at a live stop here: DI = the slot just allocated (0x12, 0x1A seen), DS = 0x8BE,
 # SS:SP = 0BCE:0100 with nothing on the stack.
 # NOT ESTABLISHED, and the live check made it worse rather than better: DS:60 read 0 after
