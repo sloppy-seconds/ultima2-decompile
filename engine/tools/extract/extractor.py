@@ -250,6 +250,20 @@ MANIFEST = [
     # that call as "numeric out". Both literals are unique in the file.
     ("U2_S_MAGIC_SPELL_READY", "3B92_cmd_M.asm",           0),
     ("U2_S_SPELL_READY_TO",    "3B92_cmd_M.asm",           1),
+    # cmd_W (WEAR ARMOUR) and cmd_V (VIEW). Both were static-only until 2026-10-26, when two
+    # scripted captures put their entries in ExecutedInstructions; see their asm headers. The W
+    # menu is digit-choice, structurally the same shape as cmd_R's weapon menu, which the owner
+    # recalled correctly and the bytes confirm.
+    #
+    # Only the single-segment db lines are addressable by index. DB_RE matches `db "text",0x00`, so
+    # the three multi-segment lines in these two handlers — the W menu (four quoted parts split by
+    # 0x0d glyphs), the strength refusal, and V's helm line with its mid-string 0x8d — are outside
+    # it and need run locators, the same mechanism docs note for the impassable-tile message. They
+    # are deliberately NOT squeezed in here with wrong indices: a silently mis-indexed string makes
+    # the engine print the wrong words and still build.
+    ("U2_S_NOT_OWNED",         "43F3_cmd_W.asm",           0),
+    ("U2_S_ARMOUR_READY",      "43F3_cmd_W.asm",           1),
+    ("U2_S_VIEW_WHAT",         "437E_cmd_V.asm",           0),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
