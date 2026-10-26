@@ -193,7 +193,7 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
      * U2_MSG_TOP..24 and never clears them, so the tail of the Z page stays printed over the
      * status band after dismissal -- reported by the owner from the SDL build. The fix needs a
      * way to observe a screen that exists inside one command, which the engine does not have
-     * yet. Tracked in docs/phase4-state.md; the attempted fix is in git history as a patch.
+     * yet. Tracked in docs/phase4-state.md, which names the fix and the prerequisite.
      */
     (void)seam_key_wait(ctx, &dismiss);
     u2_overworld_draw(ctx, ow);
