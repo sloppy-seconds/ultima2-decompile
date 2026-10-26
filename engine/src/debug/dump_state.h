@@ -17,12 +17,17 @@
 #include "core/ctx.h"
 
 #define U2_ENGINE_VERSION "0.1-cp2"
-#define U2_STATE_JSON_MAX 1024
+#define U2_STATE_JSON_MAX 4096   /* sized for the creature table; see u2_state_json */
 
 void u2_dump_screen(const u2_ctx *ctx, FILE *out);
 void u2_dump_state_json(const u2_ctx *ctx, FILE *out);
 int  u2_screen_text(const u2_ctx *ctx, char *out, int outsz);
 int  u2_state_json(const u2_ctx *ctx, char *out, int outsz);
+/* The behavioural evidence digest, scope version 1. Separate from u2_state_json on purpose: the
+ * debug serializer grows freely, the evidence digest must not, because replay.c hashes this and CP2's
+ * committed evidence is only reproducible while its scope is frozen. Changing the output of this
+ * function is a baseline move needing owner approval. */
+int  u2_state_digest_json(const u2_ctx *ctx, char *out, int outsz);
 void u2_engine_version(char *out, int outsz);
 
 #endif /* U2_DUMP_STATE_H */

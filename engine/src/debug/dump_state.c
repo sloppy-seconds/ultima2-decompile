@@ -48,7 +48,22 @@ int u2_screen_text(const u2_ctx *ctx, char *out, int outsz)
     return used;
 }
 
-int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
+/* The behavioural evidence digest — scope version 1, FROZEN.
+ *
+ * This is deliberately a SEPARATE serializer from u2_state_json(), and the reason is a bug that
+ * nearly went the other way. replay.c hashed whatever u2_state_json() emitted, so the debug turn log
+ * and the committed CP2 evidence shared one field set: adding a diagnostic field silently changed
+ * every recorded state hash and invalidated the evidence. A feature whose whole purpose is to let
+ * telemetry grow (docs/plan-cross-game-replay.md) cannot be coupled to a serializer that must not
+ * grow, so the two concerns are now split.
+ *
+ * u2_state_json() is diagnostics: it may gain fields freely, and does.
+ * u2_state_digest_json() is evidence: it is frozen at the field set CP2 was recorded against.
+ * Changing it is a baseline move and needs owner approval, exactly like a CP2 re-record would.
+ * The output below must stay byte-identical to the serializer as of the split, or the committed
+ * evidence stops reproducing.
+ */
+int u2_state_digest_json(const u2_ctx *ctx, char *out, int outsz)
 {
     const u2_state *s = &ctx->state;
     char ver[32];
@@ -73,6 +88,70 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
         ctx->vram.row, ctx->vram.col, ctx->vram.visible,
         s->player_x, s->player_y, s->cursor_row, s->cursor_col,
+        s->left_margin, s->right_margin, s->text_attr, s->story_flag, s->sector_second,
+        s->gold_lo, s->gold_hi, u2_bcd16(s->gold_lo, s->gold_hi), s->spell_pick,
+        s->rng_state[0], s->rng_state[1], s->rng_state[2],
+        s->rng_state[3], s->rng_state[4], s->rng_state[5],
+        ctx->rng_rolls, s->map_base,
+        ctx->content_source ? ctx->content_source : "none");
+}
+
+int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
+{
+    const u2_state *s = &ctx->state;
+    char ver[32];
+
+    /* The creature table, built first because snprintf has no append.
+     *
+     * Every slot that has a type, as [x, y, type, role, hp]. This exists because a turn log that
+     * cannot say where the creatures were is only a picture: the frame shows a sprite, and only the
+     * state can say whether two sprites mean two creatures or one creature and a stale stamp. Hex
+     * for the bytes, because they are bytes and not counts.
+     */
+    char mons[2048];
+    int used = 0;
+    used += snprintf(mons + used, sizeof mons - (size_t)used, "\"creatures\":[");
+    for (int i = 0; i < 32 && used < (int)sizeof mons - 48; i++) {
+        if (!s->mon_type[i]) continue;
+        used += snprintf(mons + used, sizeof mons - (size_t)used,
+                         "%s[%d,%d,\"0x%02X\",\"0x%02X\",%u]",
+                         used > 15 ? "," : "", s->mon_x[i], s->mon_y[i],
+                         s->mon_type[i], s->mon_role[i], s->mon_hp[i]);
+    }
+    snprintf(mons + used, sizeof mons - (size_t)used, "],");
+
+    u2_engine_version(ver, (int)sizeof ver);
+    return snprintf(out, (size_t)outsz,
+        "{\"engine\":\"%s\",\"mode\":\"%s\","
+        "\"platform\":{\"renderer\":\"%s\",\"input\":\"%s\",\"audio\":\"%s\",\"clock\":\"%s\"},"
+        "\"screen\":{\"cols\":%d,\"rows\":%d,\"cells_written\":%llu,"
+        "\"cursor\":{\"row\":%d,\"col\":%d,\"visible\":%d}},"
+        "\"state\":{%s"
+        /* pos is DS:00/01, the original's own player-position mirror. The field below was NAMED
+         * player_x/player_y but reported DS:23/24, which is the staged candidate cell the step gate
+         * reads — it sat at 0 in every turn log, so a recording could not say where the player was
+         * standing. Renamed `staged` rather than dropped; the rename is the honest fix. */
+        "\"pos\":{\"x\":%u,\"y\":%u},"
+        "\"sector\":\"%u%u\",\"hp\":%u,\"food\":%u,"
+        "\"staged\":{\"x\":%u,\"y\":%u},"
+        "\"cursor\":{\"row\":%u,\"col\":%u},"
+        "\"margins\":{\"left\":%u,\"right\":%u},"
+        "\"text_attr\":%u,\"story_flag\":%u,\"sector_second\":%u,"
+        "\"gold_bcd\":[%u,%u],\"gold\":%d,\"spell_pick\":%u,"
+        "\"rng\":{\"state\":[%u,%u,%u,%u,%u,%u],\"rolls\":%u},"
+        "\"map_base\":%u},"
+        "\"content\":\"%s\"}",
+        ver,
+        ctx->mode == U2_MODE_HEADLESS ? "headless" : "term",
+        ctx->renderer->name, ctx->input->name, ctx->audio->name, ctx->clock->name,
+        U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
+        ctx->vram.row, ctx->vram.col, ctx->vram.visible,
+        mons,
+        s->sector_x, s->sector_y,
+        s->sector_first, s->sector_second,
+        u2_bcd16(s->unk_52, s->hp), u2_bcd16(s->food, s->food_hi),
+        s->player_x, s->player_y,
+        s->cursor_row, s->cursor_col,
         s->left_margin, s->right_margin, s->text_attr, s->story_flag, s->sector_second,
         s->gold_lo, s->gold_hi, u2_bcd16(s->gold_lo, s->gold_hi), s->spell_pick,
         s->rng_state[0], s->rng_state[1], s->rng_state[2],

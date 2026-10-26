@@ -26,7 +26,9 @@ void u2_replay_record(u2_ctx *ctx)
     }
     i = r->n;
     u2_screen_text(ctx, screen, (int)sizeof screen);
-    u2_state_json(ctx, state, (int)sizeof state);
+    /* Hash the FROZEN evidence scope, not the debug serializer. Coupling the two meant that adding a
+     * diagnostic field to the turn log silently invalidated every recorded CP2 replay. */
+    u2_state_digest_json(ctx, state, (int)sizeof state);
     sha256_hex(screen, strlen(screen), r->screen_sha[i]);
     sha256_hex(state, strlen(state), r->state_sha[i]);
     r->keys_at[i] = ctx->keys_consumed;
@@ -88,6 +90,9 @@ int u2_replay_write(u2_ctx *ctx, const char *path)
     fputs("{\n", f);
     fputs("  \"report\": \"u2-playthrough\",\n", f);
     fputs("  \"version\": 1,\n", f);
+    /* Which field set state_sha was computed over. Verification treats an absent field as scope 1, so
+     * the evidence recorded before the split still verifies. Bumping this is a baseline move. */
+    fputs("  \"digest_version\": 1,\n", f);
     fprintf(f, "  \"engine_version\": "); emit_str(f, ver); fprintf(f, ",\n");
     fprintf(f, "  \"content_source\": ");
     emit_str(f, ctx->content_source ? ctx->content_source : "none");

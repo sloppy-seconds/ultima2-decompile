@@ -988,6 +988,14 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
 
 void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
 {
+    /* Keep the original's own position mirror current. DS:00/01 is the player position in the
+     * captured segment — it read back as the seeded entry point in every live capture — and the
+     * engine kept the live coordinate only in ow->x/ow->y, so every turn log reported a position of
+     * 0,0 and a recording could not answer "where was the player standing". Mirroring here rather
+     * than at each movement site means the log and the frame are taken from the same instant.
+     */
+    ctx->state.sector_x = (uint8_t)ow->x;
+    ctx->state.sector_y = (uint8_t)ow->y;
     /* The last argument is DS:12 -- a mode byte, not a tile. The fill loop only
      * reaches for it when no sector is resident; see core/view.c. */
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
