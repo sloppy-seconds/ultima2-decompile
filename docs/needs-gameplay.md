@@ -772,6 +772,40 @@ one's. Measurement note, because it nearly produced a wrong answer: the engine r
 place, so every run must start from a fresh copy of the seed or thefts compound across runs and the
 numbers look like a trend.
 
+**Now observed on screen, in the engine, in forrest town (sector 21).** Frame
+`captures/engine/forrest-town-theft/turn-00342-theft.ppm`, turn 342, owner playing live:
+
+```
+CMD:   A THIEF STOLE SOMETHING!
+CMD:   WEST
+CMD:   WEST
+```
+
+So the divergence is player-visible, not a headless artefact. Sector 21's four thieves are all role 3,
+same as LINDA's.
+
+**A static lead fell out of the census, and it is the thing to chase next.** Cross-referencing placed
+thieves against their role byte across every town sector:
+
+| place | thieves | role |
+| --- | --- | --- |
+| sector 03 — the castle (has a `THIEVES GUILD` sign) | 5 at (28,47..50) | **1** |
+| sector 31 PORT BONIFICE | 4 at (18,25..28) | **1** |
+| sector 22 LINDA | 2 at (7,47),(8,47) | 3 |
+| sector 21 forrest town | 4 | 3 |
+| sector 82 MAKLER | 9 | 3, plus three at `0x81..0x83` |
+
+**The only place the steal has ever been observed executing in the original is `castle-03-live`, and
+every thief in sector 03 is role 1.** The hypothesis that fits G37's negative, this positive, and the
+owner's "he's diagonal and not attacking" all at once: **the contact branch — swing and steal — belongs
+to the role-1 full-pass path, and role-3 wanderers never reach it.** The engine runs the contact test
+before the role gate, so it fires for role 3 too, which is the wrong shape.
+
+Checkable statically and cheaply: establish whether `asm/0B25/0B39`'s candidate-vs-player test is
+reachable from the role-3 chain at `asm/1086`, or only from the ungated sweep and the role-1 pass. If
+only the latter, the fix is to move the contact test inside the role gate and the town theft stops by
+itself. Grade: **inferred**, and it is the highest-value open thread on creature behaviour.
+
 ### G30 — what tile is underneath an unlocked door
 
 **Grade: recalled (owner, 2026-10-27) — "when you open a door it disappears, I don't

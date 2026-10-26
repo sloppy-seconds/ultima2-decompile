@@ -125,6 +125,23 @@ invariant the queue asked for holds exactly:
 | 92 | 2 | **BASKO** (row 63 banner `TOWNE` + `BASKO`) | WEAPONS LTD, OZY ARMOURY, TRANSPORT, NO MAGES, GET DRUNK AT OZYS, OFFENDERS, EXIT HERE | UGLY IRVING, KIETH ZABALAOUI, EXPERIENCED WARRIOR, WIMPY WARRIOR |
 | 93 | 3 | none spelled; `BARATARIA` + `CASTLE` is the place | KUEEN SUSANS ROOM, KING OZYS ROOM, CASTLE, BARATARIA, JAIL, LE CHAPEL, KITCHEN, OZYS PLACE | FATHER ANTOS, SING LEE THE COOK, JUSTIN THE JAILER, QUEEN SUSAN |
 
+### Working labels — ours, not the binary's
+
+Some sectors have no name spelled by any sign, which makes them awkward to talk about. A working
+label may be used in prose and in this document, but it must always be marked as ours. **The binary
+gets no vote on these, and they are not discovered facts** — the same two-grade discipline the
+bestiary names follow, and for the same reason: a working label that drifts into a header or a
+filename reads as if the game said it.
+
+| sector | working label | who, when | why it fits |
+| --- | --- | --- | --- |
+| 21 | **forrest town** | owner, 2026-10-26 | 58.4% of its 4096 cells are forest tile `0x0C`, more than double any other town sector (next is 81 TOMMERSVILLE at 22.7%). Measured over `original/mapx21`. |
+
+Nothing about sector 21's *identity* is established by this. Its shop signs are `ALFREDS / FISH N
+CHIPS, GORKY, LE JESTER, WIZARDRY, HOLY SPELLS` and its `tlkx` speakers are GRENDEL THE BUM, ANDY
+GREENBERG, ROBERT WOODHEAD and CHASTE NUBILE NYMPH — none of which is a town name, which is exactly
+why the label was needed.
+
 **Grade.** The sign text and the speaker list are **observed** (decoded from
 `original/mapx*` and `original/tlkx*`). Which run is the *town* name as opposed to a
 shop is **inferred**, with one exception: the row-63 banner. Four sectors put a word at
