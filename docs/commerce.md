@@ -504,6 +504,17 @@ the scan left behind, so a creature standing on the cursor takes the creature pa
 empty cursor falls through to the map-tile path. The branch structure and the runtime
 behaviour now agree.
 
+> **RETRACTION 2026-10-26 — two paragraphs below claim `DS:1F7`/`DS:217` are "per-entity arrays,
+> not direction vectors". They are direction vectors.** `asm/10AA` and `asm/10BF` write
+> `sign_of_al(rand_byte)` into them *and* into `DS:19`/`DS:1A` in the same instruction pair, and
+> `asm/10CE` then computes `(mon_x + DS:19) & 0x3F` into the staged candidate cell. Their live value
+> domain is exactly `{-1, 0, +1}` and they are non-zero only in role-3 slots. See
+> `asm/1086_creature_wander_step.asm`, which is the routine that reads them, for the full chain.
+> The observation that survived is the honest one: `DS:19/1A` read `(1,1)` in every cmd_T sample, and
+> that is still unexplained — it is a scratch pair with several writers, and the talk/transact path
+> simply never had a reason to set it. "None of the five writers is the direction handler" remains
+> true for the keystroke; it was the leap to "not direction vectors" that was wrong.
+
 **What writes `DS:19/1A` is still open, and the obvious candidates are wrong.**
 `asm/1086` loads `DS:19` from `[DI+0x1F7]` and `DS:1A` from `[DI+0x217]`, indexed via
 `DS:25`, and `asm/10AA`/`asm/10BF` are the matching writers into those arrays. Those are

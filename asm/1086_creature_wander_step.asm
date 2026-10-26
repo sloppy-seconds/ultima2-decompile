@@ -16,25 +16,50 @@
 #           * Role-3 creatures DO move. Thief slot 20 in sector 22 was seen at (7,47), (7,49) and
 #             (8,48) across PASS commands, i.e. its direction changed during play. This is what
 #             refutes the engine's `moves = (role == 1 || role == 2)`, which freezes them.
-# NOT ESTABLISHED — do not read this header as claiming these:
-#           * WHO writes DS:1F7/DS:217, or how often. The re-randomisation is inferred from a tracked
-#             creature changing direction; no writer has been found. docs/handoff-2026-10-24.md
-#             suggested "per-slot persistent direction" and that word *persistent* is now doubtful.
-#           * WHAT the rand_byte result is used for. It is the last instruction in this span and its
-#             consumer is not identified.
-#           * Whether this span performs the move at all. It only stages DS:19/1A; the move routine is
-#             NOT called here (contrast asm/1039's role-2 path, which does `call asm/4F11` and jumps to
-#             the move at asm/2122). Whoever implements role 3 must find where the staged vector is
-#             actually consumed.
-#           * The identity of DS:25, still `reserved_25` in state.h. It indexes the arrays, so it is
-#             almost certainly the slot index, but that is inference from usage.
+# THE WRITER AND THE MOVE SITE — found 2026-10-26 by reading the contiguous fall-through, static:
+#           This fragment does NOT stand alone; asm/1086..asm/10E8 is one straight-line chain that the
+#           role dispatch enters at L_001286 and that falls through, so the pieces below are one
+#           routine cut into eight files by the bulk wave:
+#             1086  DS:19 := V1[slot] ; DS:1A := V2[slot] ; call rand_byte
+#             10A0  cmp $0x40,%al ; jae 10CE      ; 75% keep the stored direction, 25% re-roll
+#             10A4  call rand_byte
+#             10A7  call L_0052d8                 ; = asm/50D8_sign_of_al -> -1/0/+1
+#             10AA  V1[slot] := AL ; DS:19 := AL ; call rand_byte
+#             10BC  call L_0052d8                 ; sign_of_al again
+#             10BF  V2[slot] := AL ; DS:1A := AL
+#             10CE  clc ; al := mon_x[slot] ; adc DS:19,al ; and $0x3f ; DS:23 := al
+#                   then range guards (cmp $0x4 / cmp $0x3c / cmp $0) that exit to L_001240, the
+#                   same next-slot target asm/1033 uses
+#           So it is a **random walk with a sticky direction**: the per-slot vector persists and is
+#           re-rolled only on the 25% branch. That is what makes a role-3 creature loiter near its
+#           post instead of scattering, and it is what was seen live — thief slot 20 drifted between
+#           (7,47), (7,49) and (8,48) rather than hunting the player.
+#           DS:23 is the staged candidate cell that asm/2199_creature_step_gate reads, so the wander
+#           feeds the SAME step gate as the pursuit paths. The value in DS:19/1A is what asm/212E
+#           adds to mon_x/mon_y (see asm/4F11_monster_step_vector).
+# TWO CORRECTIONS, one of them this file's own:
+#           * docs/commerce.md says of these arrays: "per-entity arrays, not direction vectors".
+#             That is now **wrong** — asm/10AA and asm/10BF write sign_of_al(rand_byte) into them and
+#             into DS:19/DS:1A in the same instruction pair. Corrected there.
+#           * docs/handoff-2026-10-24.md called this a "per-slot persistent direction". An earlier
+#             revision of this header today called that word *doubtful*, because a tracked creature
+#             changed direction. It was right and I was wrong: it IS persistent, re-rolled on only
+#             one turn in four. Retracted.
+# STILL NOT ESTABLISHED:
+#           * Where the y candidate is staged (the fragments after asm/10CE, not yet read to the end)
+#             and the exact instruction that enters asm/2199 from this chain.
+#           * What the three range guards at asm/10CE are guarding against, and how they relate to
+#             asm/2199's own edge guard on DS:4A.
+#           * The identity of DS:25, still `reserved_25` in state.h. It indexes the arrays in all
+#             four fragments, so it is almost certainly the slot index, but that is inference.
 # NOTE on the dispatch: asm/1035 tests `al >= 3`, not `== 3`. The engine has `if (role > 3) continue`,
 #           which differs. It is currently harmless: a census of all 33 shipped monx files gives
 #           role 0x00 x686, 0x01 x54, 0x02 x75, 0x03 x179, 0x81..0x85 x62, and NO role > 3 anywhere.
 #           If a sector ever ships one, the engine will freeze what the original wanders.
-# provenance: live:linda-thief, live:linda-aggro (2026-10-26) + static reassembly
-# confidence: high for the vector semantics and for role 3 moving; low for the writer, the roll's
-#           consumer, and where the move happens
+# provenance: live:linda-thief, live:linda-aggro (2026-10-26) + static reassembly; writer and move
+#           staging found statically the same day
+# confidence: high for the vector semantics, the 25% re-roll and the role-3 movement; medium for the
+#           tail past asm/10CE, which is read but not finished
 # func 1086..109F  len 001A B  evidence: seed+reko
 # calls: L_005417
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
