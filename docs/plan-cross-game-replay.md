@@ -216,14 +216,73 @@ creatures**, where the wander re-roll and the spawn selector actually exercise t
 Consequence: the premise holds, proceed to phase 1, and put `DS:74` on the differ's exclusion list
 with this reason attached.
 
+## 6b. PHASE 0, STRONG VERSION — measured 2026-10-26: **the naive premise is FALSE**
+
+§ 6a looked good because it tested a quiet walk in a sector with nothing in it. The owner asked for a
+harder test: sector 03, which ships 32 creatures including four role-1 thieves starting adjacent to
+the entry point at (26,48), plus a scripted melee of 37 turns (player hit rolls, monster hit rolls,
+damage, theft, death paths). Seed: `G23MAX` with `u2_edit.py set … sector 3` and `setpos … 26 48`.
+Recorder: `/var/tmp/determinism/probe2.py`. Four fresh boots, same seed, same keys.
+
+**Result: two runs matched to within one turn, one matched to within zero, and one diverged at turn 0.**
+
+| field | F2 vs F3 | F2 vs F4 |
+| --- | --- | --- |
+| pos, sector, food, exp, gold, mon_hp, mon_type, mon_kind, mon_role, paralysis | 0 | 0 |
+| **rng** | first differs at turn **13** | first differs at turn **0** |
+| mon_x, mon_y, wander_x, wander_y | turn 13 | turn 0 |
+| hp, items | 0 | turn 0 |
+
+**Mechanism, measured directly.** Sampling the RNG register with *no input at all*, one second apart:
+
+```
+t=0s rng=f4 f4 fa b4 20 73  food=99 59 17
+t=3s rng=ee ee 1b 45 94 48  food=99 59 07   CHANGED
+```
+
+**The original's idle loop runs on wall-clock time and consumes the RNG.** Food fell 10 units in the
+same instant the register advanced, with no key pressed. So the position of the RNG stream at any
+given moment is a function of *elapsed time*, not only of commands issued — and elapsed time between
+fixed sleeps is not reproducible across boots, because it depends on emulator throughput and host load.
+
+### What this does to the plan
+
+**"Record the seed and the key sequence, replay it" does not work.** It cannot, and no amount of
+pinning `--cycles` fixes it, because the coupling is to real time. Anyone who built phases 1-4 on the
+§ 6a reading would have shipped a differ that reported a false divergence on some fraction of every
+session and got distrusted for it.
+
+**The fix is better than the original design.** The replay unit is not `(seed, keys)`; it is
+`(DS checkpoint, one key)`. Record the RNG register — and ideally the whole compared field set — at
+every turn boundary, and have the engine *resume from the checkpoint* rather than replay from the
+seed. Then:
+
+- the time dimension disappears entirely, because each turn starts from a recorded register;
+- divergence is localised to a single turn instead of cascading, which is what makes the output
+  readable;
+- and "replay a specific scenario" (the owner's goal 1) becomes trivially resumable from any turn,
+  which seed-plus-keys never was.
+
+This makes § 4.1 (`u2_rng_load`) **load-bearing rather than convenient**, and it promotes § 4.4
+(capture the starting save) to *capture the full state at every turn*. Phase 1's recorder should be
+written to that shape from the start.
+
+### New behavioural question this exposed, independent of the plan
+
+The original drains food and advances the RNG on a **wall-clock tick while the player is idle**. The
+engine's food drain is per-step (`U2_FOOD_PER_MOVE = 0x19`, proven this session). Whether the engine
+reproduces the *idle* drain is unexamined, and this is the first measurement showing there is an idle
+drain to reproduce. **Check it before assuming the engine is faithful here.** Grade: the idle tick is
+`observed` in the original; the engine's behaviour is `unexamined`.
+
 ## 7. Build order
 
 Each phase is independently useful and has an acceptance test that can fail.
 
 | # | deliverable | acceptance |
 | --- | --- | --- |
-| **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE 2026-10-26 — passes.** Only `DS:74` diverges; excluded. See § 6a |
-| **1** | Original-side recorder: per turn, key + DS snapshot + frame. | N commands in, exactly N turns out, including no-op turns |
+| **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE 2026-10-26 — the naive premise FAILED.** § 6a passed on an empty sector; § 6b refuted it under combat. Replay must be checkpoint-per-turn, not seed-plus-keys |
+| **1** | Original-side recorder: per turn, key + **full DS checkpoint** + frame. Not seed-plus-keys; see § 6b. | N commands in, exactly N turns out, including no-op turns |
 | **2** | `u2_rng_load` + `--rng-state`. | load-and-match control in § 4.1 |
 | **3** | Checkpoint format: save + sector + RNG + turn index, and engine resume-from-checkpoint. | resume at turn 200 and match a from-boot run's turn 200 state |
 | **4** | `tools/replay_diff.py` with the allowlist. | **mutation control:** break something known in the engine (e.g. revert the contact gate) and confirm the differ names it, at the right turn |
