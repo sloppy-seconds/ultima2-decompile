@@ -4,7 +4,7 @@
 #           success prints " READY."
 # func 43F3..44D3  len 00E1 B  evidence: seed+reko (jump table cs:0730 entry W)
 # provenance: static
-#           entry never appears in ExecutedInstructions of any of the 150 harvests; derived by tools/provenance_from_traces.py
+#           entry never appears in ExecutedInstructions of any of the 152 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
