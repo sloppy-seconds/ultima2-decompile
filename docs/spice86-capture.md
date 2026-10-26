@@ -526,3 +526,12 @@ so a loaded character is placed by the map loader rather than restored to a save
 - **CFG blocks are not proof of execution.** `spice86dumpCfgBlocks.json` lists
   *discovered* blocks. The authority for "this ran" is `ExecutedInstructions` in
   `spice86dumpExecutionFlow.json`; use `tools/cfg_printed.py`.
+- **`ExecutedInstructions` answers *whether*, never *how many times*.** Measured across all 147
+  harvests that carry a flow dump: 214,116 entries, 864 duplicates — **0.40%**. The list is
+  effectively a *set of executed addresses*, not a per-execution trace, and two unrelated harvests
+  can share an entry count exactly. So it is a sound authority for "did this address run" and
+  useless for loop iteration counts, per-turn entry rates, or anything that needs a frequency.
+  Asking it for a count returns `1` and looks like an answer. For counting hits, use
+  `tools/bp_read.py --ip <ADDR> --samples N`, which arms a multi-shot `breakCsIp` and resumes
+  between samples; note that whatever drives the game has to be running separately, because the
+  target runs between samples.

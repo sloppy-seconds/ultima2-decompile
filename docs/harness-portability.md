@@ -801,6 +801,22 @@ Newest first. One line per learning; the detail stays in the owning document.
   produced a confident, uniformly negative answer. Any executed/not-executed gate must carry a
   positive control known to have run, and report it. This is the same shape as the lying tool in
   § 5, arrived at from the parser side instead of the detector side. → Tier 1.
+* **2026-10-26** — An "execution trace" artifact can be a **deduplicated set**, and then every
+  frequency question silently returns 1. The dump this project treats as the authority for "did
+  this run" turned out to hold ~0.4% duplicates across 147 captures: perfect for *whether*, useless
+  for *how many times*, and it answers a count query with a plausible `1` rather than an error. The
+  tell was two unrelated captures sharing an identical entry count. A harness should record, per
+  trace artifact, whether it is a trace or a set — and any classifier that needs a rate must say so
+  and use a mechanism that can supply one. → Tier 1; same family as the lying tool in § 5, arrived
+  at from the data-shape side.
+* **2026-10-26** — A branch whose target is the block immediately after some *other* block is a
+  **skip, not a guard.** Reading `cmp x,0 ; jne L` as "L is gated on x" is wrong when the
+  fall-through path also lands on L; both arms reach it and the test only selects which intervening
+  block runs. Getting this backwards was promoted into a header at `confidence: high`, implemented
+  as a gate in the reimplementation, and produced a permanent-stuck state that only showed up when a
+  person played the game. Checking the fall-through costs one disassembly and is the whole
+  verification. → Tier 1, and an argument for never writing a branch's semantics without the
+  surrounding layout.
 * **2026-10-25** — A body-conservation guard that pairs old and new files **by filename** makes a
   clean rename pass or fail depending on commit granularity: alone it is conservation, alongside any
   marked body edit it is an unmarked change, because a rename is a removal plus an addition and only
