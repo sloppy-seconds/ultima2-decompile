@@ -190,6 +190,40 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A one-instruction fragment has no meaning until its jump target's role is
+  known, and a fragment that holds both an accept and a reject trampoline will be summarised
+  wrongly by anyone reading its first line.** A dispatch arm whose entire body was `jmp X` was
+  named after the accept three instructions away in the same file, when the target it actually
+  jumped into was the reject return. Every downstream table copied the summary and the error
+  survived a rewrite of the rule it belonged to. Method: when a fragment is a bare branch,
+  resolve what the target *returns* before naming the fragment, and treat "this file is short"
+  as a warning that the file is a shared trampoline rather than a routine.
+
+* **2026-10-29 — A "last one seen" field shared between two kinds of file is a silent
+  wrong-file write.** A store path built its filename from whichever loader had run last, so
+  writing kind A after loading kind A then kind B wrote kind A's buffer over kind B's file and
+  returned success. Nothing downstream noticed, because the return code was correct and the
+  file existed. Method: any round-trip test must reproduce the application's real load order —
+  a test that loads only one kind passes honestly forever — and any struct field that records
+  "which of these N did we last touch" should be one field per kind, not one.
+
+* **2026-10-29 — Do not observe a mutation through the path the mutation is supposed to
+  exercise.** A gate that had to prove an in-memory world edit chose to save and read the file
+  back, which made the save subsystem part of the assertion — and the save subsystem was
+  broken, so the gate went red for a reason unrelated to the rule under test. The engine
+  already had a state-dump channel that observes the in-memory value directly. Method: give
+  gates a read channel that does not go through the subsystem under test, and when a gate
+  cannot be made to fail for the reason it claims, check whether it is failing through an
+  adjacent defect instead.
+
+* **2026-10-29 — "The control passed" is worthless unless the control names the artefact it
+  ran.** Three separate times in one session a deliberate break appeared to be caught or
+  ignored correctly while the binary under test was stale, because the incremental build had
+  not relinked and the exit code was identical either way. The project already documents this
+  trap and it recurred anyway, which says the rule needs to be mechanical rather than remembered:
+  a control run should print the hash of the binary it executed alongside its verdict, and a
+  harness that cannot show that did not test anything.
+
 * **2026-10-26 — Instrumentation consumes the same clock you are pacing on, so put any poll *inside*
   the pacing budget, never after it.** A recorder built to drive a timer-driven target at a fixed number
   of target ticks per input added a confirmation poll — wait for the target to consume the key — and

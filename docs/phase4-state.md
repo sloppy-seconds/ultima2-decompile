@@ -1414,3 +1414,63 @@ Two self-inflicted traps found on the way, both worth remembering:
   never truncate the pipeline that produces the artefact.
 - `gdb -batch -ex run` on an interactive engine hangs forever, because the inferior never
   exits and gdb waits for it to. Always wrap it in `timeout`.
+
+## Travel modes — implemented, and stopped at a defect (2026-10-29)
+
+`docs/handoff-vehicle-state-machine.md` was the work order. W1 (BOARD), W2 (per-mode
+passability), W3 (per-mode food) and W4/W5 (`cmd_L`'s plane and rocket branches) are
+implemented, and the findings that changed the rules are in `docs/passability-findings.md`
+F14's second correction and F15. What is wired:
+
+| piece | where | gate |
+| --- | --- | --- |
+| mode dispatch for passability | `u2_mode_passable()` in `overworld.c` | CP5 P1, 12 new mode cases |
+| per-mode food (19 / 38 / 38 / 0 / 0) | `u2_overworld_step_food()` | CP5 V1 |
+| `cmd_B` BOARD, five item gates, `BOARD WHAT?` | `commands.c` | CP5 V1 |
+| `cmd_L` LAUNCH: plane flight + land, rocket flight + crash | `commands.c` | **not gated** |
+| the tile BOARD leaves behind (grass / water) | `board_vehicle()` via `u2_world_terrain_put()` | **not gated**, see G35 below |
+
+**`cmd_L` is deliberately ungated, and that has to be said rather than left implicit.** Its
+plane branch is observed in `flight-launched-live` and `airport32` (launch, `LAND PLANE.`,
+and `LAND--NOT HERE!!!!!` all in the executed print set), but the flight loop is a
+non-blocking poll loop and the engine's scripted input gives one poll per `WAIT` token, which
+is a harness mapping rather than a measured equivalence. The rocket branch has never run in
+any capture at all — `DS:13 = 0x28` appears in zero harvest dumps. Gating a flight loop
+against a cadence nobody measured would produce a green that means nothing; `docs/needs-gameplay.md`
+G39 and G43 are the captures that would let it be gated honestly.
+
+### OPEN DEFECT: a dirty map is written to the MONX filename (found 2026-10-29, pre-existing)
+
+`u2_world_store(ctx, w, is_map)` builds its path from `w->found_prefix`, and `found_prefix`
+is **one field shared by both loaders**. `u2_world_load` sets it on every load, and the
+overworld always loads the map and then the monsters, so by save time it reads `monx`. A
+store of the **map** therefore writes 4096 bytes of map data to `monxNN`, and returns
+`U2_WORLD_OK`.
+
+Reproduced at HEAD (`45395c9`, no vehicle code involved): seed a sector with a door at
+`(3,0)`, give the character a key, `U` + `RIGHT` to pave the door, then `Q`. `monx00` goes
+from 256 bytes to 4096 and every creature in the sector is gone on the next load. The engine
+has been corrupting its own monster data on any save with a dirty map, and did so before this
+session, through the UNLOCK path.
+
+Why no gate saw it: `world_check.c` loads only a map, so `found_prefix` is still `mapx` when
+it stores, and its round-trip assertion passes honestly. The defect needs a test that loads
+**both** files before storing — which is what the game always does.
+
+Not fixed here on purpose. The fix is small (per-kind prefixes, or refuse a `found_prefix`
+that does not belong to the kind being stored) but it changes shipped behaviour on the save
+path, needs its own red-first control, and the vehicle work had no mandate to touch saves.
+**This is the blocking item for gating BOARD's tile write**, and `tests/vehicle_board.py`
+says so at the call site rather than asserting through a broken path.
+
+### Also recorded, not acted on
+
+- `u2_world_tile_put()` writes only the live grid, and `u2_monsters_restamp()` rebuilds that
+  grid from `map_base` on every creature turn — so a terrain edit made with `tile_put` alone
+  is silently undone the next time anything moves. `u2_world_terrain_put()` was added for
+  edits that are meant to last, and BOARD uses it. The UNLOCK paving at `asm/435E` still uses
+  `tile_put` and has the same latent problem; left alone for the same reason as the defect
+  above, and named in `world.h`.
+- `cmd_X` (`asm/44D4`) is now decoded as the dismount and is still unimplemented. It is a
+  letter with execution evidence, so its `NULL` slot is a real gap; it is outside the vehicle
+  handoff's letter list and needs its own ticket.

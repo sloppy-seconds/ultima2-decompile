@@ -1,8 +1,31 @@
 # Handoff — the vehicle state machine (travel modes)
 
-**Status:** not started. Every rule needed to build it is proven and cited below. This document is
-the whole brief; read `docs/passability-findings.md` **F14** first, because this file builds on it
-and does not repeat its derivations.
+**Status: worked 2026-10-29 — W1, W2, W3, W4 and W5 implemented and W1/W2/W3 gated; W6 still
+open; stopped at a pre-existing engine defect.** Read this before the body: the table in § 1 is
+**wrong in three rows** and § 6 answers two of its four questions. The corrections are in
+`docs/passability-findings.md` F14's second correction and F15, and the state of the engine is
+`docs/phase4-state.md` § "Travel modes". In one line each:
+
+* **§ 1's horse row** — not "the same ladder". `asm/2626` runs the ladder and then rejects
+  shallow water (`0x02`) and `0x60` itself, so horse = ladder minus shallows.
+* **§ 1's plane row** — not "everything except `0x06`". The plane inherits the mounted rule and
+  adds forest.
+* **§ 1's rocket row** — not "accepts everything". `asm/2542` is the rocket arm and it jumps to
+  the **reject** return; the rocket refuses every step and pays nothing because it never reaches
+  a drain. `asm/25F8` is the foot ladder's default accept.
+* **§ 6's frigate** — it is the ship arm's success path, gated on `items_held[12]` = BLUE
+  TASSLE, and it sets the ship mode `0x24`. Observed: `' FRIGATE'` printed in
+  `captures/spice86/shipcap3`.
+* **§ 6's dismount** — it is `X-IT` (`asm/44D4`): writes `2*[DS:13]` back into the cell and
+  returns the player to foot. Still unimplemented in the engine.
+* **§ 6's vehicle tile** — it IS consumed, in memory: every successful arm writes grass or water
+  through the cell pointer at `DS:06`. The "still `0x48`" reading was the file on disk.
+* **§ 3 W1's refusal** — the tail prints `" WHAT?"`, so the line is `BOARD WHAT?`. Nothing had
+  to be invented.
+* **New, and it blocked the last gate:** `u2_world_store` writes a dirty map to the `monx`
+  filename because `found_prefix` is shared between the two loaders. Pre-existing, reproduced
+  at HEAD with no vehicle code, and it is why BOARD's tile write is implemented but not gated.
+  See `docs/phase4-state.md` § OPEN DEFECT.
 
 **Scope:** travel modes. `BOARD`, `LAUNCH`/`LAND`, per-mode passability, per-mode food cost.
 **Non-goals:** dungeons and towers (parked by owner ruling), the frigate (untested, see § 6), and

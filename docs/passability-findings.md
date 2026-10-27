@@ -594,6 +594,11 @@ keeps contradicting measurements — it is the wrong shape, not merely missing r
 | plane | `0x26` | `asm/2604` | accepts everything **except mode `0x06`** (map `0x0C` forest) | −38 |
 | rocket | `0x28` | `asm/25F8` | **accepts everything** | 0 |
 
+> **Two rows of this table are wrong — see "CORRECTED 2026-10-29, second pass" at the end of
+> this section.** The horse/plane rows are not "the same ladder", and the rocket rejects
+> everything rather than accepting it. The table is kept as written because that is what was
+> believed when the rows below it were measured against it.
+
 **Corrected 2026-10-29 against the arm bodies, one hour after this section was first written.** The
 first version said the plane "accepts everything". It does not. `asm/2604` is:
 
@@ -669,3 +674,94 @@ wrong. `DS:14 = map_byte >> 1` was also re-confirmed here in a second sector (`0
 Still open on vehicles: the frigate (`asm/3038`) is a separate dispatch arm and was not tested, and
 `DS:14` did not change on a refused step, so it may hold the tile the player is ON rather than the
 attempted destination.
+
+### CORRECTED 2026-10-29, second pass: the table above is still wrong in two rows
+
+The table's plane and rocket rows were written from arm bodies that had been read one file
+deep. Following the calls changes both, and both changes are the same mistake this file has
+already logged at F6, F10 and earlier the same day: **reading a routine's first instruction
+instead of its chain.**
+
+| mode | what the table above said | what the bodies say |
+| --- | --- | --- |
+| horse `0x22` | the same ladder as foot | the foot ladder **minus shallow water** |
+| plane `0x26` | everything except forest | the foot ladder **minus shallow water, minus forest** |
+| rocket `0x28` | accepts everything | **rejects everything**, and pays nothing because it never reaches a drain |
+
+The mechanism, in address order:
+
+- `asm/2557` (horse) is a delay loop ending `jmp L_002826`, and `asm/2626` is not only a
+  food drain. After the second subtract it takes the verdict itself: reject `[DS:29]&0x7F`
+  == `0x02` (map `0x04`, shallow water) and `0x60` (the stamp divert), accept the rest.
+  The ladder still runs, because `asm/2626` reaches it with `call L_002775` — the foot tail.
+- `asm/2604` (plane) is `call L_002826` and then its own `cmp $0x6` forest reject. So the
+  plane inherits the mounted rule and adds one tile; it does not replace it.
+- `asm/2542` is the rocket arm, not `asm/25F8`. It is one instruction, `jmp L_0027fb`, and
+  `L_0027fb` is `call L_0027ff ; ret` where `L_0027ff` is the **reject** return
+  (`mov $0xff,%al ; ret`). `asm/25F8`'s `jmp L_002804` three instructions earlier is the
+  foot ladder's default accept. One file holds both verdicts' trampolines, which is how the
+  accept got attributed to the rocket.
+
+Grades: bytes for all of it. **Never observed** — no capture has walked a horse or a plane,
+and no capture has ever had `[DS:13] = 0x28`. The census over every harvest memory dump is
+`0x78` in 150, `0x00` in 12 (pre-world), `0x22` once (the `stepcost` forced poke), `0x24`
+once (`shipcap3`), `0x26` twice (`flight-32-live`, `flight-launched-live`). So the shallows
+rejection and the rocket's blanket refusal are `inferred-from-bytes` and are marked as such
+wherever the engine states them.
+
+The engine gates all twelve of these cases anyway (`engine/tests/passability_ladder.py`,
+CP5 P1), because a rule the bytes state is testable against the engine even when the original
+has not been filmed exercising it — and both controls were run: making the rocket arm accept
+and making the mounted charge 1 instead of 2 each turn the gate red.
+
+---
+
+## F15 — BOARDING IS GATED ON ITEMS, CONSUMES ITS TILE, AND IS NOT A STEP. 2026-10-29.
+
+The vehicle handoff asked three questions it could not answer from the summary headers. All
+three were answered by reading `asm/2FAD`'s arms and the item name table at file `0x501D`.
+
+**1. The gate bytes are inventory slots.** `asm/2FAD`'s arms test `DS:DD`, `DS:DF`, `DS:E1`,
+`DS:E2` and `DS:E5`. `items_held` is `DS:D6..DS:E5`, sixteen slots, so those are slots 7, 9,
+11, 12 and 15 — and the name table calls them ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and
+TRI-LITHIUM. Each refusal message names its own item, which is the independent confirmation:
+
+| gate | slot | item | refusal, in the game's words | arm |
+| --- | --- | --- | --- | --- |
+| `DS:DD` | 7 | ANKH | `A METALIC VOICE COMMANDS:` / `YOU MUST HAVE AN ANKH!` | rocket board |
+| `DS:DF` | 9 | SKULL KEY | `STRANGE YOU CAN'T GET IN!` | plane board |
+| `DS:E2` | 12 | BLUE TASSLE | `THE CREW OF THIS SHIP` / `WILL NOT LET YOU BOARD!` | ship board |
+| `DS:E1` | 11 | BRASS BUTTON | `FUNNY THIS PLANE IS` / `MISSING A BRASS BUTTON!` | plane launch |
+| `DS:E5` | 15 | TRI-LITHIUM | `A METALLIC VOICE SAYS:` / `SHIP INCAPABLE OF LAUNCH!` | rocket launch |
+
+The horse is the only ungated vehicle. This also settles the handoff's § 6 doubt about the
+frigate: `asm/3038` is not a fifth vehicle, it is the **ship arm's success path** — it sets
+`[DS:13] = 0x24`, the ship mode, and the thing it prints is the name of the ship you are
+allowed to take. `tools/cfg_printed.py` confirms `' FRIGATE'` executed in
+`captures/spice86/shipcap3`, whose memory dump reads `[DS:13] = 0x24` and `DS:E2 = 01`.
+
+**2. Boarding consumes the tile and does not move the player.** Every successful arm writes
+through the cached cell pointer at `DS:06`: grass (`0x08`) for horse, plane and rocket, water
+(`0x00`) for the ship. That is why the ship then "sails" from a dock — the cell under it is
+water. The live agreement is `captures/spice86/ship-port-boniface`: `[DS:14]` read `0x24` on
+the ship tile and `0x00` immediately after `BOARD`, position unchanged. The handoff's note
+that "the ship tile was still `0x48` after boarding" read the map **file** on disk; the live
+read says the opposite, and the write is in memory until a save carries it out.
+
+**3. The dismount is `X-IT`.** `asm/44D4` refuses on foot (`[DS:13] >= 0x78` → ` WHAT?`),
+refuses any tile that is not grass or (water while in a ship) with `-NOT HERE!`, then writes
+`2*[DS:13]` through the same cell pointer — the exact inverse of the shift right, so
+`0x24 → 0x48` puts the ship tile back — and sets `[DS:13] = 2*[DS:47] + 0x78`. Board and
+dismount are one pair: the tile is not destroyed, it is carried.
+
+**Incidental, and it corrects a standing assumption:** that last expression means the on-foot
+stamp is **class-dependent**, `0x78 + 2*pclass` (0x78/0x7A/0x7C/0x7E), not the constant
+`0x78` every capture shows — every capture used a Fighter. `asm/080D` computes the same
+expression. What survives untouched is the mounted test itself, `cmp $0x78` with `jb` meaning
+mounted, because all four vehicle modes are below it and all four class values are at or above
+it. Where `asm/080D` runs is unproven (no caller found, by label or by a byte scan for near
+calls to that address), so the engine records the class dependence and does not apply it.
+
+**Not modelled, and named rather than hidden:** whether the gating item is spent. `shipcap3`
+boarded with `DS:E2 = 01` and still reads `01` afterwards, which says no, on one sample that
+assumes the starting count was 1. `docs/needs-gameplay.md` G42.
