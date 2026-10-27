@@ -25,6 +25,9 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import u2_gate as G
+
 # (map byte, expected accept?, what it is)
 CASES = [
     (0x00, False, "open water — 22 live rejects (F11)"),
@@ -101,6 +104,81 @@ def main():
         return 1
     print("  PASS  passability ladder: %d/%d tiles match asm/2423's verdicts" %
           (len(CASES), len(CASES)))
+    return mode_main()
+
+
+# ---- the travel-mode arms (W2) ---------------------------------------------------
+#
+# The foot ladder above is only one of five arms. asm/253B branches on [DS:13] first, and
+# the four vehicle arms disagree with the summary they were first given in two ways that
+# cost this project a wrong table each time it was written from a header instead of a body:
+#
+#   * horse and plane are NOT "the same ladder as foot". asm/2626 calls the foot tail (so
+#     the ladder runs) and then rejects mode 0x02 (map 0x04, shallow water) and 0x60 of its
+#     own accord. The plane adds mode 0x06 (map 0x0C, forest) at asm/2604.
+#   * the rocket accepts NOTHING. asm/2542 jumps to the reject return; the unconditional
+#     accept that asm/25F8 is is the foot ladder's own fall-through, three instructions
+#     ahead of the reject the rocket arm lands on.
+#   * the ship is water only: asm/2619 accepts [DS:29] == 0x00 and its second compare,
+#     0x80, is unreachable because the value is a map byte shifted right once.
+#
+# Each case boards the vehicle on its own tile at the entry cell, then probes the candidate
+# one step east, and reads the position back. Fresh seed per case, same rule as above.
+
+MODE_CASES = [
+    # (mode, tile under the player, items, candidate tile east, accept?, why)
+    ("horse",  G.TILE_HORSE,  {},                       0x08, True,
+     "asm/2626 runs the foot ladder, grass is on it"),
+    ("horse",  G.TILE_HORSE,  {},                       0x0C, True,
+     "forest is below the 0x16 threshold, horse takes the ladder's verdict"),
+    ("horse",  G.TILE_HORSE,  {},                       0x04, False,
+     "shallows: asm/2626's own reject at runtime 0x2855, the finding the old table missed"),
+    ("horse",  G.TILE_HORSE,  {},                       0x00, False,
+     "open water, rejected by the ladder the mounted arm calls into"),
+    ("plane",  G.TILE_PLANE,  {G.ITEM_SKULL_KEY: 1},    0x08, True,
+     "asm/2604 adds only forest"),
+    ("plane",  G.TILE_PLANE,  {G.ITEM_SKULL_KEY: 1},    0x0C, False,
+     "forest: asm/2604 runtime 0x2813, the one tile the plane alone refuses"),
+    ("plane",  G.TILE_PLANE,  {G.ITEM_SKULL_KEY: 1},    0x04, False,
+     "shallows, inherited from asm/2626"),
+    ("ship",   G.TILE_SHIP,   {G.ITEM_BLUE_TASSLE: 1},  0x00, True,
+     "water: measured live in captures/spice86/ship-port-boniface"),
+    ("ship",   G.TILE_SHIP,   {G.ITEM_BLUE_TASSLE: 1},  0x04, False,
+     "shallows is not 0x00, so the ship refuses it too — water ONLY"),
+    ("ship",   G.TILE_SHIP,   {G.ITEM_BLUE_TASSLE: 1},  0x08, False,
+     "grass: refused live in the same capture, including the ship's own dock tile"),
+    ("rocket", G.TILE_ROCKET, {G.ITEM_ANKH: 1},        0x08, False,
+     "the rocket refuses every step: asm/2542 -> the reject return, not the accept"),
+    ("rocket", G.TILE_ROCKET, {G.ITEM_ANKH: 1},        0x00, False,
+     "and that includes water, which is what distinguishes it from the ship"),
+]
+
+
+def mode_case(name, tile, items, cand, want, why):
+    work = G.seed("/var/tmp/u2-cp5-ladder-%s-%02x" % (name, cand),
+                  tiles={G.ENTRY: tile, G.EAST: cand}, items=items)
+    d = G.state(work, ["B", "RIGHT"], name=name)
+    if d is None:
+        return None
+    return G.pos(d) == G.EAST
+
+
+def mode_main():
+    fails = 0
+    for name, tile, items, cand, want, why in MODE_CASES:
+        moved = mode_case(name, tile, items, cand, want, why)
+        ok = (moved == want)
+        if not ok:
+            fails += 1
+        print("  %s  %-6s steps onto %#04x: %s (%s)" %
+              ("PASS" if ok else "FAIL", name, cand,
+               "moved" if moved else "refused", why))
+    if fails:
+        print("  FAIL  %d of %d travel-mode passability cases disagree with asm/253B's arms"
+              % (fails, len(MODE_CASES)))
+        return 1
+    print("  PASS  travel-mode passability: %d/%d cases match asm/253B's four arms" %
+          (len(MODE_CASES), len(MODE_CASES)))
     return 0
 
 

@@ -610,10 +610,32 @@ fi
 # whoever wrote it thought of. 16 tiles, each in a fresh seed (the engine rewrites the save in
 # place, so a reused dir reports a wrong answer, and already did once this session).
 if U2_BIN=./u2 python3 tests/passability_ladder.py > "$WORK/p1.log" 2>&1; then
-    ok "CP5 P1: on-foot passability matches asm/2423's ladder (16 tiles, fresh seed each)"
+    ok "CP5 P1: passability matches asm/2423 on foot (16 tiles) and on all four travel modes (12 cases)"
 else
     sed 's/^/        /' "$WORK/p1.log" | tail -6
     bad "CP5 P1: passability ladder disagrees with the bytes"
+fi
+
+# --- V1: BOARD, and what one step costs in each travel mode ---------------------------
+#
+# asm/2F6F cmd_B prints "BOARD" and falls into asm/2FAD, which dispatches on [DS:14] (the tile
+# under the player, shifted right once) and sets [DS:13]. Each arm is gated on an item slot, and
+# the gate bytes are only interpretable through the item name table at file 0x501D: DS:DD/DF/E1/E2/E5
+# are items_held[7/9/11/12/15] = ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE, TRI-LITHIUM, and each
+# refusal message names its own item. asm/253B is the other half: one 19-food charge on foot, two
+# mounted (asm/2626 subtracts and then calls the foot tail, which subtracts again), none aboard the
+# ship, none in the rocket.
+#
+# Controls, both run and confirmed red before this was trusted: making the rocket arm accept takes
+# the ladder's two rocket cases and the rocket food case with it, and making the mounted charge 1
+# instead of 2 turns horse and plane red. The tile each arm leaves behind is NOT asserted here --
+# see board_case() in tests/vehicle_board.py and docs/needs-gameplay.md G35, because reading it
+# back needs a save and the save path has a defect of its own.
+if U2_BIN=./u2 python3 tests/vehicle_board.py > "$WORK/v1.log" 2>&1; then
+    ok "CP5 V1: BOARD sets the mode and costs the mode's food (13 cases, fresh seed each)"
+else
+    sed 's/^/        /' "$WORK/v1.log" | tail -8
+    bad "CP5 V1: BOARD or the per-mode food charge disagrees with asm/2FAD / asm/253B"
 fi
 
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------

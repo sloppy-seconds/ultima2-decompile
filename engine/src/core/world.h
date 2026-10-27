@@ -119,6 +119,32 @@ static inline void u2_world_tile_put(u2_world *w, int x, int y, uint8_t v)
     w->map_dirty = 1;
 }
 
+/* A terrain write: the cell AND the pristine copy, for a tile the game changes for
+ * good rather than covers temporarily.
+ *
+ * u2_world_tile_put() alone is not enough, and the reason is this module's own design
+ * rather than anything in the bytes: the creature stamp is rebuilt from map_base on
+ * every creature turn (u2_monsters_restamp), so a write that lands only in `map` is
+ * erased the next time anything moves. A vehicle tile you boarded would reappear; a
+ * door you opened would shut again. Anything that edits the world, as opposed to what
+ * is standing in it, goes through here.
+ *
+ * The vehicle arms of asm/2FAD are the site that forced the distinction: the live
+ * sample in captures/spice86/ship-port-boniface read [DS:14] go 0x24 -> 0x00 on BOARD
+ * and it stayed water for every step after, which is only possible if the write
+ * outlives the redraws. NOTE, not fixed here: the door-paving write in the UNLOCK arm
+ * (asm/435E, called from the walk loop) has the same requirement and still uses
+ * u2_world_tile_put(). Changing it is a separate ticket with its own gate, because it
+ * is shipped behaviour and the vehicle work has no business silently rewriting it.
+ */
+static inline void u2_world_terrain_put(u2_world *w, int x, int y, uint8_t v)
+{
+    const int i = u2_world_tile_index(x, y);
+    w->map[i] = v;
+    w->map_base[i] = v;
+    w->map_dirty = 1;
+}
+
 /* "<dir>/<prefix><hi><lo>" — the caller supplies the prefix spelling. */
 void u2_world_path(char *buf, size_t bufsz, const u2_ctx *ctx,
                    const char *prefix, u2_sector_id id);

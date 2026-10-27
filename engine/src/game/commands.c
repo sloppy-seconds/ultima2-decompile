@@ -439,6 +439,307 @@ static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* ---- the vehicles -------------------------------------------------------- */
+
+/* asm/2F6F cmd_B: print "BOARD", then asm/2FAD dispatches on [DS:14], which is the map
+ * byte under the player shifted right once — the same quantity the passability ladder
+ * tests, and NOT the art index.
+ *
+ * The dispatch, in the original's order, with what each arm actually does:
+ *
+ *   0x22 horse   " HORSE", mode := 0x22, the cell becomes grass. No gate.
+ *   0x24 ship    gated on DS:E2. With it: " FRIGATE", mode := 0x24, the cell becomes
+ *                water. Without it: " SHIP" / "THE CREW OF THIS SHIP" / "WILL NOT LET
+ *                YOU BOARD!" and nothing changes. So the thing you can board is the
+ *                FRIGATE, and asm/3038 is not a fifth vehicle — it is the ship arm's
+ *                success path. § 6 of the handoff had it as untested; the gate byte names it.
+ *   0x26 plane   gated on DS:DF (SKULL KEY): " PLANE" either way, and "STRANGE YOU CAN'T
+ *                GET IN!" without it.
+ *   0x28 rocket  " ROCKET" first, then the DS:DD (ANKH) gate: "A METALIC VOICE
+ *                COMMANDS:" / "YOU MUST HAVE AN ANKH!" without it.
+ *   anything else  the tail at asm/2FB8, which prints " WHAT?" — so the whole line reads
+ *                "BOARD WHAT?". That is the original's own refusal and nothing is invented here.
+ *
+ * The gate bytes are item slots, not flags: DS:DD/DF/E1/E2/E5 are items_held[7/9/11/12/15]
+ * and the item name table at file 0x501D calls those slots ANKH, SKULL KEY, BRASS BUTTON,
+ * BLUE TASSLE and TRI-LITHIUM. Each refusal message names its own item, so five independent
+ * agreements back the mapping — see the block comment in overworld.h.
+ *
+ * Boarding does not move the player, and it consumes the tile: each arm writes a ground byte
+ * through the cell pointer DS:06 (grass for the three land vehicles, water for the ship).
+ * The live sample is captures/spice86/ship-port-boniface, where [DS:14] went 0x24 -> 0x00 on
+ * the BOARD with the position unchanged. Whether the consumed tile comes back is answered by
+ * asm/44D4 (X-IT), which writes 2*[DS:13] back into the cell and returns the player to foot —
+ * that is the dismount the handoff could not find, and it is a separate letter.
+ *
+ * NOT modelled, because the pointer it writes through is not modelled: the original writes to
+ * [[DS:6]], the cached cell pointer asm/50B3 maintains, and which cell that holds at the moment
+ * BOARD runs is inferred (the player's own) rather than traced. The live [DS:14] change is what
+ * makes the inference worth shipping; if a capture ever shows the write landing on a different
+ * cell, this is the line that changes.
+ */
+static void board_vehicle(u2_ctx *ctx, u2_overworld *ow, uint8_t mode, uint8_t leaves)
+{
+    ctx->state.player_stamp = mode;
+    /* A terrain write, not a stamp: the tile is gone from the world, and the creature
+     * restamp rebuilds the live grid from the pristine copy on every redraw. See
+     * u2_world_terrain_put's note in core/world.h — without this the boarded tile is
+     * back the next time anything moves, which the live capture rules out.
+     */
+    u2_world_terrain_put(&ow->world, ow->x, ow->y, leaves);
+}
+
+static u2_cmd_result cmd_B(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+
+    seam_str_out(ctx, U2_S_BOARD);
+
+    switch (u2_world_tile_at(&ow->world, ow->x, ow->y) >> 1) {
+    case U2_MODE_HORSE:
+        seam_str_out(ctx, U2_S_BOARD_HORSE);
+        board_vehicle(ctx, ow, U2_MODE_HORSE, U2_TILE_AFTER_BOARD_LAND);
+        break;
+
+    case U2_MODE_SHIP:
+        if (ctx->state.items_held[U2_ITEM_BLUE_TASSLE] == 0) {
+            /* One str_out call in the original, with the newline glyph mid-string; the
+             * engine emits the breaks itself, the same convention cmd_V's helm line uses. */
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_SHIP_A);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_SHIP_B);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_SHIP_C);
+        } else {
+            seam_str_out(ctx, U2_S_BOARD_FRIGATE);
+            board_vehicle(ctx, ow, U2_MODE_SHIP, U2_TILE_AFTER_BOARD_WATER);
+        }
+        break;
+
+    case U2_MODE_PLANE:
+        if (ctx->state.items_held[U2_ITEM_SKULL_KEY] == 0) {
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_PLANE_REF_A);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_PLANE_REF_B);
+        } else {
+            seam_str_out(ctx, U2_S_BOARD_PLANE);
+            board_vehicle(ctx, ow, U2_MODE_PLANE, U2_TILE_AFTER_BOARD_LAND);
+        }
+        break;
+
+    case U2_MODE_ROCKET:
+        seam_str_out(ctx, U2_S_BOARD_ROCKET);
+        if (ctx->state.items_held[U2_ITEM_ANKH] == 0) {
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_ROCKET_REF_A);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_BOARD_ROCKET_REF_B);
+        } else {
+            board_vehicle(ctx, ow, U2_MODE_ROCKET, U2_TILE_AFTER_BOARD_LAND);
+        }
+        break;
+
+    default:
+        seam_str_out(ctx, U2_S_BOARD_WHAT);
+        break;
+    }
+
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* The flight lines all end the same way: the word, the game's newline, a fresh prompt.
+ * asm/38B0 stores it as ONE string ("NORTH",0x0d,"CMD: ") and the engine composes it from
+ * the two pool entries rather than carrying a third copy of the text. */
+static void flight_line(u2_ctx *ctx, const char *word)
+{
+    if (word) seam_str_out(ctx, word);
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_CMD_PROMPT);
+}
+
+/* asm/38B0's plane branch, runtime 0x3BFA.
+ *
+ *   "LAUNCH--PLANE" prints BEFORE the gate, so a plane without a BRASS BUTTON says both
+ *   words and then explains: "FUNNY THIS PLANE IS" / "MISSING A BRASS BUTTON!".
+ *
+ *   Launched, the original enters a loop of its own (0x3C5F..0x3CB2) that is NOT the walk
+ *   loop: it polls the key non-blocking, applies a heading delta of its own (DS:21/DS:22,
+ *   initialised to north), masks both coordinates with and 0x3F, and redraws — one cell of
+ *   travel per iteration, whether or not a key arrived. Arrows change the heading and echo
+ *   the direction word; 'L' tries to land; any other key does nothing except let the
+ *   iteration run. It consults no passability routine and charges no food, which is why
+ *   airborne flight is a mode of the handler and not a mode of DS:13's ladder: DS:13 stays
+ *   0x26 the whole time, and what the ladder at asm/2604 governs is the PLANE walked on the
+ *   ground after landing.
+ *
+ *   Landing is accepted on tile 0x08 (grass) and nowhere else: "LAND PLANE." versus
+ *   "LAND--NOT HERE!!!!!", and the refusal does not stop the plane — the bytes fall into
+ *   the same delta apply as everything else. Both branches executed in
+ *   captures/spice86/flight-launched-live (runtime 0x3B5A and 0x3B72 per the asm header),
+ *   so this is observed flow, not inferred flow.
+ *
+ * The engine's scripted input has one poll per WAIT token, so a script drives the plane one
+ * cell per WAIT and one cell per key — which is the original's cadence expressed in the only
+ * clock a headless run has. When the script runs out the loop ends: the original has no such
+ * exit, it flies until it lands or leaves the sector, and inventing one would be a guess about
+ * what exhaustion means. That is a harness limit, not a behaviour.
+ *
+ * Not modelled, both named rather than hidden: the site-edge exit at 0x3CCD (crossing x==0 or
+ * y==0 inside a site jumps to the sector reload at asm/243E, and the engine's sector-exit
+ * plumbing is site_leave(), which this loop has no proven route into), and the redraw call at
+ * asm/5CB1, which the engine's own draw replaces.
+ */
+static u2_cmd_result launch_plane(u2_ctx *ctx, u2_overworld *ow)
+{
+    seam_str_out(ctx, U2_S_LAUNCH_PLANE);
+
+    if (ctx->state.items_held[U2_ITEM_BRASS_BUTTON] == 0) {
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_LAUNCH_PLANE_REF_A);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_LAUNCH_PLANE_REF_B);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    /* DS:21 = 0, DS:22 = 0xFF: the heading the original initialises to, which is north. */
+    int dx = 0, dy = -1;
+    flight_line(ctx, NULL);
+
+    for (;;) {
+        u2_key k;
+        const int r = seam_key_poll(ctx, &k);
+        if (r < 0) break;                       /* input exhausted: no original counterpart */
+
+        if (r) {
+            switch (k.ch) {
+            case U2_KEY_UP:    dx = 0;  dy = -1; flight_line(ctx, U2_S_DIR_NORTH); break;
+            case U2_KEY_DOWN:  dx = 0;  dy =  1; flight_line(ctx, U2_S_DIR_SOUTH); break;
+            case U2_KEY_RIGHT: dx =  1; dy =  0; flight_line(ctx, U2_S_DIR_EAST);  break;
+            case U2_KEY_LEFT:  dx = -1; dy =  0; flight_line(ctx, U2_S_DIR_WEST);  break;
+            case 'L': case 'l':
+                /* asm/3D47: the tile under the player, compared to 0x08 after and 0x7F. */
+                if ((u2_world_tile_at(&ow->world, ow->x, ow->y) & 0x7F) == 0x08) {
+                    seam_str_out(ctx, U2_S_LAND_PLANE);
+                    cmd_done(ctx);
+                    return U2_CMD_DONE;
+                }
+                flight_line(ctx, U2_S_LAND_NOT_HERE);
+                break;
+            default:
+                break;                          /* any other key: the plane keeps going */
+            }
+        }
+
+        /* asm/3C9B: x += dx, y += dy, both masked, with the carry chain intact so a
+         * negative delta is the byte 0xFF and wraps the same way it does on the 8088. */
+        ow->x = (int)(((uint8_t)ow->x + (uint8_t)dx) & 0x3Fu);
+        ow->y = (int)(((uint8_t)ow->y + (uint8_t)dy) & 0x3Fu);
+        u2_overworld_draw(ctx, ow);
+    }
+
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* asm/38B0's rocket branch, runtime 0x3AD2.
+ *
+ * "LAUNCH--ROCKET", then the DS:E5 (TRI-LITHIUM) gate — without it, "A METALLIC VOICE
+ * SAYS:" / "SHIP INCAPABLE OF LAUNCH!". Note the spelling differs from cmd_B's metallic
+ * voice on purpose: the binary has "A METALIC VOICE COMMANDS:" in asm/3048 and "A METALLIC
+ * VOICE SAYS:" here, and they are two strings, not one that drifted.
+ *
+ * Launched, the rocket is nothing like the plane. It prints "PREPARE FOR LAUNCH!", puts the
+ * player at (0,0), sets the view mode byte DS:12 to 0xFF, prints "(PRESS ANY KEY)" and then
+ * flies SOUTH TWO CELLS PER ITERATION on its own, stepping one cell east every time the y
+ * coordinate lands on a multiple of 8 (asm/3B94: `adc $0x2,%al` then `and $7,%al; jne`). No
+ * heading is steerable; the only input is the key that stops it. Where it stops is the
+ * verdict: tile 0x08 grass and it survives, anything else and the handler jumps to
+ * runtime 0x0E62, which is the death tail. So a rocket is a one-way trip you aim by
+ * timing, and the engine reproduces exactly that.
+ *
+ * Not modelled, and deliberately so rather than guessed:
+ *   * the return-point triple DS:69/DS:6A/DS:6B and the save call at asm/24FD. Those bytes
+ *     are not in state.h, DS:6D (the guard on the whole block) is the byte state.h names
+ *     boots_count, and the pair belongs to the planet subsystem CP7 has not started. Writing
+ *     an invented equivalent would be worse than leaving the gap.
+ *   * the two 256-byte table clears at DS:272/DS:372 and the calls at asm/6B99 / asm/2490.
+ *     asm/437E (cmd_V) clears the same two tables and the source of the continent art it
+ *     goes with is unidentified, per that handler's own note.
+ */
+static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
+{
+    seam_str_out(ctx, U2_S_LAUNCH_ROCKET);
+
+    if (ctx->state.items_held[U2_ITEM_TRI_LITHIUM] == 0) {
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_LAUNCH_ROCKET_REF_A);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_LAUNCH_ROCKET_REF_B);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_LAUNCH_ROCKET_GO);
+
+    /* asm/3B74..0x3B7E: position to (0,0) and DS:12 to the world-map view mode. The
+     * sector reload at asm/2490 that runs just before this is not modelled — it re-reads
+     * MAPXFF, and the engine's sector store is owned by the world module, not by a command
+     * handler. Note also that "(PRESS ANY KEY)" carries NO leading 0x8d glyph, so in the
+     * original it continues the line "PREPARE FOR LAUNCH!" rather than starting one; the
+     * engine does not add a newline the bytes do not have. */
+    ow->x = 0;
+    ow->y = 0;
+    ctx->state.view_mode = 0xFF;
+
+    seam_str_out(ctx, U2_S_PRESS_ANY_KEY);
+
+    for (;;) {
+        /* asm/3B94: y += 2 always; x += 1 whenever the new y is a multiple of 8. */
+        ow->y = (int)(((uint8_t)ow->y + 2u) & 0x3Fu);
+        if ((ow->y & 7) == 0)
+            ow->x = (int)(((uint8_t)ow->x + 1u) & 0x3Fu);
+
+        u2_overworld_draw(ctx, ow);
+
+        u2_key k;
+        const int r = seam_key_poll(ctx, &k);
+        if (r < 0) break;                       /* input exhausted: the original blocks here */
+        if (r) {
+            /* asm/3BCE: the tile it stopped on decides everything. */
+            if ((u2_world_tile_at(&ow->world, ow->x, ow->y) & 0x7F) != 0x08) {
+                u2_death(ctx);
+            }
+            cmd_done(ctx);
+            return U2_CMD_DONE;
+        }
+    }
+
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* asm/38B0 cmd_L: LAUNCH. The handler dispatches on DS:13 alone — plane at 0x26, rocket at
+ * 0x28, and "LAUNCH WHAT?" for everything else, including the horse and the ship, which have
+ * no launch arm at all. */
+static u2_cmd_result cmd_L(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+
+    if (ctx->state.player_stamp == U2_MODE_PLANE)
+        return launch_plane(ctx, ow);
+    if (ctx->state.player_stamp == U2_MODE_ROCKET)
+        return launch_rocket(ctx, ow);
+
+    seam_str_out(ctx, U2_S_LAUNCH_WHAT);
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -452,7 +753,6 @@ static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  * stops each one below is a missing engine subsystem, not a missing capture. Listed in letter
  * order, because a list that drifts out of order is how entries get duplicated.
  *
- *   B  BOARD needs vehicles.
  *   C  the gates are decoded and cheap (see asm/3139_cast_spell_flow.asm: spell name from
  *      pool[0x24+DS:63], the DS:D7+DS:D8 wand/staff test, the DS:B6[pick] count and its
  *      packed-decimal decrement, and the DS:4A >= 4 rule that makes casting a tower-and-
@@ -463,7 +763,6 @@ static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      unresolved in its own header, and dungeons are parked (AGENTS.md section 3).
  *   F  FIRE is the combat/attack arm.
  *   G  GET needs ground items.
- *   L  LAUNCH needs vehicles.
  *   N  asm/3BCE prints NEGATE TIME and falls through into asm/3BDD (`mov 0xe3,%al`), which
  *      is not cmd_done. Where that fragment ends is not established; guessing a time effect
  *      from the word "NEGATE" is the invention this project's rules exist to stop.
@@ -498,7 +797,7 @@ static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  */
 static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_A, /* A  attack aim: asm/2B8F, prints ATTACK-- and awaits a direction */
-    NULL,  /* B  not implemented: BOARD needs vehicles */
+    cmd_B, /* B  board vehicle: asm/2F6F -> asm/2FAD, gated on the item the refusal names */
     NULL,  /* C  see the note above */
     NULL,  /* D  see the note above */
     cmd_E, /* E  enter site: asm/3389, body in u2_overworld_enter() */
@@ -508,7 +807,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* I  not implemented */
     cmd_J,
     NULL,  /* K  not implemented */
-    NULL,  /* L  not implemented: LAUNCH needs vehicles */
+    cmd_L, /* L  launch plane/rocket: asm/38B0, its own flight loops, gated on the item named */
     cmd_M, /* M  ready a spell by number: asm/3B92, echoes the spell NAME */
     NULL,  /* N  see the note above */
     NULL,  /* O  see the note above */

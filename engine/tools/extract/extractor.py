@@ -290,6 +290,51 @@ MANIFEST = [
     # at 0x463D. The entry names themselves come from U2_T_ARMOUR, which is the pool at 0x501D.
     ("U2_S_WEAR_HEADER",       "43F3_cmd_W.asm", ("run", 0x45F6, 12)),
     ("U2_S_WHICH",             "43F3_cmd_W.asm", ("run", 0x463D, 7)),
+    # The vehicles: cmd_B (BOARD, asm/2F6F -> asm/2FAD) and cmd_L (LAUNCH, asm/38B0).
+    #
+    # Every one of these is addressed by offset, not by index, for two reasons. Several
+    # literals repeat -- " PLANE" appears four times in 0x3000..0x4000 and " WHAT?" eight
+    # times in the file -- and locate() searching forward from the function's base would
+    # land on an earlier copy and still report success, because the bytes match. The other
+    # reason is the multi-segment lines: " SHIP",0x8d,"THE CREW..." and friends are one
+    # str_out call with the binary's newline glyph mid-string, which DB_RE does not match.
+    #
+    # Offsets were read back from original/ultimaii.exe on 2026-10-30 the same way as the
+    # cmd_W ones: the asm label is the file address of the `call str_out`, and the literal
+    # starts three bytes later. Each was confirmed unique at its own address.
+    #
+    # BOARD's arms, in dispatch order (asm/2FAD): the refusal pairs are what the original
+    # prints when the gating item is missing, and they are the evidence that names the item
+    # -- "YOU MUST HAVE AN ANKH!" sits behind DS:DD, which is items_held[7], and the item
+    # name table at file 0x501D calls slot 7 ANKH. Same for SKULL KEY (DS:DF), BRASS BUTTON
+    # (DS:E1), BLUE TASSLE (DS:E2) and TRI-LITHIUM (DS:E5).
+    ("U2_S_BOARD",                 "2F6F_cmd_B.asm",            ("run", 0x3172,  5, "BOARD")),
+    ("U2_S_BOARD_WHAT",            "2FB8_offer_what_msg.asm",   ("run", 0x31C3,  6, " WHAT?")),
+    ("U2_S_BOARD_HORSE",           "2FD6_vehicle_horse.asm",    ("run", 0x31D9,  6, " HORSE")),
+    ("U2_S_BOARD_SHIP_A",          "2FFE_vehicle_ship.asm",     ("run", 0x3201,  5, " SHIP")),
+    ("U2_S_BOARD_SHIP_B",          "2FFE_vehicle_ship.asm",     ("run", 0x3207, 21, "THE CREW OF THIS SHIP")),
+    ("U2_S_BOARD_SHIP_C",          "2FFE_vehicle_ship.asm",     ("run", 0x321D, 23, "WILL NOT LET YOU BOARD!")),
+    ("U2_S_BOARD_FRIGATE",         "3038_vehicle_frigate.asm",  ("run", 0x323C,  8, " FRIGATE")),
+    ("U2_S_BOARD_PLANE_REF_A",     "3048_vehicle_plane.asm",    ("run", 0x3264,  6, " PLANE")),
+    ("U2_S_BOARD_PLANE_REF_B",     "3048_vehicle_plane.asm",    ("run", 0x326B, 25, "STRANGE YOU CAN'T GET IN!")),
+    ("U2_S_BOARD_PLANE",           "3048_vehicle_plane.asm",    ("run", 0x328C,  6, " PLANE")),
+    ("U2_S_BOARD_ROCKET",          "3048_vehicle_plane.asm",    ("run", 0x32AD,  7, " ROCKET")),
+    ("U2_S_BOARD_ROCKET_REF_A",    "3048_vehicle_plane.asm",    ("run", 0x32C0, 25, "A METALIC VOICE COMMANDS:")),
+    ("U2_S_BOARD_ROCKET_REF_B",    "3048_vehicle_plane.asm",    ("run", 0x32DA, 22, "YOU MUST HAVE AN ANKH!")),
+    # LAUNCH, asm/38B0. Note the two metallic-voice lines are DIFFERENT strings: cmd_B's
+    # says "A METALIC VOICE COMMANDS:" (sic, one L) and cmd_L's says "A METALLIC VOICE
+    # SAYS:" (two Ls, different verb). They are not one message and must not be merged.
+    ("U2_S_LAUNCH_WHAT",           "38B0_cmd_L.asm",            ("run", 0x3AC2, 12, "LAUNCH WHAT?")),
+    ("U2_S_LAUNCH_ROCKET",         "38B0_cmd_L.asm",            ("run", 0x3AD5, 14, "LAUNCH--ROCKET")),
+    ("U2_S_LAUNCH_ROCKET_REF_A",   "38B0_cmd_L.asm",            ("run", 0x3AEF, 22, "A METALLIC VOICE SAYS:")),
+    ("U2_S_LAUNCH_ROCKET_REF_B",   "38B0_cmd_L.asm",            ("run", 0x3B06, 25, "SHIP INCAPABLE OF LAUNCH!")),
+    ("U2_S_LAUNCH_ROCKET_GO",      "38B0_cmd_L.asm",            ("run", 0x3B27, 19, "PREPARE FOR LAUNCH!")),
+    ("U2_S_PRESS_ANY_KEY",         "38B0_cmd_L.asm",            ("run", 0x3B84, 15, "(PRESS ANY KEY)")),
+    ("U2_S_LAUNCH_PLANE",          "38B0_cmd_L.asm",            ("run", 0x3BFD, 13, "LAUNCH--PLANE")),
+    ("U2_S_LAUNCH_PLANE_REF_A",    "38B0_cmd_L.asm",            ("run", 0x3C16, 19, "FUNNY THIS PLANE IS")),
+    ("U2_S_LAUNCH_PLANE_REF_B",    "38B0_cmd_L.asm",            ("run", 0x3C2A, 23, "MISSING A BRASS BUTTON!")),
+    ("U2_S_LAND_PLANE",            "38B0_cmd_L.asm",            ("run", 0x3D5D, 11, "LAND PLANE.")),
+    ("U2_S_LAND_NOT_HERE",         "38B0_cmd_L.asm",            ("run", 0x3D75, 19, "LAND--NOT HERE!!!!!")),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

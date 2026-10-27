@@ -120,6 +120,10 @@ static int emit_raw(const u2_state *s, char *out, int outsz)
         { "pos", pos, 2 }, { "sector", sector, 2 }, { "hp", hp, 2 },
         { "food", food, 3 }, { "exp", exp, 2 }, { "gold", gold, 2 },
         { "items", s->items_held, 16 },
+        /* The travel mode, which is the same byte as the sprite stamped into the player's
+         * cell (DS:13). A turn log that cannot say whether the player was aboard anything
+         * cannot explain a step that cost 38 food or a step the rocket refused. */
+        { "stamp", &s->player_stamp, 1 },
         { "mon_x", s->mon_x, 32 },     { "mon_y", s->mon_y, 32 },
         { "mon_hp", s->mon_hp, 32 },   { "mon_type", s->mon_type, 32 },
         { "mon_kind", s->mon_kind, 32 }, { "mon_role", s->mon_role, 32 },

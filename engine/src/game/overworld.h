@@ -146,6 +146,88 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow);
  */
 int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay);
 
+/* ---- travel modes (DS:13) -------------------------------------------------
+ *
+ * DS:13 is one byte doing two jobs: it is the sprite stamped into the player's map
+ * cell, and it is the travel mode that asm/253B_food_mode_dispatch branches on. The
+ * four vehicle values are the vehicle map byte shifted right once, which is the same
+ * quantity as [DS:14] and the same one the passability ladder tests.
+ *
+ * On foot the byte is NOT a constant: asm/080D computes it as `mov 0x47,%al ; add
+ * %al,%al ; clc ; adc $0x78,%al`, i.e. 0x78 + 2*pclass, so the four classes sit at
+ * 0x78/0x7A/0x7C/0x7E. Every capture has read 0x78 because every capture used a
+ * Fighter, and the mounted test everywhere in the binary is `cmp $0x78,%al` with the
+ * mounted arm being the `jb` side — so anything below 0x78 is a vehicle and anything
+ * at or above it is a class. That test is what the engine uses; the class-dependent
+ * value itself is recorded and NOT applied, because no caller of asm/080D has been
+ * found and where it runs is therefore unproven.
+ */
+#define U2_MODE_HORSE   0x22u   /* asm/2FD6, tile 0x44 */
+#define U2_MODE_SHIP    0x24u   /* asm/3038 (the FRIGATE arm), tile 0x48 */
+#define U2_MODE_PLANE   0x26u   /* asm/3048, tile 0x4C */
+#define U2_MODE_ROCKET  0x28u   /* asm/3048 tail, tile 0x50 */
+#define U2_MODE_FOOT_MIN 0x78u   /* `cmp $0x78,%al ; jb` = mounted (asm/33A6, asm/44D4) */
+
+/* The four vehicle map bytes. [DS:14] = map_byte >> 1, so each mode value doubled is
+ * the tile that produces it — corroborated three ways in asm/2FAD's header. */
+#define U2_TILE_HORSE   0x44u
+#define U2_TILE_SHIP    0x48u
+#define U2_TILE_PLANE   0x4Cu
+#define U2_TILE_ROCKET  0x50u
+
+/* Which tile a boarding leaves behind. asm/2FD6, asm/3048 and asm/3048's rocket tail
+ * each write 0x08 (grass) through the cell pointer at DS:06; asm/3038 writes 0x00
+ * (water). The live sample is captures/spice86/ship-port-boniface: [DS:14] read 0x24
+ * standing on the ship tile and 0x00 immediately after BOARD, with the position
+ * unchanged. So boarding consumes the vehicle tile — it does not move the player.
+ */
+#define U2_TILE_AFTER_BOARD_LAND  0x08u
+#define U2_TILE_AFTER_BOARD_WATER 0x00u
+
+/* The items that gate boarding and launching, as indices into state.items_held
+ * (DS:0xD6, 16 slots). The gate bytes are DS:DD, DS:DF, DS:E1, DS:E2 and DS:E5, which
+ * are slots 7, 9, 11, 12 and 15 of that array, and the item name table at file 0x501D
+ * names those slots ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and TRI-LITHIUM. The
+ * refusal messages say the same thing in the game's own words — "YOU MUST HAVE AN
+ * ANKH!" behind DS:DD, "STRANGE YOU CAN'T GET IN!" behind DS:DF, "MISSING A BRASS
+ * BUTTON!" behind DS:E1, "THE CREW OF THIS SHIP WILL NOT LET YOU BOARD!" behind
+ * DS:E2, "SHIP INCAPABLE OF LAUNCH!" behind DS:E5 — so the mapping is five independent
+ * agreements, not a guess. Sites: asm/3048 (DS:DF, DS:DD), asm/2FF6 (DS:E2),
+ * asm/38B0 (DS:E1, DS:E5).
+ *
+ * The horse has no gate: asm/2FD6 sets the mode unconditionally.
+ */
+#define U2_ITEM_ANKH         7u   /* DS:DD — gates ROCKET boarding   (asm/3048) */
+#define U2_ITEM_SKULL_KEY    9u   /* DS:DF — gates PLANE boarding    (asm/3048) */
+#define U2_ITEM_BRASS_BUTTON 11u  /* DS:E1 — gates PLANE launch      (asm/38B0) */
+#define U2_ITEM_BLUE_TASSLE  12u  /* DS:E2 — gates SHIP boarding     (asm/2FF6) */
+#define U2_ITEM_TRI_LITHIUM  15u  /* DS:E5 — gates ROCKET launch     (asm/38B0) */
+
+/*
+ * The passability verdict for a travel mode — asm/2423's mode dispatch at
+ * asm/253B, which is the first thing the routine does after storing its AL argument
+ * at DS:29. `stamp` is DS:13; anything that is not one of the four vehicle modes
+ * takes the on-foot ladder.
+ *
+ * Returns 1 to accept the step and 0 to reject it. Charges no food: the charge is a
+ * separate call (u2_overworld_step_food), because in the original the charge sits
+ * inside the same routine but ahead of the verdict, and the engine's walk loop needs
+ * to charge on refused steps too.
+ */
+int u2_mode_passable(const u2_world *w, int x, int y, uint8_t stamp);
+
+/*
+ * The per-step food charge for the mode the player is in, and the death check that
+ * goes with it. asm/2599 subtracts 19 once on foot; asm/2626 (horse and plane) subtracts
+ * 19 and then calls the foot tail, which subtracts 19 again — two charges, not one of 38,
+ * and the engine does two for the same reason asm/2626's own header gives: the first
+ * underflow goes to the starvation tail and the second never runs. The ship arm
+ * (asm/2619) and the rocket arm (asm/2542) reach no drain at all.
+ *
+ * Returns 1 when a subtract underflowed, having already run u2_death.
+ */
+int u2_overworld_step_food(u2_ctx *ctx);
+
 /*
  * Spend `bcd_sub` food from the packed-decimal triple DS:53/54/55 and return 1
  * if the subtraction underflowed, which is the original's death condition

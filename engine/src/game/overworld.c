@@ -682,13 +682,11 @@ static void u2_force_field(u2_ctx *ctx)
  * that changes.
  *
  * Modes other than foot have their own arms (asm/2557 horse, asm/2619 ship, asm/2604 plane,
- * asm/25F8 rocket) and are NOT handled here — see docs/passability-findings.md F14. The engine has
- * no travel-mode state yet, so this is the only reachable path.
+ * asm/2542 rocket) and are NOT handled here — see u2_mode_passable() below, and
+ * docs/passability-findings.md F14 for the corrected reading of those arms.
  */
-static int u2_tile_passable(const u2_world *w, int x, int y)
+static int foot_ladder(unsigned mode)
 {
-    const unsigned mode = (u2_world_tile_at(w, x, y) >> 1) & 0x7Fu;
-
     /* The two named rejections, both proven by walking: open sea (22 live rejects) and mountain
      * (blocked at (11,20)). Note these are map 0x00 and 0x10 — the ladder sees them shifted. */
     if (mode == 0x00u || mode == 0x08u)
@@ -707,6 +705,79 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
     }
 
     return mode < 0x16u;      /* asm/25F4: `cmp $0x16,%al; jae reject`, else accept */
+}
+
+static int u2_tile_passable(const u2_world *w, int x, int y)
+{
+    return foot_ladder((u2_world_tile_at(w, x, y) >> 1) & 0x7Fu);
+}
+
+/* ---- the travel-mode arms of asm/2423 -------------------------------------
+ *
+ * asm/253B reads [DS:13] and branches, in address order, 0x28 rocket, 0x26 plane,
+ * 0x24 ship, 0x22 horse, everything else foot. Each arm is a separate routine and the
+ * bodies disagree with the summary they were first given, so what follows is a
+ * transcription of the four bodies, not of the table in docs/passability-findings.md
+ * F14 — which this corrects in two places, both recorded there.
+ *
+ *   asm/2542 (rocket)  `jmp L_0027fb`, and L_0027fb is `call L_0027ff; ret` where
+ *                      L_0027ff is the reject return (`mov $0xff,%al; ret`). The rocket
+ *                      REJECTS EVERY STEP and pays nothing. It is not the accept the
+ *                      filename asm/25F8 suggested: file 0x25F8 is the foot ladder's own
+ *                      default-accept fall-through, three instructions before the reject
+ *                      return the rocket arm jumps into.
+ *   asm/2619 (ship)    accept iff [DS:29] == 0x00. The second compare, `cmp $0x80` in
+ *                      asm/2620, is unreachable: DS:29 is map_byte >> 1 and the largest
+ *                      value that can reach it is 0xFC >> 1 = 0x7E. Water only, proven
+ *                      live in captures/spice86/ship-port-boniface — the ship refused its
+ *                      own dock tile and refused grass.
+ *   asm/2557 (horse)   a delay loop, then `jmp L_002826` = asm/2626.
+ *   asm/2604 (plane)   `call L_002826` = asm/2626, then its own forest reject.
+ *   asm/2626 (mounted) subtract 19, `call L_002775` — which is the FOOT tail, so the
+ *                      whole ladder runs — then reject mode 0x02 (map 0x04, shallows)
+ *                      and 0x60 (the stamp divert) and accept everything else.
+ *
+ * So horse and plane are the foot ladder MINUS shallow water, and the plane is that
+ * again MINUS forest. Not "the same ladder as foot", and not "flies over anything".
+ * The shallows rejection is the new finding here: it is in asm/2626's body at
+ * runtime 0x2855..0x285c and nobody had read it as a tile rule, because the file is
+ * named for its food drain.
+ *
+ * Grade: bytes for every comparison above; measured for the ship (live capture) and for
+ * the -38 that rides along with the mounted arms; inferred for the horse and the plane,
+ * because neither was ever seen to walk in a capture — the two samples that set the mode
+ * were forced pokes to DS:13 (asm/2626's caveat) or a BOARD that preceded a LAUNCH.
+ */
+int u2_mode_passable(const u2_world *w, int x, int y, uint8_t stamp)
+{
+    const unsigned raw = u2_world_tile_at(w, x, y) >> 1;
+    const unsigned mode = raw & 0x7Fu;
+
+    switch (stamp) {
+    case U2_MODE_ROCKET:
+        return 0;                       /* asm/2542 -> asm/25FB: unconditional reject */
+
+    case U2_MODE_SHIP:
+        return raw == 0x00u;            /* asm/2619: no mask, and 0x80 cannot happen */
+
+    case U2_MODE_HORSE:
+    case U2_MODE_PLANE:
+        /* asm/2626 calls the foot tail, so the ladder is the first gate... */
+        if (!foot_ladder(mode))
+            return 0;
+        /* ...and then adds two of its own. 0x60 is already refused by the threshold above
+         * (0x60 >= 0x16), but the bytes test it explicitly ahead of the ladder's divert, so
+         * this does too rather than relying on the coincidence. */
+        if (mode == 0x02u || mode == 0x60u)
+            return 0;
+        /* asm/2604: the plane's own reject, and the only tile it adds. */
+        if (stamp == U2_MODE_PLANE && mode == 0x06u)
+            return 0;
+        return 1;
+
+    default:
+        return foot_ladder(mode);        /* foot, and any stamp value the dispatch misses */
+    }
 }
 
 /* Public test surface for the passability verdict on a raw map byte.
@@ -799,6 +870,40 @@ int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub)
         return 0;
     u2_death(ctx);
     return 1;
+}
+
+/* How many 19-food charges one step attempt costs in the mode the player is in.
+ * asm/253B's dispatch: the foot tail and the mounted tail are the two that reach a
+ * drain, and asm/2626 reaches it twice because it subtracts once and then calls the
+ * foot tail, which subtracts again. The ship and rocket arms never get there. */
+static int step_charges(uint8_t stamp)
+{
+    switch (stamp) {
+    case U2_MODE_SHIP:
+    case U2_MODE_ROCKET:
+        return 0;
+    case U2_MODE_HORSE:
+    case U2_MODE_PLANE:
+        return 2;
+    default:
+        return 1;
+    }
+}
+
+/* The step charge, as the original orders it: charge first, verdict afterwards, so a
+ * refused step pays and a step that starves never prints its complaint. Two subtracts
+ * rather than one of 38 because that is the shape of asm/2626 — and the shape matters
+ * at the bottom of the tank, where the first borrow goes to the starvation tail and
+ * the second subtract never runs. */
+int u2_overworld_step_food(u2_ctx *ctx)
+{
+    for (int i = 0; i < step_charges(ctx->state.player_stamp); i++) {
+        if (food_spend(ctx, U2_FOOD_PER_MOVE)) {
+            u2_death(ctx);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 /*
@@ -1466,7 +1571,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             continue;
         }
 
-        if (blocked_by_creature || !u2_tile_passable(&ow->world, nx, ny)) {
+        if (blocked_by_creature || !u2_mode_passable(&ow->world, nx, ny,
+                                                     ctx->state.player_stamp)) {
             /* Blocked. The direction word and the complaint share a line:
              * "CMD: WEST--INVALID MOVE!" then a fresh prompt below.
              *
@@ -1486,10 +1592,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
              * the charge lands whether the step is allowed or not. Measured on the
              * maxed seed in sector 31, one arrow, reads back to back: DS:00/01
              * unchanged, food 997904 -> 997885, screen `CMD: WEST--INVALID MOVE!`.
-             * u2_overworld_spend_food runs the starvation tail on underflow, and the
+             * u2_overworld_step_food runs the starvation tail on underflow, and the
              * original jumps there from inside the call — so the complaint never
-             * prints on a step that kills. */
-            if (u2_overworld_spend_food(ctx, U2_FOOD_PER_MOVE))
+             * prints on a step that kills. How many charges a step is, is the travel
+             * mode's (asm/253B): one on foot, two mounted, none aboard the ship or the
+             * rocket — and the rocket refuses every step, so it has to be launched out
+             * of, not walked out of. */
+            if (u2_overworld_step_food(ctx))
                 break;
 
             seam_str_out(ctx, U2_S_INVALID_MOVE);
@@ -1523,11 +1632,11 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * direction word and before anything else — so the word is on the line when
          * the subtraction kills, and the death tail prints three newlines so the
          * announcement lands below it (`death1.png`). On foot the cost is 19; horse
-         * and plane cost 38 because asm/2626 falls through a second subtract, and the
-         * ship and the rocket pay nothing at all. The engine has no vehicles yet, so
-         * only the on-foot figure is wired here. */
-        if (food_spend(ctx, U2_FOOD_PER_MOVE))
-            u2_death(ctx);
+         * and plane pay it twice (asm/2626_food_drain_mounted); the ship and the rocket
+         * reach no drain at all. The wrapper owns the starvation tail, so the result is
+         * deliberately not tested here: the world turn runs afterwards exactly as it does
+         * for a step that starves, which is what the refused arm above already does. */
+        (void)u2_overworld_step_food(ctx);
 
         /* The force field fires on the tile you have just stepped onto, after the direction word
          * is on the line and after the food charge — same neighbourhood inside asm/2423. It can
