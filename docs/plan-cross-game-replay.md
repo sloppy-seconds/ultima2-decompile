@@ -329,6 +329,45 @@ real and stands. A later 30 s sample showing zero changes was taken on a **dead 
 so it is not a counter-example. The engine's food drain is per-step; whether it reproduces the idle
 drain remains unexamined.
 
+## 7a. PHASE 1 RESULT — measured 2026-10-26: the recorder works, and it caught a bug in itself
+
+`tools/u2_record.py` — committed project tooling. Drives the original with a key script, paces on BIOS
+tick counts, confirms every key was consumed via the BIOS keyboard ring, and snapshots the compared DS
+field set per turn. Reuses `spice86_type.py`'s reader and injector rather than reimplementing either.
+
+**Acceptance run:** sector 03, seeded maxed character, 44-turn script (load + melee burst + reposition
++ retreat), two fresh boots.
+
+| result | value |
+| --- | --- |
+| turns recorded | 44 / 44 |
+| fields bit-identical | **17 of 18** |
+| fields differing | `speed` only — excluded by design, reason stored in the recording |
+| **unexplained divergences** | **0** |
+
+The recording is self-describing: it carries the field table with DS offsets, the exclusion list with
+reasons, the player-save hash, the pacing unit, and a per-turn `delivered`/`consumed` verdict. That last
+one earned its place immediately — it flagged that the `Return` in the load sequence is never consumed
+by the game, which was invisible in the earlier throwaway probes.
+
+### The bug the recorder found in its own design
+
+The first version did: inject key → poll the ring until the game consumed it → wait 18 ticks. Two boots
+then **diverged in player position**, which looked like phase 0's conclusion was wrong again.
+
+It was not. The consumption poll burns emulated time, and its duration varies with how long the game
+takes to read the key — so a relative wait added *after* it made inter-key spacing variable in ticks.
+That is precisely the jitter phase 0 exists to remove, reintroduced by the instrumentation.
+
+**Fix: anchor the budget at send time.** Capture the tick count before injecting, then wait until that
+absolute count plus N. The polling now happens *inside* the budget instead of after it, and the runs
+reproduce.
+
+The general rule, since it will recur: **instrumentation consumes the same clock you are pacing on.
+Any poll inserted between the stimulus and the pacing wait must be inside the budget, never additive to
+it.** A recorder that measures a time-driven system while perturbing its timebase is the same class of
+error as a change-triggered recorder answering per-event questions.
+
 ## 7. Build order
 
 Each phase is independently useful and has an acceptance test that can fail.
@@ -336,7 +375,7 @@ Each phase is independently useful and has an acceptance test that can fail.
 | # | deliverable | acceptance |
 | --- | --- | --- |
 | **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE — reproducible, with a condition.** § 6a passed vacuously, § 6b mis-diagnosed, § 6c settled it: input must be paced on emulated ticks, not real seconds |
-| **1** | Original-side recorder: per turn, key + DS snapshot + frame, **paced on BIOS tick counts**. | N commands in, exactly N turns out, including no-op turns; two boots agree on every field except `DS:74` |
+| **1** | Original-side recorder: per turn, key + DS snapshot + frame, **paced on BIOS tick counts**. | **DONE 2026-10-26 — `tools/u2_record.py`.** 44-turn combat, two boots, 17/18 fields identical, 0 unexplained. See § 7a |
 | **2** | `u2_rng_load` + `--rng-state`. | load-and-match control in § 4.1 |
 | **3** | Checkpoint format: save + sector + RNG + turn index, and engine resume-from-checkpoint. | resume at turn 200 and match a from-boot run's turn 200 state |
 | **4** | `tools/replay_diff.py` with the allowlist. | **mutation control:** break something known in the engine (e.g. revert the contact gate) and confirm the differ names it, at the right turn |

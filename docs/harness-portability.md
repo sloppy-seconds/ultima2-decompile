@@ -190,6 +190,17 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-26 — Instrumentation consumes the same clock you are pacing on, so put any poll *inside*
+  the pacing budget, never after it.** A recorder built to drive a timer-driven target at a fixed number
+  of target ticks per input added a confirmation poll — wait for the target to consume the key — and
+  then waited its fixed tick count afterwards. Two identical runs diverged, and the obvious reading was
+  that the target was nondeterministic after all. It was not: the poll burns target time, its duration
+  varies with target behaviour, and adding a relative wait on top made the spacing between stimuli
+  variable in exactly the unit the determinism argument depended on. Anchoring the wait to an absolute
+  tick count captured *before* the stimulus fixed it. The shape generalises to any harness that paces on
+  a clock it also polls: **the measurement is not free, and a relative delay after a variable-duration
+  observation is a variable delay.** Prefer absolute anchors taken before the observation.
+
 * **2026-10-26 — A probe that paces input on real-time sleeps will manufacture nondeterminism in a
   timer-driven target and then blame the target.** A determinism check injected a fixed key sequence
   with a fixed wall-clock pause after each key, got runs that diverged from the very first sample, and
