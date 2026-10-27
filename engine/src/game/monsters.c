@@ -147,15 +147,12 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_type[i] == 0)
             continue;                       /* asm/0A74: an empty slot is type 0 */
-        /* hp 0 is absent, whatever the type byte says. This is the same occupancy rule
-         * u2_monsters_at() uses, and the two must agree or the grid and the game disagree
-         * about what is there: the cell renders a creature the attack scan walks past and
-         * the player walks through. That state is reachable in play, not theoretical — in
-         * fidelity mode asm/2E3D does not kill on dmg == hp, so a creature reduced to
-         * exactly 0 keeps its type byte. Observed by the owner as a creature leaving "a copy
-         * of him behind". Gated by monsters_check section 5. */
-        if (s->mon_hp[i] == 0)
-            continue;
+        /* Deliberately NOT a mon_hp test. A creature reduced to exactly 0 hit points
+         * (fidelity mode: asm/2E3D kills only when dmg > hp) is ALIVE in the original —
+         * asm/2122/212a regens anything below 16 HP, and there is no reason to heal a
+         * corpse. So the grid keys on type, exactly as the sweep at asm/0A74 does, and a
+         * zero-hp creature is drawn and walks. The occupancy rule for this module is
+         * mon_type != 0, everywhere; see u2_monsters_at(). */
         const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
         if (cell < 0 || cell >= U2_SECTOR_TILES)
             continue;
@@ -183,25 +180,35 @@ int u2_monsters_at(const u2_ctx *ctx, int x, int y)
     if (ctx == NULL)
         return -1;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
-        /* hp != 0 is load-bearing, not tidiness. Observed live in
-         * captures/spice86/cp5-fight/: two creatures shared one cell, the front one
-         * was killed, and the very next attack hit the SECOND one at the same
-         * coordinates rather than the corpse. So the original's scan walks past
-         * slots with no hit points, and without this test a dead slot stays both
-         * attackable and, once W4 landed, a permanent wall.
+        /* The module's ONE occupancy rule: mon_type != 0.
          *
-         * The x||y test is the module's occupancy convention (docs/monster-spawn.md
-         * § 2's own note: a slot at (0,0) is unused), kept alongside hp rather than
-         * replaced by it because a slot can be occupied and wounded but never
-         * occupied with hp unset.
+         * This used to test mon_hp == 0, and that was the bug the owner described as a
+         * creature leaving "a copy of him behind". The two tests are not equivalent, and
+         * the difference is reachable in ordinary fidelity play: asm/2E3D kills only when
+         * dmg > hp, so a blow exactly equal to hp leaves hp == 0 with the type byte set.
+         * Such a creature is ALIVE by every other test in the tree — asm/0A74's sweep
+         * processes it, the grid stamps it, and asm/2122/212a regens anything below 16 HP,
+         * which is a thing you do to a wounded monster and not to a corpse. Keying the
+         * attack scan on hp made it invisible to attacks while it stood there drawn: a
+         * second copy that could be looked at and never hit, and which stayed behind when
+         * the creature that shared its cell walked off.
          *
-         * Ordering note for anyone re-deriving this: the scan returns the LOWEST
-         * slot index at the cell, which is what the live capture showed only if the
-         * front creature happened to be the lower slot. Whether the original scans
-         * in slot order or in some other order is not established; slot order is the
-         * assumption, and it is the one to revisit if a fight ever picks the wrong
-         * target among stacked creatures. */
-        if (ctx->state.mon_hp[i] == 0)
+         * The live capture this was originally cited for (captures/spice86/cp5-fight/: two
+         * creatures in one cell, the front one killed, the next attack hit the second) does
+         * NOT support an hp test. A killed slot has type == 0 AND hp == 0, so that
+         * observation cannot tell the two fields apart, and the more specific rule was
+         * inferred from evidence that only established the general one. Keying on type
+         * satisfies that capture — a corpse has type 0 — and agrees with asm/0A74.
+         *
+         * The x||y test is the module's own convention (docs/monster-spawn.md § 2: a slot
+         * at (0,0) is unused) and is kept alongside type rather than replaced by it.
+         *
+         * Ordering note for anyone re-deriving this: the scan returns the LOWEST slot index
+         * at the cell, which is what the live capture showed only if the front creature
+         * happened to be the lower slot. Whether the original scans in slot order or in
+         * some other order is not established; slot order is the assumption, and it is the
+         * one to revisit if a fight ever picks the wrong target among stacked creatures. */
+        if (ctx->state.mon_type[i] == 0)
             continue;
         if ((ctx->state.mon_x[i] || ctx->state.mon_y[i]) &&
             ctx->state.mon_x[i] == (uint8_t)x &&

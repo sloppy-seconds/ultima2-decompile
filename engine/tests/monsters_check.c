@@ -232,25 +232,38 @@ int main(int argc, char **argv)
               "restamp does NOT exempt a cell carrying 0x80 (got 0x%02x, want terrain 0x%02x)",
               w.map[dcell], terrain);
 
-        /* The zombie, and the reason the two occupancy tests in this module have to agree.
-         * In fidelity mode the original does NOT kill on dmg == hp (asm/2E3D, byte-proven), so a
-         * creature can be reduced to exactly hp 0 with its type byte still set. u2_monsters_at()
-         * skips hp 0 — proven live in captures/spice86/cp5-fight/, where an attack walked past a
-         * zero-hp slot and hit the creature behind it — so the game treats that cell as empty and
-         * the player walks through it. u2_monsters_restamp() used to stamp it anyway because it
-         * tested only type. The result is a sprite with nothing behind it: the owner's "he left a
-         * copy of him behind", and it survives every later restamp because nothing clears the type.
+        /* The zero-hp creature, and the occupancy rule the whole module now shares.
          *
-         * This is the check that fails if the hp test is removed from restamp. */
+         * asm/2E3D kills only when dmg > hp, so a blow exactly equal to hp leaves hp == 0
+         * with the type byte set. Every other test in the tree treats that as ALIVE:
+         * asm/0A74's sweep processes it, the grid stamps it, and asm/2122/212a regens
+         * anything below 16 HP — which is what you do to a wounded monster, not a corpse.
+         * The attack scan used to test mon_hp instead of mon_type, so the creature was
+         * drawn and walked but could not be hit: the owner's "he left a copy of him
+         * behind", because a zero-hp creature sharing a cell stayed behind as an
+         * unhittable duplicate when the live one walked off.
+         *
+         * So the rule is mon_type != 0 everywhere, and both halves are checked here. Remove
+         * the type test from u2_monsters_at() or put an hp test back into restamp and these
+         * go red. */
         ctx.state.mon_hp[dead]   = 0;
-        ctx.state.mon_type[dead] = 0x3C;        /* a type, deliberately left set */
+        ctx.state.mon_type[dead] = 0x3C;        /* wounded to exactly zero, not killed */
+        CHECK(u2_monsters_at(&ctx, ctx.state.mon_x[dead], ctx.state.mon_y[dead]) == dead,
+              "a zero-hp creature that still has a type is ALIVE: it must be attackable");
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(w.map[dcell] == 0x3C,
+              "and it must be drawn (got 0x%02x, want 0x3C) — asm/0A74 keys on type",
+              w.map[dcell]);
+
+        /* And a real kill — which is what the cp5-fight capture actually observed — is
+         * absent from both, because death clears the type byte along with hp and kind. */
+        ctx.state.mon_type[dead] = 0;
         CHECK(u2_monsters_at(&ctx, ctx.state.mon_x[dead], ctx.state.mon_y[dead]) < 0,
-              "fixture: the scan treats hp 0 as absent, so the cell is walkable");
+              "a killed slot is not attackable");
         u2_monsters_restamp(&ctx, &w);
         CHECK(w.map[dcell] == terrain,
-              "a zombie (hp 0, type set) must NOT be stamped — got 0x%02x, want terrain 0x%02x",
+              "and a killed slot is not drawn (got 0x%02x, want terrain 0x%02x)",
               w.map[dcell], terrain);
-        ctx.state.mon_type[dead] = 0;           /* back to how a real kill leaves it */
 
         CHECK(w.map[acell] == ctx.state.mon_type[alive],
               "the rebuild re-stamps the creatures still standing, it does not blank the grid");
