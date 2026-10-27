@@ -130,6 +130,14 @@ def snapshot(http):
     # that resumes from the save alone starts from a different world — and every dynamic field
     # then diverges from turn 0 for a reason that has nothing to do with game behaviour.
     out["ds_block"] = st.read_mem(st.DS, 0x0000, 0x280, http).hex(" ")
+    # The creature grid. It lives at DS:1800 and is 64x64 = 0x1000 bytes (docs/art-index.md:
+    # `DS:1800[y*64+x] == type`; tools/dungeon_capture.py reads 4096 there), OUTSIDE the 0x280
+    # checkpoint block, so the checkpoint cannot carry it and the engine rebuilds it by restamping.
+    # That rebuild is a claim: if the original's live grid has anything a restamp from the arrays
+    # does not produce, the passability gate differs and identical rolls move creatures to different
+    # places - same budget, different assignment, which is the symptom being chased. Capture the
+    # WHOLE grid; a truncated one makes every ghost test silently under-report.
+    out["grid"] = st.read_mem(st.DS, 0x1800, 0x1000, http).hex(" ")
     return out
 
 
