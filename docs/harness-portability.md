@@ -982,3 +982,13 @@ may share code. A same-era DOS game shares the ISA tier. A later protected-mode,
 compiler-generated title shares almost nothing at Tier 1 — no real-mode segment
 arithmetic, no BCD counter fields, different video — and would take Tier 2 method
 only. Expect the transfer value to decay fast with era and platform.
+
+**A synthetic input file is a cheaper discriminator than a second real one.** When a runtime value
+could have come from the file on disk or from the program writing its own constant, the obvious move
+is to find another real file where the two differ — which usually means reaching a different part of
+the game, which usually means a level transition, a teleport, or a save edit that may not be honoured
+and will silently leave you measuring the sector you started in. If the harness can install a
+generated file under the same name before launch, overwrite the field in question with a value the
+program could never have produced and watch which one survives. One boot answers it, and the answer
+is about the program rather than about that one file. Prefer this whenever the value is per-file and
+the file is replaceable.

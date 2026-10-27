@@ -245,13 +245,41 @@ Two consequences, both real:
    engine - same rolls, different outcome. This is the first concrete mechanism found for the
    replay differ's "same budget, different assignment" symptom.
 
-### Not done
+### Done
 
-The clear value is not proven to be `0x70` in general; it is proven for sector 03. Do not
-hardcode it from this one sector. The next step is a sector whose spawn cells sit on non-paving
-ground, which would also settle the mechanism question.
+`u2_monsters_clear_spawn_cells` (engine/src/game/monsters.c) rewrites each spawn cell in **both**
+`map` and `map_base` at sector load, called from both overworld entry paths right after the monx
+load. Clearing only `w->map` would be the same mistake in a different place: `u2_monsters_restamp`
+rebuilds from `map_base`, so the baked art would come back on the creature's first step.
 
-### Attempted and invalid: the sector-21 test
+Gated in `engine/tests/monsters_check.c` with four assertions - fixture starts as baked art, every
+in-range spawn cell becomes `0x70`, cells with no creature behind them are untouched, and after a
+creature leaves, restamp restores paving rather than its old sprite. Control run: setting the
+clear value to `0x00` turns the second and fourth red, restoring turns them green.
+
+The test's own guards had to match the implementation's (`cell < U2_SECTOR_TILES`, `type != 0`,
+all 32 slots). It did not at first, and the fixture's slot 31 sits at `(0,0)` with a live type -
+the same `(0,0)` shape as the grid phantom fixed earlier - so a loop stopping at slot 31 reported a
+legitimate clear as collateral damage. A test that disagrees with the code about what a slot is,
+is the test's bug.
+
+### Settled by seeding: `0x70` is written by the game, not read from the file
+
+The generator question had a cheap answer that needed no second sector. `spice86_start.sh
+--seed-map` installs a synthetic `mapx03` before launch; the version used here rewrote all 32
+spawn cells from their baked creature art to `0x0C` forest, leaving everything else alone. A live
+recording on that seeded map then showed **13 of 14 vacated spawn cells reading `0x70`**, not the
+`0x0C` the file had been given.
+
+So the clear value is a game constant, not terrain-derived, and not `monx kind` either (sector 21's
+`kind` array is all `0x08`; sector 03's is all `0x70`; neither predicts the other sector). That is
+what makes the engine fix safe to write from one sector: whichever of the two mechanisms produces
+it, the terrain under a creature's spawn cell is `0x70`.
+
+Still open, and now harmless: whether the write happens at load or on departure. `docs/map-format.md`
+§ 9's engine fix clears `map_base` once at load, which serves both.
+
+### Attempted and invalid: the sector-21 route
 
 Sector 21 (forrest town, 2394 forest cells, **zero** `0x70` cells in mapx21) is the right
 discriminator: if vacated spawn cells there read `0x70`, the clear is a constant; if they read

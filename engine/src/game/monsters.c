@@ -168,6 +168,24 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     }
 }
 
+void u2_monsters_clear_spawn_cells(u2_ctx *ctx, u2_world *w)
+{
+    static const uint8_t k_clear = 0x70;   /* art 0x1C; see the header comment for the evidence */
+    u2_state *s = &ctx->state;
+
+    for (int i = 0; i < 32; i++) {
+        if (s->mon_type[i] == 0)
+            continue;
+        const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
+        if (cell < 0 || cell >= U2_SECTOR_TILES)
+            continue;
+        /* Both arrays: map_base is what restamp rebuilds from, so clearing only w->map would let
+         * the baked art reappear on the creature's first step off the cell - which is the bug. */
+        w->map_base[cell] = k_clear;
+        w->map[cell] = k_clear;
+    }
+}
+
 void u2_monsters_store(u2_ctx *ctx, u2_world *w)
 {
     if (ctx == NULL || w == NULL || !w->mon_loaded)

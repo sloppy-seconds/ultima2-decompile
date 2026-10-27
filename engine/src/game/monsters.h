@@ -102,6 +102,31 @@ int u2_monsters_at(const u2_ctx *ctx, int x, int y);
  * not "some hittable creature is". Using u2_monsters_at() for the second half would report every
  * wounded creature as a ghost and teach everyone to ignore the number.
  */
+/* Clear the creature art that mapx bakes into every spawn cell.
+ *
+ * mapxNN is not pure ground: at each cell where monxNN places a creature, the map byte IS that
+ * creature's own art byte. Measured across the whole pack: 483 of 511 live spawn cells have
+ * mapx[x,y] == monx type. The map was authored by drawing the creatures into the terrain.
+ *
+ * The original does not treat that byte as ground. Once the cell is no longer under a creature it
+ * reads 0x70 (art 0x1C, paving, walkable) - and it reads 0x70 even when the file says otherwise.
+ * Proven by seeding: spice86_start.sh --seed-map with every sector-03 spawn cell rewritten to 0x0C
+ * forest, then a live recording; 13 of 14 vacated spawn cells came back 0x70, not the 0x0C the
+ * file was given. So 0x70 is written by the game, not derived from mapx.
+ *
+ * Why the engine has to do this explicitly: u2_world_load reads mapx verbatim into map_base, and
+ * u2_monsters_restamp rebuilds w->map from map_base. Without this clear, a creature walking off its
+ * spawn cell has its own sprite restored underneath it - the owner's report "he left a copy of him
+ * behind" - and the spawn cell is a wall, because every art index seen at sector-03 spawn cells
+ * (0x0d-0x0f, 0x1a, 0x3c-0x3f) is impassable in u2_tile_passable's default-deny table while the
+ * original has walkable paving there.
+ *
+ * Whether the original clears at load or on departure is still open (docs/map-format.md § 9); both
+ * produce this terrain, so both are served by clearing map_base once here. Call after the monx
+ * load, while the arrays still hold spawn positions.
+ */
+void u2_monsters_clear_spawn_cells(u2_ctx *ctx, u2_world *w);
+
 int u2_monsters_ghost_cells(const u2_ctx *ctx, const u2_world *w);
 
 /* The nearest occupied slot to (x,y) in manhattan distance, or -1 if the sector

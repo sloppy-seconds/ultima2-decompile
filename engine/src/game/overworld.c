@@ -232,6 +232,8 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     monsters_clear(ctx);
     const u2_world_result mr = u2_world_load(ctx, &ow->world, 0, id);
     const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
+    if (mr == U2_WORLD_OK)
+        u2_monsters_clear_spawn_cells(ctx, &ow->world);
 
     /* asm/343F tail, reached by every arm: `mov $0x4,%al; mov %al,0x12`. */
     ctx->state.view_mode = 4;
@@ -927,6 +929,8 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
      * find nothing there. */
     const u2_world_result mr = u2_world_load(ctx, &ow->world, 0, id);
     const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
+    if (mr == U2_WORLD_OK)
+        u2_monsters_clear_spawn_cells(ctx, &ow->world);
 
     /* The status band and the command prompt, printed once on entering the
      * world (CP4b task 1). The four value lines go through the proven status

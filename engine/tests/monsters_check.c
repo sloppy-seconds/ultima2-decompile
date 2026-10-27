@@ -110,6 +110,66 @@ int main(int argc, char **argv)
     int occupied = u2_monsters_spawn(&ctx, &w);
     CHECK(occupied == 31, "31 occupied slots, the one all-zero slot reported empty (got %d)", occupied);
 
+    /* --- 1b. mapx bakes creature art into spawn cells; the clear removes it ---
+     * Self-contained: the fixture world is shared with the checks below, so the arrays are
+     * snapshotted and restored, and only slots the implementation itself would touch (in range)
+     * are asserted on. A test that mutates state for its neighbours is a false failure waiting
+     * to be blamed on someone else's change. */
+    static uint8_t save_map[U2_SECTOR_TILES], save_base[U2_SECTOR_TILES];
+    memcpy(save_map, w.map, sizeof save_map);
+    memcpy(save_base, w.map_base, sizeof save_base);
+    const uint8_t keep_x = ctx.state.mon_x[7], keep_y = ctx.state.mon_y[7];
+
+    int inrange = 0;
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (ctx.state.mon_type[i] == 0) continue;
+        const int c = (int)ctx.state.mon_y[i] * U2_SECTOR_EDGE + (int)ctx.state.mon_x[i];
+        if (c >= 0 && c < U2_SECTOR_TILES) inrange++;
+    }
+    CHECK(inrange > 0, "fixture has in-range spawn cells to test (%d)", inrange);
+
+    const int c7 = (int)ctx.state.mon_y[7] * U2_SECTOR_EDGE + (int)ctx.state.mon_x[7];
+    CHECK(c7 < U2_SECTOR_TILES && w.map_base[c7] != 0x70,
+          "fixture: spawn cell 7 starts as baked art, not paving");
+    u2_monsters_clear_spawn_cells(&ctx, &w);
+
+    int spawn_cleared = 1;
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (ctx.state.mon_type[i] == 0) continue;
+        const int c = (int)ctx.state.mon_y[i] * U2_SECTOR_EDGE + (int)ctx.state.mon_x[i];
+        if (c < 0 || c >= U2_SECTOR_TILES) continue;   /* same guard as the implementation */
+        if (w.map_base[c] != 0x70 || w.map[c] != 0x70) spawn_cleared = 0;
+    }
+    int others_kept = 1;
+    for (int c = 0; c < U2_SECTOR_TILES; c++) {
+        int is_spawn = 0;
+        for (int i = 0; i < U2_MON_SLOTS; i++) {
+            if (ctx.state.mon_type[i] == 0) continue;
+            const int sc = (int)ctx.state.mon_y[i] * U2_SECTOR_EDGE + (int)ctx.state.mon_x[i];
+            if (sc < 0 || sc >= U2_SECTOR_TILES) continue;
+            if (sc == c) is_spawn = 1;
+        }
+        if (!is_spawn && w.map_base[c] != save_base[c]) {
+            others_kept = 0;
+        }
+    }
+    CHECK(spawn_cleared, "every in-range spawn cell became 0x70 paving in both map and map_base");
+    CHECK(others_kept, "cells with no creature behind them kept their terrain");
+
+    /* restamp must not resurrect the art - that resurrection IS the reported bug. */
+    if (c7 < U2_SECTOR_TILES) {
+        ctx.state.mon_x[7] = (uint8_t)((keep_x + 1) & 0x3F);
+        ctx.state.mon_y[7] = (uint8_t)((keep_y + 1) & 0x3F);
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(w.map[c7] == 0x70,
+              "after a creature leaves its spawn cell, restamp restores paving, not its sprite");
+    }
+
+    memcpy(w.map, save_map, sizeof w.map);
+    memcpy(w.map_base, save_base, sizeof w.map_base);
+    ctx.state.mon_x[7] = keep_x;
+    ctx.state.mon_y[7] = keep_y;
+
     int col_ok = 1;
     for (int i = 0; i < 31; i++) {
         if (ctx.state.mon_x[i]    != (uint8_t)(i * 8 + 1) ||
