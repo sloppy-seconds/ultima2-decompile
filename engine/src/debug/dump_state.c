@@ -173,7 +173,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         "\"platform\":{\"renderer\":\"%s\",\"input\":\"%s\",\"audio\":\"%s\",\"clock\":\"%s\"},"
         "\"screen\":{\"cols\":%d,\"rows\":%d,\"cells_written\":%llu,"
         "\"cursor\":{\"row\":%d,\"col\":%d,\"visible\":%d}},"
-        "\"state\":{%s%s"
+        "\"state\":{%s%s\"ghosts\":%d,"
         /* pos is DS:00/01, the original's own player-position mirror. The field below was NAMED
          * player_x/player_y but reported DS:23/24, which is the staged candidate cell the step gate
          * reads — it sat at 0 in every turn log, so a recording could not say where the player was
@@ -194,6 +194,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
         ctx->vram.row, ctx->vram.col, ctx->vram.visible,
         mons, raw,
+        ctx->diag_ghosts,
         s->sector_x, s->sector_y,
         s->sector_first, s->sector_second,
         u2_bcd16(s->unk_52, s->hp), u2_bcd16(s->food, s->food_hi),

@@ -89,6 +89,21 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w);
  * `EAST--INVALID MOVE!` over a tile the player was standing on the value of. */
 int u2_monsters_at(const u2_ctx *ctx, int x, int y);
 
+/* Count cells the grid claims are occupied but no creature slot actually sits on.
+ *
+ * This is the "he left a copy of him behind" invariant, stated so a machine can check it: the grid is
+ * stamped from the creature arrays, so if a cell differs from the pristine terrain and no slot is
+ * standing there, something drew a creature that is not there — a sprite whose owner walked off and
+ * whose cell was never put back.
+ *
+ * Note what this deliberately does NOT count. A zero-hp creature is stamped (asm/0A74 keys on type)
+ * and is skipped by the attack scan, and that asymmetry is the original's own — measured 2026-10-26.
+ * It is a wounded monster, not a ghost, so occupancy here is "some slot with a type is at this cell",
+ * not "some hittable creature is". Using u2_monsters_at() for the second half would report every
+ * wounded creature as a ghost and teach everyone to ignore the number.
+ */
+int u2_monsters_ghost_cells(const u2_ctx *ctx, const u2_world *w);
+
 /* The nearest occupied slot to (x,y) in manhattan distance, or -1 if the sector
  * holds nothing. Used by the attack command's "nothing there" path and by tests. */
 int u2_monsters_nearest(const u2_ctx *ctx, int x, int y);

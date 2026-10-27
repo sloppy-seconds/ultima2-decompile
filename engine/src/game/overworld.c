@@ -1021,6 +1021,11 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
      * looks exactly like working output. */
     if (ow->turns != ow->logged_turn) {
         ow->logged_turn = ow->turns;
+        /* Refreshed here because this is the one place the composed frame, the grid and the
+         * creature arrays are all known to be current, for the same reason the log itself is
+         * written here: measured anywhere earlier it would describe the turn before it is
+         * labelled with. */
+        ctx->diag_ghosts = u2_monsters_ghost_cells(ctx, &ow->world);
         u2_turnlog(ctx, &ow->frame, ow->turns);
     }
 }

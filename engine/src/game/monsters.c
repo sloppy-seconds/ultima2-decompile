@@ -147,6 +147,15 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_type[i] == 0)
             continue;                       /* asm/0A74: an empty slot is type 0 */
+        /* The same occupancy convention u2_monsters_store() uses: a slot at (0,0) is unused
+         * (docs/monster-spawn.md § 2). Without this the two stamp paths disagree — the
+         * initial stamp skips such a slot and the rebuild stamped it into the corner, which
+         * is a phantom creature at (0,0) that no attack can ever reach. No shipped monx slot
+         * has a type with no coordinates, so this is latent rather than live, but a phantom
+         * is exactly the class of defect the ghost counter exists to catch, and the counter
+         * found it the day it was written. */
+        if (!(s->mon_x[i] || s->mon_y[i]))
+            continue;
         /* Deliberately a mon_type test and NOT a mon_hp test — asm/0A74's own rule. A
          * creature at zero hp is drawn and walks in the original (measured 2026-10-26: a
          * poked-to-zero slot moved (27,48)->(28,49)->(28,50) with its type intact), so the
@@ -216,6 +225,35 @@ int u2_monsters_at(const u2_ctx *ctx, int x, int y)
             return i;
     }
     return -1;
+}
+
+int u2_monsters_ghost_cells(const u2_ctx *ctx, const u2_world *w)
+{
+    if (ctx == NULL || w == NULL || !w->map_loaded)
+        return 0;
+
+    /* Which cells some creature slot is standing on. Occupied means "has a type and is not
+     * the (0,0) unused convention" — deliberately NOT "hittable", because a zero-hp creature
+     * is legitimately stamped and is not a ghost. See the header. */
+    uint8_t occupied[U2_SECTOR_TILES];
+    memset(occupied, 0, sizeof occupied);
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (ctx->state.mon_type[i] == 0)
+            continue;
+        if (!(ctx->state.mon_x[i] || ctx->state.mon_y[i]))
+            continue;
+        const int cell = (int)ctx->state.mon_y[i] * U2_SECTOR_EDGE
+                       + (int)ctx->state.mon_x[i];
+        if (cell >= 0 && cell < U2_SECTOR_TILES)
+            occupied[cell] = 1;
+    }
+
+    int ghosts = 0;
+    for (int c = 0; c < U2_SECTOR_TILES; c++) {
+        if (w->map[c] != w->map_base[c] && !occupied[c])
+            ghosts++;
+    }
+    return ghosts;
 }
 
 int u2_monsters_nearest(const u2_ctx *ctx, int x, int y)

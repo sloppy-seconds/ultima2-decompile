@@ -269,6 +269,20 @@ int main(int argc, char **argv)
 
         CHECK(w.map[acell] == ctx.state.mon_type[alive],
               "the rebuild re-stamps the creatures still standing, it does not blank the grid");
+
+        /* The ghost counter's own control. A diagnostic that can only ever read 0 is worse than
+         * none, because it certifies silence: this is the fourth shape of "a gate that cannot go
+         * red" this project has been bitten by, so it gets a deliberate fault rather than trust.
+         * Stamp a cell that nothing is standing on — exactly what a stale departure looks like —
+         * and require the counter to notice, then to clear after a rebuild. */
+        CHECK(u2_monsters_ghost_cells(&ctx, &w) == 0,
+              "no ghosts on a clean grid (the state the owner complained about is absent here)");
+        w.map[dcell] = 0x3C;          /* a sprite with nothing behind it */
+        CHECK(u2_monsters_ghost_cells(&ctx, &w) >= 1,
+              "CONTROL FAILED: the ghost counter did not see a stamp with no creature under it");
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(u2_monsters_ghost_cells(&ctx, &w) == 0,
+              "the rebuild must clear a stale stamp (ghosts still reported)");
     }
 
     printf("monsters_check: %d checks, %d failures\n", checks, fails);
