@@ -597,6 +597,81 @@ else
     bad "CP5 C3d: $c3d dumps for 16 refused attacks (expect 16), paralysis '$c3dpara' (expect '00 00 00 00') — the arms refusal is not taking the turn, and arm paralysis is permanent"
 fi
 
+# --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
+#
+# asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is
+# walkable (mode byte 0x2E = 0x5C >> 1 — the units error that made an earlier phase search mapx
+# for 0x2E and conclude the tile could not exist), and stepping on it subtracts 1000 HP unless
+# items_held[0] (DS:D6, the RING slot) is non-zero. Measured: captures/spice86/g29-field, six
+# crossings at exactly 1000 each and nothing with the ring held; fight-20261021-castle03 turn 2909.
+#
+# Two runs, same seeded world, differing only in DS:D6. Without the gate the engine treated 0x5C
+# as a wall via default-deny, so the first run would refuse the step and the player would never
+# move — which is the failure this replaces, and it is caught by the position assertion, not only
+# the HP one.
+python3 tests/cp5_fight_seed.py "$WORK/c5" >/dev/null 2>&1
+python3 - "$WORK/c5/content/mapx00" <<'PYEOF'
+import sys
+p = sys.argv[1]
+d = bytearray(open(p, 'rb').read())
+d[0 * 64 + 3] = 0x5C          # force field directly east of the seeded entry at (2,0)
+open(p, 'wb').write(bytes(d))
+PYEOF
+# The seeded monx00 puts its one creature at (3,0), and u2_monsters_clear_spawn_cells legitimately
+# writes 0x70 over a spawn cell (that is the C6 fix, and the original does it too). So the field and
+# the creature cannot share a cell in this fixture: move the creature far away rather than move the
+# field, which is what the test is about.
+python3 - "$WORK/c5/content/monx00" <<'PYEOF'
+import sys
+p = sys.argv[1]
+d = bytearray(open(p, 'rb').read())
+d[0] = 30; d[32] = 30         # slot 0 x,y -> (30,30)
+open(p, 'wb').write(bytes(d))
+PYEOF
+printf '0xf2\n' > "$WORK/c5/k0"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c5/content" --save-dir "$WORK/c5/save" \
+     --script "$WORK/c5/k0" --dump-ds "$WORK/c5/base.hex" >/dev/null 2>&1
+# HP high byte 0x99 (= 9900..9999, comfortably above the death threshold), no ring, then with one.
+python3 - "$WORK/c5/base.hex" "$WORK/c5/noring.hex" "$WORK/c5/ring.hex" <<'PYEOF'
+import sys
+b = bytearray(bytes.fromhex(open(sys.argv[1]).read()))
+b[0x51] = 0x99; b[0x52] = 0x99; b[0xD6] = 0x00
+open(sys.argv[2], 'w').write(b.hex())
+b[0xD6] = 0x01
+open(sys.argv[3], 'w').write(b.hex())
+PYEOF
+# Two steps: the warm-up key above leaves the player at (1,0), so RIGHT once returns to the entry
+# cell (2,0) and RIGHT again steps onto the field at (3,0). Only the second one is charged.
+printf '0xf3\n0xf3\n' > "$WORK/c5/east.keys"       # 0xf3 = U2_KEY_RIGHT
+c5read() {   # $1 = debug dir -> prints "pos hp"
+  local last
+  last=$(find "$1" -name 'turn-*.json' 2>/dev/null | sort | tail -1)
+  python3 -c "
+import json,sys
+p=sys.argv[1]
+if not p: print('none none'); raise SystemExit
+s=json.load(open(p))['state']['raw']
+print(s['pos'], s['hp'])" "$last"
+}
+rm -rf "$WORK/c5/dbg_a" "$WORK/c5/dbg_b"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c5/content" --save-dir "$WORK/c5/save" \
+     --load-ds "$WORK/c5/noring.hex" --script "$WORK/c5/east.keys" \
+     --debug cli --debug-path "$WORK/c5/dbg_a" --debug-limit 0 >/dev/null 2>&1
+no_ring=$(c5read "$WORK/c5/dbg_a")
+rm -rf "$WORK/c5/save2" && cp -r "$WORK/c5/save" "$WORK/c5/save2"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c5/content" --save-dir "$WORK/c5/save2" \
+     --load-ds "$WORK/c5/ring.hex" --script "$WORK/c5/east.keys" \
+     --debug cli --debug-path "$WORK/c5/dbg_b" --debug-limit 0 >/dev/null 2>&1
+with_ring=$(c5read "$WORK/c5/dbg_b")
+case "$no_ring" in
+  "03 00 89 99") ok "CP5 C5: stepping on the force field moves the player and costs 1000 HP (9999 -> 8999)" ;;
+  *) bad "CP5 C5: no-ring step gave '$no_ring' (expect '03 00 89 99' — moved onto 0x5C, HP high byte 99 -> 89)" ;;
+esac
+case "$with_ring" in
+  "03 00 99 99") ok "CP5 C5: with the ring held the field costs nothing (HP unchanged, still moved)" ;;
+  *) bad "CP5 C5: with-ring step gave '$with_ring' (expect '03 00 99 99' — ring must absorb the field)" ;;
+esac
+
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
 # loop routes a letter into it at all. The Q migration is what exposed the gap: putting a

@@ -193,6 +193,11 @@ MANIFEST = [
     ("U2_S_HIT",               "2BEC_combat_hit_msg.asm", 0),
     ("U2_S_MISS",              "2E09_combat_miss_msg.asm", 0),
     ("U2_S_PARALYZED",         "2BAD_attack_arms_refusal_to_cmd_done.asm", 0),
+    # CP5 C5 — the force field (tile 0x5C). Both carry the leading 0x8d newline glyph, so the asm
+    # fallback cannot reach them by index and they use the exe-offset form, like U2_S_KILLED above.
+    # Offsets verified against the exe 2026-10-29; the strings live in asm/24B5_force_field_event.
+    ("U2_S_FIELD_RING_PROTECTS", "24B5_force_field_event.asm", ("run", 0x26C0, 25, "RING PROTECTS FROM FIELD!")),
+    ("U2_S_FIELD_DAMAGE",        "24B5_force_field_event.asm", ("run", 0x26E4, 25, "FIELD CAUSES 1000 DAMAGE!")),
     # `db 0x8d,"KILLED--GOLD+"` — the leading glyph byte puts it outside the asm
     # fallback, so it is exe-only, like the title strings above.
     ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13, "KILLED--GOLD+")),

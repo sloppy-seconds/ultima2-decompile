@@ -608,6 +608,43 @@ uint64_t u2_overworld_unmeasured_tiles(void)
  * agent inference (AGENTS.md § 5) but is not a byte; `art-shape` = inferred from
  * what the bitmap depicts, the weakest grade here and marked so.
  */
+/* asm/24B5_force_field_event — the cost of walking through a force field.
+ *
+ * The gate is `mov al,[ds:d6]; cmp al,0; je <damage>`: DS:D6 is items_held[0], the RING slot.
+ * Non-zero prints "RING PROTECTS FROM FIELD!" and does nothing else. Zero takes the damage path,
+ * which flashes and sounds and then subtracts with `stc; sbb al,0x10; das` on [DS:51] — the high
+ * byte of the 4-digit packed-BCD HP at DS:51/52 — which is exactly minus 1000 in decimal. If that
+ * subtract borrows (fewer than 1000 HP) the branch at file 0x271B goes to the death handler, so
+ * this tile kills a weak character outright.
+ *
+ * Measured twice, independently: the g29-field capture (9999 -> 8999 -> 7999 -> 6999 -> 5999 ->
+ * 4999 -> 3999, six crossings, and nothing with DS:D6 = 01) and fight-20261021-castle03 turn 2909
+ * (HP_hi 0x88 -> 0x78 with DS:D6 = 0).
+ *
+ * The subtract is done in decimal rather than by replaying `das`. The engine is a reimplementation,
+ * not a byte match, and the measured contract is "minus 1000, and death if that goes below zero".
+ * Both branches print, so the owner's rule that every effect on the player announces itself holds.
+ */
+static void u2_force_field(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+
+    if (st->items_held[0] != 0) {
+        seam_str_out(ctx, U2_S_FIELD_RING_PROTECTS);
+        return;
+    }
+
+    seam_str_out(ctx, U2_S_FIELD_DAMAGE);
+
+    /* BCD: the high byte holds the hundreds and thousands digits, so -0x10 there is -1000. A
+     * borrow out of it is the original's death branch. */
+    if (st->hp < 0x10u) {
+        u2_death(ctx);
+        return;
+    }
+    st->hp = (uint8_t)(st->hp - 0x10u);
+}
+
 static int u2_tile_passable(const u2_world *w, int x, int y)
 {
     const uint8_t t = u2_world_tile_at(w, x, y);
@@ -648,6 +685,19 @@ static int u2_tile_passable(const u2_world *w, int x, int y)
      * (mapx22: 873 cells, mapx92: 1118). A default-deny table that blocks the second
      * most common tile in the world is blocking ground, not scenery. Grade: owner. */
     if (art == 0x1C) return 1;
+
+    /* Force field. Map byte 0x5C, which is mode byte 0x2E because the mode is `map_byte >> 1`
+     * (0x5C >> 1 == 0x2E) — the units error that hid this for a whole phase. It is TRAVERSABLE:
+     * the original walks you straight through it and charges 1000 hit points for the privilege,
+     * which is why the default-deny table must not treat it as a wall. Proven by
+     * captures/spice86/g29-field (six crossings, HP 9999 -> 8999 -> ... -> 3999, exactly 1000 each,
+     * nothing with the ring held) and by asm/24B5_force_field_event, whose ladder sits INSIDE the
+     * passability routine asm/2423 (asm/248B -> 2495 -> 24B1 -> 24B5) rather than rejecting the
+     * step. Grade: measured.
+     *
+     * Keyed on the map byte, not the art index, because the trigger the original tests is the byte
+     * shifted once. The art index (0x5C >> 2 == 0x17) is a different quantity. */
+    if (t == 0x5C) return 1;
 
     /* --- proven blockers --- */
     if (art == 0x00) return 0;   /* map 0x00 water    — proven: 22 live rejects, F11 */
@@ -1519,6 +1569,14 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * only the on-foot figure is wired here. */
         if (food_spend(ctx, U2_FOOD_PER_MOVE))
             u2_death(ctx);
+
+        /* The force field fires on the tile you have just stepped onto, after the direction word
+         * is on the line and after the food charge — same neighbourhood inside asm/2423. It can
+         * kill, and u2_death owns the tail, so the world turn still runs afterwards exactly as it
+         * does for a step that starves. */
+        if (u2_world_tile_at(&ow->world, ow->x, ow->y) == 0x5C)
+            u2_force_field(ctx);
+
         creature_turn(ctx, ow);
     }
     ctx->frame = NULL;
