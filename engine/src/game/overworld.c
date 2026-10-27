@@ -951,6 +951,41 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
     return 0;
 }
 
+/* Apply a --load-ds checkpoint after everything that would overwrite it has run.
+ *
+ * The save load places the persisted 256 bytes, and overworld_open then loads mapx and monx and
+ * positions the player from entry_x/entry_y. Together those clobber the player position, the
+ * creature arrays and the RNG register — exactly the fields a mid-session checkpoint carries and
+ * the save does not. So the checkpoint has to land after all of it, and then re-sync the
+ * overworld's own copies: the draw path mirrors ow->x/ow->y back into DS:00/01 every frame, so a
+ * resumed position left only in the state would be erased on the first frame. That is not
+ * hypothetical — loading before overworld_open produced exactly that, a checkpoint that read back
+ * correct and then silently reverted to the entry point.
+ *
+ * The grid is rebuilt from the resumed arrays as well, because it was stamped from the freshly
+ * loaded monx; without the restamp the first frame draws the world as it was at load rather than
+ * as the checkpoint left it.
+ */
+static int overworld_resume(u2_ctx *ctx, u2_overworld *ow)
+{
+    if (!ctx->load_ds_path)
+        return 0;
+
+    const int sec_hi = ow->sector_hi, sec_lo = ow->sector_lo;
+    if (u2_state_load_ds(&ctx->state, ctx->load_ds_path) != 0)
+        return -1;
+    if ((int)ctx->state.sector_first != sec_hi || (int)ctx->state.sector_second != sec_lo) {
+        fprintf(stderr, "u2: checkpoint names sector %u%u but the world loaded %u%u; "
+                        "point --data-dir at the sector the recording used\n",
+                ctx->state.sector_first, ctx->state.sector_second, sec_hi, sec_lo);
+        return -1;
+    }
+    ow->x = ctx->state.sector_x;
+    ow->y = ctx->state.sector_y;
+    u2_monsters_restamp(ctx, &ow->world);
+    return 0;
+}
+
 int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
 {
     if (!ctx || !ow) return -1;
@@ -960,7 +995,8 @@ int u2_overworld_init(u2_ctx *ctx, u2_overworld *ow)
     ow->sector_hi = U2_OVERWORLD_PROBE_SECTOR_HI;
     ow->sector_lo = U2_OVERWORLD_PROBE_SECTOR_LO;
     ow->view_mode = 0xFF;         /* DS:12 in the live capture */
-    return overworld_open(ctx, ow);
+    if (overworld_open(ctx, ow) != 0) return -1;
+    return overworld_resume(ctx, ow);
 }
 
 /*
@@ -983,7 +1019,8 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     ow->sector_hi = ctx->state.sector_first;
     ow->sector_lo = ctx->state.sector_second;
     ow->view_mode = 0xFF;         /* file 0x0A67: mov $0xff,[0x12] */
-    return overworld_open(ctx, ow);
+    if (overworld_open(ctx, ow) != 0) return -1;
+    return overworld_resume(ctx, ow);
 }
 
 void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)

@@ -486,4 +486,18 @@ int  u2_bcd16(uint8_t lo, uint8_t hi);
 
 void u2_state_init(u2_state *s);
 
+/* Resume the DS mirror from a checkpoint file: whitespace-separated hex bytes starting at
+ * DS:0000. Returns 0 on success.
+ *
+ * The save file only carries DS:36..135 — the 256 bytes the original persists. A mid-session
+ * checkpoint needs the creature arrays, the wander vectors, the RNG register and the status
+ * counters too, all of which live outside the record and all of which evolve during play, so a
+ * replay that resumes from the save alone starts from a different world. That is why this exists
+ * separately from u2_save_load().
+ *
+ * Fails loudly on an empty, malformed or oversized file: a silently-partial checkpoint would fill
+ * a diff with divergences caused by the loader rather than by the engine.
+ */
+int u2_state_load_ds(u2_state *s, const char *path);
+
 #endif /* U2_STATE_H */

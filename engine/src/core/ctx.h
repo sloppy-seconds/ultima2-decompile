@@ -52,6 +52,10 @@ typedef struct u2_ctx {
     } trace;
 
     int dump_state;         /* --dump-state */
+    /* Checkpoint file for --load-ds: whitespace-separated hex bytes of the DS mirror,
+     * applied after the save AND after the world/monx load, because both of those overwrite
+     * fields a mid-session checkpoint carries. NULL means no checkpoint. */
+    const char *load_ds_path;
     /* Diagnostic only, never read by game logic: the count of grid cells that look occupied
      * but hold no creature, refreshed each composed frame where the world is at hand.
      * "He left a copy of him behind", made checkable. See u2_monsters_ghost_cells(). */

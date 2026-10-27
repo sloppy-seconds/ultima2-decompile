@@ -123,7 +123,14 @@ def wait_until_tick(target, http, deadline_s=15.0):
 
 
 def snapshot(http):
-    return {name: st.read_mem(st.DS, off, n, http).hex(" ") for name, off, n, _ in FIELDS}
+    out = {name: st.read_mem(st.DS, off, n, http).hex(" ") for name, off, n, _ in FIELDS}
+    # The whole DS range as well, so a replay resumes from an exact checkpoint instead of
+    # rebuilding one from the named fields. The save file carries only DS:36..135; the creature
+    # arrays, wander vectors, RNG register and status counters all live outside it, so a replay
+    # that resumes from the save alone starts from a different world — and every dynamic field
+    # then diverges from turn 0 for a reason that has nothing to do with game behaviour.
+    out["ds_block"] = st.read_mem(st.DS, 0x0000, 0x280, http).hex(" ")
+    return out
 
 
 def read_script(path):

@@ -4,7 +4,43 @@
  *       asm/50B3_map_tile_ptr.asm, asm/51FD_str_out_core.asm,
  *       asm/5217_rand_byte.asm
  */
+#include <stdio.h>
+#include <string.h>
+
 #include "core/state.h"
+
+int u2_state_load_ds(u2_state *s, const char *path)
+{
+    FILE *f;
+    unsigned char *base;
+    size_t n = 0;
+    unsigned int v;
+    int got = 1;
+
+    if (s == NULL || path == NULL) return -1;
+    f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "u2: cannot open checkpoint '%s'\n", path);
+        return -1;
+    }
+    base = (unsigned char *)s;
+    while ((got = fscanf(f, "%2x", &v)) == 1) {
+        if (n >= sizeof(u2_state)) {
+            fprintf(stderr, "u2: checkpoint '%s' is larger than the DS mirror "
+                            "(%zu bytes)\n", path, sizeof(u2_state));
+            fclose(f);
+            return -1;
+        }
+        base[n++] = (unsigned char)v;
+    }
+    fclose(f);
+    if (n == 0 || got != EOF) {
+        fprintf(stderr, "u2: checkpoint '%s' is empty or not whitespace-separated hex\n", path);
+        return -1;
+    }
+    fprintf(stderr, "u2: resumed DS from checkpoint '%s': %zu bytes at DS:0000\n", path, n);
+    return 0;
+}
 
 int u2_bcd16(uint8_t lo, uint8_t hi)
 {

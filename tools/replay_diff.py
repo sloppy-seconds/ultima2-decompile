@@ -62,6 +62,42 @@ RAW_FIELDS = [
 ]
 
 
+# DS offset of each recorded field, so a checkpoint file can be rebuilt from a recording.
+# These are the same offsets the recorder reads, and state.h mirrors them byte for byte.
+DS_OFFSETS = {
+    "pos": 0x00, "sector": 0x49, "hp": 0x51, "food": 0x53, "exp": 0x56, "gold": 0x58,
+    "items": 0xD6, "mon_x": 0x137, "mon_y": 0x157, "mon_hp": 0x177, "mon_type": 0x197,
+    "mon_kind": 0x1B7, "mon_role": 0x1D7, "wander_x": 0x1F7, "wander_y": 0x217,
+    "rng": 0x23F, "paralysis": 0x26A,
+}
+DS_BLOCK_LEN = 0x280
+
+
+def build_checkpoint(turns, align, path):
+    """Rebuild a DS block from the recording, taken at the sample BEFORE the first compared turn.
+
+    This is what makes the comparison mean anything. The save file carries only DS:36..135, and the
+    original ran several menu commands before the compared window — during which creatures moved,
+    the player's state changed and the RNG advanced. Resuming only the RNG register left the engine
+    starting from a different world, and the very first diff proved it: every static loaded field
+    matched while every dynamic one differed from turn 0. That was a starting-state mismatch wearing
+    a behavioural divergence's clothes.
+
+    Fields the recording does not carry stay zero, which is why the block is bounded at 0x280 and
+    why a recorder that dumps the whole DS range is the better long-term answer.
+    """
+    ds = turns[align - 1]["ds"] if align > 0 else turns[0]["ds"]
+    blk = bytearray(DS_BLOCK_LEN)
+    for name, off in DS_OFFSETS.items():
+        if name not in ds:
+            continue
+        raw = bytes.fromhex(ds[name].replace(" ", ""))
+        blk[off:off + len(raw)] = raw
+    with open(path, "w") as f:
+        f.write(" ".join(f"{b:02x}" for b in blk))
+    return ds
+
+
 def bcd(s):
     """Packed-decimal bytes to an int. Each byte's two nibbles ARE decimal digits,
     so 0x99 0x63 0x67 is 996367. Formatting the byte as decimal instead of hex is the
@@ -122,6 +158,8 @@ def run_engine(args, keys, rng_state, work):
            "--data-dir", args.data_dir, "--save-dir", work,
            "--debug", "cli", "--debug-path", eng_dir, "--debug-limit", "0",
            "--script", script]
+    if args.checkpoint:
+        cmd += ["--load-ds", os.path.join(work, "checkpoint.hex")]
     if rng_state:
         cmd += ["--rng-state", rng_state]
     if args.seed is not None:
@@ -151,6 +189,11 @@ def main():
     ap.add_argument("--seed", default=None, help="passed through to the engine")
     ap.add_argument("--no-rng-resume", action="store_true",
                     help="do not load the original's register (shows what the resume is buying)")
+    ap.add_argument("--checkpoint", action="store_true",
+                    help="resume the engine from a full DS block rebuilt from the recording, not "
+                         "just the RNG register. Without it the two sides start from different "
+                         "worlds and every dynamic field diverges from turn 0 for a reason that "
+                         "has nothing to do with game behaviour.")
     ap.add_argument("--force-register", action="store_true",
                     help="align on RNG register even when the food odometer proves index alignment valid")
     ap.add_argument("--max-report", type=int, default=5, help="divergences to print per field")
@@ -170,6 +213,10 @@ def main():
 
     work = tempfile.mkdtemp(prefix="u2-diff-", dir="/var/tmp")
     try:
+        if a.checkpoint and a.align_turn > 0:
+            pre = build_checkpoint(turns, a.align_turn, os.path.join(work, "checkpoint.hex"))
+            print(f"checkpoint: DS block from sample {a.align_turn - 1} "
+                  f"(pos={pre['pos']} rng={pre['rng']})")
         dumps, rc = run_engine(a, keys, rng_state, work)
         print(f"engine produced {len(dumps)} turn dumps (exit {rc})")
 
