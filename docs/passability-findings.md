@@ -538,3 +538,82 @@ question about the data, not a reason to discount the report.
 `T`-through-solid is a separate interaction predicate from walkability, and at
 least the letter range needs both: not walkable, talkable-through. Any engine
 model that stores only `passable(tile)` will be unable to reproduce a shop.
+
+## F14 — THE GATE VARIABLE IS `map_byte >> 1`, AND THE RULE IS A RANGE PLUS A SHORT LIST
+
+Found 2026-10-29 by joining two headers that had never been read together: `asm/2FAD_vehicle_board_dispatch`
+(which already recorded, as RESOLVED, that `[DS:14] = map_byte >> 1`, measured on 53 of 54 walk samples:
+`0x0C->0x06`, `0x5C->0x2E`, `0x70->0x38`, `0x08->0x04`) and the ladder at `asm/25C0..25F6`, which tests
+`[DS:29] & 0x7F` against exactly that value space.
+
+**This retroactively refutes F10's refutation of F8.** F10 rejected the tile interpretation because
+"if DS:29 were the tile byte the ladder would have rejected 0x08 twice; it did not". But the ladder
+never sees `0x08` — it sees `0x08 >> 1 = 0x04`, which is below `0x16` and therefore accepted. The
+refutation, the F9 "CONTESTED" flag and F1's "does not read the target tile" all rest on assuming the
+gate variable was the raw tile byte. It is the tile byte shifted once.
+
+### The on-foot ladder, in byte order
+
+```
+al = DS:29 & 0x7F                  ; == destination map byte >> 1
+if al == 0x60: -> 0x2877           ; stamp-path divert, not a verdict
+if al == 0x00: REJECT              ; map 0x00  open water
+if al == 0x08: REJECT              ; map 0x10  mountain
+if al in {0x22,0x24,0x26,0x28,     ; map 0x44,0x48,0x4C,0x50  the four vehicle tiles
+          0x2A,0x2C,0x2E,0x38}: ACCEPT
+                                   ; map 0x54,0x58,0x5C(force field),0x70(town paving)
+if al >= 0x16: REJECT
+else:          ACCEPT              ; every map byte below 0x2C
+```
+
+So the rule is **not a per-tile table**. It is: accept everything under `0x2C` except water and
+mountain, plus eight named bytes, reject the rest. That is why a hand-maintained default-deny table
+keeps contradicting measurements — it is the wrong shape, not merely missing rows.
+
+### Every live measurement in this file agrees, with no exceptions
+
+| map byte | `>>1` | ladder | measured |
+| --- | --- | --- | --- |
+| `0x00` water | `0x00` | reject | 22 live rejects (F11) |
+| `0x04` shallows | `0x02` | accept | re-proven live, sector 10 |
+| `0x08` grass | `0x04` | accept | walked, F11 |
+| `0x0C` forest | `0x06` | accept | five steps, F11 |
+| `0x10` mountain | `0x08` | reject | blocked at (11,20), F11 |
+| `0x5C` force field | `0x2E` | accept | g29-field, six crossings |
+| `0x70` town paving | `0x38` | accept | owner, standing in town |
+
+### Travel modes, and their separate arms
+
+`[DS:13]` is the travel mode, and `asm/253B_food_mode_dispatch` branches on it before the ladder:
+
+| mode | `[DS:13]` | arm | tile rule | food per step |
+| --- | --- | --- | --- | --- |
+| on foot | `0x78` | `asm/2575` -> `asm/2599` | the ladder above | −19 |
+| horse | `0x22` | `asm/2557` -> `asm/2626` | ladder, charged twice | −38 |
+| ship | `0x24` | `asm/2619` | **water only** | 0 |
+| plane | `0x26` | `asm/2604` | **accepts everything** (airborne) | −38 |
+| rocket | `0x28` | `asm/25F8` | **accepts everything** | 0 |
+
+Vehicle tiles, from `[DS:14] = map_byte >> 1` inverted: horse `0x44`, ship `0x48`, PLANE `0x4C`,
+rocket `0x50` — arts `0x11/0x12/0x13/0x14`, corroborated three ways per the `2FAD` header.
+
+The plane's ground/air distinction is real and is a *state*, not a tile: `asm/38B0` (`cmd_L`, LAUNCH)
+tests `[DS:13]` for `0x26` and `0x28`, and landing is gated separately — `LAND PLANE.` is accepted only
+on tile `0x08` grass, anything else prints `LAND--NOT HERE!!!!!` and inertial flight continues. Both
+branches executed in `captures/spice86/flight-launched-live`.
+
+### Grades, because this is a synthesis and not one measurement
+
+- **Bytes**: the ladder's comparisons and branch targets, the mode dispatch arms, the landing gate.
+- **Measured**: `[DS:14] = map_byte >> 1` (53/54 samples), every row of the agreement table above,
+  the food figures, both plane-landing branches.
+- **Inferred**: that the ladder is reached identically on every mode arm. The arms are separate
+  routines and only the foot path was traced end to end.
+
+### Open, and it matters before wiring
+
+`asm/2619` (ship) reads `[DS:29]` and accepts `0x00` **and `0x80`**. `0x80` is not reachable as
+`map_byte >> 1` for any byte in a mapx file, and this arm does not apply the `& 0x7F` mask the foot
+ladder does. Either the ship arm sees a different quantity, or the high bit carries a second meaning.
+**Do not guess it.** It needs one live sample: board a ship and read `DS:29` and the tile under the
+player together.
