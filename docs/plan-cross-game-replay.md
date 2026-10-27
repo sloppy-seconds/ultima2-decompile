@@ -376,9 +376,9 @@ Each phase is independently useful and has an acceptance test that can fail.
 | --- | --- | --- |
 | **#0** | **Determinism probe.** Record one scripted original session twice; diff. | **DONE — reproducible, with a condition.** § 6a passed vacuously, § 6b mis-diagnosed, § 6c settled it: input must be paced on emulated ticks, not real seconds |
 | **1** | Original-side recorder: per turn, key + DS snapshot + frame, **paced on BIOS tick counts**. | **DONE 2026-10-26 — `tools/u2_record.py`.** 44-turn combat, two boots, 17/18 fields identical, 0 unexplained. See § 7a |
-| **2** | `u2_rng_load` + `--rng-state`. | load-and-match control in § 4.1 |
+| **2** | `u2_rng_load` + `--rng-state`. | **DONE 2026-10-26.** `rng_check.c` 38 checks; both controls run — no-op load 33 failures, off-by-one 34, real build 0 |
 | **3** | Checkpoint format: save + sector + RNG + turn index, and engine resume-from-checkpoint. | resume at turn 200 and match a from-boot run's turn 200 state |
-| **4** | `tools/replay_diff.py` with the allowlist. | **mutation control:** break something known in the engine (e.g. revert the contact gate) and confirm the differ names it, at the right turn |
+| **4** | `tools/replay_diff.py` with the allowlist. | **PARTIAL — skeleton runs end to end, NOT a gate.** Two open problems, both in the differ: command-level turn alignment (recording samples per key, engine dumps per turn) and BCD/hex normalisation. See the tool's STATUS block |
 | **5** | Wire it as a gate: a small committed corpus of original sessions that must replay with zero unexplained diffs. | the gate goes red on a deliberate engine regression |
 | **6** | Demo path (enhanced mode, later): replay a key script and capture frames locally. | see § 8 policy |
 
