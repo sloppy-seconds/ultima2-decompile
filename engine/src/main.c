@@ -71,6 +71,9 @@ static void usage(const char *argv0)
         "                    COUNT matching the original was not the diagnosis — same count,"
         "                    different creature positions, so the rolls are spent on different"
         "                    decisions. Only a per-site trace shows that.\n"
+        "  --dump-ds F     write the first 0x280 bytes of the DS mirror as flat hex at exit."
+        "                  The counterpart to --load-ds, so a test can read a state, patch one"
+        "                  byte, and feed it back.\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
@@ -185,6 +188,7 @@ int main(int argc, char **argv)
     int rng_state_given = 0;
     uint8_t rng_state[6];
     const char *roll_trace_path = NULL;
+    const char *dump_ds_path = NULL;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
@@ -231,6 +235,8 @@ int main(int argc, char **argv)
             rng_state_given = 1;
         } else if (strcmp(a, "--load-ds") == 0 && i + 1 < argc) {
             ctx.load_ds_path = argv[++i];
+        } else if (strcmp(a, "--dump-ds") == 0 && i + 1 < argc) {
+            dump_ds_path = argv[++i];
         } else if (strcmp(a, "--trace-rolls") == 0 && i + 1 < argc) {
             roll_trace_path = argv[++i];
         } else if (strcmp(a, "--dump-state") == 0) {
@@ -395,6 +401,23 @@ int main(int argc, char **argv)
     if (ctx.dump_state) {
         u2_dump_screen(&ctx, stdout);
         u2_dump_state_json(&ctx, stdout);
+    }
+    /* The counterpart to --load-ds, which had no partner: it reads a flat hex block into the DS
+     * mirror, and until now nothing could produce one from an engine run. That asymmetry is why a
+     * gate cannot set a single DS byte (e.g. force arm paralysis) without hand-building a whole
+     * checkpoint. Written at exit, same span --load-ds consumes.
+     */
+    if (dump_ds_path) {
+        FILE *f = fopen(dump_ds_path, "w");
+        if (!f) {
+            fprintf(stderr, "u2: cannot open --dump-ds file '%s'\n", dump_ds_path);
+            ctx.exit_code = 1;
+        } else {
+            const unsigned char *base = (const unsigned char *)&ctx.state;
+            for (unsigned n = 0; n < 0x280u; n++)
+                fprintf(f, "%02x", base[n]);
+            fclose(f);
+        }
     }
     if (report_path && u2_replay_write(&ctx, report_path) != 0) {
         fprintf(stderr, "u2: cannot write replay report '%s'\n", report_path);

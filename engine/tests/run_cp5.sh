@@ -552,6 +552,51 @@ else
     bad "CP5 C3c: $dumps dumps for 5 refused steps (expect 5), player at '$stay' (expect '02 00') — the reject path is not taking the world turn"
 fi
 
+# --- C3d: the arms-paralysis ATTACK refusal is a completed command too --------------
+#
+# asm/2BA5 refuses the swing when [DS:26C] is non-zero, and asm/2BAD ends that refusal with
+# `jmp L_000c30` -- asm/0A30, which falls through to asm/0A33_cmd_done and the post-command tail.
+# Same target as asm/0A15, the terrain refusal proven in C3c above. So a refused attack takes the
+# world turn and ticks the status counters.
+#
+# The engine had `if (paral_arms == 0) creature_turn(...)` there, which made arm paralysis
+# PERMANENT for a player who kept trying to swing: the refusal resolved nothing, so the counter
+# never decayed. That is the same stranding the owner reported for legs, on the other command.
+# Corroborated without a new capture, in captures/spice86/fight-20261021-castle03/turns (3000
+# per-turn DS dumps): DS:26C fell 6 times, every one with the food odometer UNCHANGED, and zero
+# times with food changed.
+#
+# --dump-ds exists for this gate: it writes the DS mirror, the test sets DS:26C=15, and the run
+# must drive it to 0. Control, run 2026-10-29: with the old guard restored the same script writes
+# ZERO dumps, because a refusal that resolves nothing also logs nothing (against 16 here).
+python3 tests/cp5_fight_seed.py "$WORK/c3d" >/dev/null 2>&1
+printf '0xf2\n' > "$WORK/c3d/k0"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c3d/content" --save-dir "$WORK/c3d/save" \
+     --script "$WORK/c3d/k0" --dump-ds "$WORK/c3d/base.hex" >/dev/null 2>&1
+python3 - "$WORK/c3d/base.hex" "$WORK/c3d/arms.hex" <<'PYEOF'
+import sys
+b = bytearray(bytes.fromhex(open(sys.argv[1]).read()))
+b[0x26C] = 0x0F                      # arms paralysis, 15 turns
+open(sys.argv[2], 'w').write(b.hex())
+PYEOF
+for i in $(seq 1 16); do printf '0x41\n0xf0\n'; done > "$WORK/c3d/atk.keys"   # A then UP, x16
+rm -rf "$WORK/c3d/dbg"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c3d/content" --save-dir "$WORK/c3d/save" \
+     --load-ds "$WORK/c3d/arms.hex" --script "$WORK/c3d/atk.keys" \
+     --debug cli --debug-path "$WORK/c3d/dbg" --debug-limit 0 >/dev/null 2>&1
+c3d=$(find "$WORK/c3d/dbg" -name 'turn-*.json' 2>/dev/null | wc -l)
+c3dlast=$(find "$WORK/c3d/dbg" -name 'turn-*.json' 2>/dev/null | sort | tail -1)
+c3dpara=$(python3 -c "
+import json,sys
+p=sys.argv[1]
+print(json.load(open(p))['state']['raw']['paralysis'] if p else 'none')" "$c3dlast" 2>/dev/null)
+# One turn per attack, not two: `A` only arms the pending command, the direction completes it.
+if [ "$c3d" -eq 16 ] && [ "$c3dpara" = "00 00 00 00" ]; then
+    ok "CP5 C3d: a refused attack takes the world turn and decays arm paralysis (16 dumps, DS:26C 15->0)"
+else
+    bad "CP5 C3d: $c3d dumps for 16 refused attacks (expect 16), paralysis '$c3dpara' (expect '00 00 00 00') — the arms refusal is not taking the turn, and arm paralysis is permanent"
+fi
+
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
 # loop routes a letter into it at all. The Q migration is what exposed the gap: putting a

@@ -192,7 +192,7 @@ MANIFEST = [
     ("U2_S_ATTACK",            "2B8F_cmd_A.asm", 0),
     ("U2_S_HIT",               "2BEC_combat_hit_msg.asm", 0),
     ("U2_S_MISS",              "2E09_combat_miss_msg.asm", 0),
-    ("U2_S_PARALYZED",         "2BAD_sub_2bad.asm", 0),
+    ("U2_S_PARALYZED",         "2BAD_attack_arms_refusal_to_cmd_done.asm", 0),
     # `db 0x8d,"KILLED--GOLD+"` — the leading glyph byte puts it outside the asm
     # fallback, so it is exe-only, like the title strings above.
     ("U2_S_KILLED",            "2E3D_combat_attack_flow.asm", ("run", 0x2FA6, 13, "KILLED--GOLD+")),

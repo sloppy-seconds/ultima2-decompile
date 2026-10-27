@@ -1346,12 +1346,27 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             attack_dir(ctx, ow, word, dx, dy);
             /* The swing is the turn: the original's monsters advance on the
              * expiry of a half-typed `A` too (`ATTACK--PASS`), so an attack that
-             * was actually completed cannot sensibly advance nothing. Whether the
-             * arms-paralysis refusal inside attack_dir costs a turn is NOT
-             * proven; the engine advances on both the miss and the hit and not on
-             * the refusal. */
-            if (ctx->state.paral_arms == 0)
-                creature_turn(ctx, ow);
+             * was actually completed cannot sensibly advance nothing.
+             *
+             * And the ARMS-PARALYSIS REFUSAL is a turn as well. This used to be
+             * `if (ctx->state.paral_arms == 0) creature_turn(...)`, which made arm
+             * paralysis permanent for anyone who kept trying to swing - the same stranding
+             * the owner had already reported for legs. Two independent proofs, both found
+             * without a new capture:
+             *
+             * BYTES: the refusal is asm/2BAD, whose whole tail is `jmp L_000c30`. That is
+             * asm/0A30, the 3-byte stub that falls through to asm/0A33_cmd_done and so to
+             * asm/0A38_post_command_tail - the IDENTICAL target of asm/0A15, the terrain
+             * refusal whose tick was proven by forced-poke. Same jump, same tail, same tick.
+             * asm/2052, asm/228A and asm/277B refuse their way to the same address too.
+             *
+             * CORPUS: captures/spice86/fight-20261021-castle03/turns, 3000 per-turn DS dumps.
+             * DS:26C fell 6 times, every one of them with the food odometer UNCHANGED, and
+             * zero times with food changed. A counter that only decremented on spent turns
+             * would show the opposite. Legs in the same corpus: 91 decrements, all same-food.
+             *
+             * So the guard is gone: a completed ATTACK command always reaches the tail. */
+            creature_turn(ctx, ow);
             continue;
         }
 

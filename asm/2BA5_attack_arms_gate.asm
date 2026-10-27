@@ -2,8 +2,12 @@
 # name-evidence: reached from asm/2B8F_cmd_A (which prints "ATTACK--") as the first
 #           gate in its fall-through chain; reads [DS:26C] — the arms counter proven
 #           by asm/0EC2_combat_paralyzed_arms — and on non-zero branches to
-#           asm/2BAD_sub_2bad, which prints "PARALIZED!" and returns to the command
-#           loop without attacking.
+#           asm/2BAD_attack_arms_refusal_to_cmd_done, which prints "PARALIZED!" and then
+#           `jmp L_000c30` -- i.e. it does NOT return to the input poll. L_000c30 is asm/0A30,
+#           which falls through to asm/0A33_cmd_done and the post-command tail, so the refusal is
+#           a completed command and the status tick fires on it (corrected 2026-10-29; this header
+#           used to say it "returns to the command loop without attacking", which understated it
+#           and let the engine make arm paralysis permanent).
 # CORRECTION 2026-10-28d: this header used to add "observed on screen as a `CMD:` line reading
 #           exactly that". It was never observed on screen. `tools/cfg_printed.py
 #           captures/spice86/castle-03-live` lists print sites whose `call` is confirmed in
