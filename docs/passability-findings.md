@@ -589,10 +589,36 @@ keeps contradicting measurements — it is the wrong shape, not merely missing r
 | mode | `[DS:13]` | arm | tile rule | food per step |
 | --- | --- | --- | --- | --- |
 | on foot | `0x78` | `asm/2575` -> `asm/2599` | the ladder above | −19 |
-| horse | `0x22` | `asm/2557` -> `asm/2626` | ladder, charged twice | −38 |
-| ship | `0x24` | `asm/2619` | **water only** | 0 |
-| plane | `0x26` | `asm/2604` | **accepts everything** (airborne) | −38 |
+| horse | `0x22` | `asm/2557` -> `asm/2626` | **the same ladder as foot** | −38 |
+| ship | `0x24` | `asm/2619` | `DS:29 == 0x00` or `0x80` only | 0 |
+| plane | `0x26` | `asm/2604` | accepts everything **except mode `0x06`** (map `0x0C` forest) | −38 |
 | rocket | `0x28` | `asm/25F8` | **accepts everything** | 0 |
+
+**Corrected 2026-10-29 against the arm bodies, one hour after this section was first written.** The
+first version said the plane "accepts everything". It does not. `asm/2604` is:
+
+```
+call L_002826          ; the mounted drain, -38
+cmp $0xff,%al
+je  reject             ; food underflow -> reject path
+mov 0x29,%al
+and $0x7f,%al
+cmp $0x6,%al
+je  reject             ; mode 0x06 == map 0x0C == FOREST is the only refusal
+jmp L_002804           ; accept
+```
+
+So the airborne rule is "fly over anything except forest", which is a real and surprising rule that
+the summary table flattened. Reading the header's one-line arm description instead of the body is
+what caused it — the same mistake pattern this file already documents at F6 and F10.
+
+`asm/2557` (horse) is a **delay loop**, not a tile rule: nested `dec %si / jne` over `0x20` and a
+`%di` counter, then `jmp L_002826`. Horse therefore walks exactly where a footman walks and pays
+double. That matters for the engine: horse needs travel-mode state and a food cost, not a second
+passability table.
+
+`asm/25F8` (rocket) is a single instruction, `jmp L_002804` — unconditional accept, and it never
+reaches a drain, which is why the rocket is free.
 
 Vehicle tiles, from `[DS:14] = map_byte >> 1` inverted: horse `0x44`, ship `0x48`, PLANE `0x4C`,
 rocket `0x50` — arts `0x11/0x12/0x13/0x14`, corroborated three ways per the `2FAD` header.
