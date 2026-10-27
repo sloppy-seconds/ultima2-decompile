@@ -3,6 +3,11 @@
 # func 0A02..0A14  len 0013 B  evidence: seed+reko
 # strings: "--INVALID MOVE!"
 # calls: L_0051df (str_out)
+# flow: after printing the reject string this falls through to asm/0A15_invalid_move_to_cmd_done,
+#           which jumps to asm/0A30 and thence into asm/0A33_cmd_done and the post-command tail.
+#           A refused step is therefore a COMPLETED COMMAND: the creature sweep and the wandering-spawn
+#           attempt both run. Proven from bytes plus live corroboration on 2026-10-26; see that file's
+#           header. The engine's reject paths used to skip the sweep, which was a fidelity bug.
 # provenance: live:play-test-live — observed firing on water (22 rejections) and
 #           on mountain terrain; the engine's blocked-move echo cites this string
 #           CORRECTION 2026-10-22: the string's execution is real and confirmed by
