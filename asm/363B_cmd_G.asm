@@ -5,7 +5,7 @@
 #           CONTAINS ", gold / TRI-LITHIUM handling); returns to dispatcher 0xc33.
 # func 363B..3781  len 0147 B  evidence: seed+reko (jump table cs:0730 entry G)
 # provenance: live:airport32 (+1 other harvests), static
-#           entry executed in 2 of 162 harvests; derived by tools/provenance_from_traces.py
+#           entry executed in 2 of 163 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
