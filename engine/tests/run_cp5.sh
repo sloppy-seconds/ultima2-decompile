@@ -597,6 +597,25 @@ else
     bad "CP5 C3d: $c3d dumps for 16 refused attacks (expect 16), paralysis '$c3dpara' (expect '00 00 00 00') — the arms refusal is not taking the turn, and arm paralysis is permanent"
 fi
 
+# --- P1: the on-foot passability ladder, checked tile by tile -------------------------
+#
+# The engine used to classify tiles on the ART INDEX (map_byte >> 2). asm/2423 classifies on
+# map_byte >> 1, and its rule is a threshold plus a short list, not a table. That mismatch is the
+# root of every passability regression here: shallow water, town gates, town paving and the force
+# field were each wrong in turn, and each was fixed by adding a row to a table that should not
+# exist. See docs/passability-findings.md F14.
+#
+# The gate drives the real engine and asks whether the player actually moved, because the failure it
+# guards is a shape error — someone reinstating a per-tile table that agrees on whichever rows
+# whoever wrote it thought of. 16 tiles, each in a fresh seed (the engine rewrites the save in
+# place, so a reused dir reports a wrong answer, and already did once this session).
+if U2_BIN=./u2 python3 tests/passability_ladder.py > "$WORK/p1.log" 2>&1; then
+    ok "CP5 P1: on-foot passability matches asm/2423's ladder (16 tiles, fresh seed each)"
+else
+    sed 's/^/        /' "$WORK/p1.log" | tail -6
+    bad "CP5 P1: passability ladder disagrees with the bytes"
+fi
+
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
 #
 # asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is

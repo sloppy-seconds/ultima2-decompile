@@ -645,109 +645,68 @@ static void u2_force_field(u2_ctx *ctx)
     st->hp = (uint8_t)(st->hp - 0x10u);
 }
 
+/* On-foot passability — asm/2423's ladder, transcribed rather than re-derived.
+ *
+ * THE GATE VARIABLE IS `map_byte >> 1`, not the art index. asm/2FAD_vehicle_board_dispatch
+ * recorded this as resolved on 2026-10-21 ([DS:14] = map_byte >> 1, measured on 53 of 54 walk
+ * samples: 0x0C->0x06, 0x5C->0x2E, 0x70->0x38, 0x08->0x04), and the ladder at asm/25C0..25F6 tests
+ * [DS:29] & 0x7F in exactly that space. The engine used to classify on `map_byte >> 2`, a third
+ * quantity, and that mismatch is the root of every passability regression this project has had:
+ * a per-tile deny table cannot express a rule that is "everything below a threshold, except two
+ * bytes, plus a short list". Full write-up: docs/passability-findings.md F14.
+ *
+ * The ladder, in byte order (asm/25C0, 25CC, 25D0, 25D4..25F0, 25F4):
+ *
+ *   al = DS:29 & 0x7F
+ *   al == 0x60            -> asm/2677 (stamp path; NOT a verdict, see the note below)
+ *   al == 0x00, 0x08      -> reject          map 0x00 water, 0x10 mountain
+ *   al in 22,24,26,28,
+ *          2A,2C,2E,38    -> accept          map 0x44 horse, 0x48 ship, 0x4C PLANE, 0x50 rocket,
+ *                                            0x54, 0x58, 0x5C force field, 0x70 town paving
+ *   al >= 0x16            -> reject
+ *   else                  -> accept          every map byte below 0x2C
+ *
+ * What this changes against the table it replaces, and why each one is an improvement rather than a
+ * risk: it UNBLOCKS the four vehicle tiles (0x44/0x48/0x4C/0x50), the dungeon mouth and the
+ * monument, all of which the old table refused on art-shape reasoning — the weakest grade in that
+ * function. A vehicle tile you cannot stand on is a vehicle you cannot board, so those rows were
+ * blocking content, not scenery. It KEEPS every blocker that was proven by walking or by bytes:
+ * water, mountain, the A-Z sign letters (map 0x80..0xE4 all land at mode >= 0x40), the building
+ * walls (0x74, 0x78), the humanoid figures (0x30..0x40, 0x60..0x6C) and the closed door 0xA0
+ * (mode 0x50, rejected by the threshold — no special case needed any more).
+ *
+ * The 0x60 divert is deliberately NOT modelled. asm/2677 is unreviewed bulk-wave output whose only
+ * call is map_tile_ptr; it is a stamp write, not an accept or a reject, and map 0xC0 is art 0x30,
+ * one of the sign letters, which the old table also refused. Falling through to the threshold
+ * reproduces that verdict. If asm/2677 is ever reviewed and turns out to accept, this is the line
+ * that changes.
+ *
+ * Modes other than foot have their own arms (asm/2557 horse, asm/2619 ship, asm/2604 plane,
+ * asm/25F8 rocket) and are NOT handled here — see docs/passability-findings.md F14. The engine has
+ * no travel-mode state yet, so this is the only reachable path.
+ */
 static int u2_tile_passable(const u2_world *w, int x, int y)
 {
-    const uint8_t t = u2_world_tile_at(w, x, y);
-    const int art = (t >> 2) & 0x7F;
+    const unsigned mode = (u2_world_tile_at(w, x, y) >> 1) & 0x7Fu;
 
-    /* --- ground: the only entries proven walkable by an actual step --- */
-    if (art == 0x02) return 1;   /* map 0x08 grass    — proven: walked across, F11 */
-    /* Shallow water. map 0x04 / art 0x01, "sparse cyan and white single pixels"
-     * (disasm/tile-art.tsv), 1602 cells across the pack.
-     *
-     * This was never a new ruling; it was a regression. docs/map-format.md § 3 records
-     * `0x04 | 1 | faint sparse dots | passes` from the F11 walk measurements, and the
-     * default-deny rewrite of 2026-10-27 — which sealed every town in the game for the
-     * same reason — silently blocked it by simply having no row. The engine contradicted
-     * its own documented measurement until the owner reported being unable to wade it.
-     *
-     * The corroboration is the creature gate, and it is a good one: asm/2199 refuses
-     * {0x10, 0x04, 0x00} for land creatures (asm/21BD, 21C5, 21C9). So the original
-     * treats 0x04 as terrain the PLAYER crosses and a land monster will not — which is
-     * what distinguishes shallows from open sea (0x00, impassable to both, proven by 22
-     * live rejects) and from ordinary ground (0x08, 0x0C, accepted by both).
-     * Grade: measured walk, plus a byte-level asymmetry that agrees with it.
-     *
-     * RE-PROVEN LIVE 2026-10-26 with controls, in sector 10 against real mapx10 cells: stepping
-     * East from (20,12) onto the 0x04 at (21,12) was ACCEPTED, while grass passed and both open
-     * sea (0x00) and mountain (0x10) were refused from adjacent walkable ground. The controls are
-     * what make the answer usable — a harness that also passed mountain would have passed this and
-     * proved nothing, which is how an earlier probe sweep reported forest as impassable. Each step
-     * spent 19 food including the refused pair, re-confirming the charge-before-verdict finding.
-     * Write-up: docs/map-format.md § 3a. */
-    if (art == 0x01) return 1;
-    if (art == 0x03) return 1;   /* map 0x0C forest   — proven: five steps, F11     */
-    /* Town paving. Owner report 2026-10-27, standing in a town: "the terrain I'm not
-     * standing on (cobblestone) should be passable". The tile is art 0x1C, map byte
-     * 0x70, and the census makes the case better than the description does: 12889
-     * cells across 15 of 33 sectors, the second most common byte in the entire pack,
-     * and inside a town sector it is what the ground between the buildings IS
-     * (mapx22: 873 cells, mapx92: 1118). A default-deny table that blocks the second
-     * most common tile in the world is blocking ground, not scenery. Grade: owner. */
-    if (art == 0x1C) return 1;
+    /* The two named rejections, both proven by walking: open sea (22 live rejects) and mountain
+     * (blocked at (11,20)). Note these are map 0x00 and 0x10 — the ladder sees them shifted. */
+    if (mode == 0x00u || mode == 0x08u)
+        return 0;
 
-    /* Force field. Map byte 0x5C, which is mode byte 0x2E because the mode is `map_byte >> 1`
-     * (0x5C >> 1 == 0x2E) — the units error that hid this for a whole phase. It is TRAVERSABLE:
-     * the original walks you straight through it and charges 1000 hit points for the privilege,
-     * which is why the default-deny table must not treat it as a wall. Proven by
-     * captures/spice86/g29-field (six crossings, HP 9999 -> 8999 -> ... -> 3999, exactly 1000 each,
-     * nothing with the ring held) and by asm/24B5_force_field_event, whose ladder sits INSIDE the
-     * passability routine asm/2423 (asm/248B -> 2495 -> 24B1 -> 24B5) rather than rejecting the
-     * step. Grade: measured.
-     *
-     * Keyed on the map byte, not the art index, because the trigger the original tests is the byte
-     * shifted once. The art index (0x5C >> 2 == 0x17) is a different quantity. */
-    if (t == 0x5C) return 1;
+    /* The eight named acceptances. Seven of them are the reason this rewrite exists: four vehicle
+     * tiles, the dungeon mouth, and town paving, all of which must admit the player. */
+    switch (mode) {
+    case 0x22u: case 0x24u: case 0x26u: case 0x28u:   /* horse, ship, PLANE, rocket tiles */
+    case 0x2Au: case 0x2Cu:                           /* map 0x54, 0x58                   */
+    case 0x2Eu:                                       /* map 0x5C — the force field       */
+    case 0x38u:                                       /* map 0x70 — town paving           */
+        return 1;
+    default:
+        break;
+    }
 
-    /* --- proven blockers --- */
-    if (art == 0x00) return 0;   /* map 0x00 water    — proven: 22 live rejects, F11 */
-    if (art == 0x04) return 0;   /* map 0x10 mountain — proven: blocked at (11,20), F11 */
-    /* asm/433A_sub_433a.asm: `cmp $0xa0,%al; jne open_no_door` — the open-door path
-     * accepts only map byte 0xA0 as a door, so 0xA0 is a door and it is solid until
-     * opened (art 0x28, the letter I). proven by bytes, not by walking. */
-    if (t == 0xA0) return 0;
-
-    /* --- owner-reported blockers, 2026-10-27 --- */
-    /* Letters A-Z: shop signs and solid fixtures. F13 records the same report and
-     * notes T (talk) still works through them, so "impassable" is not "inert" —
-     * see the note at the foot of this function. */
-    if (art >= 0x20 && art <= 0x39) return 0;
-    /* Building walls. art 0x1E is solid white, 256 of 256 px (disasm/tile-art.tsv,
-     * colour counts computed from the bytes) and map 0x78 carries it 6997 times
-     * across 16 sectors — the volume a wall needs. art 0x1D is its solid-black
-     * twin; blocked on the same reasoning, and marked art-shape grade. */
-    if (art == 0x1E || art == 0x1D) return 0;
-    /* Humanoid figures drawn from the map. The owner's report: walking through
-     * people is wrong. These are real map bytes, not stamped creatures — measured
-     * occurrence: map 0x40 (art 0x10) 878x/9 sectors, 0x60 (0x18) 126x/15,
-     * 0x68 (0x1A) 78x/15, 0x30 (0x0C) 68x/11. Stamped creatures block by a
-     * different route (monsters.c overwrites the cell), so this is additive. */
-    if (art >= 0x0C && art <= 0x11) return 0;   /* Orc, Daemon, Devil, Balron, Minax, horse */
-    if (art >= 0x18 && art <= 0x1B) return 0;   /* Guard, Jester, Merchant, King            */
-
-    /* --- site gates: you must STAND ON these to enter, so they walk through ---
-     * `E` dispatches on the tile under the player (`site_kind`, tile >> 2: 5
-     * village, 6 town, 7 tower, 8 castle, 9 dungeon), so a gate that does not
-     * admit the player is a town that cannot be entered at all. Blocking these
-     * was a regression introduced on 2026-10-27 by the default-deny rewrite, which
-     * filed art 0x06/0x07/0x09 under "structures depicted as solid" on art-shape
-     * reasoning — the weakest grade in that function — and it took the owner walking
-     * into Linde's gate to disprove it. Census across the pack: 7 village, 4 town,
-     * 2 tower, 121 castle, 4 dungeon cells. The 121 for castle is art 0x08, the gate
-     * frame, and it matches the map-byte 0x20 count exactly, which is the one
-     * cross-check that should have made me suspicious of blocking any of them. */
-    if (art >= 0x05 && art <= 0x09) return 1;
-
-    /* --- structures depicted as solid: art-shape grade, the weakest rows here --- */
-    if (art == 0x0A || art == 0x0B ||
-        art == 0x13 || art == 0x14 || art == 0x15)
-        return 0;                /* monument, doorway, plane, rocket, dungeon mouth */
-
-    /* Unclassified: refuse, and record it so the gap is visible rather than felt.
-     * A stop is a bug report; a free pass is a silent wrong game. */
-    if (art < 64)
-        g_unmeasured_tiles |= (uint64_t)1 << art;
-    return 0;
+    return mode < 0x16u;      /* asm/25F4: `cmp $0x16,%al; jae reject`, else accept */
 }
 
 /* Public test surface for the passability verdict on a raw map byte.
