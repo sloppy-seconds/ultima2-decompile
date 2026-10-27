@@ -250,3 +250,30 @@ Two consequences, both real:
 The clear value is not proven to be `0x70` in general; it is proven for sector 03. Do not
 hardcode it from this one sector. The next step is a sector whose spawn cells sit on non-paving
 ground, which would also settle the mechanism question.
+
+### Attempted and invalid: the sector-21 test
+
+Sector 21 (forrest town, 2394 forest cells, **zero** `0x70` cells in mapx21) is the right
+discriminator: if vacated spawn cells there read `0x70`, the clear is a constant; if they read
+`0x0C`, it is the surrounding ground. The attempt failed and the failure is worth recording.
+
+`u2_edit.py set <save> sector 21` writes the two decimal digit bytes, and the recorder then
+reported `sector: 00 03` - the game loaded sector 03 regardless. Two separate mistakes
+compounded:
+
+* the first attempt edited a copy of `original/player`, which is a **blank character** (name all
+  spaces), so there was no valid save to honour the field;
+* the second used the real character and still landed in sector 03, and the tell was that the
+  recorder's final line was **byte-identical across runs with different key counts**
+  (`rng 62 62 4f c9 96 68`, `pos 1a 2f`, `sector 00 03` for both a 6-key and a 24-key script).
+
+The invalid recording was compared against `mapx21` anyway and produced a confident-looking
+absurdity: 3448 of 4096 cells "differing", and a `mapx byte -> many grid values` mapping that
+looked like a broad load-time transformation. It was none of that - it was sector-03 grid data
+measured against the wrong terrain file. Caught only because the sector field was checked after
+the fact. **Check the recording is in the sector you think it is before analysing it against a
+sector's mapx.**
+
+So: no conclusion about sector 21, and the mechanism and the generality of `0x70` remain open.
+Whatever method is used to reach a non-paving sector must first be proven to change the sector at
+all - the save's sector pair is not sufficient on its own.
