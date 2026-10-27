@@ -62,6 +62,39 @@ RAW_FIELDS = [
 ]
 
 
+def bcd(s):
+    """Packed-decimal bytes to an int. Each byte's two nibbles ARE decimal digits,
+    so 0x99 0x63 0x67 is 996367. Formatting the byte as decimal instead of hex is the
+    classic mistake here and yields impossible numbers with more digits than the field has."""
+    return int("".join(f"{int(x, 16):02x}" for x in s.split()))
+
+
+# The food a completed command costs, from asm/2599 (move, 19) and asm/0B0D (pass, 10).
+# A refused step pays the 19 as well - proven, and re-proven by the M1 recording, where all
+# 19 movement keys cost exactly 19 whether the player moved or not.
+TURN_COSTS = {19, 10}
+
+
+def odometer_ok(turns, align, n):
+    """Prove the original's samples are one-per-command before aligning them by index.
+
+    Index alignment is only honest if each original sample is a completed command. The food
+    odometer is the evidence: every accepted move, refused step and auto-PASS costs a known
+    amount, so a window where every consecutive delta is 19 or 10 has no extra turns hiding in
+    it and no missing ones. Anything else (a delta of 0, or an unexplained amount) means a
+    command landed between samples or a sample was torn, and index alignment would then compare
+    different moments - which is the exact error this whole file exists to avoid.
+    """
+    bad = []
+    for i in range(align, align + n):
+        if i >= len(turns) or i == 0:
+            continue
+        d = bcd(turns[i - 1]["ds"]["food"]) - bcd(turns[i]["ds"]["food"])
+        if d not in TURN_COSTS:
+            bad.append((i, d))
+    return bad
+
+
 def map_keys(turns, align):
     out = []
     for t in turns[align:]:
@@ -118,6 +151,8 @@ def main():
     ap.add_argument("--seed", default=None, help="passed through to the engine")
     ap.add_argument("--no-rng-resume", action="store_true",
                     help="do not load the original's register (shows what the resume is buying)")
+    ap.add_argument("--force-register", action="store_true",
+                    help="align on RNG register even when the food odometer proves index alignment valid")
     ap.add_argument("--max-report", type=int, default=5, help="divergences to print per field")
     a = ap.parse_args()
 
@@ -145,33 +180,60 @@ def main():
             print("\nREPLAY DIFF: INCONCLUSIVE — the engine produced no turn dumps")
             return 2
 
-        # --- align by RNG register ---------------------------------------------------------------
-        # The register advances monotonically with rolls, so it is a clock both sides expose. Multiple
-        # original samples can share a register (keys that trigger no roll); the first is used and the
-        # ambiguity is counted rather than hidden.
-        index = {}
+        # --- alignment --------------------------------------------------------------------------
+        # Two candidate axes, and the honest one depends on the script.
+        #
+        # INDEX (engine turn j == original sample align+j) is exact IF each original sample is one
+        # completed command. The food odometer proves that: every accepted move, refused step and
+        # auto-PASS costs a known 19 or 10, so a window where every delta is one of those has no
+        # command hiding between samples. When it holds, index alignment is the right axis and the
+        # divergences it reports are behavioural.
+        #
+        # REGISTER (join on the RNG value) was the only axis before, and it is now known to be the
+        # wrong one for a general script: the original's idle auto-PASSes consume rolls the engine
+        # never makes, so the two roll streams drift apart permanently and only coincidental matches
+        # survive. It stays as a fallback and as a cross-check, because how often the registers agree
+        # is itself a measurement of roll-consumption fidelity.
+        n = min(len(dumps), len(turns) - a.align_turn)
+        if n <= 0:
+            print("\nREPLAY DIFF: INCONCLUSIVE — nothing to compare")
+            return 2
+
+        reg_index = {}
         for i, t in enumerate(turns):
-            if i < a.align_turn:
-                continue
-            index.setdefault(t["ds"]["rng"], []).append(i)
+            if i >= a.align_turn:
+                reg_index.setdefault(t["ds"]["rng"], []).append(i)
+        reg_hits = sum(1 for d in dumps[:n]
+                       if d["state"]["raw"]["rng"] in reg_index)
 
-        pairs, unaligned, ambiguous = [], [], 0
-        for j, d in enumerate(dumps):
-            try:
-                reg = d["state"]["raw"]["rng"]
-            except KeyError:
-                print("REPLAY DIFF: INCONCLUSIVE — engine dump has no state.raw; rebuild the engine")
-                return 2
-            hits = index.get(reg)
-            if not hits:
-                unaligned.append(j)
-                continue
-            if len(hits) > 1:
-                ambiguous += 1
-            pairs.append((j, hits[0]))
+        bad = odometer_ok(turns, a.align_turn, n)
+        if a.force_register:
+            use_index = False
+        else:
+            use_index = not bad
+        print(f"food odometer over the compared window: "
+              f"{'clean, every delta 19 or 10' if not bad else f'{len(bad)} sample(s) not on a command boundary'}")
+        print(f"RNG registers agree on {reg_hits}/{n} turns "
+              f"(a roll-consumption fidelity measure, not the alignment)")
 
-        print(f"aligned {len(pairs)} engine turns to original samples; "
-              f"{len(unaligned)} unaligned; {ambiguous} registers matched more than one sample")
+        if use_index:
+            pairs = [(j, a.align_turn + j) for j in range(n)]
+            unaligned = []
+            print(f"alignment: INDEX — engine turn j vs original sample {a.align_turn}+j, "
+                  f"{n} pairs")
+        else:
+            pairs, unaligned = [], []
+            for j, d in enumerate(dumps[:n]):
+                hits = reg_index.get(d["state"]["raw"]["rng"])
+                if hits:
+                    pairs.append((j, hits[0]))
+                else:
+                    unaligned.append(j)
+            print(f"alignment: REGISTER fallback — {len(pairs)} matched, {len(unaligned)} unaligned")
+            print("  index alignment was refused because the odometer shows commands between samples;")
+            print("  a movement-only script is the way to get an exact index comparison.")
+
+        print(f"aligned {len(pairs)} engine turns to original samples")
         if not pairs:
             print("\nREPLAY DIFF: INCONCLUSIVE — no engine turn shares an RNG register with any "
                   "original sample")
