@@ -636,10 +636,36 @@ branches executed in `captures/spice86/flight-launched-live`.
 - **Inferred**: that the ladder is reached identically on every mode arm. The arms are separate
   routines and only the foot path was traced end to end.
 
-### Open, and it matters before wiring
+### CLOSED: the ship's `0x80` — it is unreachable, so the ship is water-only
 
-`asm/2619` (ship) reads `[DS:29]` and accepts `0x00` **and `0x80`**. `0x80` is not reachable as
-`map_byte >> 1` for any byte in a mapx file, and this arm does not apply the `& 0x7F` mask the foot
-ladder does. Either the ship arm sees a different quantity, or the high bit carries a second meaning.
-**Do not guess it.** It needs one live sample: board a ship and read `DS:29` and the tile under the
-player together.
+Resolved 2026-10-29 by `captures/spice86/ship-port-boniface`. Sector 31 has five ship tiles; the
+ones at `(6,23)` and `(8,25)` are ringed by water and unreachable on foot, but `(14,23)` is docked
+with grass to the north and east, and `u2_edit.py set <save> sector 31` plus `setpos 15 23` parks
+the character beside it. Then: step onto the ship tile, press `B`, step onto the water.
+
+Measured, all live:
+
+- stepping onto the ship tile `0x48` (mode `0x24`) **was accepted on foot** — F14's named-accept list
+  confirmed from the live side, in a sector nobody had probed before;
+- `BOARD` set `[DS:13] = 0x24` and **did not move the player** — travel mode is a state, not a step;
+- the ship then sailed onto water (`0x00`) and **refused both its own dock tile and grass**. So
+  "water only" is the rule, not a summary of it;
+- `[DS:29]` read `0x14` at rest through every step and never changed. It is scratch, set only inside
+  the `asm/2423` call, exactly as `asm/24B5` documents. **Read `DS:14` from a live session, not
+  `DS:29`.**
+
+And the `0x80` itself: if `[DS:29]` is `map_byte >> 1` where `asm/2619` tests it — which is how the
+routine's entry is documented, and every `DS:14` sample in this capture agrees with it — then the
+largest value it can hold is `0xFC >> 1 = 0x7E`. **`cmp $0x80,%al` can never match.** The ship's
+rule is water only, and the second comparison is dead code or a leftover, not a tile we had failed
+to find. Recorded as unreachable rather than mysterious, because unreachable is testable.
+
+Incidental, and it corrects something said earlier the same day: the save's sector pair **is**
+honoured by the original (`DS:49/4A` read back `03 01`). An earlier attempt this session concluded
+`u2_edit.py set sector` did not work; that test used a blank character, and the conclusion was
+wrong. `DS:14 = map_byte >> 1` was also re-confirmed here in a second sector (`0x70 -> 0x38`,
+`0x08 -> 0x04`, `0x48 -> 0x24`, `0x00 -> 0x00`).
+
+Still open on vehicles: the frigate (`asm/3038`) is a separate dispatch arm and was not tested, and
+`DS:14` did not change on a refused step, so it may hold the tile the player is ON rather than the
+attempted destination.
