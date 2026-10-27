@@ -131,6 +131,42 @@ def odometer_ok(turns, align, n):
     return bad
 
 
+def fsr_step(s):
+    """One rand_byte() advance of the 6-byte register, as asm/5217/522B/5236 do it.
+
+    The shift loop runs bx = 4..0 writing s[1+bx] = s[bx], so s[1] = s[0] happens AFTER s[0] takes
+    the new value — which is why every observed register has its first two bytes equal. Getting that
+    order wrong yields a model that rolls plausible numbers and matches nothing. This one reproduces
+    CP0's committed vector (seed 0 -> 2,3,4,6,10,16,24,35,52,79,120,180,12,144) byte for byte, which
+    is what makes it arithmetic rather than a guess.
+    """
+    al = s[1]
+    t = al + s[4] + 1
+    al = t & 0xFF
+    cf = (t >> 8) & 1
+    t = al + s[5] + cf
+    al = t & 0xFF
+    return [al, al, s[1], s[2], s[3], s[4]]
+
+
+def rolls_between(a, b, cap=4000):
+    """How many rolls take register a to register b, or None if not reachable within cap.
+
+    The register is a pure forward function of itself but NOT invertible — the shift discards the old
+    high byte — so the count is found by stepping forward. Cheap: a few thousand steps is nothing.
+    """
+    s = a
+    for k in range(1, cap + 1):
+        s = fsr_step(s)
+        if s == b:
+            return k
+    return None
+
+
+def hexreg(s):
+    return [int(x, 16) for x in s.split()]
+
+
 def map_keys(turns, align):
     out = []
     for t in turns[align:]:
@@ -315,6 +351,42 @@ def main():
             print(f"    engine turn {j} (original sample {i}):")
             print(f"      original {o[:60]}")
             print(f"      engine   {e[:60]}")
+
+        print()
+        # --- rolls per command -----------------------------------------------------------------
+        # "Which fields differ" is downstream; "which command first consumed a different number of
+        # rolls" is usually the cause. Once the two sides sit at different points in the stream,
+        # every wander vector, creature position and contact test after that inherits the offset,
+        # so chasing a late divergence before fixing the first one wastes the afternoon.
+        print("rolls per command (original derived by forward simulation; engine from its counter)")
+        print(f"{'turn':>4} {'key':<7} {'orig':>6} {'eng':>6} {'diff':>6}  note")
+        first_split = None
+        for j in range(n):
+            i = a.align_turn + j
+            try:
+                o_rolls = rolls_between(hexreg(turns[i - 1]["ds"]["rng"]),
+                                        hexreg(turns[i]["ds"]["rng"]))
+            except (KeyError, IndexError):
+                o_rolls = None
+            e_rolls = dumps[j]["state"]["rng"]["rolls"] - (
+                dumps[j - 1]["state"]["rng"]["rolls"] if j else 0)
+            d = None if o_rolls is None else o_rolls - e_rolls
+            note = ""
+            if d not in (0, None) and first_split is None:
+                first_split = j
+                note = "<-- FIRST SPLIT"
+            if o_rolls is None:
+                note = "original register unreachable (torn read or over cap)"
+            if j < a.max_report or first_split == j:
+                print(f"{j:>4} {turns[i]['key']:<7} {str(o_rolls):>6} {e_rolls:>6} "
+                      f"{str(d):>6}  {note}")
+        if first_split is None:
+            print("  no split: the engine consumed the same number of rolls on every compared turn")
+        else:
+            print(f"  first split at engine turn {first_split} "
+                  f"(key {turns[a.align_turn + first_split]['key']}, "
+                  f"original sample {a.align_turn + first_split})")
+            print("  fix that before chasing any later divergence; the rest inherit it.")
 
         print()
         if unaligned:
