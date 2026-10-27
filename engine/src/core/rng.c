@@ -17,6 +17,13 @@ void u2_rng_seed(u2_ctx *ctx, uint8_t f)
     ctx->rng_rolls = 0;
 }
 
+void u2_rng_load(u2_ctx *ctx, const uint8_t state[6])
+{
+    for (int i = 0; i < 6; i++)
+        ctx->state.rng_state[i] = state[i];
+    ctx->rng_rolls = 0;
+}
+
 uint8_t u2_rand_byte(u2_ctx *ctx)
 {
     uint8_t *s = ctx->state.rng_state;

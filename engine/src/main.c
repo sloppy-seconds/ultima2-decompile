@@ -70,6 +70,9 @@ static void usage(const char *argv0)
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
+        "  --rng-state HEX   resume from a captured register: 12 hex digits for DS:23F..244,\n"
+        "                    e.g. 8282ffc7cda4. Overrides --seed. This is how a recording taken\n"
+        "                    from the original is replayed from an arbitrary turn.\n"
         "  --rng-sequence N  print N rand_byte values and exit (test vector)\n"
         "  --cleanroom       use the engine's own independently created assets in\n"
         "                    place of the game's: substitute tiles now, and other\n"
@@ -130,6 +133,36 @@ static void release_backends(u2_ctx *ctx)
     if (ctx->clock->shutdown) ctx->clock->shutdown(ctx);
 }
 
+/* Parse a captured rand_byte register: 12 hex digits, DS:23F..244 in order.
+ * Fails loudly rather than defaulting — a silently-mis-parsed register would make a resumed replay
+ * diverge for a reason that looks like an engine bug. Returns 0 on success. */
+static int parse_rng_state(const char *s, uint8_t out[6])
+{
+    unsigned nib = 0, acc = 0;
+    const char *p = s;
+
+    while (*p) {
+        int d;
+        if (*p == ' ' || *p == ':') { p++; continue; }
+        if (*p >= '0' && *p <= '9')      d = *p - '0';
+        else if (*p >= 'a' && *p <= 'f') d = *p - 'a' + 10;
+        else if (*p >= 'A' && *p <= 'F') d = *p - 'A' + 10;
+        else { fprintf(stderr, "u2: --rng-state needs 12 hex digits, got '%s'\n", s); return -1; }
+        acc = (acc << 4) | (unsigned)d;
+        if (++nib % 2 == 0) {
+            if (nib / 2 > 6) { fprintf(stderr, "u2: --rng-state too long\n"); return -1; }
+            out[nib / 2 - 1] = (uint8_t)acc;
+            acc = 0;
+        }
+        p++;
+    }
+    if (nib != 12) {
+        fprintf(stderr, "u2: --rng-state needs 12 hex digits (6 bytes), got %u nibbles\n", nib);
+        return -1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     u2_ctx ctx;
@@ -138,6 +171,8 @@ int main(int argc, char **argv)
     const char *map_dump_path = NULL;
     unsigned seed = U2_RNG_DEFAULT_SEED;
     int rng_probe = 0;
+    int rng_state_given = 0;
+    uint8_t rng_state[6];
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
@@ -179,6 +214,9 @@ int main(int argc, char **argv)
             report_path = argv[++i];
         } else if (strcmp(a, "--rng-sequence") == 0 && i + 1 < argc) {
             rng_probe = (int)strtol(argv[++i], NULL, 0);
+        } else if (strcmp(a, "--rng-state") == 0 && i + 1 < argc) {
+            if (parse_rng_state(argv[++i], rng_state) != 0) return 2;
+            rng_state_given = 1;
         } else if (strcmp(a, "--dump-state") == 0) {
             ctx.dump_state = 1;
         } else if (strcmp(a, "--dump-map") == 0 && i + 1 < argc) {
@@ -242,6 +280,10 @@ int main(int argc, char **argv)
      * reproducible or deliberately different. */
     u2_rng_seed(&ctx, (uint8_t)seed);
     ctx.seed = seed & 0xFFu;
+    /* A captured register replaces the seeded one. Applied after the seed so --seed still governs
+     * everything else, and before anything rolls. */
+    if (rng_state_given)
+        u2_rng_load(&ctx, rng_state);
 
     if (report_path) {
         u2_replay_begin(&ctx);

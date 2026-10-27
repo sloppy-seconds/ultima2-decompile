@@ -72,6 +72,49 @@ vec2=$(./u2 --seed 0x20 --rng-sequence 6)
     && ok "--seed changes the sequence as the seed model predicts" \
     || bad "--seed 0x20 gave $vec2"
 
+# Resuming the register from a captured state (docs/plan-cross-game-replay.md phase 2).
+# asm/0100 can only reach 256 of 2^48 register states, so a replay that has to pick up mid-session
+# needs a raw load. The harness carries its own corrupt-register control: a load that silently did
+# nothing would still "roll something", and that is the failure this has to catch.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "${WORK:-/var/tmp}/rng_check" \
+        tests/rng_check.c src/core/rng.c src/core/state.c 2>"${WORK:-/var/tmp}/rng.build"; then
+    if "${WORK:-/var/tmp}/rng_check" > "${WORK:-/var/tmp}/rng.out" 2>&1; then
+        n=$(sed -n 's/^rng_check: \([0-9]\{1,\}\) checks.*/\1/p' "${WORK:-/var/tmp}/rng.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP0 rng resume run executed 0 checks — the test is not running"
+        else
+            ok "CP0 rng resume: load reproduces the stream, controls fire ($n checks)"
+        fi
+    else
+        bad "CP0 rng resume check failed:"
+        sed 's/^/        /' "${WORK:-/var/tmp}/rng.out"
+    fi
+else
+    bad "CP0 rng resume harness did not build:"
+    sed 's/^/        /' "${WORK:-/var/tmp}/rng.build"
+fi
+
+# --rng-state must reject malformed input rather than quietly defaulting: a mis-parsed register makes
+# a resumed replay diverge for a reason that looks like an engine bug.
+if ./u2 --rng-state 8282ff --rng-sequence 3 >/dev/null 2>&1; then
+    bad "--rng-state 8282ff was accepted; a short register must exit non-zero"
+else
+    ok "--rng-state rejects a short register (exit non-zero, not a silent default)"
+fi
+if ./u2 --rng-state 8282ffc7cdzz --rng-sequence 3 >/dev/null 2>&1; then
+    bad "--rng-state with non-hex was accepted"
+else
+    ok "--rng-state rejects non-hex input"
+fi
+
+base_seq=$(./u2 --rng-sequence 6)
+loaded_seq=$(./u2 --rng-state 8282ffc7cda4 --rng-sequence 6)
+if [ -n "$loaded_seq" ] && [ "$loaded_seq" != "$base_seq" ]; then
+    ok "--rng-state changes the sequence (default $base_seq -> loaded $loaded_seq)"
+else
+    bad "--rng-state did not change the sequence: base=$base_seq loaded=$loaded_seq"
+fi
+
 # The engine must never change the bytes the reconstruction produces.
 #
 # original/ and references/ are game content: they must be untouched, full stop.

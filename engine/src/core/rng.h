@@ -54,6 +54,24 @@ void u2_rng_seed(u2_ctx *ctx, uint8_t bios_kbd_flags);
 /* The value the original would have read at 0x40:6C on a cold boot. */
 #define U2_RNG_DEFAULT_SEED 0x00
 
+/* Load a captured register verbatim, replacing whatever the seed produced.
+ *
+ * This exists because asm/0100's seeding cannot express a mid-game state: it writes six copies of one
+ * byte and then increments two of them, so the reachable startup states are 256 out of 2^48. A
+ * recording taken from the original at turn N holds six arbitrary bytes, and resuming there needs a
+ * raw load.
+ *
+ * That is what makes cross-game replay possible at all. The original's idle loop advances the register
+ * on the BIOS timer, so the register at any turn is a function of emulated time as well as commands;
+ * replaying a seed and a key script from boot only reproduces a session if the pacing matches tick for
+ * tick. Resuming from the recorded register sidesteps the question entirely — each turn starts from the
+ * state the original actually had. See docs/plan-cross-game-replay.md § 6b/§ 6c.
+ *
+ * ctx->rng_rolls is a diagnostic counter, not part of the original's state, and is reset: after a load
+ * the engine has not rolled anything yet.
+ */
+void u2_rng_load(u2_ctx *ctx, const uint8_t state[6]);
+
 /* Number of rolls performed (diagnostics; not part of the original's state). */
 uint32_t u2_rng_rolls(const u2_ctx *ctx);
 
