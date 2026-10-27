@@ -46,6 +46,13 @@
 /* One rand_byte() call: advances the register and returns the new byte. */
 uint8_t u2_rand_byte(u2_ctx *ctx);
 
+/* The same, tagged with the call site for --trace-rolls. Callers do not pass the tag: the macro
+ * below fills __func__, so the whole tree keeps calling u2_rand_byte(ctx) unchanged and every site
+ * is still named. __func__ is the enclosing function, which is coarse (two rolls in one function
+ * share a label) but honest, and it costs nothing to maintain. */
+uint8_t u2_rand_byte_at(u2_ctx *ctx, const char *site);
+#define u2_rand_byte(c) u2_rand_byte_at((c), __func__)
+
 /* Seed the register the way asm/0100_sub_0100.asm does, from the 0x40:6C byte.
  * The engine calls this at startup with u2_rng_default_seed(); --seed overrides
  * it so a run can be given a different-but-still-reproducible dice sequence. */

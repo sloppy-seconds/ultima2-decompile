@@ -67,6 +67,10 @@ static void usage(const char *argv0)
         "  --dump-screen F  (SDL build) save the first presented frame to F as\n"
         "                    PPM and exit; with SDL_VIDEODRIVER=dummy this\n"
         "                    proves the window pixel path with no display\n"
+        "  --trace-rolls F   write one line per rand_byte() call: '<roll> <function>'. The roll"
+        "                    COUNT matching the original was not the diagnosis — same count,"
+        "                    different creature positions, so the rolls are spent on different"
+        "                    decisions. Only a per-site trace shows that.\n"
         "  --selftest      exercise every seam once on an engine-authored screen\n"
         "  --replay-report F  write a verifiable playthrough report (digests, no game text) to F\n"
         "  --seed N          PRNG seed byte, as the 0x40:6C value the original reads\n"
@@ -180,6 +184,7 @@ int main(int argc, char **argv)
     int rng_probe = 0;
     int rng_state_given = 0;
     uint8_t rng_state[6];
+    const char *roll_trace_path = NULL;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
@@ -226,6 +231,8 @@ int main(int argc, char **argv)
             rng_state_given = 1;
         } else if (strcmp(a, "--load-ds") == 0 && i + 1 < argc) {
             ctx.load_ds_path = argv[++i];
+        } else if (strcmp(a, "--trace-rolls") == 0 && i + 1 < argc) {
+            roll_trace_path = argv[++i];
         } else if (strcmp(a, "--dump-state") == 0) {
             ctx.dump_state = 1;
         } else if (strcmp(a, "--dump-map") == 0 && i + 1 < argc) {
@@ -278,6 +285,17 @@ int main(int argc, char **argv)
     if (trace_arg && u2_trace_open(&ctx, trace_arg) != 0) {
         fprintf(stderr, "u2: cannot open trace file '%s'\n", trace_arg);
         return 2;
+    }
+
+    /* Per-roll trace. Not closed explicitly: stdio flushes on normal exit, and threading an fclose
+     * through every early-return path for a diagnostic buys nothing. Fails loudly if the path is
+     * unusable, because a silently-missing trace reads exactly like "no rolls happened". */
+    if (roll_trace_path) {
+        ctx.roll_trace = fopen(roll_trace_path, "w");
+        if (!ctx.roll_trace) {
+            fprintf(stderr, "u2: cannot open --trace-rolls file '%s'\n", roll_trace_path);
+            return 2;
+        }
     }
 
     u2_vram_init(&ctx.vram);

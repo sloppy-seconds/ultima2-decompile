@@ -24,7 +24,7 @@ void u2_rng_load(u2_ctx *ctx, const uint8_t state[6])
     ctx->rng_rolls = 0;
 }
 
-uint8_t u2_rand_byte(u2_ctx *ctx)
+uint8_t u2_rand_byte_at(u2_ctx *ctx, const char *site)
 {
     uint8_t *s = ctx->state.rng_state;
 
@@ -45,6 +45,12 @@ uint8_t u2_rand_byte(u2_ctx *ctx)
         s[1 + bx] = s[bx];
 
     ctx->rng_rolls++;
+
+    /* Tagged trace, when asked for. Written here rather than at the call sites so no caller can
+     * forget it, and so the roll number in the log is the same counter the replay report carries.
+     */
+    if (ctx->roll_trace)
+        fprintf(ctx->roll_trace, "%u %s\n", ctx->rng_rolls, site ? site : "?");
 
     return s[0];                              /* mov 0x23f,%al; or %al,%al */
 }

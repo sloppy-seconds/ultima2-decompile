@@ -94,6 +94,23 @@ else
     sed 's/^/        /' "${WORK:-/var/tmp}/rng.build"
 fi
 
+# --trace-rolls: the per-site roll log the roll-allocation diagnosis depends on.
+# It must be non-empty, numbered from 1, and strictly increasing — a trace that silently stopped
+# numbering would read exactly like "no rolls happened", which is the failure shape this project
+# keeps meeting. The named sites are what make it more than a count.
+rt="${WORK:-/var/tmp}/cp0-rolls.txt"
+if ./u2 "${ARGS[@]}" --trace-rolls "$rt" >/dev/null 2>&1 && [ -s "$rt" ]; then
+    bad=$(awk 'NR != $1 { print NR; exit }' "$rt")
+    sites=$(awk '{print $2}' "$rt" | sort -u | wc -l)
+    if [ -z "$bad" ] && [ "$sites" -ge 1 ]; then
+        ok "--trace-rolls: $(wc -l < "$rt") rolls logged from $sites distinct call sites, numbered from 1"
+    else
+        bad "--trace-rolls numbering broken at line ${bad:-?} or no sites recorded"
+    fi
+else
+    bad "--trace-rolls produced no output (or the fixture run failed)"
+fi
+
 # --rng-state must reject malformed input rather than quietly defaulting: a mis-parsed register makes
 # a resumed replay diverge for a reason that looks like an engine bug.
 if ./u2 --rng-state 8282ff --rng-sequence 3 >/dev/null 2>&1; then

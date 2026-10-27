@@ -56,6 +56,12 @@ typedef struct u2_ctx {
      * applied after the save AND after the world/monx load, because both of those overwrite
      * fields a mid-session checkpoint carries. NULL means no checkpoint. */
     const char *load_ds_path;
+    /* --trace-rolls FILE: one line per rand_byte() call, tagged with the calling function.
+     * NULL when not tracing. This exists because roll COUNT alone was not the diagnosis: the
+     * engine and the original consumed the same number of rolls on a turn and still ended up with
+     * different creature positions, which means the rolls were spent on different decisions. Only
+     * a per-site trace shows that. */
+    FILE *roll_trace;
     /* Diagnostic only, never read by game logic: the count of grid cells that look occupied
      * but hold no creature, refreshed each composed frame where the world is at hand.
      * "He left a copy of him behind", made checkable. See u2_monsters_ghost_cells(). */
