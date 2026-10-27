@@ -15,7 +15,8 @@
 #   launch arm at all.
 #
 # PLANE (0x3BFA). Prints 'LAUNCH--PLANE' BEFORE the gate, then `mov 0xe1,%al` — DS:E1 is
-#   items_held[11] = BRASS BUTTON (item table, file 0x501D) — and with none it says 'FUNNY
+#   items_held[11] = BRASS BUTTON (slot names: docs/spice86-live-findings.md § 11) — and
+#   with none it says 'FUNNY
 #   THIS PLANE IS' / 'MISSING A BRASS BUTTON!'. Launched, it initialises a heading at
 #   DS:21=0, DS:22=0xFF (north) and enters a loop of its own that is NOT the walk loop:
 #   poll the key non-blocking, apply the heading delta with both coordinates masked and

@@ -8,8 +8,9 @@ BOARD (W1). asm/2FAD dispatches on [DS:14] — the map byte under the player shi
 once — and each arm sets DS:13 and writes a ground byte through the cell pointer. The gate
 asserts the mode byte, the position (BOARD must NOT move the player, measured in
 captures/spice86/ship-port-boniface) and the words on screen. The refusals are asserted
-too, and they are not invented: each names the item that gates it, and the item name table
-at file 0x501D puts those words in exactly the slots the gate bytes are. The tile each arm
+too, and they are not invented: each names the item that gates it, and
+spice86-live-findings.md § 11 already puts those words in exactly the slots the gate bytes
+are. The tile each arm
 leaves behind is listed in the case table but NOT asserted, for the reason in board_case().
 
 Food per mode (W3). asm/253B's dispatch decides the charge: one 19 on foot, two on horse or

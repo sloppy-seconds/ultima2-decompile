@@ -460,10 +460,10 @@ static u2_cmd_result cmd_V(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *   anything else  the tail at asm/2FB8, which prints " WHAT?" — so the whole line reads
  *                "BOARD WHAT?". That is the original's own refusal and nothing is invented here.
  *
- * The gate bytes are item slots, not flags: DS:DD/DF/E1/E2/E5 are items_held[7/9/11/12/15]
- * and the item name table at file 0x501D calls those slots ANKH, SKULL KEY, BRASS BUTTON,
- * BLUE TASSLE and TRI-LITHIUM. Each refusal message names its own item, so five independent
- * agreements back the mapping — see the block comment in overworld.h.
+ * The gate bytes are item slots, not flags: DS:DD/DF/E1/E2/E5 are items_held[7/9/11/12/15],
+ * and the slot names are already recorded in docs/spice86-live-findings.md § 11 — ANKH, SKULL
+ * KEY, BRASS BUTTON, BLUE TASSLE, TRI-LITHIUM. Each refusal message names its own item, which
+ * corroborates that pairing from the message side; see the block comment in overworld.h.
  *
  * Boarding does not move the player, and it consumes the tile: each arm writes a ground byte
  * through the cell pointer DS:06 (grass for the three land vehicles, water for the ship).

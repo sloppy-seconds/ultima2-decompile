@@ -719,12 +719,19 @@ and making the mounted charge 1 instead of 2 each turn the gate red.
 ## F15 — BOARDING IS GATED ON ITEMS, CONSUMES ITS TILE, AND IS NOT A STEP. 2026-10-29.
 
 The vehicle handoff asked three questions it could not answer from the summary headers. All
-three were answered by reading `asm/2FAD`'s arms and the item name table at file `0x501D`.
+three were answered by reading `asm/2FAD`'s arms — and the slot names were **already
+recorded**, in `docs/spice86-live-findings.md` § 11 ("The item array, and its name table"),
+which gives `DS:D6+0..15` as sixteen item counts with the indexed table, and again in
+`docs/save-format.md` and `docs/status-screen-z.md` § 7. What is new here is only which bytes
+the vehicle code *tests*. Recording that plainly matters, because the first write-up of this
+finding claimed the mapping as fresh inference and it was a lookup.
 
 **1. The gate bytes are inventory slots.** `asm/2FAD`'s arms test `DS:DD`, `DS:DF`, `DS:E1`,
-`DS:E2` and `DS:E5`. `items_held` is `DS:D6..DS:E5`, sixteen slots, so those are slots 7, 9,
-11, 12 and 15 — and the name table calls them ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and
-TRI-LITHIUM. Each refusal message names its own item, which is the independent confirmation:
+`DS:E2` and `DS:E5`. Those are `items_held[7]`, `[9]`, `[11]`, `[12]` and `[15]`, and § 11's
+table names those slots ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and TRI-LITHIUM. Each
+refusal message independently names its own item, which corroborates the pairing rather than
+establishing it — and `asm/363B` (GET) was already known to increment `DS:E5` on
+`TRI-LITHIUM!`, which is the same pairing from the writer's side:
 
 | gate | slot | item | refusal, in the game's words | arm |
 | --- | --- | --- | --- | --- |

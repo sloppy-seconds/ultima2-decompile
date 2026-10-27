@@ -37,7 +37,7 @@ large: `engine/src/core/state.h` is a byte-for-byte mirror of the original's DS 
 | food | `0x53`, `0x54`, `0x55` | 3-byte BCD |
 | gold, exp | `0x56..0x59` | BCD |
 | stats | `0x4B..0x50` | str, agi, sta, cha, wis, int |
-| items held | `0xD6..0xDF` | 16 slots |
+| items held | `0xD6..0xE5` | 16 slots — the span ends at `0xE5`, not `0xDF`; slot names and indices in `docs/spice86-live-findings.md` § 11 |
 | creature x / y / hp / type / kind / role | `0x137` / `0x157` / `0x177` / `0x197` / `0x1B7` / `0x1D7` | 32 slots each |
 | creature wander vectors | `0x1F7`, `0x217` | role-3 step vectors, runtime state |
 | RNG register | `0x23F..0x244` | 6-byte feedback shift register |

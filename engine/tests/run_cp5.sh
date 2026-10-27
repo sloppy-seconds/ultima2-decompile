@@ -619,9 +619,9 @@ fi
 # --- V1: BOARD, and what one step costs in each travel mode ---------------------------
 #
 # asm/2F6F cmd_B prints "BOARD" and falls into asm/2FAD, which dispatches on [DS:14] (the tile
-# under the player, shifted right once) and sets [DS:13]. Each arm is gated on an item slot, and
-# the gate bytes are only interpretable through the item name table at file 0x501D: DS:DD/DF/E1/E2/E5
-# are items_held[7/9/11/12/15] = ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE, TRI-LITHIUM, and each
+# under the player, shifted right once) and sets [DS:13]. Each arm is gated on an item slot:
+# DS:DD/DF/E1/E2/E5 are items_held[7/9/11/12/15] = ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE,
+# TRI-LITHIUM (slot names from docs/spice86-live-findings.md § 11), and each
 # refusal message names its own item. asm/253B is the other half: one 19-food charge on foot, two
 # mounted (asm/2626 subtracts and then calls the foot tail, which subtracts again), none aboard the
 # ship, none in the rocket.

@@ -10,7 +10,7 @@
 # RENAMED 2026-10-29 from sub_2ff6, with the behaviour. This is the SHIP BOARDING GATE:
 #           `mov 0xe2,%al ; or %al,%al ; jne L_003238`. Non-zero jumps to asm/3038, the
 #           successful boarding; zero falls through into asm/2FFE, the crew's refusal.
-#           DS:E2 is items_held[12] and the item table at file 0x501D names slot 12 BLUE
+#           DS:E2 is items_held[12] and docs/spice86-live-findings.md § 11 names slot 12 BLUE
 #           TASSLE, which is the item the refusal implies. Reached from asm/2FAD when
 #           [DS:14] == 0x24, i.e. when the player is standing on the ship tile 0x48.
 sub_2ff6:

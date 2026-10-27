@@ -185,14 +185,15 @@ int u2_site_for_tile(uint8_t tile, const char **label, int *ax, int *ay);
 #define U2_TILE_AFTER_BOARD_WATER 0x00u
 
 /* The items that gate boarding and launching, as indices into state.items_held
- * (DS:0xD6, 16 slots). The gate bytes are DS:DD, DS:DF, DS:E1, DS:E2 and DS:E5, which
- * are slots 7, 9, 11, 12 and 15 of that array, and the item name table at file 0x501D
- * names those slots ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and TRI-LITHIUM. The
- * refusal messages say the same thing in the game's own words — "YOU MUST HAVE AN
- * ANKH!" behind DS:DD, "STRANGE YOU CAN'T GET IN!" behind DS:DF, "MISSING A BRASS
- * BUTTON!" behind DS:E1, "THE CREW OF THIS SHIP WILL NOT LET YOU BOARD!" behind
- * DS:E2, "SHIP INCAPABLE OF LAUNCH!" behind DS:E5 — so the mapping is five independent
- * agreements, not a guess. Sites: asm/3048 (DS:DF, DS:DD), asm/2FF6 (DS:E2),
+ * (DS:0xD6..DS:E5, 16 slots). The gate bytes are DS:DD, DS:DF, DS:E1, DS:E2 and DS:E5,
+ * which are slots 7, 9, 11, 12 and 15 of that array, and the slot names come from
+ * docs/spice86-live-findings.md § 11 — ANKH, SKULL KEY, BRASS BUTTON, BLUE TASSLE and
+ * TRI-LITHIUM. That section is the source; what the asm adds is only that these five
+ * bytes are the ones the vehicle code tests. The refusal messages agree with it — "YOU
+ * MUST HAVE AN ANKH!" behind DS:DD, "STRANGE YOU CAN'T GET IN!" behind DS:DF, "MISSING A
+ * BRASS BUTTON!" behind DS:E1, "THE CREW OF THIS SHIP WILL NOT LET YOU BOARD!" behind
+ * DS:E2, "SHIP INCAPABLE OF LAUNCH!" behind DS:E5 — which corroborates the pairing rather
+ * than establishing it. Sites: asm/3048 (DS:DF, DS:DD), asm/2FF6 (DS:E2),
  * asm/38B0 (DS:E1, DS:E5).
  *
  * The horse has no gate: asm/2FD6 sets the mode unconditionally.

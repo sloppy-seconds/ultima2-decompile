@@ -22,7 +22,8 @@
 #           'sails' from its own dock: the tile under the player is water, and asm/2619
 #           accepts water only. The live sample is captures/spice86/ship-port-boniface,
 #           where [DS:14] went 0x24 -> 0x00 on BOARD without the position moving.
-#           The gate DS:E2 is items_held[12] = BLUE TASSLE (item table, file 0x501D).
+#           The gate DS:E2 is items_held[12] = BLUE TASSLE (slot names:
+#           docs/spice86-live-findings.md § 11, not derived here).
 #           This closes the handoff's § 6 note that the frigate 'may not be a ship at
 #           all': it sets the ship's mode byte and shares asm/2619's rule by construction,
 #           because it IS the ship arm's success path.

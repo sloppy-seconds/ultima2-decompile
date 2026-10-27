@@ -48,11 +48,13 @@
 #           so BOARD on ordinary ground prints the line "BOARD WHAT?". Nothing had to be
 #           invented, which is the question the handoff asked before writing a refusal.
 #           THE GATE BYTES ARE ITEM SLOTS. DS:DD, DS:DF, DS:E1, DS:E2 and DS:E5 are
-#           items_held[7], [9], [11], [12] and [15] (items_held is DS:D6..DS:E5, sixteen
-#           slots), and the item name table at file 0x501D names those slots ANKH, SKULL
-#           KEY, BRASS BUTTON, BLUE TASSLE and TRI-LITHIUM. Each refusal names its own item
-#           in the game's words, so the mapping is five independent agreements rather than
-#           an inference: 'YOU MUST HAVE AN ANKH!' behind DS:DD, 'STRANGE YOU CAN'T GET IN!'
+#           items_held[7], [9], [11], [12] and [15]. The slot->name mapping is NOT new
+#           here: docs/spice86-live-findings.md § 11 already gives DS:D6+0..15 as sixteen
+#           item counts with the indexed name table (7 ANKH, 9 SKULL KEY, 11 BRASS BUTTON,
+#           12 BLUE TASSLE, 15 TRI-LITHIUM), and asm/363B (GET) already increments DS:E5 on
+#           'TRI-LITHIUM!'. What this file adds is only that these five bytes are the ones
+#           the vehicle arms test. Each refusal names its own item, which corroborates the
+#           pairing: 'YOU MUST HAVE AN ANKH!' behind DS:DD, 'STRANGE YOU CAN'T GET IN!'
 #           behind DS:DF, 'THE CREW OF THIS SHIP WILL NOT LET YOU BOARD!' behind DS:E2, and
 #           from asm/38B0 'MISSING A BRASS BUTTON!' behind DS:E1 and 'SHIP INCAPABLE OF
 #           LAUNCH!' behind DS:E5.

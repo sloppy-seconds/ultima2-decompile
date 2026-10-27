@@ -36,8 +36,8 @@ MODE_FOOT, MODE_HORSE, MODE_SHIP, MODE_PLANE, MODE_ROCKET = 0x78, 0x22, 0x24, 0x
 TILE_HORSE, TILE_SHIP, TILE_PLANE, TILE_ROCKET = 0x44, 0x48, 0x4C, 0x50
 
 # items_held is DS:0xD6..0xE5 and the save record starts at DS:0x36, so slot n is
-# byte 0xA0+n of the PLAYER file. The five vehicle gates, by the names the item
-# table at file 0x501D gives them.
+# byte 0xA0+n of the PLAYER file. The five vehicle gates, by the names
+# docs/spice86-live-findings.md § 11 gives those slots.
 ITEM_ANKH, ITEM_SKULL_KEY = 7, 9
 ITEM_BRASS_BUTTON, ITEM_BLUE_TASSLE, ITEM_TRI_LITHIUM = 11, 12, 15
 

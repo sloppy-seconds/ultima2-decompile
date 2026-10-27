@@ -262,10 +262,18 @@ typedef struct u2_state {
                                         * nothing but the Z screen should touch it. */
     /* 0xC0 */ uint8_t reserved_C0[0x16];   /* 0xC0..0xD5 */
     /* 0xD6 */ uint8_t items_held[16]; /* the LIVE inventory array, one count per
-                                        * item, 16 slots. The C2 resist gates read
+                                        * item, 16 slots, so the span is 0xD6..0xE5 INCLUSIVE.
+                                        * Say it in full because '16 slots from 0xD6' written as
+                                        * 0xD6..0xDF sent an agent looking for the vehicle gates
+                                        * in the wrong place: DS:E1/E2/E5 are inside this array
+                                        * and a truncated range hides them. Slot names and
+                                        * indices: docs/spice86-live-findings.md § 11 (7 ANKH,
+                                        * 9 SKULL KEY, 11 BRASS BUTTON, 12 BLUE TASSLE,
+                                        * 15 TRI-LITHIUM). The C2 resist gates read
                                         * slots inside it (0xD9 BOOTS, 0xDA CLOAK,
-                                        * 0xE4 GREEN IDOL) and asm/0FCD theft deletes
-                                        * from it. Name table at file 0x501D. */
+                                        * 0xE4 GREEN IDOL), asm/0FCD theft deletes
+                                        * from it, and asm/363B GET increments DS:E5.
+                                        * Name table at file 0x501D. */
     /* 0xE6 */ uint8_t reserved_E6[0x51];   /* 0xE6..0x136 */
     /* ------------------------------------------------------------------------
      * The creature table: six parallel 32-slot arrays, loaded from monxNN by

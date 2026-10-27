@@ -24,7 +24,8 @@
 #   0x3245 is the tail of asm/3038's ship arm (see that file), writing WATER and mode 0x24.
 #
 #           The gates are items: DS:DF = items_held[9] = SKULL KEY and DS:DD =
-#           items_held[7] = ANKH, per the item name table at file 0x501D, and each refusal
+#           items_held[7] = ANKH (slot names from docs/spice86-live-findings.md § 11, not
+#           derived here), and each refusal
 #           names its own item. The horse (asm/2FD6) is the only vehicle with no gate.
 #           Note the plane's 'can't get in' gag means a PLANE tile you cannot board is a
 #           tile you can still walk over: asm/2423's foot ladder accepts mode 0x26 (map

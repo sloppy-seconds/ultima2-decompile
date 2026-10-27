@@ -304,10 +304,10 @@ MANIFEST = [
     # starts three bytes later. Each was confirmed unique at its own address.
     #
     # BOARD's arms, in dispatch order (asm/2FAD): the refusal pairs are what the original
-    # prints when the gating item is missing, and they are the evidence that names the item
-    # -- "YOU MUST HAVE AN ANKH!" sits behind DS:DD, which is items_held[7], and the item
-    # name table at file 0x501D calls slot 7 ANKH. Same for SKULL KEY (DS:DF), BRASS BUTTON
-    # (DS:E1), BLUE TASSLE (DS:E2) and TRI-LITHIUM (DS:E5).
+    # prints when the gating item is missing, and each names its own item -- "YOU MUST HAVE
+    # AN ANKH!" sits behind DS:DD, which is items_held[7], and
+    # docs/spice86-live-findings.md § 11 calls slot 7 ANKH. Same for SKULL KEY (DS:DF),
+    # BRASS BUTTON (DS:E1), BLUE TASSLE (DS:E2) and TRI-LITHIUM (DS:E5).
     ("U2_S_BOARD",                 "2F6F_cmd_B.asm",            ("run", 0x3172,  5, "BOARD")),
     ("U2_S_BOARD_WHAT",            "2FB8_offer_what_msg.asm",   ("run", 0x31C3,  6, " WHAT?")),
     ("U2_S_BOARD_HORSE",           "2FD6_vehicle_horse.asm",    ("run", 0x31D9,  6, " HORSE")),

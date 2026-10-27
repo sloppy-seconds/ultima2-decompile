@@ -9,7 +9,7 @@
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 # CORRECTED 2026-10-29: this is the ship arm's REFUSAL, not a vehicle. asm/2FF6 tests
 #           [DS:E2] and reaches here only when it is zero; the success path is asm/3038.
-#           E2 is items_held[12], and the item table at file 0x501D calls slot 12 BLUE
+#           E2 is items_held[12], and docs/spice86-live-findings.md § 11 calls slot 12 BLUE
 #           TASSLE — which is what the message says in other words: the crew will not let
 #           you board without it. No mode is set and no cell is written on this path; it
 #           ends at jmp L_000c30 (cmd_done).
