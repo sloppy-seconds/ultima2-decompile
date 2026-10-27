@@ -17,7 +17,7 @@
 #include "core/ctx.h"
 
 #define U2_ENGINE_VERSION "0.1-cp2"
-#define U2_STATE_JSON_MAX 4096   /* sized for the creature table; see u2_state_json */
+#define U2_STATE_JSON_MAX 8192   /* sized for the creature table plus the raw block; see u2_state_json */
 
 void u2_dump_screen(const u2_ctx *ctx, FILE *out);
 void u2_dump_state_json(const u2_ctx *ctx, FILE *out);

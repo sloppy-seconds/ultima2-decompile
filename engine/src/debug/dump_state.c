@@ -96,6 +96,50 @@ int u2_state_digest_json(const u2_ctx *ctx, char *out, int outsz)
         ctx->content_source ? ctx->content_source : "none");
 }
 
+/* Raw DS bytes, in memory order, under the SAME field names tools/u2_record.py uses for the original.
+ *
+ * This exists so a cross-game diff can compare bytes instead of interpretations. The decoded fields
+ * above are convenient for a human and useless as a comparison basis: u2_bcd16() takes (lo, hi) while
+ * the display prints hundreds-first, and food is a 3-byte BCD that the 16-bit decoder truncates. Every
+ * such convention is a place where two correct sides look different. Comparing raw bytes removes the
+ * whole class. The debug serializer may carry this because the evidence digest is a separate, frozen
+ * function - see u2_state_digest_json.
+ */
+static int emit_raw(const u2_state *s, char *out, int outsz)
+{
+    int used = 0;
+    uint8_t pos[2]    = { s->sector_x, s->sector_y };
+    uint8_t sector[2] = { s->sector_first, s->sector_second };
+    uint8_t hp[2]     = { s->hp, s->unk_52 };
+    uint8_t food[3]   = { s->food, s->food_hi, s->food_lo };
+    uint8_t exp[2]    = { s->exp_lo, s->exp_hi };
+    uint8_t gold[2]   = { s->gold_lo, s->gold_hi };
+    uint8_t para[4]   = { s->counter_26A, s->paral_legs, s->paral_arms, s->paral_sleep };
+
+    struct { const char *name; const uint8_t *p; int n; } f[] = {
+        { "pos", pos, 2 }, { "sector", sector, 2 }, { "hp", hp, 2 },
+        { "food", food, 3 }, { "exp", exp, 2 }, { "gold", gold, 2 },
+        { "items", s->items_held, 16 },
+        { "mon_x", s->mon_x, 32 },     { "mon_y", s->mon_y, 32 },
+        { "mon_hp", s->mon_hp, 32 },   { "mon_type", s->mon_type, 32 },
+        { "mon_kind", s->mon_kind, 32 }, { "mon_role", s->mon_role, 32 },
+        { "wander_x", s->mon_wander_x, 32 }, { "wander_y", s->mon_wander_y, 32 },
+        { "rng", s->rng_state, 6 },    { "paralysis", para, 4 },
+    };
+
+    /* No leading comma: the creatures block this follows already ends with one. */
+    used += snprintf(out + used, (size_t)(outsz - used), "\"raw\":{");
+    for (size_t i = 0; i < sizeof f / sizeof f[0]; i++) {
+        used += snprintf(out + used, (size_t)(outsz - used), "\"%s\":\"", f[i].name);
+        for (int b = 0; b < f[i].n && used < outsz - 16; b++)
+            used += snprintf(out + used, (size_t)(outsz - used), "%s%02x",
+                             b ? " " : "", f[i].p[b]);
+        used += snprintf(out + used, (size_t)(outsz - used), "\"%s",
+                         i + 1 < sizeof f / sizeof f[0] ? "," : "},");
+    }
+    return used;
+}
+
 int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
 {
     const u2_state *s = &ctx->state;
@@ -109,7 +153,10 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
      * for the bytes, because they are bytes and not counts.
      */
     char mons[2048];
+    char raw[1600];
     int used = 0;
+
+    emit_raw(s, raw, (int)sizeof raw);
     used += snprintf(mons + used, sizeof mons - (size_t)used, "\"creatures\":[");
     for (int i = 0; i < 32 && used < (int)sizeof mons - 48; i++) {
         if (!s->mon_type[i]) continue;
@@ -126,7 +173,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         "\"platform\":{\"renderer\":\"%s\",\"input\":\"%s\",\"audio\":\"%s\",\"clock\":\"%s\"},"
         "\"screen\":{\"cols\":%d,\"rows\":%d,\"cells_written\":%llu,"
         "\"cursor\":{\"row\":%d,\"col\":%d,\"visible\":%d}},"
-        "\"state\":{%s"
+        "\"state\":{%s%s"
         /* pos is DS:00/01, the original's own player-position mirror. The field below was NAMED
          * player_x/player_y but reported DS:23/24, which is the staged candidate cell the step gate
          * reads — it sat at 0 in every turn log, so a recording could not say where the player was
@@ -146,7 +193,7 @@ int u2_state_json(const u2_ctx *ctx, char *out, int outsz)
         ctx->renderer->name, ctx->input->name, ctx->audio->name, ctx->clock->name,
         U2_COLS, U2_ROWS, (unsigned long long)ctx->vram.writes,
         ctx->vram.row, ctx->vram.col, ctx->vram.visible,
-        mons,
+        mons, raw,
         s->sector_x, s->sector_y,
         s->sector_first, s->sector_second,
         u2_bcd16(s->unk_52, s->hp), u2_bcd16(s->food, s->food_hi),
