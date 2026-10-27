@@ -11,7 +11,11 @@ exact byte-for-byte fidelity.
 > `disasm/phase1-summary.md`, `disasm/phase2-summary.md` and `disasm/phase3-summary.md`.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
-> `docs/phase4-implementation.md`. To start a fresh agent, read
+> `docs/phase4-implementation.md`. **The next piece of work is the vehicle state machine: read
+> `docs/handoff-vehicle-state-machine.md` — it is a complete brief with six ordered work items, the
+> byte evidence for every rule, the capture recipe, and the ten traps that cost this session time.
+> Nothing in it is speculative; the one genuinely open question (the plane's airborne flag, W6) is
+> marked as needing a capture and not a guess.** To start a fresh agent, read
 > `docs/handoff-2026-10-28f.md` first (**current entry point** — **§ 1 is the open owner
 > decisions D3/D8/D9/D10; § 2 carries a correction that changes a ruling already made: the
 > command-loop evidence split is 22 proven / 4 unproven (D N V W), not 14/12, so eight handlers
