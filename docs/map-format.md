@@ -198,3 +198,55 @@ trustworthy.
 - **`pgrep -f Spice86` matches its own shell.** Check ports instead.
 - **Never run the game in place.** It rewrites its own `player` file; always use
   a run copy.
+
+## 9. mapx has creature art baked into the terrain, and the game clears it
+
+Found 2026-10-29 while looking for the cause of the replay differ's creature-position
+divergence, and it is a better answer than the one being chased.
+
+`mapxNN` is not pure ground. At every cell where `monxNN` places a creature, the map byte
+**is the creature's own art byte**. Observed in sector 03, all 32 live slots: the raw mapx
+byte at the spawn cell equals that slot's `type` (`0xf4`, `0xfc`, `0x3c`, `0x60`, ...). The
+map was authored by drawing the creature into it.
+
+The original does not treat that byte as terrain. Once a creature leaves its spawn cell the
+cell reads `0x70` - art `0x1C`, town paving, walkable - in every case measured. Measured on
+a fresh sector-03 session: 22 of 32 spawn cells, and the set is identical across two
+different player key paths and stable across 24 turns.
+
+Two mechanisms fit and this data does not separate them:
+
+* **departure writes `0x70`**, or
+* **load clears the baked art to `0x70`** and a creature still standing there re-stamps its
+  own type over it.
+
+They are indistinguishable here because the creatures never left the paving: of all cells ever
+occupied across 24 turns, **zero** were non-spawn cells whose mapx byte was not already `0x70`
+(1886 of 4096 cells in sector 03 are `0x70`). Settling it needs a sector where spawn cells sit
+on non-paving ground. Grade: the `0x70` outcome is **measured**; which mechanism produces it is
+**open**.
+
+### Why this matters for the engine
+
+`u2_world_load_sector` reads mapx verbatim into `map_base`, and `u2_monsters_restamp` rebuilds
+`w->map` from `map_base`. So the engine keeps the baked creature art as terrain, and every art
+index seen at sector-03 spawn cells (`0x0d`-`0x0f`, `0x1a`, `0x3c`-`0x3f`) is **impassable** in
+`u2_tile_passable`'s default-deny table.
+
+Two consequences, both real:
+
+1. **The engine leaves a copy of the creature behind.** When a creature walks off its spawn cell,
+   the restamp restores the baked art byte, so the sprite reappears on empty ground. This is the
+   owner's report "he left a copy of him behind", which was earlier attributed to the per-pass
+   stamp bug. That bug was real and is fixed, but it is not this. Grade: inferred from the code
+   path, not yet screenshotted.
+2. **The spawn cells are walls in the engine and walkable paving in the original.** Creatures
+   that wander back over their spawn cell move legally in the original and are blocked in the
+   engine - same rolls, different outcome. This is the first concrete mechanism found for the
+   replay differ's "same budget, different assignment" symptom.
+
+### Not done
+
+The clear value is not proven to be `0x70` in general; it is proven for sector 03. Do not
+hardcode it from this one sector. The next step is a sector whose spawn cells sit on non-paving
+ground, which would also settle the mechanism question.
