@@ -147,12 +147,11 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_type[i] == 0)
             continue;                       /* asm/0A74: an empty slot is type 0 */
-        /* Deliberately NOT a mon_hp test. A creature reduced to exactly 0 hit points
-         * (fidelity mode: asm/2E3D kills only when dmg > hp) is ALIVE in the original —
-         * asm/2122/212a regens anything below 16 HP, and there is no reason to heal a
-         * corpse. So the grid keys on type, exactly as the sweep at asm/0A74 does, and a
-         * zero-hp creature is drawn and walks. The occupancy rule for this module is
-         * mon_type != 0, everywhere; see u2_monsters_at(). */
+        /* Deliberately a mon_type test and NOT a mon_hp test — asm/0A74's own rule. A
+         * creature at zero hp is drawn and walks in the original (measured 2026-10-26: a
+         * poked-to-zero slot moved (27,48)->(28,49)->(28,50) with its type intact), so the
+         * grid has to show it. The attack scan skips hp 0 anyway, which is the asymmetry
+         * the original has; see u2_monsters_at(). Do not "tidy" the two rules into one. */
         const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
         if (cell < 0 || cell >= U2_SECTOR_TILES)
             continue;
@@ -180,35 +179,36 @@ int u2_monsters_at(const u2_ctx *ctx, int x, int y)
     if (ctx == NULL)
         return -1;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
-        /* The module's ONE occupancy rule: mon_type != 0.
+        /* The attack scan skips hp 0, and the grid stamp does not. That asymmetry is the
+         * original's, not an oversight — it was measured, and it survived two attempts to
+         "fix" it away today.
          *
-         * This used to test mon_hp == 0, and that was the bug the owner described as a
-         * creature leaving "a copy of him behind". The two tests are not equivalent, and
-         * the difference is reachable in ordinary fidelity play: asm/2E3D kills only when
-         * dmg > hp, so a blow exactly equal to hp leaves hp == 0 with the type byte set.
-         * Such a creature is ALIVE by every other test in the tree — asm/0A74's sweep
-         * processes it, the grid stamps it, and asm/2122/212a regens anything below 16 HP,
-         * which is a thing you do to a wounded monster and not to a corpse. Keying the
-         * attack scan on hp made it invisible to attacks while it stood there drawn: a
-         * second copy that could be looked at and never hit, and which stayed behind when
-         * the creature that shared its cell walked off.
+         * Evidence (2026-10-26, original under Spice86, sector 03): poke mon_hp of an
+         * adjacent live slot to 0, leaving type and kind set, then swing at it. The first
+         * swing MISSED — the slot was still at hp 0 plus one regen tick and its type was
+         * intact. The second swing killed it (type cleared, slot emptied) from the same
+         * geometry. The only difference is that the regen in the first swing's post-command
+         * tail lifted hp off 0, so the second swing had a target. Same run also showed the
+         * zero-hp creature WALKING: (27,48) -> (28,49) -> (28,50), type 0xFC throughout.
          *
-         * The live capture this was originally cited for (captures/spice86/cp5-fight/: two
-         * creatures in one cell, the front one killed, the next attack hit the second) does
-         * NOT support an hp test. A killed slot has type == 0 AND hp == 0, so that
-         * observation cannot tell the two fields apart, and the more specific rule was
-         * inferred from evidence that only established the general one. Keying on type
-         * satisfies that capture — a corpse has type 0 — and agrees with asm/0A74.
+         * So: drawn and mobile (asm/0A74 keys the sweep and the stamp on mon_type), but
+         * unhittable while hp is 0 (this scan). In normal play that window is almost
+         * unreachable, because the blow that zeroes hp is followed in the SAME command by
+         * the sweep's regen (asm/2122/212a, +1 below 16 HP), so the player's next swing
+         * meets hp 1, not hp 0. The observable effect of dmg == hp is one extra swing.
          *
-         * The x||y test is the module's own convention (docs/monster-spawn.md § 2: a slot
-         * at (0,0) is unused) and is kept alongside type rather than replaced by it.
+         * The exception worth remembering: the regen lives in the move routine, so a
+         * zero-hp creature that never attempts a step never regens and stays unhittable.
+         *
+         * The x||y test is the module's occupancy convention (docs/monster-spawn.md § 2: a
+         * slot at (0,0) is unused), kept alongside hp rather than replaced by it.
          *
          * Ordering note for anyone re-deriving this: the scan returns the LOWEST slot index
          * at the cell, which is what the live capture showed only if the front creature
-         * happened to be the lower slot. Whether the original scans in slot order or in
-         * some other order is not established; slot order is the assumption, and it is the
-         * one to revisit if a fight ever picks the wrong target among stacked creatures. */
-        if (ctx->state.mon_type[i] == 0)
+         * happened to be the lower slot. Whether the original scans in slot order or in some
+         * other order is not established; slot order is the assumption, and it is the one to
+         * revisit if a fight ever picks the wrong target among stacked creatures. */
+        if (ctx->state.mon_hp[i] == 0)
             continue;
         if ((ctx->state.mon_x[i] || ctx->state.mon_y[i]) &&
             ctx->state.mon_x[i] == (uint8_t)x &&
