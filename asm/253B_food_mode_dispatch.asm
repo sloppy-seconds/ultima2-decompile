@@ -1,12 +1,18 @@
 # food_mode_dispatch — routes the per-step food charge by travel mode
 # name-evidence: reads [DS:13], the player stamp / travel mode (0x78 foot, 0x22 horse,
 #           0x24 ship, 0x26 plane, 0x28 rocket — docs/contract-creature-tick.md), and
-#           dispatches. 0x28 rocket -> asm/25F8_sub_25f8.asm, no charge, returns 0xFF.
-#           0x26 plane -> asm/2604_sub_2604.asm, charged via asm/2626_food_drain_mounted.
-#           0x24 ship -> asm/2619_sub_2619.asm, no charge, accepts water only.
-#           0x22 horse -> asm/2557_sub_2557.asm, charged via asm/2626_food_drain_mounted.
+#           dispatches. 0x28 rocket -> asm/2542_mode_arm_rocket.asm, REJECTS EVERY STEP,
+#           no charge (it never reaches a drain, which is why it looked exempt).
+#           0x26 plane -> asm/2604_mode_arm_plane.asm, charged via asm/2626_food_drain_mounted
+#           and additionally refuses forest.
+#           0x24 ship -> asm/2619_mode_arm_ship.asm, no charge, accepts water only.
+#           0x22 horse -> asm/2557_mode_arm_horse.asm, charged via asm/2626_food_drain_mounted.
 #           anything else (foot) -> asm/2575_sub_2575.asm, charged via
 #           asm/2599_food_drain_walk.asm.
+#           CORRECTED 2026-10-29: the rocket line used to point at asm/25F8 and call it an
+#           accept, and the horse/plane lines did not mention that asm/2626 refuses shallow
+#           water of its own. Both are fixed at the source files now; the dispatch order
+#           here (0x28, 0x26, 0x24, 0x22, else foot) was always right.
 #           This is the bytes' answer to the third-party claim that food is not consumed
 #           aboard any vehicle (docs/needs-gameplay.md G34 claim 1): the ship and the
 #           rocket are exempt, the plane is not, and the horse costs double.

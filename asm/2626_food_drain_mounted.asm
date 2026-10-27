@@ -27,6 +27,25 @@
 # calls: L_00248d, L_002775, L_002804
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# THIS FILE IS ALSO A TILE RULE, and that half was never read until 2026-10-29. After the
+#           second subtract (which happens inside `call L_002775`, the foot tail) the
+#           verdict is taken here, at runtime 0x2851..0x2862:
+#
+#             cmp $0xff,%al ; je reject          ; the foot ladder already refused it
+#             mov 0x29,%al ; and $0x7f,%al
+#             cmp $0x2,%al  ; je reject          ; map 0x04 = SHALLOW WATER
+#             cmp $0x60,%al ; je reject          ; the stamp divert, refused outright
+#             jmp L_002804                       ; accept
+#
+#           So a horse and a plane walk everywhere a footman walks EXCEPT shallow water,
+#           and the plane additionally refuses forest (asm/2604). 'Horse uses the same
+#           ladder as foot' — the words in F14 and in the vehicle handoff — is wrong by
+#           exactly this one tile, and the shallows reject is the kind of rule a per-tile
+#           table would have had to be guessed into existence. The 0x60 test is redundant
+#           against the ladder (0x60 >= 0x16 already rejects it) but the bytes test it
+#           explicitly ahead of the divert, so the engine does too.
+#           Grade: bytes. Never observed: no capture has walked a horse or a plane, so the
+#           shallows refusal has no live sample and is graded inferred-from-bytes.
 sub_2626:
 L_002826:
         nop

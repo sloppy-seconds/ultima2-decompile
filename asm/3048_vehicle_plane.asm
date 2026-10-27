@@ -7,6 +7,30 @@
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# RESOLVED 2026-10-29: this file holds THREE vehicle arms, and the forced-keep bytes are
+#           the writes that make them vehicles. Decoded against the raw exe, not against
+#           gas's re-encode:
+#
+#   0x3259 PLANE, gated.  `mov 0xdf,%al ; or %al,%al ; jne 0x3288`.
+#       zero -> ' PLANE' + 0x8d + 'STRANGE YOU CAN'T GET IN!' then jmp L_000c30, no mode
+#               set and no cell written;
+#       non-zero -> ' PLANE', then al=8, bx=[DS:06], `mov %al,(%bx,%si)` writes GRASS over
+#               the tile, then [DS:13] = 0x26.
+#   0x32a9 ROCKET, gated. Prints ' ROCKET' FIRST (so the word appears on both paths), then
+#       `mov 0xdd,%al ; or %al,%al ; jne 0x32f4`.
+#       zero -> 0x8d 'A METALIC VOICE COMMANDS:' 0x8d 'YOU MUST HAVE AN ANKH!' (sic, one L)
+#               then jmp L_000c30, nothing set;
+#       non-zero -> writes GRASS, [DS:13] = 0x28.
+#   0x3245 is the tail of asm/3038's ship arm (see that file), writing WATER and mode 0x24.
+#
+#           The gates are items: DS:DF = items_held[9] = SKULL KEY and DS:DD =
+#           items_held[7] = ANKH, per the item name table at file 0x501D, and each refusal
+#           names its own item. The horse (asm/2FD6) is the only vehicle with no gate.
+#           Note the plane's 'can't get in' gag means a PLANE tile you cannot board is a
+#           tile you can still walk over: asm/2423's foot ladder accepts mode 0x26 (map
+#           0x4C) regardless of what you hold.
+#           Grade: bytes for all of it; the SKULL KEY identity is inferred from the slot
+#           arithmetic plus the message, and no capture has ever run either refusal arm.
 vehicle_plane:
 L_003248:
         .byte 0x00,0x8b,0xf0,0x8b  # forced-kept: gas re-encodes 'add    %cl,-0x7410(%bp,%di)' differently

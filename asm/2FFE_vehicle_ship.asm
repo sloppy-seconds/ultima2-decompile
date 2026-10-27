@@ -7,6 +7,17 @@
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# CORRECTED 2026-10-29: this is the ship arm's REFUSAL, not a vehicle. asm/2FF6 tests
+#           [DS:E2] and reaches here only when it is zero; the success path is asm/3038.
+#           E2 is items_held[12], and the item table at file 0x501D calls slot 12 BLUE
+#           TASSLE — which is what the message says in other words: the crew will not let
+#           you board without it. No mode is set and no cell is written on this path; it
+#           ends at jmp L_000c30 (cmd_done).
+#           The provenance line above ('entry never appears in ExecutedInstructions of any
+#           of the 60 harvests') still holds: every capture that boarded a ship used a
+#           character holding the tassle, so the refusal arm has never run on camera.
+#           Grade: bytes for the branch and the string; the item identity is inferred from
+#           the message naming it, corroborated by the slot arithmetic.
 vehicle_ship:
 L_0031fe:
         call L_0051df

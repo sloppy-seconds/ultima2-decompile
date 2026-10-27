@@ -6,6 +6,31 @@
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
+# ---------------------------------------------------------------------------
+# THIS IS THE DISMOUNT. The vehicle handoff's § 6 asked how the travel mode ever gets
+#   cleared and found no evidence; it is here, and it is a letter the project already
+#   treats as proven-executing. Read against asm/2FAD (which BOARDs), the pair is exactly
+#   symmetric:
+#
+#     'X-IT' ; if [DS:13] >= 0x78 -> ' WHAT?' (on foot there is nothing to destroy)
+#     look at the tile under the player: [DS:14] == 0x04 (grass) -> allowed
+#                              [DS:14] == 0x00 (water) AND [DS:13] == 0x24 -> allowed
+#                              anything else -> '-NOT HERE!'
+#     al = [DS:13] ; add al,al ; write it through the cell pointer DS:06
+#     [DS:13] = 2*[DS:47] + 0x78
+#
+#   Doubling the mode byte is the inverse of BOARD's shift right: 0x22->0x44 horse,
+#   0x24->0x48 ship, 0x26->0x4C plane, 0x28->0x50 rocket. So X-IT puts the vehicle tile
+#   BACK under the player and returns them to foot, which is the other half of the
+#   'boarding consumes the tile' rule in asm/2FAD — the tile is not gone, it is carried.
+#   The water clause is the ship's own case: you may only drop the ship where you are
+#   standing on water, which is what the ship arm left behind when you boarded.
+#   Grade: bytes for every step above. Not observed: no harvest has an X-IT on a vehicle
+#   (the three harvests that ran cmd_X were the cmd-letters sweeps, which press every
+#   letter on a foot character in a grass sector). The engine has cmd_X unimplemented
+#   still; this header is the record, not a claim that it is wired.
+#   NB the last line is the same expression as asm/080D's: the on-foot stamp is
+#   class-dependent, 0x78 + 2*pclass, not the constant 0x78 every capture happens to show.
 cmd_X:
 cmd_X:
 L_0046d4:

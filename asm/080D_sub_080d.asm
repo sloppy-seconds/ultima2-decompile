@@ -2,6 +2,29 @@
 # func 080D..0838  len 002C B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# READ 2026-10-29, and it changes what [DS:13] is. The first five instructions are
+#           `mov 0x47,%al ; add %al,%al ; clc ; adc $0x78,%al ; mov %al,0x13`, i.e.
+#           DS:13 = 0x78 + 2*pclass. The on-foot stamp is therefore CLASS-DEPENDENT:
+#           0x78 fighter, 0x7A mage, 0x7C bishop, 0x7E thief. Every capture in the corpus
+#           reads 0x78 because every capture used a fighter, which is why 'DS:13 = 0x78 on
+#           foot' has been written as a constant in half a dozen places.
+#           What survives unchanged is the test every gate uses: the mounted check is
+#           `cmp $0x78,%al` with the mounted arm on the `jb` side (asm/33A6, asm/44D4,
+#           asm/2F96), and all four vehicle modes (0x22..0x28) are below 0x78 while all
+#           four class values are at or above it. So 'below 0x78 means mounted' is right
+#           for every class and the engine's uses of it stand.
+#           The rest of the routine is an arrival tail: it zeroes the four counters at
+#           DS:26A..26D (the three paralysis counters and the unnamed one), loads the entry
+#           pair DS:5A/5B into DS:00/01, and then tests DS:69 — the same byte asm/38B0's
+#           rocket branch writes, which makes this the most likely landing/return path for
+#           a launched rocket.
+#           CALLER NOT FOUND. Nothing in asm/ jumps or calls L_000a0d, and a byte scan of
+#           the exe for near calls and jumps to that runtime address comes back empty, so
+#           it is reached by fall-through from asm/080A, whose own label is equally
+#           unreferenced. Where this runs is therefore UNPROVEN, and the engine does not
+#           apply the class-dependent value for that reason: setting DS:13 from pclass at
+#           sector entry would be a claim about a call site nobody has found. Recorded in
+#           docs/needs-gameplay.md as a capture question.
 sub_080d:
 L_000a0d:
         mov    0x47,%al

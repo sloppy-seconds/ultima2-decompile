@@ -9,6 +9,52 @@
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
+# ---------------------------------------------------------------------------
+# FLOW, read end to end 2026-10-29. The handler branches on [DS:13] alone: 0x26 plane at
+#   0x3BFA, 0x28 rocket at 0x3AD2, everything else 'LAUNCH WHAT?'. Horse and ship have no
+#   launch arm at all.
+#
+# PLANE (0x3BFA). Prints 'LAUNCH--PLANE' BEFORE the gate, then `mov 0xe1,%al` — DS:E1 is
+#   items_held[11] = BRASS BUTTON (item table, file 0x501D) — and with none it says 'FUNNY
+#   THIS PLANE IS' / 'MISSING A BRASS BUTTON!'. Launched, it initialises a heading at
+#   DS:21=0, DS:22=0xFF (north) and enters a loop of its own that is NOT the walk loop:
+#   poll the key non-blocking, apply the heading delta with both coordinates masked and
+#   0x3F, redraw, one cell per iteration whether or not a key arrived. Arrows change the
+#   heading and echo the direction word; 'L' (0x4C) tries to land; any other key just lets
+#   the iteration run. Landing is accepted on tile 0x08 grass ('LAND PLANE.') and nowhere
+#   else ('LAND--NOT HERE!!!!!' and the plane keeps moving). Crossing x==0 or y==0 while
+#   [DS:4A] is non-zero leaves the site through the sector reload at asm/243E.
+#   THE LOOP CONSULTS NO PASSABILITY ROUTINE AND CHARGES NO FOOD. That is the answer to the
+#   handoff's W6 question shape: the airborne state is this loop, and asm/2604's forest rule
+#   governs the plane walked on the ground after landing. Whether the airborne loop should
+#   have any tile rule at all is now a byte-level no — it has none — but the owner's
+#   recollection is about the ground case and is consistent.
+#
+# ROCKET (0x3AD2). 'LAUNCH--ROCKET', then DS:E5 = items_held[15] = TRI-LITHIUM; without it
+#   'A METALLIC VOICE SAYS:' / 'SHIP INCAPABLE OF LAUNCH!' (note this metallic-voice line is
+#   a DIFFERENT string from cmd_B's 'A METALIC VOICE COMMANDS:' — different spelling, verb
+#   and file; they must never be merged). Launched: 'PREPARE FOR LAUNCH!', then if [DS:6D]
+#   and [DS:4A] are both zero it records the launch cell at DS:6A/6B with DS:69=1 and calls
+#   the save body at asm/24FD — launching a rocket SAVES THE GAME. Then two 256-byte tables
+#   at DS:272 and DS:372 are filled with 0xFF, position goes to (0,0), DS:12 = 0xFF, and
+#   '(PRESS ANY KEY)' prints with no leading newline glyph of its own.
+#   The flight is not steerable: y += 2 every iteration, and x += 1 whenever the new y is a
+#   multiple of 8 (asm/3B9F: `and $7,%al ; jne`). It stops on any key, and the tile it
+#   stopped on decides everything — tile 0x08 grass and it lives, anything else jumps to
+#   runtime 0x0E62, which is the death tail. So a rocket is aimed by timing, not steering.
+#
+# GRADES. Bytes for every branch above. OBSERVED (tools/cfg_printed.py over the harvests,
+#   which requires the call instruction itself to have executed): 'LAUNCH--PLANE' and 'LAND
+#   PLANE.' in flight-launched-live and airport32, 'LAND--NOT HERE!!!!!' in airport32, and
+#   ' FRIGATE' in shipcap3. The DS census over every harvest memory dump agrees: [DS:13] is
+#   0x24 in shipcap3 and 0x26 in flight-32-live and flight-launched-live, 0x78 in 150
+#   dumps, 0x22 once (the stepcost forced poke) and NEVER 0x28. So the plane branch is
+#   observed end to end, the ship arm is observed, and the ROCKET has never been entered in
+#   any capture — its launch flight, its auto-flight-south and its crash-on-non-grass rule
+#   are bytes only, graded inferred-from-bytes, and the engine marks them as such.
+#   Also measured, from the same dumps: shipcap3 boarded the frigate and its DS:E2 still
+#   reads 01 afterwards, so boarding CHECKS the gating item and does not spend it. One
+#   sample, and it assumes the starting count was 1.
 cmd_L:
 cmd_L:
 L_003ab0:

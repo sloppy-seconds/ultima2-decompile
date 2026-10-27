@@ -30,6 +30,44 @@
 #           arithmetic came out as y*16 + x against a 64-wide grid. Unexplained.
 # confidence: medium (dispatch table and riding state proven; the tile->code
 #           transform is not)
+# ---------------------------------------------------------------------------
+# RESOLVED 2026-10-29: the four arms are gated on ITEMS, and the tail refuses with the
+#           game's own words instead of falling through silently. Read as a whole, the
+#           dispatch is:
+#
+#             0x22 horse   -> asm/2FD6            no gate
+#             0x24 ship    -> asm/2FF6 gate       DS:E2 == 0 -> asm/2FFE (refusal)
+#                                                   DS:E2 != 0 -> asm/3038 (board, mode 0x24)
+#             0x26 plane   -> asm/3048 at 0x3259  DS:DF == 0 -> 'STRANGE YOU CAN'T GET IN!'
+#                                                   DS:DF != 0 -> board, mode 0x26
+#             0x28 rocket  -> asm/3048 at 0x32a9  prints ' ROCKET' FIRST, then
+#                                                   DS:DD == 0 -> 'YOU MUST HAVE AN ANKH!'
+#                                                   DS:DD != 0 -> board, mode 0x28
+#             anything else-> asm/2FB8: call str_out ' WHAT?' ; jmp L_000c30
+#
+#           so BOARD on ordinary ground prints the line "BOARD WHAT?". Nothing had to be
+#           invented, which is the question the handoff asked before writing a refusal.
+#           THE GATE BYTES ARE ITEM SLOTS. DS:DD, DS:DF, DS:E1, DS:E2 and DS:E5 are
+#           items_held[7], [9], [11], [12] and [15] (items_held is DS:D6..DS:E5, sixteen
+#           slots), and the item name table at file 0x501D names those slots ANKH, SKULL
+#           KEY, BRASS BUTTON, BLUE TASSLE and TRI-LITHIUM. Each refusal names its own item
+#           in the game's words, so the mapping is five independent agreements rather than
+#           an inference: 'YOU MUST HAVE AN ANKH!' behind DS:DD, 'STRANGE YOU CAN'T GET IN!'
+#           behind DS:DF, 'THE CREW OF THIS SHIP WILL NOT LET YOU BOARD!' behind DS:E2, and
+#           from asm/38B0 'MISSING A BRASS BUTTON!' behind DS:E1 and 'SHIP INCAPABLE OF
+#           LAUNCH!' behind DS:E5.
+#           EVERY SUCCESSFUL ARM ALSO WRITES THE CELL. asm/2FD6 and asm/3048's plane and
+#           rocket tails write 0x08 (grass) and asm/3038 writes 0x00 (water), each through
+#           the cached cell pointer (`mov 0x6,%bx` then `mov %al,(%bx)`). Boarding therefore
+#           consumes the vehicle tile and does not move the player. The live agreement is
+#           captures/spice86/ship-port-boniface, where [DS:14] read 0x24 on the ship tile
+#           and 0x00 immediately after BOARD with the position unchanged.
+#           Grade: bytes for the writes, one measured live sample, and INFERRED that [DS:6]
+#           holds the player's own cell at this moment — asm/5AFF computes that pointer from
+#           coordinates and which coordinates are current here was not traced. Note the
+#           handoff's "the ship tile was still 0x48 after boarding" is the map FILE read
+#           back from disk, not live memory; the live read says otherwise.
+# confidence: high for the dispatch and the item gates, medium for the cell write's target
 sub_2fad:
 L_0031ad:
         mov    0x14,%al
