@@ -1372,19 +1372,26 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          *
          * No food is spent, and that is an address fact rather than a convention:
          * asm/2520 returns 0xFF from the passability routine ahead of the mode
-         * dispatch at asm/253B, which is where the per-step charge lives. The turn
-         * does not advance either — the reject paths above all `continue` without
-         * creature_turn(). */
+         * dispatch at asm/253B, which is where the per-step charge lives. The tick fires
+         * here (proven), the sweep is NOT proven for this path and is deliberately not
+         * called — see the note below. */
         if (ctx->state.paral_legs != 0) {
             seam_str_out(ctx, word);                  /* no CR: same line */
             seam_str_out(ctx, U2_S_MOVE_PARALYZED);
             seam_char_print(ctx, '\r');
             seam_str_out(ctx, U2_S_CMD_PROMPT);
-            /* The original ticks here. Proven, not assumed: with DS:26B forced to 15, pressing a
-             * direction key repeatedly drove the counter to 0 while food never moved, so the
-             * refused step reached the tick without being a turn. Without this line a player who
-             * keeps pressing directions is stranded forever, which is the bug the owner reported.
-             * The reason this reads as a trap in the engine and not in the original. */
+            /* The original ticks here, and only the tick is proven. With DS:26B forced to 15,
+             * pressing a direction key repeatedly drove the counter to 0 while food never moved,
+             * so a refused step reaches the tick without spending food. Without this line a player
+             * who keeps pressing directions is stranded forever — the bug the owner reported by
+             * playing, not by reading.
+             *
+             * NOT called here: creature_turn(). The byte-level chain that puts the sweep on a
+             * refused step runs through asm/0A02_invalid_move_msg, which is the TERRAIN reject. The
+             * paralysis reject prints a different string and its route to asm/0A33_cmd_done has
+             * never been traced, so promoting it to a full world turn would be exactly the
+             * inference AGENTS.md § 5 forbids. If a capture ever shows the paralysis path reaching
+             * the tail, this line becomes creature_turn() and nothing else changes. */
             status_tick(ctx);
             continue;
         }
@@ -1418,6 +1425,15 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             seam_str_out(ctx, U2_S_INVALID_MOVE);
             seam_char_print(ctx, '\r');               /* the game's newline */
             seam_str_out(ctx, U2_S_CMD_PROMPT);
+            /* The world still takes its turn. asm/0A02 (this complaint) falls through to
+             * asm/0A15_invalid_move_to_cmd_done, which jumps to asm/0A30 and thence into
+             * asm/0A33_cmd_done and asm/0A38_post_command_tail — so a bump into a mountain is a
+             * completed command, the creature sweep runs, and a wandering spawn is attempted.
+             * Proven from bytes on 2026-10-26 and corroborated live: in sector 03, 16 of 19
+             * direction keys were refused and creature coordinates changed on 12 of them.
+             * Skipping this is what made our creatures freeze against a wall while the original's
+             * kept closing on the player. */
+            creature_turn(ctx, ow);
             continue;
         }
 

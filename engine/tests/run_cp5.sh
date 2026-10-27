@@ -513,6 +513,45 @@ else
 fi
 echo "  NOTE  CP5 C3b: decay is measured (two-arm run on the original), not gated -- see above"
 
+# --- C3c: a refused step is a completed command, so the world takes its turn ----
+#
+# asm/0A02 (the --INVALID MOVE! reject) falls through to asm/0A15_invalid_move_to_cmd_done,
+# which jumps to asm/0A30 and thence into asm/0A33_cmd_done and asm/0A38_post_command_tail.
+# So bumping into a wall runs the creature sweep and the wandering-spawn attempt. The engine
+# used to `continue` without creature_turn(), which froze our creatures while the player stood
+# against a wall while the original's kept moving. Proven from bytes 2026-10-26 and corroborated
+# live in sector 03: 16 refused direction keys, creature coordinates changed on 12 of them.
+#
+# The signature is the turn log. --debug cli writes one dump per RESOLVED turn, and a refused
+# step used to resolve nothing, so a build without the fix writes ZERO dumps for a script made
+# entirely of refusals. That is what makes this a gate that fails on the behaviour it replaced,
+# which is the only kind worth having. The player must also stay put, or the refusals are not
+# refusals and the count would pass for the wrong reason.
+python3 tests/cp5_fight_seed.py "$WORK/c3c" >/dev/null 2>&1
+python3 - "$WORK/c3c/content/mapx00" <<'PYEOF'
+import sys
+p = sys.argv[1]
+d = bytearray(open(p, 'rb').read())
+d[0 * 64 + 1] = 0x10          # mountain at (1,0), directly west of the entry at (2,0)
+open(p, 'wb').write(bytes(d))
+PYEOF
+for i in $(seq 1 5); do printf '0xf2\n'; done > "$WORK/c3c.keys"   # 0xf2 = U2_KEY_LEFT
+rm -rf "$WORK/c3c/dbg"
+./u2 --headless --play-map --cleanroom --data-dir "$WORK/c3c/content" --save-dir "$WORK/c3c/save" \
+     --script "$WORK/c3c.keys" --debug cli --debug-path "$WORK/c3c/dbg" --debug-limit 0 \
+     >/dev/null 2>&1
+dumps=$(find "$WORK/c3c/dbg" -name 'turn-*.json' 2>/dev/null | wc -l)
+last=$(find "$WORK/c3c/dbg" -name 'turn-*.json' 2>/dev/null | sort | tail -1)
+stay=$(python3 -c "
+import json, sys
+p = sys.argv[1]
+print(json.load(open(p))['state']['raw']['pos'] if p else 'none')" "$last" 2>/dev/null)
+if [ "$dumps" -eq 5 ] && [ "$stay" = "02 00" ]; then
+    ok "CP5 C3c: a refused step takes the world turn ($dumps dumps for 5 refusals, player held at 02 00)"
+else
+    bad "CP5 C3c: $dumps dumps for 5 refused steps (expect 5), player at '$stay' (expect '02 00') — the reject path is not taking the world turn"
+fi
+
 # --- the jump table is reachable: a letter key must land in its handler ------
 # u2_cmd_implemented() reports what the table CLAIMS, and nothing until now proved the
 # loop routes a letter into it at all. The Q migration is what exposed the gap: putting a
