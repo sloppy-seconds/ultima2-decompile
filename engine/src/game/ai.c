@@ -54,7 +54,11 @@
 #define U2_AI_TYPE_ARMS      0x38   /* asm/0EC2, resisted by CLOAK  [DS:DA] */
 #define U2_AI_TYPE_SLEEP     0x3C   /* asm/0F48, resisted by IDOL   [DS:E4] */
 #define U2_AI_TYPE_MISSILE   0xF8   /* asm/0F12, no save exists            */
-#define U2_AI_TYPE_THIEF     0xFC   /* asm/0FCD, on the contact path only  */
+#define U2_AI_TYPE_THIEF     0xFC   /* asm/0FCD, on the contact path only. The type whose art
+                                     * index is 0x3F (0xFC >> 2), the tile the bestiary match
+                                     * names Thief; confirmed by the owner 2026-10-29. The steal
+                                     * routine itself reads no monster record, so no byte in it
+                                     * can name this constant. */
 
 /* asm/50EF: values below 0x80 pass through, so this is |x| of a signed byte. */
 static int abs8(uint8_t v)

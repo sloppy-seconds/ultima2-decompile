@@ -5,6 +5,12 @@
 #   Note the codex lists Thief as both a wandering monster and a townsfolk NPC, so
 #   the string's 'A THIEF' agrees with a creature, not only the player class at
 #   file 0x50FE. External claim; changes no name.
+# owner ruling 2026-10-29: the thief identity is CONFIRMED by the owner, so the engine's
+#   `U2_AI_TYPE_THIEF = 0xFC` (ai.c) is not an open question. 0xFC is the TYPE whose art index
+#   is 0x3F (0xFC >> 2 == 0x3F), which is the tile the bestiary match names as Thief. Recorded
+#   here because this file's own bytes never name a type -- the routine reads no monster record
+#   -- so the identification can only ever come from outside, and a reader who did not know that
+#   would look for a byte that does not exist. Grade: owner, not byte.
 # func 0FCD..1012  len 0046 B  evidence: call+reko
 # strings: "A THIEF STOLE SOMETHING!"
 # calls: L_0051df (str_out), L_005417
@@ -26,7 +32,14 @@
 #     mov 0xd6(%di),%al      ; item array [DS:D6 + slot];  DS:D6 is slot 0 (the RING,
 #     or %al,%al             ;   per asm/0E70, asm/0EC2, asm/0F48 and asm/24B5)
 #     je  done               ; EMPTY SLOT -> nothing taken and NOTHING PRINTED
-#     stc; sbb $0x1,%al; das; cmc   ; packed-decimal decrement by 1
+#     stc                        ; set carry...
+#     mov 0xd6(%di),%al          ; reload the slot
+#     cmc                        ; ...and immediately clear it again: the pair is a guard,
+#                                ;   NOT a borrow-in, so the subtract below is -1 and not -2
+#     sbb $0x1,%al
+#     das                        ; packed-decimal adjust -> decrement by 1
+#     cmc
+#     mov %al,0xd6(%di)
 #     mov %al,0xd6(%di)
 #     print "A THIEF STOLE SOMETHING!"
 #   done: ret
@@ -34,8 +47,12 @@
 #   So 0x40 here is a PROBABILITY THRESHOLD, not a type. Note also that 0x40 is the
 #   empty-slot sentinel in the monster record ([DI+0x197]) -- a second, unrelated use of
 #   the same byte, and the likely origin of the original confusion.
-#   Which monster reaches this routine is NOT decided here. The caller asm/0AD3 dispatches
-#   on the kind index [DI+0x1B7]; this function never reads a monster record.
+#   Which monster reaches this routine is NOT decided here, and this header used to describe
+#   the caller wrongly: it said asm/0AD3 "dispatches on the kind index [DI+0x1B7]". It does
+#   not. asm/0AD3's first instruction is `mov 0x197(%di),%al` -- [DI+0x197], the TYPE array --
+#   and asm/0AD3's own header records that as resolved 2026-10-22 ("[DI+0x197] is the monster
+#   TYPE"). Corrected 2026-10-29 against the bytes. This function still never reads a monster
+#   record of its own, which was the true point of the sentence.
 #   Engine consequence: a failed theft is SILENT, so a reimplementation that prints on
 #   every thief turn will not match.
 # notes: theft is PERMANENT. Measured over 3000 recorded turns in the sector-00
