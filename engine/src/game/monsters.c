@@ -147,6 +147,15 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_type[i] == 0)
             continue;                       /* asm/0A74: an empty slot is type 0 */
+        /* hp 0 is absent, whatever the type byte says. This is the same occupancy rule
+         * u2_monsters_at() uses, and the two must agree or the grid and the game disagree
+         * about what is there: the cell renders a creature the attack scan walks past and
+         * the player walks through. That state is reachable in play, not theoretical — in
+         * fidelity mode asm/2E3D does not kill on dmg == hp, so a creature reduced to
+         * exactly 0 keeps its type byte. Observed by the owner as a creature leaving "a copy
+         * of him behind". Gated by monsters_check section 5. */
+        if (s->mon_hp[i] == 0)
+            continue;
         const int cell = (int)s->mon_y[i] * U2_SECTOR_EDGE + (int)s->mon_x[i];
         if (cell < 0 || cell >= U2_SECTOR_TILES)
             continue;

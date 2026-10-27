@@ -232,6 +232,26 @@ int main(int argc, char **argv)
               "restamp does NOT exempt a cell carrying 0x80 (got 0x%02x, want terrain 0x%02x)",
               w.map[dcell], terrain);
 
+        /* The zombie, and the reason the two occupancy tests in this module have to agree.
+         * In fidelity mode the original does NOT kill on dmg == hp (asm/2E3D, byte-proven), so a
+         * creature can be reduced to exactly hp 0 with its type byte still set. u2_monsters_at()
+         * skips hp 0 — proven live in captures/spice86/cp5-fight/, where an attack walked past a
+         * zero-hp slot and hit the creature behind it — so the game treats that cell as empty and
+         * the player walks through it. u2_monsters_restamp() used to stamp it anyway because it
+         * tested only type. The result is a sprite with nothing behind it: the owner's "he left a
+         * copy of him behind", and it survives every later restamp because nothing clears the type.
+         *
+         * This is the check that fails if the hp test is removed from restamp. */
+        ctx.state.mon_hp[dead]   = 0;
+        ctx.state.mon_type[dead] = 0x3C;        /* a type, deliberately left set */
+        CHECK(u2_monsters_at(&ctx, ctx.state.mon_x[dead], ctx.state.mon_y[dead]) < 0,
+              "fixture: the scan treats hp 0 as absent, so the cell is walkable");
+        u2_monsters_restamp(&ctx, &w);
+        CHECK(w.map[dcell] == terrain,
+              "a zombie (hp 0, type set) must NOT be stamped — got 0x%02x, want terrain 0x%02x",
+              w.map[dcell], terrain);
+        ctx.state.mon_type[dead] = 0;           /* back to how a real kill leaves it */
+
         CHECK(w.map[acell] == ctx.state.mon_type[alive],
               "the rebuild re-stamps the creatures still standing, it does not blank the grid");
     }
