@@ -1,4 +1,19 @@
 # sub_2744 — mechanical clean (bulk wave); behavior not yet reviewed
+# DECODED 2026-10-29: the mismatch path, and the only place in the tree where the number 8 and a
+#           mod-8 counter appear together in a way that matches a live observation. Reached when
+#           asm/2731 does NOT find `0xC0`. It sets DS:6F = 8, adds 2 to DS:6E, masks it with
+#           `and $0x7,%al`, stores it back, then rebuilds the index from DS:1F and loads the next
+#           candidate cell from the same table and re-tests it.
+#           OBSERVED 2026-10-29 (docs/moongates.md § 2, captures/spice86/moongate-cycle): the
+#           live rotation behaves exactly like this. DS:6F reloads to precisely 8 and then
+#           decrements about every 4.2 s with the player standing still, and DS:6E steps
+#           00 -> 02 -> 04 -> 06 -> 00, each value selecting the next cell of the era-2 row of
+#           the table at file 0x2998. Four cells matched four table entries in index order,
+#           and with a third era watched live the model is now 12/12 — see docs/moongates.md § 3.
+#           CORRECTION to a recalled detail worth recording: the cycle is TIME, not turns. The
+#           countdown ran at a steady rate with no input at all, so "every 8 steps" is wrong in
+#           the unit even though the 8 is right.
+#           Causal link unproven — see asm/2708 and docs/moongates.md § 6.
 # func 2744..2775  len 0032 B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)
