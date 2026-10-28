@@ -30,6 +30,36 @@
 #              on into the rest of the range.
 #           There is no key read, no direction and no cursor anywhere in steps 1-7. CAST aims
 #           at nothing; the spells that need a position are dungeon-side.
+# CAPTURE-CONFIRMED 2026-10-29 — captures/spice86/cmd-c-cast-tower/ (wizard MAGUS, the tower in
+#           sector 20, live frames). Three things the listing allowed but never forced anyone to
+#           notice, all of them engine-relevant:
+#           (a) **a failed cast still spends the spell.** On the world map `C` printed
+#              `CAST-LIGHT-FAILED!` and the LIGHT count went 9 -> 8. Gate 5 (the decrement) runs
+#              before gate 6 (`DS:4A >= 4`), so an implementation that checks the location first
+#              and spends after — the natural way to write it — is wrong, and only a test that
+#              counts stock would catch it.
+#           (b) the NAME prints before every gate: with nothing readied, `C` printed `CAST-NONE`
+#              rather than a refusal, because pool[36] is NONE and step 1 is unconditional.
+#           (c) LIGHT has no darkness precondition and always spends: casting it in a lit corridor
+#              consumed another charge and reset DS:26 to 0x96. "Cast LIGHT when it's dark" is a
+#              play habit, not a rule.
+# ONE SPELL LIST, TWO SHOPPED CATALOGUES (the cleric/wizard difference, 2026-10-29). The ten
+#           names in pool[36..45] are the whole spell vocabulary and both classes draw from it; what
+#           differs is what each is offered. asm/1869_cleric_shrine sells
+#           `1-LIGHT, 2-L.D., 3-L.U., 4-PASS 5-SURFACE, 6-PRAYER` and asm/19D7_magic_shop_menu
+#           sells `1-LIGHT, 2-L.D., 3-L.U., 4-M.M., 5-BLINK, 6-KILL`. So three are shared (LIGHT,
+#           DOWN LADDER, UP LADDER), three are cleric-only (PASSWALL, SURFACE, PRAYER) and three
+#           wizard-only (MAGIC MISSILE, BLINK, KILL). The class gate is the pair of refusals
+#           asm/184C (` YOU ARE NOT A CLERIC!`) and asm/19BA (` YOU ARE NOT A WIZARD!`).
+#           INFERRED, and cheap to settle: the cleric menu numbers land on slots 1..6 exactly, but
+#           the wizard's 4/5/6 name spells that live at pool[43..45], i.e. slots 7/8/9. If that is
+#           right, a wizard who buys "6-KILL" must ready it with M 9, not M 6. One capture settles
+#           it: buy a spell at the magic shoppe and read DS:B6[1..9] before and after.
+#           Class values themselves come from pool[72..75] = FIGHTER, CLERIC, WIZARD, THIEF — not
+#           "mage"/"paladin", which is corrected in asm/080D_sub_080d.asm and tools/u2_edit.py.
+#           Also learned the hard way from this capture: the 3D view does not redraw on a move that
+#           did not land, so two frames showed a stale IT'S DARK* after an illegal arrow and an
+#           ADVANCE-BLOCKED. A dungeon frame is only evidence after a move that actually moved.
 # func 3139..330B  len 01D3 B  evidence: call+reko
 # strings: "-FAILED!"; "-FAILED!"; "NEED WAND OR STAFF!"; "NO SPELL!"
 # calls: L_000c33, L_001651, L_0030d1, L_003432, L_0034a2, L_0034a5, L_0034ad, L_0034d2 (+9 more)

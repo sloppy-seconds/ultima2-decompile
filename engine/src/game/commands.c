@@ -861,6 +861,10 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      dungeon thing). What is missing is every EFFECT, and every effect is dungeon-side in
  *      a subsystem AGENTS.md § 3 parks. DS:D7/DS:D8 are not even in state.h yet. TODO once
  *      dungeons open: wire the gates, then the LIGHT / DOWN LADDER / UP LADDER branches.
+ *      CAPTURE-CONFIRMED 2026-10-29 (captures/spice86/cmd-c-cast-tower), and one ordering rule
+ *      there is easy to get wrong: the count is decremented BEFORE the location gate, so a cast
+ *      that fails with -FAILED! outside a tower or dungeon still spends the spell. Check the
+ *      stock, spend, then fail — not check, fail, spend.
  *   D  asm/334D prints DESCEND and falls into a key-code test whose meaning is recorded as
  *      unresolved in its own header, and dungeons are parked (AGENTS.md section 3).
  *   F  FIRE is the combat/attack arm.

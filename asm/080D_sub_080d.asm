@@ -5,9 +5,14 @@
 # READ 2026-10-29, and it changes what [DS:13] is. The first five instructions are
 #           `mov 0x47,%al ; add %al,%al ; clc ; adc $0x78,%al ; mov %al,0x13`, i.e.
 #           DS:13 = 0x78 + 2*pclass. The on-foot stamp is therefore CLASS-DEPENDENT:
-#           0x78 fighter, 0x7A mage, 0x7C bishop, 0x7E thief. Every capture in the corpus
+#           0x78 fighter, 0x7A cleric, 0x7C wizard, 0x7E thief. Every capture in the corpus
 #           reads 0x78 because every capture used a fighter, which is why 'DS:13 = 0x78 on
 #           foot' has been written as a constant in half a dozen places.
+#           CLASS NAMES CORRECTED the same day: this line said "mage" and "bishop", which are
+#           neither of them words this binary uses. pool[72..75] in asm/4C55_name_pool.asm is
+#           FIGHTER, CLERIC, WIZARD, THIEF, so class 1 is CLERIC (0x7A) and class 2 is WIZARD
+#           (0x7C) — the reverse of what the informal names implied. tools/u2_edit.py carried
+#           the same error as 'mage'/'paladin' and is fixed in the same commit.
 #           What survives unchanged is the test every gate uses: the mounted check is
 #           `cmp $0x78,%al` with the mounted arm on the `jb` side (asm/33A6, asm/44D4,
 #           asm/2F96), and all four vehicle modes (0x22..0x28) are below 0x78 while all
