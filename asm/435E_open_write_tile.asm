@@ -15,14 +15,28 @@
 #           asm/50B3_map_tile_ptr left the pointer it just computed (`mov %bx,0x6`). So the
 #           write goes through the SAME pointer the door test read -- into the live sector
 #           grid in DS, not a separate overlay and not the file. Whether it survives leaving
-#           and re-entering is therefore a question about the sector store (asm/22FD), not
-#           about this instruction.
+#           and re-entering was a question about the sector store; it is now answered (see
+#           below) and the answer is no: the original writes no sector file at all, so the
+#           paving lives only as long as the grid in DS does.
+# PERSISTENCE (2026-10-29, owner-driven live session over noVNC, sector 31): two doors opened
+#           at (42,17) and (49,17) both came back 0x70, the paving the player was standing
+#           on, and both survived a walk through a town with 32 live creatures (38-odd cells
+#           churned by movement, the two openings intact). Leaving the sector and re-entering
+#           closed them: `mapx31` in the run dir is byte-identical to the pristine copy, and
+#           so are `monx31`, `mapx30` and `monx30` -- the only file the game writes back is
+#           `player`. So the paving is real and durable within a visit and gone on reload.
 # label: kept as sub_435e on purpose (CP3 cross-reference anchor).
 # func 435E..437D  len 0020 B  evidence: seed+reko
 # calls: L_000c33
-# provenance: static reassembly 2026-10-28; the two DS:14 reads are from the g30 sessions
-# confidence: high for the mechanism; the ground-paving rule is two-for-two on live reads
-#           and has not yet been confirmed by a completed unlock
+# provenance: static reassembly 2026-10-28; the two DS:14 reads are from the g30 sessions;
+#           persistence half from the 2026-10-29 noVNC session (owner playing, DS read live
+#           over the HTTP API, run dir /var/tmp/u2/spice86-runs/20261028-012747)
+# confidence: high for the mechanism. The ground-paving rule is now confirmed by THREE
+#           completed unlocks with three DIFFERENT ground values -- 0x0C (the scripted
+#           unlock1 run, recorded in docs/needs-gameplay.md G30), 0x08 and 0x70 (this
+#           session). An earlier line here said the rule had "not yet been confirmed by a
+#           completed unlock"; that was stale against needs-gameplay, and it is wrong now
+#           in both directions.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_435e:
 L_00455e:
