@@ -184,7 +184,59 @@ int main(int argc, char **argv)
     CHECK(u2_world_load(&ctx, &w, 0, id) == U2_WORLD_OK, "monx sector loads");
     CHECK(w.bytes_read == U2_MON_TILES, "monx read is 256 bytes (CX at asm/22D5)");
 
-    printf(fails ? "world check: FAIL (%d)\n" : "world check: all %d checks passed\n",
-           fails ? fails : 30);
+    /* --- the game's real load order: BOTH kinds into one world, then a map write-back ---
+     *
+     * Everything above loads one kind and stores that kind, which is why the write-back
+     * tests passed while the engine was corrupting player data: the overworld always loads
+     * the map (asm/2290) and then the monsters (asm/22D5) into the same u2_world, and a
+     * store path that derives its filename from whichever load ran last writes the map
+     * buffer to monxNN and returns U2_WORLD_OK. This case is the one that can see it.
+     *
+     * Added red-first at the commit that documented the defect (docs/phase4-state.md,
+     * OPEN DEFECT): run against the unfixed store, the MONX size assertion fails and the
+     * map change never lands in MAPX. */
+    memset(&w, 0, sizeof w);
+    id.hi = 3; id.lo = 0;
+    CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK,
+          "both-kind world: map loads first");
+    CHECK(u2_world_load(&ctx, &w, 0, id) == U2_WORLD_OK,
+          "both-kind world: monx loads second, as asm/22D5 does in play");
+
+    path_for(p, sizeof p, dir, "monx30");
+    const long mon_size_before = filesize(p);
+    f = fopen(p, "rb");
+    size_t mon_n = f ? fread(buf, 1, sizeof buf, f) : 0;
+    if (f) fclose(f);
+    CHECK(mon_n > 0, "monx30 snapshotted before the map write-back");
+
+    u2_world_tile_put(&w, 2, 0, 0x44);      /* the byte a boarded ship tile becomes */
+    CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_OK,
+          "both-kind world: storing the map reports OK");
+
+    path_for(p, sizeof p, dir, "monx30");
+    CHECK(filesize(p) == mon_size_before,
+          "storing the MAP does not touch the MONX file's size");
+    f = fopen(p, "rb");
+    int mon_intact = (f != NULL);
+    if (f) {
+        uint8_t after[U2_SECTOR_TILES + 256];
+        size_t n = fread(after, 1, sizeof after, f);
+        fclose(f);
+        mon_intact = (n == mon_n && memcmp(after, buf, mon_n) == 0);
+    }
+    CHECK(mon_intact, "storing the MAP leaves the MONX bytes byte-identical");
+
+    path_for(p, sizeof p, dir, "mapx30");
+    f = fopen(p, "rb");
+    int tile_on_disk = 0;
+    if (f) {
+        size_t n = fread(readback, 1, sizeof readback, f);
+        fclose(f);
+        tile_on_disk = (n >= U2_SECTOR_TILES && readback[0 * U2_SECTOR_EDGE + 2] == 0x44);
+    }
+    CHECK(tile_on_disk, "storing the MAP writes the MAP file, where the change belongs");
+
+    printf(fails ? "world check: FAIL (%d)\n" : "world check: all checks passed\n",
+           fails);
     return fails != 0;
 }

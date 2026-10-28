@@ -1428,7 +1428,7 @@ F14's second correction and F15. What is wired:
 | per-mode food (19 / 38 / 38 / 0 / 0) | `u2_overworld_step_food()` | CP5 V1 |
 | `cmd_B` BOARD, five item gates, `BOARD WHAT?` | `commands.c` | CP5 V1 |
 | `cmd_L` LAUNCH: plane flight + land, rocket flight + crash | `commands.c` | **not gated** |
-| the tile BOARD leaves behind (grass / water) | `board_vehicle()` via `u2_world_terrain_put()` | **not gated**, see G35 below |
+| the tile BOARD leaves behind (grass / water) | `board_vehicle()` via `u2_world_terrain_put()` | CP5 V1, gated 2026-10-29 once the store defect closed |
 
 **`cmd_L` is deliberately ungated, and that has to be said rather than left implicit.** Its
 plane branch is observed in `flight-launched-live` and `airport32` (launch, `LAND PLANE.`,
@@ -1439,29 +1439,43 @@ any capture at all — `DS:13 = 0x28` appears in zero harvest dumps. Gating a fl
 against a cadence nobody measured would produce a green that means nothing; `docs/needs-gameplay.md`
 G39 and G43 are the captures that would let it be gated honestly.
 
-### OPEN DEFECT: a dirty map is written to the MONX filename (found 2026-10-29, pre-existing)
+### CLOSED 2026-10-29: a dirty map was written to the MONX filename
 
-`u2_world_store(ctx, w, is_map)` builds its path from `w->found_prefix`, and `found_prefix`
-is **one field shared by both loaders**. `u2_world_load` sets it on every load, and the
-overworld always loads the map and then the monsters, so by save time it reads `monx`. A
-store of the **map** therefore writes 4096 bytes of map data to `monxNN`, and returns
-`U2_WORLD_OK`.
+`u2_world_store(ctx, w, is_map)` built its path from `w->found_prefix`, and `found_prefix`
+was **one field shared by both loaders**. `u2_world_load` set it on every load, and the
+overworld always loads the map and then the monsters, so by save time it read `monx`. A
+store of the **map** therefore wrote 4096 bytes of map data to `monxNN`, and returned
+`U2_WORLD_OK`. It compounded: once `monxNN` was 4096 bytes, a later monster store wrote 256
+bytes and copied the "tail" from offset 256 of the corrupted file, so the map bytes stayed.
 
 Reproduced at HEAD (`45395c9`, no vehicle code involved): seed a sector with a door at
-`(3,0)`, give the character a key, `U` + `RIGHT` to pave the door, then `Q`. `monx00` goes
-from 256 bytes to 4096 and every creature in the sector is gone on the next load. The engine
-has been corrupting its own monster data on any save with a dirty map, and did so before this
-session, through the UNLOCK path.
+`(3,0)`, give the character a key, `U` + `RIGHT` to pave the door, then `Q`. `monx00` went
+from 384 bytes to 4096 and every creature in the sector was gone on the next load.
 
-Why no gate saw it: `world_check.c` loads only a map, so `found_prefix` is still `mapx` when
-it stores, and its round-trip assertion passes honestly. The defect needs a test that loads
-**both** files before storing — which is what the game always does.
+Why no gate saw it: `world_check.c` loaded only a map, so the shared field still said `mapx`
+when it stored, and its round-trip assertions passed honestly. The defect needed a test that
+loads **both** kinds before storing — which is what the game always does.
 
-Not fixed here on purpose. The fix is small (per-kind prefixes, or refuse a `found_prefix`
-that does not belong to the kind being stored) but it changes shipped behaviour on the save
-path, needs its own red-first control, and the vehicle work had no mandate to touch saves.
-**This is the blocking item for gating BOARD's tile write**, and `tests/vehicle_board.py`
-says so at the call site rather than asserting through a broken path.
+**The fix, and the order it was done in.** Control first: a both-kind case in
+`tests/world_check.c` that loads map then monsters into one world, edits a tile, stores the
+map, and asserts the map file carries the change *and* the monster file is untouched in size
+and bytes. Run against the unfixed store it failed three assertions while `storing the map
+reports OK` passed — which is the defect in one line. Then the fix: `found_prefix` is now
+`map_prefix` / `mon_prefix`, set and read per kind, plus a guard in `u2_world_store` that
+returns `U2_WORLD_ERROR` rather than writing if the prefix it was given does not belong to
+the kind being stored. The guard is the point as much as the split is: it converts any future
+recurrence from silent destruction of the player's creature data into a failed save.
+
+The two diagnostic notes that printed `sector 31 via monx` were reading the same shared field
+and so always named the monster file; they now print the map's prefix, which is what the
+sentence was trying to say. `docs/monster-spawn.md` § 10's quote is updated.
+
+**No player data was damaged here.** A scan of the repo found 5519 `monx` files all at 384
+bytes and 5518 `mapx` files all at 4224 — the shipped sizes are 256 + a 128-byte tail and
+4096 + 128, which is what the engine preserves on write-back. The only corrupted files were
+the `/var/tmp/vt*/` scratch dirs this session created while diagnosing it. Anyone who has run
+an older engine build and saved can still check: a `monx` that is not 384 bytes has been
+overwritten, and `references/ultima2/` is the pristine copy to restore from.
 
 ### Also recorded, not acted on
 

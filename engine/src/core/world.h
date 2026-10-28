@@ -95,7 +95,16 @@ typedef struct u2_world {
     int          mon_loaded;
     int          map_dirty;   /* set by a tile write; only dirty sectors are stored */
     int          mon_dirty;
-    const char  *found_prefix;/* which spelling the last successful load used */
+    /* Which filename spelling each kind was actually found under, kept PER KIND on
+     * purpose. There used to be one field for both, and because the overworld always
+     * loads the map (asm/2290) and then the monsters (asm/22D5), it read "monx" by save
+     * time — so storing a dirty map wrote 4096 bytes of map data over monxNN and returned
+     * U2_WORLD_OK. See docs/phase4-state.md, OPEN DEFECT, and the both-kind case in
+     * tests/world_check.c, which is the only shape that can see it.
+     * Legal values are the entries of prefix_list() for that kind: mapx/MAPX/mapg/MAPG,
+     * monx/MONX/mong/MONG. u2_world_store refuses a prefix that is not one of them. */
+    const char  *map_prefix;  /* spelling the map sector was found under */
+    const char  *mon_prefix;  /* spelling the creature table was found under */
     size_t       bytes_read;  /* diagnostics and tests */
 } u2_world;
 

@@ -10,8 +10,9 @@ asserts the mode byte, the position (BOARD must NOT move the player, measured in
 captures/spice86/ship-port-boniface) and the words on screen. The refusals are asserted
 too, and they are not invented: each names the item that gates it, and
 spice86-live-findings.md § 11 already puts those words in exactly the slots the gate bytes
-are. The tile each arm
-leaves behind is listed in the case table but NOT asserted, for the reason in board_case().
+are. The tile each arm leaves behind is asserted too, by saving and reading the sector back —
+and the save must leave the creature table alone, which is the game-level half of the
+u2_world_store defect fixed 2026-10-29 (per-kind prefixes; unit control in world_check.c).
 
 Food per mode (W3). asm/253B's dispatch decides the charge: one 19 on foot, two on horse or
 plane (asm/2626 subtracts once and then calls the foot tail, which subtracts again), none
@@ -30,9 +31,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import u2_gate as G
 
 # (name, tile under the player, items, expected DS:13 after B, the tile that arm writes
-#  through the cell pointer [recorded here, NOT asserted — see board_case], a word that
-#  must be on screen). The words are short on purpose: the screen is 40 columns and a
-#  whole sentence can wrap across two rows.
+#  through the cell pointer, a word that must be on screen). The words are short on
+#  purpose: the screen is 40 columns and a whole sentence can wrap across two rows.
 BOARD_CASES = [
     ("horse",          G.TILE_HORSE,  {},                      G.MODE_HORSE,  0x08, "HORSE"),
     ("ship-refused",   G.TILE_SHIP,   {},                      G.MODE_FOOT,   0x48, "BOARD!"),
@@ -63,6 +63,13 @@ def board_case(name, tile, items, want_mode, want_left, want_word):
         return ["no --dump-state output"]
     out = G.flatten(text)
 
+    # B then Q, on the same pristine seed (the run above saved nothing, so the tile the
+    # first run consumed is back on disk). The save is what makes the tile BOARD wrote
+    # observable, because u2_world_store only runs for a dirty sector.
+    mon_path = os.path.join(work, "content", "monx00")
+    mon_size_before = os.path.getsize(mon_path)
+    G.run_stdout(work, ["B", "Q"], name="save")
+
     errs = []
     if G.pos(d) != G.ENTRY:
         errs.append("moved to %s (BOARD must not move the player)" % (G.pos(d),))
@@ -70,15 +77,16 @@ def board_case(name, tile, items, want_mode, want_left, want_word):
         errs.append("DS:13 = 0x%02X, want 0x%02X" % (G.stamp(d), want_mode))
     if want_word not in out:
         errs.append("screen has no %r" % want_word)
-    # The tile BOARD leaves behind (want_left) is deliberately NOT asserted here, and it is
-    # not laziness: asserting it needs a Q, and Q on a dirty sector currently writes the
-    # map over the MONX file, because u2_world_store reuses the single w->found_prefix the
-    # monster load set last. That is a pre-existing engine defect, reproduced at HEAD with
-    # no vehicle code anywhere in the picture (UNLOCK a door, then save), and it is
-    # recorded in docs/needs-gameplay.md G35 with its repro. A gate that rides on a save
-    # path which corrupts a different file would report green while doing damage.
-    # The write itself is still exercised: BOARD picks its arm from the tile under the
-    # player, so the mode above only comes out right if that read and the write agree.
+    left = G.map_byte(work, *G.ENTRY)
+    if left != want_left:
+        errs.append("cell left as 0x%02X, want 0x%02X" % (left, want_left))
+    # And the save must not have eaten the creature table. A shared prefix field used to
+    # make a dirty MAP write land on the MONX filename and return OK, so monx00 went from
+    # 256 bytes to 4096 of map data. Fixed per-kind in core/world.c; this is the
+    # end-to-end guard and world_check.c's both-kind case is the unit one.
+    if os.path.getsize(mon_path) != mon_size_before:
+        errs.append("saving corrupted monx00: %d bytes -> %d" %
+                    (mon_size_before, os.path.getsize(mon_path)))
     return errs
 
 

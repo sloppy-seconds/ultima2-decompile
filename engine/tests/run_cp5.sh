@@ -628,9 +628,10 @@ fi
 #
 # Controls, both run and confirmed red before this was trusted: making the rocket arm accept takes
 # the ladder's two rocket cases and the rocket food case with it, and making the mounted charge 1
-# instead of 2 turns horse and plane red. The tile each arm leaves behind is NOT asserted here --
-# see board_case() in tests/vehicle_board.py and docs/needs-gameplay.md G35, because reading it
-# back needs a save and the save path has a defect of its own.
+# instead of 2 turns horse and plane red. The tile each arm leaves behind IS asserted, by saving
+# and reading the sector back -- which only became possible once u2_world_store stopped writing a
+# dirty map to the monx filename (docs/phase4-state.md, closed 2026-10-29). The gate also checks
+# the save left monx00's size alone, so that defect cannot come back quietly.
 if U2_BIN=./u2 python3 tests/vehicle_board.py > "$WORK/v1.log" 2>&1; then
     ok "CP5 V1: BOARD sets the mode and costs the mode's food (13 cases, fresh seed each)"
 else

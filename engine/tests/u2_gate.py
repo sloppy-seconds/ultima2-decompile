@@ -111,6 +111,13 @@ def stamp(dump):
     return raw(dump, "stamp")[0]
 
 
+def map_byte(work, x, y):
+    """Read a cell back out of the sector file after a save: what the world looks like to
+    the next player who loads this sector. Only meaningful after a Q, because the engine
+    stores a sector when it is dirty and nothing else writes the file."""
+    return open(os.path.join(work, "content", "mapx00"), "rb").read()[y * 64 + x]
+
+
 def run_stdout(work, keys, name="case"):
     """Run the engine and return its stdout as text.
 

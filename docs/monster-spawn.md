@@ -401,9 +401,12 @@ confirmed as written.
 ### Status
 
 `U2_MONSTERS_LAYOUT_PROVEN` is gone; the stamp is live. `docs/needs-gameplay.md` G26 is
-closed as not-a-question. The engine now reports `sector 31 via monx, tiles from cache,
+closed as not-a-question. The engine now reports `sector 31 via mapx, tiles from cache,
 32 creatures` and a scripted attack against a real creature from `monx31` lands:
-`CMD: ATTACK--EAST--HIT!!!`.
+`CMD: ATTACK--EAST--HIT!!!`. (The note used to read `via monx`, which was not a claim about
+the creature file: it printed one shared "last load" prefix field, and monsters always load
+last. That field is per-kind now — see `docs/phase4-state.md` § OPEN DEFECT, closed
+2026-10-29 — so the note names the sector file it actually means.)
 
 ## 11. The overworld spawner is `0C9A..0E00` — found by reading, not sampling (2026-10-23)
 

@@ -244,7 +244,7 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     snprintf(ow->note, sizeof ow->note,
              "sector %d%d via %s, %d creature%s%s",
              ow->sector_hi, ow->sector_lo,
-             ow->world.found_prefix ? ow->world.found_prefix : "?",
+             ow->world.map_prefix ? ow->world.map_prefix : "?",
              creatures, creatures == 1 ? "" : "s",
              mr == U2_WORLD_OK ? "" : " (no monx file)");
     /* Same reason the open path prints its note unconditionally: on a transition
@@ -1058,7 +1058,7 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
     snprintf(ow->note, sizeof ow->note,
              "sector %d%d via %s, %s%s, %d creature%s%s",
              ow->sector_hi, ow->sector_lo,
-             ow->world.found_prefix ? ow->world.found_prefix : "?",
+             ow->world.map_prefix ? ow->world.map_prefix : "?",
              strncmp(ow->tiles.source, "builtin:", 8) == 0
                  ? "cleanroom tiles"          /* substitute art, named as such */
                  : (ow->tiles.from_cache ? "tiles from cache" : "tiles extracted"),

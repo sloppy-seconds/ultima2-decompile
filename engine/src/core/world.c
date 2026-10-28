@@ -143,7 +143,10 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
         return U2_WORLD_SHORT;
 
     w->bytes_read = got;
-    w->found_prefix = used;
+    /* Per kind, never one shared field: see the note on the struct. The overworld loads
+     * map then monsters into the same world, so a single field would always say "monx"
+     * by the time anything is stored. */
+    if (is_map) w->map_prefix = used; else w->mon_prefix = used;
     if (is_map) {
         w->map_id = id;
         w->map_loaded = 1;
@@ -184,8 +187,26 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
     if (!dir_writable(ctx))
         return U2_WORLD_NOT_READY;
 
+    /* The prefix must belong to the kind being written. This is the loud version of the
+     * invariant the shared field used to violate: a map buffer reaching a monx filename
+     * (or the reverse) is not a naming detail, it silently destroys the other file and
+     * reports success. Refusing costs a save; writing the wrong file costs the player's
+     * creature data, and there is no backup in the content directory.
+     *
+     * want_bytes() is checked the same way for the same reason: the sizes differ (4096 vs
+     * 256), so a mismatch here is the other half of the same class of mistake. */
+    const char *const *ok_prefixes = prefix_list(is_map, &nprefixes);
+    const char *want_prefix = is_map ? w->map_prefix : w->mon_prefix;
+    if (want_prefix) {
+        int legal = 0;
+        for (size_t i = 0; i < nprefixes; i++)
+            if (strcmp(want_prefix, ok_prefixes[i]) == 0) { legal = 1; break; }
+        if (!legal)
+            return U2_WORLD_ERROR;
+    }
+
     u2_world_path(path, sizeof path, ctx,
-                  w->found_prefix ? w->found_prefix : prefix_list(is_map, &nprefixes)[0], id);
+                  want_prefix ? want_prefix : prefix_list(is_map, &nprefixes)[0], id);
     snprintf(tmp, sizeof tmp, "%s.u2tmp", path);
 
     dst = fopen(tmp, "wb");
