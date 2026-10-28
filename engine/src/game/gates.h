@@ -27,8 +27,20 @@
 struct u2_overworld;
 
 /* Reload value for the countdown. asm/2744 does `mov $0x8,%al ; mov %al,0x6f`, and the
- * live run reloaded to exactly 8 on every rotation. */
+ * live run reloaded to exactly 8 on every rotation IN ERAS 1, 2 AND 3.
+ *
+ * Do not read this as "DS:6F is the gate timer". It is a general countdown the gate code
+ * borrows, and it runs whether or not the gate code does: in era 0 (sector 00) DS:6F fell
+ * from 0xfb to 0xe5 over 130 s while DS:6E never moved and the byte was never reloaded to
+ * 8, and a stop armed at 17D:2908 in that sector never fired. So the rotation is gated on
+ * something the countdown does not control, and era 0 is the counterexample that proves it.
+ * See docs/moongates.md § 2 and § 6. */
 #define U2_GATE_COUNTDOWN_RELOAD 8
+
+/* Observed at load, both bytes 0x00 (captures/spice86/moongate-cycle, first row after P).
+ * The engine's zero-initialised state matches, so there is nothing to seed here — which is
+ * worth recording because a countdown that reloads to 8 looks like it should start at 8. */
+#define U2_GATE_COUNTDOWN_AT_LOAD 0
 
 /* Gate indices are byte offsets 0, 2, 4, 6 into an 8-byte era row. */
 #define U2_GATE_SLOTS 4

@@ -63,6 +63,20 @@ coordinates* — and it is right in every particular except the unit: **it is ti
 countdown ran at a steady rate while the player stood completely still. Grade: observed, and the
 "8 turns" half of the memory is corrected by the frame where nothing moved and the door turned anyway.
 
+### The countdown is not the gate timer
+
+Added after the commit, from the same logs, because the wording above overstates what was measured.
+`DS:6F` is a **general countdown that the gate code borrows**, not a gate-owned timer:
+
+- at load, both `DS:6E` and `DS:6F` are `0x00` — not 8. The engine's zero-initialised state matches
+  the original, so there is nothing to seed.
+- in **era 0** (sector 00) `DS:6F` fell from `0xfb` to `0xe5` over 130 s while `DS:6E` never moved and
+  the byte was **never reloaded to 8**. A stop armed at `17D:2908` in that sector never fired.
+
+So the rotation is gated on something the countdown does not control, and era 0 is the counterexample
+that proves it. Whatever that gate is, it is still unfound — which is also why `asm/2708`–`2775` stays
+unnamed in § 6.
+
 ## 3. The gate table — decoded, 12/12
 
 The candidate coordinates come from a table in the code segment. **File offset `0x2998`**, which is
