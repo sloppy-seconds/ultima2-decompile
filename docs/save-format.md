@@ -268,34 +268,46 @@ harness rather than left as prose:
 engine-authored filler and proves sizes, offsets and tail preservation. What it cannot prove is
 that the real game accepts what we write, and that is the gap this harness closes.
 
-## 10. The player record is the only thing the game writes back (measured 2026-10-29)
+## 10. What the game writes back: the player record, and the outdoors sector (measured 2026-10-29)
 
-Everything above describes the one file the original persists. What it does **not** persist
-turned out to matter more than what it does, and it took an owner-driven live session over
-noVNC to measure rather than inference:
+**Corrected the same evening.** The first version of this section said the player record was
+the only thing the game ever writes. That was wrong, and it was wrong because the save that
+would have shown otherwise had silently refused. The full picture, measured with
+`captures/spice86/save-wilderness`:
 
-| file | after playing in it, vs pristine |
+| action | what lands on disk |
 | --- | --- |
-| `player` | **written** — the only one |
-| `mapx31` (town) | byte-identical |
-| `monx31` (town) | byte-identical |
-| `mapx30` (wilderness) | byte-identical |
-| `monx30` (wilderness) | byte-identical |
+| crossing a site edge (leave or enter a town) | **nothing** but nothing at all — `mapx`/`monx` byte-identical to pristine |
+| `Q` outdoors, gate satisfied | `player`, **and `mapxNN` and `monxNN` of the sector you are standing in** |
+| `Q` inside a town | refused: `ONLY OUTDOORS!`, nothing written |
+| `Q` outdoors with `DS:6D != 0` | refused: `ONLY ON EARTH!`, nothing written |
 
-Measured across several town entries and exits in one session, diffing the run dir against
-`references/ultima2/`. So the save format is not "small" so much as **exclusive**: the world
-has no persistence at all. Opened doors, damaged monsters, aggro, killed creatures — none of
-it survives leaving the sector, because none of it is ever written anywhere.
+So the save is real and it does persist the world — but only the **outdoor** sector, and only
+when its gate passes. The owner's reading of why, offered before the measurement and borne out
+by it: the overworld is the persistent world, and towns and dungeons are instances the game
+declines to save at all. That is a design, not an oversight, and it is why "towns reset when
+you enter them" is true even though the engine has a working sector store.
 
-The practical consequences, each of which cost someone a wrong assumption:
+What a wilderness save actually wrote, in sector 30, against the pristine file:
 
-* **Towns reset on entry, and so does everything else.** Owner's phrasing, and correct:
-  "towns reset every time you enter them". Recalling a door as "stays open" was right about
-  the visit and wrong about the reload — see `docs/needs-gameplay.md` G30.
-* **A test that walks a character into a sector by editing the save has no valid return
-  point.** `site_enter()` records `entry_x/entry_y` as the wilderness cell to go back to; a
-  save-seeded town position skips that bookkeeping, so leaving lands the player on whatever
-  the stale field said. This is what put the owner in the sea on the first attempt, and it is
-  a property of the tool, not a game bug.
-* **Nothing in the engine may write sector files.** `site_enter()`/`site_leave()` used to, on
-  a mis-attributed routine — see `asm/22FD_sub_22fd.asm` and `docs/phase4-state.md`.
+* **`mapx30`: 3 cells**, each a creature standing on that cell at the moment of the save —
+  `0x0C -> 0x30`, `0x0C -> 0xFC`, `0x08 -> 0x30`. The saved grid is the **stamped** grid, not
+  the authored terrain. This is the mechanism behind `docs/map-format.md` § 9's odd fact that
+  shipped `mapx` files contain creature art baked into the terrain: somebody saved a game with
+  monsters standing there.
+* **`monx30`: 15 bytes**, three creature slots (29, 30, 31) that were empty in the shipped
+  file and now carry x, y, hp, type and kind. Those are wandering spawns, persisted.
+
+### The `DS:6D` gate is measured and still unexplained
+
+`asm/3DFA_offer_only_outdoors_earth` tests `DS:6D` and prints `ONLY ON EARTH!` when it is
+non-zero. The maxed test character from `tools/u2_edit.py maxout` **holds boots**, `DS:6D`
+reads `0x01`, and every `Q` it makes is refused — which is how this was missed: a refusal that
+prints a plausible sentence looks exactly like a rule about the world rather than a rule about
+the inventory. Forcing `DS:6D = 0` with a poke made the same `Q` succeed immediately.
+
+`state.h` names `DS:6D` `boots_count` and already flags it as a **STALE COPY**, and an earlier
+session noticed the same contradiction. It is now measured behaviour with an unconfirmed name:
+whatever `DS:6D` is, non-zero blocks the save. Whether it is boots, a site-depth counter, or
+something else is an open question — see `docs/needs-gameplay.md`.
+

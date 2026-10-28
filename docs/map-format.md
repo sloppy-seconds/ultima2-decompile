@@ -306,30 +306,38 @@ So: no conclusion about sector 21, and the mechanism and the generality of `0x70
 Whatever method is used to reach a non-paving sector must first be proven to change the sector at
 all - the save's sector pair is not sufficient on its own.
 
-## 10. The sector grid is re-derived on entry; the game never writes it (2026-10-29)
+## 10. The grid is re-derived on entry; it is written back only by an outdoor save (2026-10-29)
 
-§ 9 established that `mapx` carries baked creature art. The follow-on question was whether
-the game ever writes the grid back after mutating it — paving an opened door, clearing baked
-art, stamping a creature. It does not.
+§ 9 established that `mapx` carries baked creature art. The follow-on question was whether the
+game ever writes the grid back after mutating it — paving an opened door, clearing baked art,
+stamping a creature. **It does, but only on a save, and only outdoors.** Corrected the same
+evening it was first written: an earlier draft of this section said the game never writes the
+grid, which was measured from transitions and from a `Q` that had silently been refused.
 
-Measured live in sector 31 over noVNC: doors were opened (each paving itself with the ground
-the player stood on, per `asm/435E_open_write_tile.asm`), the player walked through a town
-with 32 live creatures, and then left and re-entered. Afterwards `mapx31` in the run dir was
-**byte-identical to the pristine copy**, as was `mapx30`. The only file the session changed
-was `player`.
+The full shape, from `captures/spice86/save-wilderness` and the noVNC session:
 
-Two things this settles:
+| event | sector files on disk |
+| --- | --- |
+| leaving or entering a site | untouched — `mapx31`, `monx31`, `mapx30`, `monx30` byte-identical to pristine |
+| `Q` outdoors, `DS:6D == 0` | **written**: the stamped grid and the live creature table |
+| `Q` inside a town | refused, `ONLY OUTDOORS!` |
 
-* **Within a visit the grid is durable.** The opened doors survived the walk — roughly 38
-  cells were changed by creature movement and the two openings were not among the reverted
-  ones. So the original does not rebuild the grid from a pristine copy on every creature
-  turn.
-* **Across a visit nothing survives.** Re-entry re-reads the pristine file, so every terrain
-  edit is undone. An opened door is not restorable *by design*, not by an engine limitation.
+What an outdoor save wrote in sector 30 answers § 9 directly: three cells changed, each one a
+cell a creature was standing on, written as the creature's **type byte** (`0x0C -> 0x30`,
+`0x0C -> 0xFC`, `0x08 -> 0x30`). The saved grid is the stamped grid. So the baked creature art
+that § 9 found in the shipped files is not an authoring quirk — it is what a saved game looks
+like, and the shipped `mapx` files are somebody's save. That closes the question of why the
+files contain art the renderer draws as creatures.
 
-The engine's `map_base` is therefore an engine construct serving § 9's problem (telling baked
-art from terrain at load), and it must not be read as a model of the original's memory. Where
-the engine rebuilds `map` from `map_base` on a creature turn, it is **more** destructive than
-the game: an edit made through `u2_world_tile_put()` alone vanishes on the next creature move,
-where the original keeps it for the whole visit. `u2_world_terrain_put()` writes both arrays
-and is the correct call for any terrain edit that is meant to last the visit.
+Two things this settles for the engine:
+
+* **Within a visit the grid is durable.** Opened doors survived ~38 cells of creature churn.
+  The original does not rebuild the grid from a pristine copy on a creature turn, and the
+  engine must not either — which is why `u2_world_terrain_put()` is the correct call for a
+  terrain edit that should last the visit (`asm/435E` now uses it).
+* **Across a visit nothing survives unless you saved outdoors first.** Re-entering a town
+  re-reads the file, so an opening closes. A town can never be saved, so a town can never
+  persist — that is the design, and the refusal message is the evidence.
+
+The engine's `map_base` is an engine construct serving § 9's problem (telling baked art from
+terrain at load), and it must not be read as a model of the original's memory.

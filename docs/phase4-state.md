@@ -1532,11 +1532,20 @@ measured behaviour or the CP2 byte-comparison baseline would be measuring someth
 never did. `u2_ctx.keep_site_state` is documented as enhanced-only in `ctx.h`, next to the
 `auto_pass_polls` precedent.
 
-**What was deliberately not touched**: the save path (`Q`) still writes a dirty sector, and that
-is byte-supported — `asm/2305` names `MONXFF` as well as `MAPXFF`, and the comment there is
-correct. Tonight measured transitions, not saves. Nobody has yet pressed `Q` in a town with an
-opened door and diffed `mapx`, so whether a save persists terrain is still unmeasured. It is the
-remaining gap in this story and it wants a capture, not a guess.
+**What was deliberately not touched, and was right not to be**: the save path (`Q`) still writes
+a dirty sector, and that is byte-supported — `asm/2305` names `MONXFF` as well as `MAPXFF`.
+Measured later the same evening in `captures/spice86/save-wilderness`: an outdoor `Q` writes
+`player` **and** `mapx30` **and** `monx30`; a `Q` inside a town is refused with
+`ONLY OUTDOORS!`; a `Q` outdoors while `DS:6D != 0` is refused with `ONLY ON EARTH!`. The
+first version of tonight's finding — "the original writes nothing but the player record" — was
+wrong for exactly one reason: the `maxout` test character holds boots, `DS:6D` reads 1, and
+every save it attempted had been silently refusing. A refusal that prints a plausible sentence
+is the most expensive kind of no-op. Docs: `docs/save-format.md` § 10, `docs/map-format.md`
+§ 10, `asm/3DFA_offer_only_outdoors_earth.asm`.
+
+The transition rule is unchanged by all of this and CP5 V2 still holds it: crossing a site edge
+writes nothing. The world is not stateless — it is stateful outdoors and stateless indoors, and
+the refusal messages are the design saying so.
 
 **It had already damaged a game file.** `original/monx71` was found rewritten (mtime
 2026-10-23 15:57, same second as `monx70`, monster coords and HP drifted) — a run of an older

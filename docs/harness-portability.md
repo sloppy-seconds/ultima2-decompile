@@ -190,6 +190,17 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A refusal that prints a plausible sentence is the most expensive kind of
+  no-op, so confirm the action happened and not that the command was accepted.** A save command
+  that printed a confident message had been silently refusing for every test run, because the
+  test character happened to hold an item that tripped the gate. The resulting measurement —
+  "the program persists nothing but the player record" — was reproducible, byte-checked, and
+  wrong, and it took a poke at the gating byte to notice. Method: any harness that concludes
+  something is never written must first prove the write was ever attempted. Read a state change
+  the accepted action is certain to cause (a timestamp, a counter, the file's mtime, a byte the
+  save path is known to touch) before trusting an absence. An absence measured through a
+  refused operation is not a finding about storage at all.
+
 * **2026-10-29 — Prove a claimed disk write by diffing the data directory, never by trusting a
   routine's inferred role.** A reconstruction wrote the outgoing sector back to its data files
   on every level transition because a comment said the routine it cited "stores the sector
