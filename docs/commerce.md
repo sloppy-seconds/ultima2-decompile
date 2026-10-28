@@ -261,7 +261,13 @@ Fighter at (51,21)), arrows confirmed working, and `tools/bp_read.py` armed at `
 on its own registers — the band prints `CMD: TRANSACT-PASS` — but `T,Right` and `T,Up`
 queued together at `--delay 0.02` both fell through to `CMD: PASS`, and `17B7` never
 executed. The original quote came from a **human driving over VNC**; the documented headless
-recipe does not reproduce it. G23 now carries that as the blocker, plus a cheap bonus: every
+recipe does not reproduce it. **That blocker is retired 2026-10-29:** headless `T` does land, and the
+whole difference is the gap between the two keys — `--keys T,<dir> --delay 0.05` from a cell the foot
+ladder admits exactly one step from a merchant on a `0x68` marker prints `TRANSACT-<DIR>`; 0.12 s and
+up gives `TRANSACT-PASS`. Recipe and dead ends in `docs/spice86-capture.md`, evidence in
+`captures/spice86/spell-slot-map`. What is still not reproduced is reaching a **spell** shoppe: the
+village merchants beside the `WIZARDRY` sign serve `tlkx` dialogue instead of a menu.
+G23 now carries that as the blocker, plus a cheap bonus: every
 maxout character has `DS:4E == DS:4F`, which is exactly why `tools/u2_edit.py` still marked
 the cha/wis labels DISPUTED, and one quote with the two bytes set **unequal** would settle
 that field dispute as a side effect. **It did, on 2026-10-29 — see "Charisma affects costs"

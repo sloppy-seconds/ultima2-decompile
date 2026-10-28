@@ -442,6 +442,24 @@ curl -s "http://127.0.0.1:20180/api/memory/$((0x08BE * 16))/range/512" \
 open('u2-snap-%d.bin'%datetime.datetime.now().timestamp(),'wb').write(bytes(d['values']))"
 ```
 
+### Headless `T` works — the gap between the two keys is the whole problem
+
+The standing note in `docs/commerce.md` § 5b and G23 was that a vendor transaction could not be
+driven headlessly: `T` registered but the direction fell through and the band printed
+`CMD: TRANSACT-PASS`. **It is reproducible.** Stand on a cell that the **foot ladder over the raw
+`mapxNN`** admits, exactly **one** cell from a merchant standing on a `0x68` marker, then send `T`
+and the direction with a **~50 ms** gap: `tools/spice86_type.py --keys T,Down --delay 0.05`. At
+0.12 s, 0.2 s and 0.3 s the direction is drained before `cmd_T` reads it and you get
+`TRANSACT-PASS`; at 0.05 s it lands and the band reads `TRANSACT-NORTH` / `TRANSACT-SOUTH`. Same
+timing window `tools/spice86_keys.py` documents for the windowed path, never pinned down for the MCP
+path until 2026-10-29 (`captures/spice86/spell-slot-map`).
+
+Two dead ends, so nobody retries them. Holding `DS:23/24` and `DS:19/1A` at the values the ray model
+wants does nothing, because `cmd_T` **recomputes** the cursor from the player position and the
+direction key (its own header at `asm/4050` says so). And the stamped grid at `DS:1800` is a bad
+pathability predicate — `0x08` accepts in some cells and refuses in others — so path over `mapxNN`
+with `foot_ladder`, not over the stamp.
+
 ## Useful offsets, once you have a dump
 
 The player record starts at `DS:0x36`, so a save-file offset `i` corresponds to `DS:0x36 + i`.
