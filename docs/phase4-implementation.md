@@ -1238,6 +1238,16 @@ no longer a guess.
 1. **Does `--data-dir` get written to?** — **answered by the owner 2026-10-27:**
    **(a) faithful in `original` mode**, the engine writes back into the player's own
    sector files, and **(b) copy-on-write is the candidate for `enhanced` mode**.
+   **REVERSED BY EVIDENCE 2026-10-29 — read this before acting on (a) or (b).** The
+   ruling rested on the premise that the original persists sector state, and it does
+   not: measured across several town entries and exits, `mapx31`, `monx31`, `mapx30`
+   and `monx30` came back byte-identical to pristine and only `player` was written
+   (`docs/save-format.md` § 10). So `original` mode writes sector files on **save
+   only** (`asm/2305`, which names `MONXFF` as well as `MAPXFF`) and never on a
+   transition; the enhanced-mode option that survives is `--keep-site-state`, opt-in,
+   refused in original mode. The consequences below were written against the old
+   premise and are kept for the reasoning that still holds — atomicity and the
+   not-ready handling apply to the save path, which does write.
    Consequences, so nobody rediscovers them later:
    * `--data-dir` must be **writable** in `original` mode, so it needs the same
      not-ready handling the save path already has (`U2_SAVE_NOT_READY`): if the

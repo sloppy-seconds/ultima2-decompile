@@ -1495,7 +1495,7 @@ overwritten, and `references/ultima2/` is the pristine copy to restore from.
   letter with execution evidence, so its `NULL` slot is a real gap; it is outside the vehicle
   handoff's letter list and needs its own ticket.
 
-## The engine writes sector files the original never writes — OPEN DEFECT (2026-10-29)
+## The engine writes sector files the original never writes — FIXED (2026-10-29)
 
 `site_enter()` and `site_leave()` in `engine/src/game/overworld.c` write the outgoing sector
 back to disk — `u2_monsters_store()` unconditionally, and `u2_world_store()` for anything
@@ -1517,13 +1517,28 @@ the same direction — the engine remembers a world the original forgets:
 | wound a guard, leave, re-enter | guard at authored HP, back at his cell | HP and positions persisted, so he stays wounded and displaced |
 | kill everything in a town, re-enter | town repopulates from `monxNN` | town stays cleared |
 
-**The fix is a deletion, not an addition**: drop the store calls from `site_enter()` and
-`site_leave()`, and let `site_reload()` be the only thing that touches sector files on a
-transition. It needs a gate that fails first — the control is a wound-and-re-enter case, seed
-a creature, damage it, cross the site edge, and assert the live `mon_hp` equals the authored
-byte again. Against the current engine that assertion goes red, which is the point.
+**The fix was a deletion, and the control went red first.** The two `u2_world_store()` calls
+are now gated on `ctx->keep_site_state`; `u2_monsters_store()` stays, because it is an
+in-memory DS→world sync and not a file write, and the save path needs it. Gate:
+`engine/tests/site_state.py`, wired as **CP5 V2**. It seeds a village sector (ones digit 1),
+dirties the map with BOARD, steps off the north edge, and asserts the sector files on disk are
+untouched; the second case asserts `--enhanced --keep-site-state` *does* write them. Run
+against the unfixed engine the first case failed exactly as predicted — `mapx01 on disk
+untouched ... saw 0x8` — which is the proof that the gate can fail where it enforces.
 
-**It has already damaged a game file.** `original/monx71` was found rewritten (mtime
+**The owner's option.** `--keep-site-state` keeps town state across a transition, as asked for
+on 2026-10-29, and it is **refused in original mode** with exit 2: the default has to stay the
+measured behaviour or the CP2 byte-comparison baseline would be measuring something the game
+never did. `u2_ctx.keep_site_state` is documented as enhanced-only in `ctx.h`, next to the
+`auto_pass_polls` precedent.
+
+**What was deliberately not touched**: the save path (`Q`) still writes a dirty sector, and that
+is byte-supported — `asm/2305` names `MONXFF` as well as `MAPXFF`, and the comment there is
+correct. Tonight measured transitions, not saves. Nobody has yet pressed `Q` in a town with an
+opened door and diffed `mapx`, so whether a save persists terrain is still unmeasured. It is the
+remaining gap in this story and it wants a capture, not a guess.
+
+**It had already damaged a game file.** `original/monx71` was found rewritten (mtime
 2026-10-23 15:57, same second as `monx70`, monster coords and HP drifted) — a run of an older
 engine build using `original/` as its data dir. Restored from `references/ultima2/` on
 2026-10-29 with the owner's approval; the damaged copy is preserved at
@@ -1539,6 +1554,7 @@ the conclusion: the original keeps an opening for the whole visit (~38 cells chu
 creature movement, both openings intact) and then drops it on reload. The engine's
 `map_base` rebuild on a creature turn is therefore **more** destructive than the game, and
 `terrain_put()` is the right call for the paving — but as a fix for an engine-invented
-problem, not a reconstruction of original behaviour. Worth doing in the same commit as the
-deletion above, because once nothing is persisted the two are the same question: what does the
-grid look like after a creature turn.
+problem, not a reconstruction of original behaviour. Still open: `cmd_U`'s paving uses
+`tile_put`, so an opened door in the engine vanishes on the next creature move. It is now a
+one-line change with its own case in `site_state.py`, and it no longer interacts with
+persistence, because nothing persists.
