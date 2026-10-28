@@ -15,6 +15,7 @@
 #include "game/ai.h"           /* u2_ai_creature_turn: the monsters' turn */
 #include "game/combat.h"      /* u2_combat_attack, u2_attack */
 #include "game/monsters.h"    /* u2_monsters_at: who is standing there */
+#include "game/gates.h"       /* u2_gate_transit, u2_gate_turn: the time doors */
 #include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
 #include "core/font.h"
@@ -1717,7 +1718,22 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         if (u2_world_tile_at(&ow->world, ow->x, ow->y) == 0x5C)
             u2_force_field(ctx);
 
+        /* A time door fires on the step onto its cell — no prompt, no key, unlike a town
+         * or tower gate, which is why this sits in the move path and not in cmd_E. Observed
+         * 2026-10-29: the cell is consumed within one tick of the step and the player is
+         * elsewhere about a second later (docs/moongates.md § 1). It runs after the force
+         * field because both are "something happened on the cell you arrived on", and the
+         * ordering between them has never been observed; if a gate and a field ever share a
+         * cell, this line is the guess to revisit. */
+        if (u2_gate_transit(ctx, ow))
+            u2_overworld_draw(ctx, ow);
+
         creature_turn(ctx, ow);
+
+        /* One world turn of the door rotation. The original's countdown is wall-clock and
+         * this is turn-based; see gates.h for why that substitution is stated rather than
+         * hidden. */
+        u2_gate_turn(ctx);
     }
     ctx->frame = NULL;
     return 0;

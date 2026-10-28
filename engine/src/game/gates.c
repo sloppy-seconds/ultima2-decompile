@@ -1,0 +1,110 @@
+/*
+ * Time doors (moongates) — see gates.h for the scope ruling and docs/moongates.md
+ * for the evidence behind every number in this file.
+ *
+ * Byte provenance for the table: original/ultimaii.exe file offset 0x2998, which is the
+ * runtime displacement %cs:0x2798 read by asm/2708 plus the 0x200 file/runtime offset.
+ * Row = era * 8, slot = 2 bytes. Verified 12/12 against gate cells watched live in
+ * eras 1, 2 and 3 (captures/spice86/moongate-cycle).
+ */
+
+#include "game/gates.h"
+
+#include <stddef.h>
+
+#include "core/state.h"
+#include "core/world.h"
+#include "game/overworld.h"
+
+struct gate_cell { uint8_t x, y; };
+
+/* Four doors per era, five eras. The era digit is DS:49 / sector_first, which is the
+ * sector's TENS digit and, on Earth, the time period — settled 2026-10-29 by transiting
+ * and reading DS:49 on both sides (02 -> 03 -> 02) while DS:6D, the world byte, did not
+ * move. See docs/moongates.md § 4 and docs/needs-gameplay.md G45. */
+static const struct gate_cell k_gates[5][U2_GATE_SLOTS] = {
+    { { 29, 56 }, { 31, 56 }, { 33, 56 }, { 35, 56 } },   /* era 0 */
+    { { 34,  8 }, { 47, 28 }, { 36, 56 }, { 20, 37 } },   /* era 1 */
+    { { 16, 16 }, { 48, 24 }, { 42, 24 }, { 19, 52 } },   /* era 2 */
+    { { 56, 52 }, { 28, 12 }, { 33, 23 }, { 20, 52 } },   /* era 3 */
+    { { 18, 23 }, { 50, 34 }, { 52, 24 }, {  8, 11 } },   /* era 4 */
+};
+
+/* Observed pairings only. Absence here means "never seen", not "does not exist": in the
+ * original all four doors stamp and rotate in every era, and the two unlisted slots do
+ * transit somewhere. They are left unimplemented rather than guessed at. */
+static const struct { uint8_t era, slot, partner; } k_pairs[] = {
+    { 1, 1, 2 },
+    { 2, 1, 1 },
+    { 2, 2, 3 },
+    { 3, 2, 2 },
+};
+
+int u2_gate_cell(int era, int slot, int *x, int *y)
+{
+    if (era < 0 || era >= 5 || slot < 0 || slot >= U2_GATE_SLOTS)
+        return 0;
+    if (x) *x = k_gates[era][slot].x;
+    if (y) *y = k_gates[era][slot].y;
+    return 1;
+}
+
+int u2_gate_partner_era(int era, int slot)
+{
+    for (size_t i = 0; i < sizeof k_pairs / sizeof k_pairs[0]; ++i)
+        if (k_pairs[i].era == era && k_pairs[i].slot == slot)
+            return k_pairs[i].partner;
+    return -1;
+}
+
+int u2_gate_slot(uint8_t gate_index)
+{
+    return (gate_index & 0x7) / 2;
+}
+
+void u2_gate_turn(u2_ctx *ctx)
+{
+    /* Observed sequence is 8,7,6,...,2,1 and then the next tick reloads to 8 with the
+     * index advanced — the reload happens ON the 1, not on a tick at zero. */
+    if (ctx->state.gate_countdown <= 1) {
+        ctx->state.gate_countdown = U2_GATE_COUNTDOWN_RELOAD;
+        ctx->state.gate_index = (uint8_t)((ctx->state.gate_index + 2) & 0x7);
+        return;
+    }
+    ctx->state.gate_countdown--;
+}
+
+int u2_gate_transit(u2_ctx *ctx, struct u2_overworld *ow)
+{
+    const int era = ctx->state.sector_first;
+    const int slot = u2_gate_slot(ctx->state.gate_index);
+    int gx = 0, gy = 0;
+    if (!u2_gate_cell(era, slot, &gx, &gy))
+        return 0;
+    if (ow->x != gx || ow->y != gy)
+        return 0;
+
+    const int partner = u2_gate_partner_era(era, slot);
+    if (partner < 0)
+        return 0;                       /* unobserved pairing: no door offered */
+    int px = 0, py = 0;
+    if (!u2_gate_cell(partner, slot, &px, &py))
+        return 0;
+
+    /* The era digit moves and the world byte does not — that is the whole content of
+     * G45, and getting it the other way round would put the player on another planet. */
+    ctx->state.sector_first = (uint8_t)partner;
+    ow->sector_hi = partner;
+
+    const u2_sector_id id = { (uint8_t)partner, (uint8_t)ow->sector_lo };
+    (void)u2_world_load(ctx, &ow->world, 1, id);
+
+    ow->x = px;
+    ow->y = py;
+
+    /* Observed on arrival: the countdown is reloaded and the index has already advanced,
+     * so the door you came through is not the one now standing open. */
+    ctx->state.gate_countdown = U2_GATE_COUNTDOWN_RELOAD;
+    ctx->state.gate_index = (uint8_t)((ctx->state.gate_index + 2) & 0x7);
+    return 1;
+}

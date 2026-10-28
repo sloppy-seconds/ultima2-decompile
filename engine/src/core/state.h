@@ -275,7 +275,20 @@ typedef struct u2_state {
                                         * explanation of the 'STALE COPY' note that used to
                                         * sit here: the byte never was boots, so of course a
                                         * thief stealing boots left it alone. */
-    /* 0x6E */ uint8_t reserved_6E[6];
+    /* 0x6E */ uint8_t gate_index;     /* TIME-DOOR rotation index. Steps by 2 and is masked
+                                       * to 3 bits (asm/2744: `incb 0x6e` twice then
+                                       * `and $0x7,%al`), so it cycles 00,02,04,06 and the
+                                       * active slot is index/2. Observed live 2026-10-29:
+                                       * frozen while the countdown runs, advancing by 2 when
+                                       * it expires. docs/moongates.md § 2. */
+    /* 0x6F */ uint8_t gate_countdown; /* TIME-DOOR countdown, reloaded to exactly 8 on each
+                                       * rotation (asm/2744 `mov $0x8,%al ; mov %al,0x6f`).
+                                       * Measured falling about every 4.2 s with the player
+                                       * standing still, so the original's unit is TIME and
+                                       * the recalled "every 8 steps" is wrong in the unit.
+                                       * Both bytes are inside the saved record, so the
+                                       * rotation state persists across a save. */
+    /* 0x70 */ uint8_t reserved_70[4];  /* 0x70..0x73 */
     /* 0x74 */ uint16_t speed;        /* THE GAME SPEED. Two writers, one consumer.
                                         * Seeded at startup by asm/06AC_clock_tick_wait,
                                         * which counts how many 100-iteration busy passes

@@ -152,10 +152,29 @@ files are not renamed and no name is asserted; see their headers for the proposa
 rotate — sector 20, era 2, is now a known-good place — and confirm it is hit at the rotation, with
 `DS:6E` and the table index visible at the stop. Until then § 6 is the honest ceiling.
 
-## 7. What the engine owes
+## 7. Engine status — implemented for the observed subset
 
-Nothing here is implemented. `cmd_C`-style gating does not apply; this is overworld movement, so the
-work lands in `engine/src/game/overworld.c` and the sector-change path, and it needs: a runtime stamp
-of `0xC0` at the indexed table cell, a countdown and index pair, the reciprocal destination map, and
-the era change on `DS:49`. None of it is modelled today. It is also, unlike most of what is parked,
-entirely overworld work.
+`engine/src/game/gates.{c,h}` now carries the mechanic, wired into the walk loop after a step is
+accepted, and `engine/tests/gate_check.c` is the spec (45 checks, run from CP4).
+
+Modelled: the table for all five eras, the countdown and index rotation, the transit on the step onto
+the active cell, and the era change on the sector's tens digit with the world byte left alone.
+
+**Deliberately not modelled, each for a stated reason:**
+
+* **Slots 0 and 3.** Never transited, so `u2_gate_partner_era()` returns unknown and no door is offered
+  there. The spec asserts that unknown-ness on every era, so filling those slots with a guess goes red
+  rather than shipping a door that opens onto an invention.
+* **The `0xC0` stamp into the resident sector.** Two independent reasons: the substitute art for that
+  byte is under cleanroom control, and writing the resident grid marks the sector dirty while whether
+  the original persists a stamped gate into `mapxNN` on a save is untested. The gate is therefore
+  state and transit, not pixels, until someone measures the save question.
+* **The countdown unit.** The original's is wall-clock (~4.2 s per unit, measured with the player
+  standing still). The engine is turn-driven, so `u2_gate_turn()` counts turns. That substitution is
+  inferred from the idle auto-PASS advancing turns and is **not proven** — anyone wiring this to a
+  real-time backend should revisit it before trusting the pacing.
+
+Still open for a future session, in the order that would unblock the most: transit era-2 slot 0
+`(16,16)` and slot 3 `(19,52)` to complete the partner map; measure whether a stamped gate survives
+a save; find the countdown's real timebase; and arm `bp_read --ip 2908` in a sector where a gate is
+rotating, which is the one thing that would let `asm/2708`–`2775` finally be named.
