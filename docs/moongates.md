@@ -250,15 +250,21 @@ What the cleanroom path lacks is not a tile but a passing one: `tools/tile_rules
 and `0x30` is in `PENDING_REDRAW` — PROVENANCE records it as "`30` moongate (no top rule)". So the
 substitute door renders and is reported as debt on every `make test`, which is the arrangement working
 as designed. **This raises its priority** — it went from a map tile nobody had yet reached to the only
-depiction of a feature the engine now has — but the redraw cannot be done by whoever read the live
-screenshots, and this session read several. It needs a fresh implementer working from the spec alone,
-per `docs/cleanroom-procedure.md`.
-* **The countdown unit.** The original's is wall-clock (~4.2 s per unit, measured with the player
-  standing still). The engine is turn-driven, so `u2_gate_turn()` counts turns. That substitution is
-  inferred from the idle auto-PASS advancing turns and is **not proven** — anyone wiring this to a
-  real-time backend should revisit it before trusting the pacing.
+depiction of a feature the engine now has.
+
+**Owner ruling, 2026-10-29: that is accepted, and further cleanroom redraw work is deferred until
+after enhanced mode.** "As long as we have one" is the standard for now — a rendering substitute beats
+no substitute, and the 47-tile `PENDING_REDRAW` list is a post-enhanced-mode queue, not a blocker. So
+`0x30` staying in debt is the intended state and should not be re-prioritised on the strength of the
+gate work. When the redraw does happen it still cannot be done by whoever read the live screenshots,
+and several sessions now have; it needs a fresh implementer working from the spec alone, per
+`docs/cleanroom-procedure.md`.
+* **The countdown unit is settled: turns, not seconds.** Measured at 1.00 drops per landed turn
+  (§ 2), so the engine's turn-driven `u2_gate_turn()` matches the original rather than substituting
+  for it. The earlier note here claiming a wall-clock unit and an unproven mapping was wrong.
 
 Still open for a future session, in the order that would unblock the most: transit era-2 slot 0
 `(16,16)` and slot 3 `(19,52)` to complete the partner map; measure whether a stamped gate survives
-a save; find the countdown's real timebase; and arm `bp_read --ip 2908` in a sector where a gate is
-rotating, which is the one thing that would let `asm/2708`–`2775` finally be named.
+a save; and find the routine that actually rotates the doors — `asm/2708`–`2775` was refuted as the
+candidate by a stop that never fired across two demonstrated rotations, so the implementing code is
+still undiscovered and those four files stay unnamed.
