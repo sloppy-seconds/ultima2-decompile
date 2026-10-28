@@ -1585,6 +1585,33 @@ overwritten, and `references/ultima2/` is the pristine copy to restore from.
   letter with execution evidence, so its `NULL` slot is a real gap; it is outside the vehicle
   handoff's letter list and needs its own ticket.
 
+## Buying a horse changes the mode without BOARD — and it exposed an engine defect (2026-10-29)
+
+Owner-played evidence, `captures/spice86/shop-window-transport`. A Wizard bought a horse from the
+TRANSPORT shoppe and the state moved like this: `DS:13` 0x7A → **0x22 (HORSE)**, gold 9999 → 9967,
+and **nothing else** — all 16 item slots unchanged, all nine spell counts unchanged, and the tile
+under the player still `0x70` town floor.
+
+So a purchased horse is neither an inventory item nor a map tile. **The transport shoppe is the one
+route found where the travel mode changes without `cmd_B`.** BOARD consumes a tile and derives the
+mode from the tile under the player; the shoppe skips the tile entirely and writes the mode. The
+vehicle work modelled only BOARD, so this is a missing branch, not a detail.
+
+**OPEN DEFECT, found by the same reading.** `overworld.c` sets `ctx->state.player_stamp = 0x78`
+unconditionally at world open. But `asm/080D` and `asm/44D4` both compute the on-foot stamp as
+`0x78 + 2*pclass`, and G41 is now closed with a live sample: a class-2 Wizard read `DS:13 = 0x7A`
+on foot. **Three of four classes are stamped wrong the moment the engine enters the world** — cleric
+`0x7A`, wizard `0x7C`, thief `0x7E`. It went unnoticed because every capture and every seeded test
+character so far was a Fighter, which is the artifact G41 suspected. Not fixed here: it touches the
+CP2 byte-comparison baseline path and wants its own gate with a non-Fighter fixture, so it is
+recorded rather than patched mid-stream.
+
+Two prices came out of the same session and they split a decode in half — see
+`asm/20AB_bcd_price_from_stats.asm`: the horse at 32 gp is exactly what that routine produces, and
+the axe at 25 gp cannot be produced by it at all, so the weapons shoppe has a separate price path.
+
+---
+
 ## The engine writes sector files the original never writes — FIXED (2026-10-29)
 
 `site_enter()` and `site_leave()` in `engine/src/game/overworld.c` write the outgoing sector

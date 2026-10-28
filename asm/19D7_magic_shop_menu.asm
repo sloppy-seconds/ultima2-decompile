@@ -7,6 +7,27 @@
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+# SCOPE WIDER THAN THE NAME, and now observed. This span (19D7..2027) carries several shoppe
+#           menus, not only the magic one: the TRANSPORT and WEAPONS text sits in this same file.
+#           Live 2026-10-29 (captures/spice86/shop-window-transport, owner-played, wizard BUYTEST):
+#           * **Buying a horse sets the travel mode directly.** DS:13 went 0x7A (on foot, class 2)
+#             to 0x22 (HORSE) as part of the purchase, with no tile stamped under the player (the
+#             cell stayed 0x70 town floor) and no inventory write at all — all 16 item slots and all
+#             nine spell counts were unchanged. This is the only route found so far where the mode
+#             changes WITHOUT cmd_B: BOARD consumes a tile and derives the mode from the tile under
+#             the player, and the transport shoppe skips the tile entirely. Any vehicle state
+#             machine modelled only on BOARD will miss this branch.
+#           * **The purchase happens across the shop's sign band.** Player (48,53), vendor on the
+#             0x68 marker at (48,51), the "TRANSPORT" lettering at y=52 between them. See the
+#             correction in asm/4050_cmd_T.asm.
+#           * **Prices here are not one mechanism.** Horse 32 gp matches the reachable output of
+#             asm/20AB_bcd_price_from_stats at caller_AL=4; axe 25 gp cannot be produced by that
+#             routine at any index or stat pair. So the weapon branch of this file has a separate
+#             price path, probably a table, and it has not been read.
+#           Confidence on the file as a whole stays low — none of this was executed in a harvested
+#           capture; it is live-play observation with frames, and the entry line above ("never
+#           appears in ExecutedInstructions") predates the corpus growth and refers to the harvest
+#           set, not to today.
 magic_shop_menu:
 L_001bd7:
         .byte 0x90  # forced-kept: gas re-encodes 'nop' differently

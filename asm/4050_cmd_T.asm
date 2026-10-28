@@ -1,4 +1,16 @@
-# cmd_T — TRANSACT: aim a ray one cell from the player and see whether it will deal
+# cmd_T — TRANSACT: aim a ray from the player at a vendor and see whether it will deal
+#           RAY EXTENT CORRECTED 2026-10-29: this line said "one cell from the player" and that
+#           is wrong. A live purchase in captures/spice86/shop-window-transport had the player at
+#           (48,53) and the vendor standing on the 0x68 marker at (48,51), with the shop's sign
+#           row (the "TRANSPORT" lettering, y=52) between them. The deal completed. So the ray
+#           crosses the sign band and reaches at least two cells; how far it actually goes, and
+#           whether the sign row is transparent to it by design or simply not a stop condition,
+#           is NOT established. Do not write cmd_T to a one-cell test.
+#           This also retires a wrong blocker note. On 2026-10-29 an earlier pass concluded that no
+#           0x68 marker had a walkable cell adjacent to it, from a scan that compared raw mapx tile
+#           bytes against the stamped grid at DS:1800 as if they were one representation (they are
+#           not: the same ground is 0x0c in mapx21 and 0x70 in the grid). The geometry was never
+#           the obstacle; adjacency was the wrong expectation.
 # name-evidence: prints 'TRANSACT-' then the direction; calls the cursor initialiser at
 #           runtime 23E6; rejects via the shared printer asm/40A6 ('FUNNY, NO RESPONSE!');
 #           on success tail-jumps to runtime 1590, the vendor dispatcher. Corroboration:

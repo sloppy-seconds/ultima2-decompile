@@ -8,7 +8,9 @@
 #           1869_cleric_shrine, 19D7_magic_shop_menu. All three are places a price is
 #           quoted.
 # func 20AB..2121  len 0077 B  evidence: seed+call+reko
-# provenance: static, 2026-10-23. NOT validated against a live price -- see DOUBT.
+# provenance: static, 2026-10-23. First live prices observed 2026-10-29 (see LIVE PRICES below)
+#           -- a horse at 32 gp reproduces exactly; an axe at 25 gp cannot be produced here at
+#           all, which is new information about what this routine does NOT price.
 # confidence: high on the instruction-level mechanics (bytes + a step-by-step
 #           simulation); LOW on whether this is what produced the observed 0200.
 #
@@ -45,6 +47,42 @@
 #   number.** The owner confirms on 2026-10-23 that charisma affecting costs is known
 #   game behaviour, which is the strongest support this reading has; it is corroboration
 #   of direction, not proof of the arithmetic.
+#
+# LIVE PRICES, 2026-10-29 — the first numbers the game actually charged, and they split the
+#           routine's remit in two. Owner-played, character BUYTEST (class 2 WIZARD, DS:50=0x40,
+#           DS:4E=0x40), gold read from DS:58/59 before and after each purchase, frames in
+#           captures/spice86/shop-window-transport/:
+#             TRANSPORT shoppe, horse:  9999 -> 9967  = **32 gp**
+#             WEAPONS shoppe, axe:      9967 -> 9942  = **25 gp**
+#           The loop's reachable values, re-simulated from the bytes with DAA's CF taken only from
+#           the >0x99 adjustment (an earlier attempt let the auxiliary nibble fixup feed the second
+#           adc and produced 4, 8, 112, 220 -- plausible-looking and wrong from the third term).
+#           The corrected model reproduces this file's own hand-computed anchor, AL=3 on a maxed
+#           character -> DI=3 -> 0020, which is the control that makes the rest of this credible:
+#             DI:      0   1   2   3   4   5   6    7    8    9    10   11
+#             value:   4   8  12  20  32  52  84  136  220  356  576  932
+#           On int=cha=0x40 the bit length is 8, so DI = caller_AL + 8 - 8 = caller_AL.
+#           **32 is in the sequence, at AL=4.** The horse price is exactly what this routine
+#           produces, which is the first time this file has reproduced a number the game charged.
+#           **25 is not in the sequence at any AL and at no stat pair tested** (swept AL 0..59 at
+#           maxed stats, and AL 0..19 across stat pairs 0x10/0x20/0x40/0x60/0x99 on both bytes).
+#           So the weapons shoppe is NOT priced by this routine. That is a real narrowing: the
+#           three known callers (17B2 tavern, 1869 cleric shrine, 19D7 magic shoppe) are not
+#           "all shops", and asm/19D7 in particular carries the transport AND weapons menus in one
+#           file, so the two prices observed today come from the same file and only one of them
+#           routes through here. Whoever reads 19D7's weapon branch should expect a separate price
+#           path, probably a table.
+#           Two things this does NOT settle. The DS:4E charisma-vs-wisdom dispute is untouched --
+#           both bytes are 0x40 on every maxout character including this one, so the datapoint
+#           cannot discriminate, though equally it is not invalidated by the ambiguity. And the
+#           tavern's observed '0200' is still unreproduced and still not in the sequence; G23
+#           carries it. The DOUBT below stands in full except that "do not describe this routine as
+#           the price formula until it reproduces a number the game actually printed" is now
+#           satisfied for one number out of two.
+#           Third-party cross-check, same day: the wiki's 52 gp grocery maximum and the claimed
+#           576 gp for a batch of KILL are BOTH in the sequence (DI=5 and DI=10). Two independent
+#           third-party numbers landing on a sequence derived from bytes neither source saw is the
+#           strongest support this decode has. Still corroboration, not proof.
 #
 # DOUBT -- read this before citing the routine, and note two retractions inside it
 #   * THIRD-PARTY CORROBORATION, 2026-10-28e, and it is the strongest support this file has.
