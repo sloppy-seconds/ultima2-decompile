@@ -1592,5 +1592,14 @@ pair followed the live position. Two lessons the controls taught the hard way:
   in. Both were fixture problems, and the guard was right in each case.
 
 Still open: the engine has no writer for `DS:6D`, so the Earth gate only fires from a save
-record that carries the byte — which is exactly the case the original refuses, but it means
-picking up the item that sets it is not yet modelled. That is G44.
+record that carries a non-zero world — which is exactly the case the original refuses, but
+space travel itself is CP7 work.
+
+`DS:6D` is no longer a mystery, and the answer was embarrassing: **it is the world byte** (Earth
+0, planets 1..9, deep space 0x0A), written by `asm/7030_space_collision` and copied into the
+sector tens digit. The reason it looked like a boots counter for two years is that
+`tools/u2_edit.py` had a `boots` field at that address and `maxout` wrote 1 into it — every
+maxed test character was silently standing on planet 1 and could not save, and `state.h` named
+the byte after our own tool's write. G44 opened and closed the same day; the field is now
+`world`, the bogus `boots` field is gone, and `maxout` leaves the character on Earth. See
+`docs/save-format.md` § 10.

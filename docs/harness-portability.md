@@ -190,6 +190,18 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A reverse-engineered field can be named after what your own editor writes into
+  it, and the contamination is invisible from inside the layout.** A save byte was called
+  `boots_count` for two years, with a note recording that it failed to behave like boots. The
+  truth was that the project's own save editor had defined a boots field at that offset and its
+  "max out" command wrote 1 there, so every test character was silently placed somewhere else
+  and a gate that read the byte refused them — and the layout document had then named the byte
+  after the tool's write, not after the program's use. Method: a field name must be justified
+  by a **reader** in the target program, never by a writer in the harness. Audit every named
+  field against the sites that consume it, and treat any note that says a field "does not behave
+  as named" as evidence about the name rather than about the program — the cheapest check is
+  whether the shipped data carries the value the name predicts at all.
+
 * **2026-10-29 — A refusal that prints a plausible sentence is the most expensive kind of
   no-op, so confirm the action happened and not that the command was accepted.** A save command
   that printed a confident message had been silently refusing for every test run, because the

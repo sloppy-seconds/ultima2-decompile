@@ -318,16 +318,27 @@ Two things that fell out of implementing it:
   it hand-rolled a world without the on-foot stamp, which is a state the game cannot be in.
 
 
-### The `DS:6D` gate is measured and still unexplained
+### `DS:6D` is the world byte, and our own tool named it wrong
 
-`asm/3DFA_offer_only_outdoors_earth` tests `DS:6D` and prints `ONLY ON EARTH!` when it is
-non-zero. The maxed test character from `tools/u2_edit.py maxout` **holds boots**, `DS:6D`
-reads `0x01`, and every `Q` it makes is refused — which is how this was missed: a refusal that
-prints a plausible sentence looks exactly like a rule about the world rather than a rule about
-the inventory. Forcing `DS:6D = 0` with a poke made the same `Q` succeed immediately.
+`DS:6D` is **which world the player is on**: 0 = Earth, 1..9 = the planets, 0x0A = deep space.
+`asm/3DFA`'s `ONLY ON EARTH!` is a literal description of the save test, not a metaphor.
 
-`state.h` names `DS:6D` `boots_count` and already flags it as a **STALE COPY**, and an earlier
-session noticed the same contradiction. It is now measured behaviour with an unconfirmed name:
-whatever `DS:6D` is, non-zero blocks the save. Whether it is boots, a site-depth counter, or
-something else is an open question — see `docs/needs-gameplay.md`.
+The byte was called `boots_count` for two years because of a bug in our own tooling.
+`tools/u2_edit.py` defined a `boots` field at `DS:6D` and `maxout` wrote `1` into it, so every
+maxed test character was silently standing on planet 1 — and `state.h` then named the field
+after the write our editor was making. Boots are `items_held[BOOTS]` at `DS:D9`, which is what
+the paralysis resist actually reads. That also retires the `STALE COPY` note that used to sit
+against the field: a byte that never was boots did not change when a thief took the boots,
+which was never a paradox about the game at all.
+
+The evidence is in `asm/7030_space_collision`, the only writer of the byte in the tree: it
+stores `0x0A` beside `YOU ARE IN DEEP SPACE.`, stores a world index beside `YOU ARE ORBITING `,
+dispatches on `cmp $0x0`/`$0x1`/`$0x2`…, and answers `cmp $0xa` in the landing path with
+`REQUEST DENIED!`. Then `mov 0x6d,%al ; mov %al,0x49` copies it into the sector **tens** digit,
+so the world and the high digit of the sector number are the same value. The shipped `player`
+record carries `0x00` there — Earth, and therefore savable.
+
+Practical consequence, now fixed: `maxout` no longer writes `DS:6D`, so a maxed character can
+save again. Any test character built by an older `maxout` and left on disk is sitting on planet
+1 and will refuse `Q` until the byte is cleared with `u2_edit.py set <file> world 0`.
 
