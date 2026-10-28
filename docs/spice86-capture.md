@@ -419,6 +419,20 @@ diff. The bytes that changed are the state that action touched.
 from `references/ultima2/ultimaii.exe` directly. Scanning for printable ASCII runs of five or
 more bytes recovers the whole text table.
 
+**3. Hold a value against the game's own tick, in-process.** The site tick rewrites
+`mon_x`/`mon_y` continuously, so "poke, then press the key" loses: three scripted casts each hit a
+creature that had already wandered out of range. A `--poke` through `tools/spice86_type.py` costs a
+process spawn (~150 ms) and is still too slow. Import it instead — `sys.path.insert(0, "tools")`
+then `import spice86_type as st`, one `st.Mcp()` session, and `st.write_mem` in a loop held ~2 200
+writes/s, which is enough that the value is still there when the handler reads it. Confirm it was
+there with pattern 4, not by reading afterwards.
+
+**4. When a routine scans memory, stop at its entry and dump there.** `tools/bp_read.py --ip <runtime
+offset> --dump OFF:LEN` halts the CPU at the first instruction of the routine and reads DS while it
+is stopped, which is the only way to know what the scan actually saw rather than what it left behind.
+Arm it in the background, drive the key from another shell, read the log. This is what turned a
+statically misread operand into a proven one — see `asm/330C_cast_target_finder.asm`'s TRAP note.
+
 Save the captures inside the current run directory (under `tmp/<timestamp>/`) and name them by
 cycle count so a later run can be lined up against them:
 

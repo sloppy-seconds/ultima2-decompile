@@ -1726,3 +1726,41 @@ maxed test character was silently standing on planet 1 and could not save, and `
 the byte after our own tool's write. G44 opened and closed the same day; the field is now
 `world`, the bogus `boots` field is gone, and `maxout` leaves the character on Earth. See
 `docs/save-format.md` § 10.
+
+## CAST slot 7 is MAGIC MISSILE, and its effect is site-side, not dungeon-only (2026-10-29)
+
+`captures/spice86/cmd-c-magic-missile` — a Wizard in the sector-20 tower, driven headless, with
+`tools/bp_read.py` stopping the CPU inside the target scan. This closes the "LOCATED but not
+attributed" note in `asm/3139_cast_spell_flow.asm` and it is the evidence behind decision **D14**
+(whether `cmd_C` ships now), which is still the owner's call and still open.
+
+What is now observed rather than inferred:
+
+* **The dispatch.** Slot 7 (`DS:63 = 7`, readied with `M 7`) branches to the arm that calls the target
+  scan at `asm/330C_cast_target_finder.asm`. The scan takes the first creature, slot 31 downwards,
+  whose `mon_type` is non-zero, whose `mon_kind` equals `DS:25`, and whose `mon_x`/`mon_y` are exactly
+  `DS:00 + DS:02` and `DS:01 + DS:03`. No match prints `CAST-MAGIC MISSILE-FAILED!` and **still spends
+  the scroll**, which is the same spend-before-validate shape gate 5 already showed.
+* **`DS:02`/`DS:03` are a signed facing delta**, measured `(01,00)` on entering the tower and
+  `(00,FF)` after one Left turn, unchanged by Down. So the spell needs no aim prompt because it hits
+  what the caster is facing. Both bytes sit inside `state.h`'s `reserved_02` and are now known to have
+  a consumer.
+* **The amount is `DS:20 = 2*DS:56 + 0x1e + CF`, and the `cmc ; sbb` idiom subtracts `DS:20 + 1`.**
+  Two points, both exact: `DS:56 = 0x99` → `DS:20 = 0x51`, HP `0x99 → 0x47`; `DS:56 = 0x01` →
+  `DS:20 = 0x20`, HP `0x99 → 0x78`. `DS:56` is the high BCD byte of experience, so the third-party
+  "scales with level" claim is wrong in shape, not merely unproven: there is no level field and a
+  binary doubling of a BCD digit is not monotone (82 damage at `0x99`, 33 at `0x01`).
+* **Survived → nothing prints and the slot keeps the reduced HP. Died → the slot is cleared and the
+  frame reads `KILLED--GOLD+3--EXP.+00`**, with the gold awarded in BCD and wrapping (9999 → 0002 on
+  +3, consistent with the no-ceiling property the owner recalled). The award *table* is not decoded —
+  the synthetic test slot carried no kind entry, hence `EXP.+00`.
+
+Two process notes. The facing delta was first misread as the constants 2 and 3, because `adc 0x2,%al`
+with no `$` is a memory operand in the listing dialect; the misread is recorded as a TRAP in the
+scan's header and the generic lesson went to `docs/harness-portability.md` § 6. And holding a creature
+in range needed an in-process poke loop — three scripted casts lost the race against the site tick.
+Recipe in `docs/spice86-capture.md`, patterns 3 and 4.
+
+What this does **not** settle: the other site-side branches (PASSWALL, SURFACE, PRAYER, BLINK's
+validity rule, KILL's award) and whether `mon_kind` is a floor index. Registered as G46.
+

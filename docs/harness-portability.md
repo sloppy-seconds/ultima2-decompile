@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A disassembly dialect's operand syntax is a correctness surface, and a finding that
+  quotes a literal has to prove the operand is an immediate.** Reading a listing produced "the routine
+  aims two cells east and three south of the player" from instructions rendered as `adc 0x2,al` and
+  `adc 0x3,al`. In that dialect an operand with no immediate prefix is a *memory* reference, so the two
+  "constants" were runtime fields and the real rule was "the cell the player is facing". Two general
+  lessons. First, the wrong derivation was self-refuting — the parity of the program's own coordinate
+  grid made the claimed window unreachable — and the parity check was not run, so a derived rule should
+  be sanity-checked against a structural property of the domain before it is quoted. Second, static
+  reading could not settle it, because the listing was correct and only the reading of it was wrong;
+  halting at the routine's entry and dumping what the scan reads settled it in one shot. Harness
+  implication: any detector, summariser or decompiler front-end that renders operands must keep the
+  immediate prefix visible and never normalise it away, and any generated finding containing a literal
+  should name the bytes that make it a literal rather than a displacement.
 * **2026-10-29 — A hardcoded value that matches the only sampled input is indistinguishable from a
   verified rule, and the way to break the tie is to enumerate the input domain rather than retest the
   member at hand.** A harness had a constant where the target program had a formula, and it survived
