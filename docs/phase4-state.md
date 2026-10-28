@@ -855,7 +855,7 @@ Not yet proven, and deliberately not guessed:
 
 ---
 
-## Paralysis stranding on the open world — OPEN DEFECT (owner-found, 2026-10-26)
+## Paralysis stranding on the open world — FIXED, one sub-question open (owner-found, 2026-10-26)
 
 **Symptom, reported by the owner playing the noVNC build:** the player is stuck with legs
 paralyzed and never recovers. The owner's statement was flat — *the original 100% does not strand
@@ -972,12 +972,28 @@ assertion vanish before the step. Reverted. The corpus proves what the tick is *
 wound-triggered, not site-gated); it does not pin what it **is**, because the recorder's notion of
 a "turn" is not the game's and the samples-per-decrement varies from 4 to 24.
 
-**So the honest open item is unchanged, and it is two questions, not one:** (1) does a paralyzed
-reject advance the turn in the original — the corpus says monsters kept acting while the player was
-pinned, which strongly suggests yes; and (2) what is the decrement rate per turn. Both need the
-breakpoint count on `L_000e33` with a live fight, which is the experiment this section kept
-deferring. It is now clearly the only way forward, and it is bigger than the "few minutes" it was
-two estimates ago.
+**So the honest open item is narrower than it was, and it is one question, not two.** The
+stranding itself is **fixed and now gated**: `status_tick()` runs on the paralysis reject, so a
+player who keeps pressing directions decays `DS:26B` to zero and walks again, and
+`tests/paralysis_decay.py` (CP5 C3e) proves it on a rig that sets the counter directly from a
+captured DS mirror — `--dump-ds`, patch byte `0x26B`, `--load-ds`, press LEFT. The rig itself is
+borrowed from CP5 C3d, which already does it for **arm** paralysis on the attack path and
+already fixed that path's own stranding (`if (paral_arms == 0) creature_turn(...)` made arm
+paralysis permanent for a player who kept swinging). What C3e closes is the legs half, the one
+C3b could not gate because its Daemon fixture let the player walk away. With no monster in the
+rig there is nothing to walk away from, so the assertion cannot pass by accident. The control was
+run — with the tick removed the gate reports `still 15 means the reject path does not tick` and
+`x=2, want 61`, which is the owner's bug reproduced mechanically.
+
+What remains open is the **turn-semantics** question only: does a paralyzed reject advance the
+creature sweep in the original? The corpus says monsters kept acting while the player was
+pinned, which strongly suggests yes, but the byte chain that puts the sweep on a refused step
+runs through `asm/0A02`, which is the *terrain* reject — the paralysis path prints a different
+string and its route to `asm/0A33_cmd_done` has never been traced. The engine deliberately does
+not call `creature_turn()` there, and says so at the call site. Settling it needs the breakpoint
+count on `L_000e33` with a live fight, which is bigger than the "few minutes" it was two
+estimates ago. The decrement rate per turn is no longer open: it is one per refused step, gated
+by C3e.
 
 **Process note worth keeping:** two confident, documented, high-confidence readings were wrong in
 the same paragraph, and both were overturned by the owner playing the game. The rule that owner

@@ -492,26 +492,43 @@ PYEOF
      --data-dir "$WORK/c3/content" --save-dir "$WORK/c3/save" \
      --script "$WORK/c3-expire.keys" --dump-each > "$WORK/c3-expire.out" 2>&1
 par=$(grep -c -- "--PARALIZED!" "$WORK/c3-expire.out")
-# WHY THERE IS NO AUTOMATED DECAY GATE HERE, stated rather than hidden. An earlier version of this
+# WHY THERE WAS NO AUTOMATED DECAY GATE HERE, and what replaced it. An earlier version of this
 # block asserted "refusals must be a minority of attempts" as the decay test. It was run against a
 # build with the tick deleted entirely and it still PASSED -- 2 of 24 refused either way -- because
 # a successful west step walks the player away from the Daemon, so neither build reaches a terminal
 # state and the counts cannot separate them. A gate that cannot fail is the failure mode
-# AGENTS.md § 3 and § 5 both call out, so the assertion is removed rather than kept for comfort.
-#
-# What IS gated: that the special reaches play at all (the count above), and that a plain melee
-# Orc never produces the word (C3's control half). What is NOT gated: that the counter decays.
-# That is established by direct measurement -- a breakpoint on asm/0C33 shows one tick per turn,
-# food -10 at every stop -- and by the owner playing the build, not by this script. Making it
-# gateable needs a deterministic rig: either a debug seam that sets paral_legs, or a fixture where
-# the Daemon cannot be walked away from. Both are engine-surface decisions, not test tweaks.
+# AGENTS.md § 3 and § 5 both call out, so the assertion was removed rather than kept for comfort,
+# and the gap was named instead: a rig that sets the counter directly. That rig now exists as
+# CP5 C3e below, so this block's only job is what it can honestly prove -- that the special
+# reaches play at all (the count below), with C3's plain-Orc half as the control that it is not
+# just noise.
 if [ "$par" -gt 0 ]; then
     ok "CP5 C3b: leg paralysis is applied on the open world (sector 00, $par of 60 attempts refused)"
 else
     bad "CP5 C3b: the Daemon never paralyzed on the open world -- the special is not reaching play"
     sed 's/^/        /' "$WORK/c3-expire.out" | tail -5
 fi
-echo "  NOTE  CP5 C3b: decay is measured (two-arm run on the original), not gated -- see above"
+echo "  NOTE  CP5 C3b: decay is gated separately -- see CP5 C3e below (deterministic rig)"
+
+# --- C3e: the decay itself, on a rig that can actually fail -------------------------------
+#
+# C3b could not gate decay: its refusal count was measured against a Daemon, and a successful
+# west step walks the player away from it, so the assertion passed even against a build with the
+# tick deleted. tests/paralysis_decay.py replaces that with a rig that sets DS:26B directly from
+# a captured DS mirror (--dump-ds, patch, --load-ds) and presses LEFT. No monster, nothing to
+# walk away from, nothing random. Two runs: a short one proving the paralysis applies and each
+# refusal gives a count back, and a long one proving the counter reaches zero and the remaining
+# presses land as steps.
+#
+# The control was run: with status_tick() removed from the paralysis reject the gate reports
+# "still 15 means the reject path does not tick" and "x=2, want 61" -- the owner's stranding,
+# reproduced mechanically.
+if U2_BIN=./u2 python3 tests/paralysis_decay.py > "$WORK/c3e.log" 2>&1; then
+    ok "CP5 C3e: leg paralysis decays on the open world under refused steps (rig: --load-ds)"
+else
+    sed 's/^/        /' "$WORK/c3e.log" | tail -8
+    bad "CP5 C3e: paralysis does not expire when the player cannot move -- the stranding bug"
+fi
 
 # --- C3c: a refused step is a completed command, so the world takes its turn ----
 #

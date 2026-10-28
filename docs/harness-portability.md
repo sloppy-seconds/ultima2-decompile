@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A timer-expiry gate must pin the subject in the state, and the way to do that is
+  to set the state from a captured snapshot rather than induce it through play.** A gate asserting
+  that a status counter decays was written by inducing the status from an in-game adversary and
+  counting refusals. It passed against a build with the decay removed, because the subject could
+  simply walk out of range and neither build reached a terminal state. The fix generalises: capture
+  the program's state block once (`--dump-ds`-style), patch the counter, resume from the patched
+  snapshot, and drive the input that the state blocks. Nothing is induced, nothing can wander off,
+  and the assertion becomes arithmetic. Two corollaries worth applying on the same day: assert on
+  the state field rather than on rendered text, because a frame-diffing renderer prints N identical
+  refusals once and a word count then measures the renderer instead of the rule; and when the same
+  class of bug exists on two code paths, gate both — one path's fixture may be able to prove what
+  the other's cannot.
+
 * **2026-10-29 — A reverse-engineered field can be named after what your own editor writes into
   it, and the contamination is invisible from inside the layout.** A save byte was called
   `boots_count` for two years, with a note recording that it failed to behave like boots. The
