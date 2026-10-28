@@ -37,7 +37,11 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/gate_check" \
 if [ $? -ne 0 ]; then
     bad "gate test harness did not build: $(head -5 "$WORK/cc-gate.err")"
 else
-    "$WORK/gate_check" > "$WORK/gate.out" 2>&1 \
+    GATE_EXE=""
+    for c in ../original/ultimaii.exe ../original/ULTIMAII.EXE; do
+        if [ -r "$c" ]; then GATE_EXE="$c"; break; fi
+    done
+    "$WORK/gate_check" "$GATE_EXE" > "$WORK/gate.out" 2>&1 \
         && ok "time doors: table, pairings, rotation ($(grep -c '  ok  ' "$WORK/gate.out") checks)" \
         || { bad "gate check failed:"; sed 's/^/        /' "$WORK/gate.out"; }
 fi

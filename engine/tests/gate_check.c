@@ -39,7 +39,7 @@ static const struct { int era, slot, x, y; } k_table[] = {
     { 4, 0, 18, 23 }, { 4, 1, 50, 34 }, { 4, 2, 52, 24 }, { 4, 3,  8, 11 },
 };
 
-int main(void)
+int main(int argc, char **argv)
 {
     /* --- the table ------------------------------------------------------- */
     for (size_t i = 0; i < sizeof k_table / sizeof k_table[0]; ++i) {
@@ -91,6 +91,55 @@ int main(void)
     }
     CHECK(ctx.state.gate_index == 0, "index wraps 06 -> 00 after four rotations, got %u",
           ctx.state.gate_index);
+
+    /* --- the non-circular check: read the table back out of the executable ------ */
+    /* Everything above is the engine agreeing with itself and with a transcription.
+     * This half is the engine agreeing with the bytes, and it is the only assertion here
+     * that could catch a mistyped coordinate. The executable is gitignored, so this SKIPs
+     * in CI and bites on a machine that has the player's own copy — same arrangement as
+     * the tile extractor's real-binary half.
+     *
+     * File offset 0x2998 is the runtime displacement %cs:0x2798 from asm/2708 plus the
+     * 0x200 file/runtime offset. Row stride 8 bytes, 4 slots of 2 bytes, era = DS:49. */
+    const char *exe_path = argc > 1 ? argv[1] : NULL;
+    if (exe_path && exe_path[0]) {
+        FILE *f = fopen(exe_path, "rb");
+        if (!f) {
+            printf("  FAIL  cannot read %s\n", exe_path);
+            ++fails;
+        } else {
+            unsigned char tbl[5 * U2_GATE_ERA_STRIDE];
+            if (fseek(f, 0x2998, SEEK_SET) != 0 ||
+                fread(tbl, 1, sizeof tbl, f) != sizeof tbl) {
+                printf("  FAIL  cannot read 40 bytes at file 0x2998 in %s\n", exe_path);
+                ++fails;
+            } else {
+                fclose(f);
+                int bad = 0;
+                for (int era = 0; era < 5; ++era) {
+                    for (int slot = 0; slot < U2_GATE_SLOTS; ++slot) {
+                        int x = -1, y = -1;
+                        (void)u2_gate_cell(era, slot, &x, &y);
+                        const int bx = tbl[era * U2_GATE_ERA_STRIDE + slot * 2];
+                        const int by = tbl[era * U2_GATE_ERA_STRIDE + slot * 2 + 1];
+                        if (x != bx || y != by) {
+                            printf("  FAIL  era%d slot%d: engine (%d,%d) vs binary (%d,%d)\n",
+                                   era, slot, x, y, bx, by);
+                            ++bad;
+                        }
+                    }
+                }
+                checks += 20;
+                fails += bad;
+                if (bad == 0)
+                    printf("  ok    all 20 gate cells read back from the binary match the engine\n");
+                else
+                    printf("  FAIL  %d gate cells disagree with the binary\n", bad);
+            }
+        }
+    } else {
+        printf("  skip  binary cross-check (no ultimaii.exe passed)\n");
+    }
 
     printf("gate_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
