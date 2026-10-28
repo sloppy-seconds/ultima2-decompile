@@ -18,7 +18,14 @@ exact byte-for-byte fidelity.
 > BOARD's tile write is gated (CP5 V1) via `u2_world_terrain_put`.** W1 (BOARD), W2 (per-mode
 > passability), W3 (per-mode food) and W4/W5 (`cmd_L`) are implemented and W1/W2/W3 are gated as
 > CP5 P1 and V1. The one genuinely open question there (the plane's airborne flag, W6) is marked as
-> needing a capture and not a guess, and is now `docs/needs-gameplay.md` G43.** To start a fresh
+> needing a capture and not a guess, and is now `docs/needs-gameplay.md` G43.** **Scoped handoffs are
+> the entry point for their own topic, not history:** `docs/handoff-commerce-transact.md` (assessed
+> 2026-10-29 — what is and is not evidenced for `cmd_T`; **there is no TALK command, `T` does both
+> jobs**; selling is evidenced end to end and talking is data-ready but mechanism-blind, so build the
+> selling branch and leave the talking branch a `NULL` slot, and run G23 before writing any pricing
+> code because `asm/20AB` is known to fail a real observation), and `docs/moongates.md` (time doors:
+> observed mechanic, decoded table, engine implementation, and three recorded self-corrections worth
+> reading for method as much as content).** To start a fresh
 > agent, read `docs/handoff-2026-10-29b.md` first (**current entry point** — the overnight run that
 > closed D13, G40 and D12 and part of G46: `DS:4E` is charisma proven twice, the horse really does
 > refuse shallows and the engine already matched, `DS:25` is the site floor and is renamed
