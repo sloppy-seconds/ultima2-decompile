@@ -60,6 +60,28 @@
 #           Also learned the hard way from this capture: the 3D view does not redraw on a move that
 #           did not land, so two frames showed a stale IT'S DARK* after an illegal arrow and an
 #           ADVANCE-BLOCKED. A dungeon frame is only evidence after a move that actually moved.
+# THIRD-PARTY CROSS-CHECK 2026-10-29 (a class/spell write-up the owner supplied). Graded against
+#           these bytes, and the grades are deliberately not merged into the claims above:
+#           PROVEN, and more precisely than the claim: BLINK. L_0034d2 calls the rand seam twice,
+#           `and $0xf ; or $0x1` each result (random ODD 1..15) into DS:23/DS:24, runs a validity
+#           call (L_001651) that can fail into the -FAILED! path at L_003432, and then writes
+#           DS:23 -> DS:00 and DS:24 -> DS:01. It overwrites the player position directly.
+#           LOCATED but not attributed: a creature-HP subtract at L_0034bc
+#           (`mov 0x177(%di),%al ; cmc ; sbb 0x20,%al ; cmc ; mov %al,0x177(%di) ; jb`), with the
+#           amount in DS:20. Which spell index dispatches here is NOT established, so neither
+#           "MAGIC MISSILE does damage" nor "KILL destroys" is proven by this file — and the claim
+#           that MAGIC MISSILE scales with level is unverified twice over: DS:20's derivation is
+#           untraced and there is no level field anywhere in state.h, only BCD experience.
+#           NOT FOUND: a 50%-shaped test for PRAYER, a grid write for PASSWALL, an exit-to-surface
+#           path for SURFACE. Absence in this header is not absence in the binary — the branches
+#           from 4..9 run on into the rest of the range and dungeons are parked (AGENTS.md § 3).
+#           CORROBORATED ELSEWHERE: the class bonuses are exact (CLERIC +10 WIS at file 0x5AD5,
+#           WIZARD +10 INT at 0x5B04, FIGHTER +15 STR, THIEF +10 AGI, and STAMINA gets no bonus
+#           from sex, race or class at all) — see engine/src/game/creation.c. And shop price is
+#           COMPUTED, not tabulated: asm/20AB_bcd_price_from_stats derives it from the caller's
+#           index and the bit length of [DS:50] + [DS:4E], so a fixed per-spell cost like "576 gold
+#           for KILL" cannot exist, and a high-INT buyer is quoted less for the same spell. Both
+#           spell shops call the same function, so expense tracks index and stats, not class.
 # func 3139..330B  len 01D3 B  evidence: call+reko
 # strings: "-FAILED!"; "-FAILED!"; "NEED WAND OR STAFF!"; "NO SPELL!"
 # calls: L_000c33, L_001651, L_0030d1, L_003432, L_0034a2, L_0034a5, L_0034ad, L_0034d2 (+9 more)

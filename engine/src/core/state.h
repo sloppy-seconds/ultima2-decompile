@@ -95,11 +95,39 @@ typedef struct u2_state {
                                         DS:00/01 pair above is not yet established by
                                         the asm, so both are kept rather than merged. */
     /* 0x24 */ uint8_t player_y;      /* asm/50B3_map_tile_ptr.asm */
-    /* 0x25 */ uint8_t reserved_25;
+    /* 0x25 */ uint8_t reserved_25;   /* NOT reserved, probably the site floor index, and left
+                                         * unnamed on purpose until a capture proves it.
+                                         * Evidence: the DOWN LADDER / UP LADDER branches of
+                                         * asm/3139_cast_spell_flow read it and bound it with
+                                         * `cmp $0xf,%al` (a 0..15 floor count), and it is the
+                                         * only value those branches change — which is what makes
+                                         * "same position, next floor down/up" the natural reading.
+                                         * It is also read at L_0034e6 in the BLINK branch. A third
+                                         * party write-up asserted the floor semantics on 2026-10-29
+                                         * and the bytes are friendly to it, but friendly is not
+                                         * proven: renaming this needs a capture that goes down a
+                                         * ladder and reads DS:25 before and after. Until then the
+                                         * name stays reserved_25 and the note stays here — a wrong
+                                         * name is worse than no name (AGENTS.md § 3). */
     /* 0x26 */ uint8_t moved_flag;    /* the accept tail of the walk loop xors it
                                          * with 0xFF (runtime 0x09E9) and it is
                                          * zeroed at 0x09F7; a rejected step never
-                                         * reaches the xor. */
+                                         * reaches the xor.
+                                         * ALIASED — this byte has a second, unrelated life inside
+                                         * a site, and reading it as moved_flag there reads a
+                                         * light counter. asm/1151_dungeon_darkness tests it
+                                         * (`mov 0x26,%al ; or %al,%al`), prints IT'S DARK! when it
+                                         * is zero, and otherwise `decb 0x26` per step, printing
+                                         * TORCH BURNED OUT! when the decrement reaches zero; and
+                                         * the CAST dispatch for LIGHT writes 0x96 (150) into it
+                                         * (asm/3139_cast_spell_flow). Confirmed live 2026-10-29 in
+                                         * captures/spice86/cmd-c-cast-tower: 0x96 on cast, then
+                                         * 0x95 and 0x94 on the two steps after it. So torches and
+                                         * the LIGHT spell share ONE counter — LIGHT is not a
+                                         * parallel light source, which is why casting it in a lit
+                                         * corridor spends a spell to refill a running count. Same
+                                         * mode-dependent reuse as DS:49/DS:4A. Any future reader of
+                                         * moved_flag must know which mode it is in. */
     /* 0x27 */ uint8_t reserved_27[2];
     /* 0x29 */ uint8_t mode_arg;      /* asm/2423_passability.asm stores its AL
                                          * argument here on entry and the mode
