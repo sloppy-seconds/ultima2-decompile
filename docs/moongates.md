@@ -242,9 +242,17 @@ because the substitute art for that byte is under cleanroom control. That was wr
 pointed it out: the stamp byte was already known from the live grid, and the engine's own proven
 mapping takes it the rest of the way — map byte `0xC0` → staging `(0xC0>>1)&0xFE = 0x60` → art
 `0x60>>1 = 0x30`, which is the moongate record in `docs/tile-art-spec.md` (whose index is written in
-hex). The normal render path uses the player's own extracted tiles, so the cleanroom never applied.
-Only the `--cleanroom` substitute set would need a moongate drawn, and that is a separate task with its
-own procedure.
+hex). The stamp goes through `u2_tiles`, which is whichever set is loaded, so **the normal path and the
+`--cleanroom` path both render a door at the same index with no extra plumbing.** The cleanroom set
+already has a moongate at `tile_30.svg`, drawn under amendment A9 from the owner's own description.
+
+What the cleanroom path lacks is not a tile but a passing one: `tools/tile_rules.py` has `RULES[0x30]`
+and `0x30` is in `PENDING_REDRAW` — PROVENANCE records it as "`30` moongate (no top rule)". So the
+substitute door renders and is reported as debt on every `make test`, which is the arrangement working
+as designed. **This raises its priority** — it went from a map tile nobody had yet reached to the only
+depiction of a feature the engine now has — but the redraw cannot be done by whoever read the live
+screenshots, and this session read several. It needs a fresh implementer working from the spec alone,
+per `docs/cleanroom-procedure.md`.
 * **The countdown unit.** The original's is wall-clock (~4.2 s per unit, measured with the player
   standing still). The engine is turn-driven, so `u2_gate_turn()` counts turns. That substitution is
   inferred from the idle auto-PASS advancing turns and is **not proven** — anyone wiring this to a
