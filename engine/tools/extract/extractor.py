@@ -244,11 +244,18 @@ MANIFEST = [
     ("U2_S_NO_KEYS_FIT",       "4345_open_no_key_fit.asm", ("run", 0x4549, 17, "NO KEYS THAT FIT!")),
     # The two command handlers whose entire body is one message: asm/3782 cmd_H and
     # asm/37DC cmd_J each print a literal and `jmp L_000c33` (cmd_done). Added for the
-    # command dispatcher, engine/src/game/commands.c. Both are `high` confidence in their
-    # own headers and both are UNPROVEN in the capture sense -- neither letter has ever
-    # executed in any of the 60 harvests -- so the engine marks them as such.
+    # command dispatcher, engine/src/game/commands.c. Both are `high` confidence in their own
+    # headers, and both have since been seen executing — the 60-harvest note that used to sit
+    # here was stale against a corpus that has grown twice; tools/cmd_handlers.py is the
+    # authority for what has executed, and it is why this line no longer carries a count.
     ("U2_S_HYPER_WHAT",        "3782_cmd_H.asm",           0),
     ("U2_S_JUMP_WHEE",         "37DC_cmd_J.asm",           0),
+    # cmd_Y: the yell prompt. The db line is `db "YELL WHAT?",0x8d,0`, and the trailing 0x8d
+    # is the game's newline glyph (the same convention as " IS DEAD!" and the Q guards), so
+    # the run locator takes the ten text bytes and the engine emits the newline itself.
+    # Offset verified against the raw bytes at file 0x4745: `e8 9a 0a` is the str_out call and
+    # the string starts immediately after it, terminated `...3f 8d 00`.
+    ("U2_S_YELL_WHAT",         "4542_cmd_Y.asm", ("run", 0x4745, 10, "YELL WHAT?")),
     # cmd_M: the ready-a-spell prompt and the word that introduces its echo. The echo line
     # is followed by the pool printer, so what lands after "SPELL READY => " is the spell
     # NAME, not a number — see the correction in asm/3B92_cmd_M.asm, which used to describe

@@ -7,6 +7,11 @@
 #           log reads `JUMP...WHEE...`). Was recorded as never executed against a 60-harvest
 #           corpus that has since grown without this line being refreshed.
 # confidence: high
+# INTENTIONAL, not unfinished: the owner reports the shipped manual describing J as letting the
+#           character "jump up and down" to release frustration, with no effect on obstacles,
+#           terrain or any mechanic. The bytes agree and are stronger — three instructions, no
+#           write of any kind, so there is nothing here to touch a mechanic even by accident.
+#           Recorded in docs/third-party-claims.md § 1. Do not "fix" the missing jump.
 cmd_J:
         call L_0051df          # str_out — prints the inline string below
         db "JUMP...WHEE...",0   # string

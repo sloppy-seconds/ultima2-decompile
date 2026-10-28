@@ -811,6 +811,24 @@ for pair in "H:HYPER WHAT?" "J:JUMP...WHEE..." "Q:ONE MOMENT PLEASE!" "P:CMD: PA
     fi
 done
 
+# --- Y1: the yell is a freeform line input, and it is the loop the letter run misread ----------
+#
+# asm/4542 falls into asm/4551..asm/4567, which is a complete read-echo loop terminated by Enter.
+# For four days this was logged as cmd_Y "not returning to the prompt", because the range sat cut
+# into seven fragments each headed "behavior not yet reviewed" and nobody read it as one routine.
+# tests/cmd_yell.py asserts the prompt, the echo, Enter handing control back, the swallow of a
+# letter typed before Enter (the observation that was misread), that J on its own still dispatches
+# so the swallow is the loop's doing, and that no DS field moves at all -- the byte claim "nothing
+# in the range writes memory" made testable.
+# Control, run 2026-10-29: with the loop replaced by print-and-return the gate reports 6 failures
+# including the swallow case, which is the property a prompt-and-echo check alone would miss.
+if U2_BIN=./u2 python3 tests/cmd_yell.py > "$WORK/y1.log" 2>&1; then
+    ok "CP5 Y1: cmd_Y echoes freeform input until Enter and writes nothing (asm/4551..4567)"
+else
+    sed 's/^/        /' "$WORK/y1.log" | tail -8
+    bad "CP5 Y1: the yell loop is wrong -- prompt, echo, Enter-termination or a state write"
+fi
+
 # Z takes the WHOLE screen. asm/4568 opens with `call L_004c1c`, a full clear, so the original's
 # Z page has no status band on it at all -- proven against the original with the same maxed save
 # in captures/spice86/z-page-maxed/readings.md. The engine used to leave the band in place, so a

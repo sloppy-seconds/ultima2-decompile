@@ -109,7 +109,13 @@ static u2_cmd_result cmd_H(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
    capture settled is the one this comment used to flag as suspicious: the message promises a
    jump the body never performs, and the body really is only print-and-return -- there is no
    tail-call hiding the action. So the original ships a message that overstates what the
-   handler does. That is now observed rather than inferred. */
+   handler does. That is now observed rather than inferred.
+
+   And it is intentional. The owner reports the official manual describing J as letting the
+   character "jump up and down", a way to release frustration, with no effect on obstacles,
+   terrain or any mechanic. The bytes agree, and go further: a handler with three instructions
+   and no write cannot touch a mechanic. So the emptiness is the feature, not a stub waiting to
+   be finished -- do not "fix" it by implementing a jump. Recorded in docs/third-party-claims.md. */
 static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)ow; (void)letter;
@@ -785,6 +791,57 @@ static u2_cmd_result cmd_L(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/4542 cmd_Y, together with the input loop it falls into at asm/4551..asm/4567.
+ *
+ * That fall-through was recorded as unresolved for as long as the loop lay cut into seven
+ * bulk-wave fragments, each headed "behavior not yet reviewed". Read as one address-ordered
+ * stream it is a complete routine, and it is the freeform line input the owner remembered from
+ * the manual: type anything, it echoes, Enter ends it. The bytes agree with the recollection,
+ * and they say something stronger than "no gameplay effect" — nothing in the whole range
+ * writes memory, so the yell is display-only and the text evaporates.
+ *
+ *   4551  L_004751: call key_poll         ; asm/4F4D, the seam that arrow-maps and upper-cases
+ *   4554          cmp $0xff,%ah           ; AH=0xFF is the seam's "a key was consumed"
+ *                 jne L_004751            ; nothing typed: spin, no turn advances
+ *   4559          cmp $0xd,%al            ; Enter
+ *                 je  L_004762
+ *   455D          call char_print_wrap    ; echo the character
+ *   4560          jmp L_004751
+ *   4562  L_004762: call char_print_wrap  ; AL still holds 0x0D, so the Enter prints too
+ *   4565          jmp L_000c33            ; cmd_done
+ *
+ * Two mappings, both stated rather than assumed. `seam_key_wait` stands for the spin loop,
+ * because a spin on a key seam is a blocking read; it returns 0 only when a scripted input has
+ * run dry, a condition the original cannot reach, and that exit is shared with cmd_M. And the
+ * seam's upper-casing is NOT applied here: it belongs to asm/4F4D, which the engine does not
+ * model engine-wide, and putting it in one handler would make a seam behaviour look like a
+ * command's own.
+ *
+ * This is also the explanation for a capture we had misread. The 2026-10-25 letter run found
+ * that after `YELL WHAT?` later letters accumulated on the CMD line and never dispatched, and
+ * logged it as the command not returning to the prompt. It does return — on Enter. Those
+ * letters were the yell being echoed.
+ */
+static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+    seam_str_out(ctx, U2_S_YELL_WHAT);
+    seam_char_print(ctx, '\r');          /* the 0x8d newline glyph in its db line */
+
+    for (;;) {
+        u2_key k;
+        if (seam_key_wait(ctx, &k) == 0)
+            break;                        /* input exhausted: no original counterpart */
+        if (k.ch == '\r') {
+            seam_char_print(ctx, '\r');   /* asm/4562 prints the Enter itself */
+            break;
+        }
+        seam_char_print(ctx, (char)k.ch); /* asm/455D: echo one character */
+    }
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -831,8 +888,10 @@ static u2_cmd_result cmd_L(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      but the ownership bytes are not modelled.
  *   X  implemented 2026-10-29 as the dismount (asm/44D4); it was listed here as "destroy item"
  *      from the string alone, which was the wrong reading of the letter.
- *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
- *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
+ *   Y  implemented 2026-10-29: asm/4542 falls into asm/4551..4567, which is a freeform echo
+ *      loop terminated by Enter, not an unresolved tail. See cmd_Y. The 0x8d on the prompt's
+ *      db line is the game's newline glyph, not a mystery glyph, so the CP9 note about it is
+ *      retired as well.
  *
  * All six letters that used to live in u2_overworld_loop are here now, and A and U came last
  * on purpose: they leave the loop waiting for a direction key that arrives turns later, so
@@ -866,7 +925,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_V, /* V  view: asm/437E, needs a HELM held and sector digit < 4; the map overlay is NOT modelled */
     cmd_W, /* W  wear armour: asm/43F3, full menu then digit then ownership and strength gates */
     cmd_X, /* X  X-IT dismount: asm/44D4, returns the tile and the class-dependent foot stamp */
-    NULL,  /* Y  see the note above */
+    cmd_Y, /* Y  yell: asm/4542 + its echo loop asm/4551..4567, display-only */
     cmd_Z, /* Z  status screen: asm/4568, a full-page overwrite, no turn passes */
 };
 
