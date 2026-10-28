@@ -2,7 +2,7 @@
 #           through into the following map fragment
 # func 35C1..35C8  len 008 B  evidence: seed+reko (jump table cs:0730 entry F)
 # provenance: live:airport32 (+3 other harvests), static
-#           entry executed in 4 of 172 harvests; derived by tools/provenance_from_traces.py
+#           entry executed in 4 of 173 harvests; derived by tools/provenance_from_traces.py
 # confidence: high (handler role proven; message literal)
 cmd_F:
         call L_0051df          # str_out — prints the inline string below
