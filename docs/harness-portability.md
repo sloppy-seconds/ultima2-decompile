@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A hardcoded value that matches the only sampled input is indistinguishable from a
+  verified rule, and the way to break the tie is to enumerate the input domain rather than retest the
+  member at hand.** A harness had a constant where the target program had a formula, and it survived
+  thousands of green runs because the one input every fixture used happened to be the fixed point of
+  the two — the formula returned the constant for that value and nothing else. The path was not
+  untested; it was tested exhaustively against the single input that could not tell them apart. The
+  general shape to look for: any place a rule is `base + k * index` and the harness says `base`, with
+  every fixture at `index == 0`. The fix is not more runs of the same input but a gate that walks the
+  whole domain — all four classes, all modes, all digits — and a control that restores the constant
+  and shows the gate going red on every member except the fixed point. Worth stating in the gate
+  itself, because "why is there a gate for a one-line constant" is otherwise a fair question, and the
+  answer is the interesting finding.
+
 * **2026-10-29 — A routine cut into fragments by a mechanical first pass stays invisible until
   someone reads the address range as one stream, and a mechanical pass will happily fragment a
   complete routine into pieces too small to recognise.** A command handler's body was seven
