@@ -19,15 +19,21 @@ exact byte-for-byte fidelity.
 > passability), W3 (per-mode food) and W4/W5 (`cmd_L`) are implemented and W1/W2/W3 are gated as
 > CP5 P1 and V1. The one genuinely open question there (the plane's airborne flag, W6) is marked as
 > needing a capture and not a guess, and is now `docs/needs-gameplay.md` G43.** To start a fresh
-> agent, read `docs/handoff-2026-10-29.md` first (**current entry point** — **§ 2 is the part that
+> agent, read `docs/handoff-2026-10-29b.md` first (**current entry point** — the overnight run that
+> closed D13, G40 and D12 and part of G46: `DS:4E` is charisma proven twice, the horse really does
+> refuse shallows and the engine already matched, `DS:25` is the site floor and is renamed
+> `site_floor`, KILL and BLINK observed, `cmd_D` executed at last so `cmd_N` is the only letter never
+> seen running, plus the three hold-a-value-against-the-tick recipes in its § 4 and the Spice86
+> noVNC key-injection crash in its § 5), then `docs/handoff-2026-10-29.md` (the queue it supersedes,
+> with items 2, 4 and 5 now ticked in place — **§ 2 is the part that
 > matters: six recorded decodes proved wrong, four of them written by this project inside a week
 > (`cmd_T`'s one-cell ray, `cmd_Y`'s "unresolved" fall-through which was a complete freeform input
 > loop, the class names in our own editor, and an on-foot stamp hardcoded to the one value a Fighter
-> would agree with); § 1 is open owner decisions D11, D12 and D14 (the cheat-code flag, `DS:25`,
-> whether `cmd_C` ships gates without effects — D13's charisma-vs-wisdom dispute closed the same
-> day by `captures/spice86/d13-cha-vs-wis`: `DS:4E` is charisma); 1222 `asm/` files,
-> whole-binary md5 green, `check_all` green, pushed through `958f299`, 15 of 26 handlers implemented
-> and only D and N never executed; § 3 is the ranked queue, § 4 is facts worth knowing cold (the
+> would agree with); § 1 is open owner decisions D11 and D14 (the cheat-code flag, and whether
+> `cmd_C` ships gates without effects — D12's `DS:25` and D13's charisma-vs-wisdom dispute both
+> closed 2026-10-29, the latter by `captures/spice86/d13-cha-vs-wis`); 1222 `asm/` files,
+> whole-binary md5 green, `check_all` green, pushed through `fe05fff`, 15 of 26 handlers implemented
+> and only N never executed; § 3 is the ranked queue, § 4 is facts worth knowing cold (the
 > sector's ones digit IS the site kind; the stamped grid at `DS:1800` is not the raw `mapx` bytes),
 > § 5 is the copy-paste capture recipes including the live owner-play loop, § 6 is the hazards that
 > cost this session time), then
