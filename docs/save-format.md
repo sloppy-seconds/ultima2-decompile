@@ -211,3 +211,59 @@ file shipped on the disk is all zeros, which means an empty name, which means
   (`title.c` `run_play`). Before this it entered the world on zeros, so a scripted
   fight could not be shown at all: `agi` 0 never lands a hit, and the sector was
   whatever the zero bytes happened to say.
+
+## 8. The saved window is not the same set as the saved fields (found 2026-10-29)
+
+The record is 256 bytes at `DS:36`, and the game saves that whole span — but some bytes inside
+the span are **runtime state that happens to live there**, and they do not survive a round trip
+through the original unchanged. The first one measured:
+
+| byte | field | why it is not save state |
+| --- | --- | --- |
+| `DS:74/75` | `speed` | `asm/06AC_clock_tick_wait` calibrates it at **every** startup by counting busy passes inside a 20-tick `INT 1Ah` window. The engine has no clock calibration, so its mirror holds 0; the original writes whatever this machine measured. |
+
+Observed directly: the engine wrote `00 00` there, the original loaded the record and its live
+`DS:74` read `04 3a` (0x3A04 — the same neighbourhood as the documented 0x3A17 measurement in
+`docs/spice86-live-findings.md`). So a byte-for-byte "our file vs the original's memory"
+comparison can never be exact across those two bytes, and a harness that demanded it would be
+asserting that the engine should fake a clock calibration it does not have.
+
+This matters for anyone writing a save comparison: **exclude by name with a reason, and print
+what both sides held.** A tolerance that prints nothing is indistinguishable from a tolerance
+that never fired.
+
+## 9. Cross-loading with the original — `tools/save_cross_load.py`
+
+Local, on demand, **not in CI and not in `make test`**. Two reasons, both owner decisions
+2026-10-29: it needs `original/` and `references/`, which are gitignored by policy, and
+re-running it on every push would be measuring a game binary that has not changed since the
+last time it passed.
+
+**Run it when save handling changes**: `engine/src/core/save.c`, the write-back in
+`engine/src/core/world.c`, the DS layout in `engine/src/core/state.h`, or the harness itself.
+
+```sh
+python3 tools/save_cross_load.py                  # A only, no emulator, a few seconds
+python3 tools/save_cross_load.py --with-emulator  # A + B, boots the original, about a minute
+```
+
+* **A, original -> engine.** Loads a real record (default `references/ultima2/player`) and
+  asserts `DS:36..0x135` matches the file byte for byte. Proves our *reader*.
+* **B, engine -> original.** Builds a record with the engine's own reader and writer, boots the
+  original with it, presses `ESC`+`P`, and peeks `DS:36..256` out of the live process. Proves
+  our *writer* produces a file the real game accepts. It checks the name at `DS:36` first, so a
+  green means the original loaded **our** character rather than sitting on a title screen.
+
+Both directions pass as of 2026-10-29. Two things learned doing it, both now encoded in the
+harness rather than left as prose:
+
+* the shipped `references/ultima2/player` is the **blank creation template**, and the original
+  will not "load previous character" from it — the first attempt read `DS:13 = 0x00` and a blank
+  name. Direction B therefore starts from the engine's own seed record, which is the thing under
+  test anyway.
+* the live peek is read from memory, not from the run dir's `player` file, because the game
+  rewrites that file as it plays and it is not a stable witness.
+
+`engine/tests/save_check.c` still owns the byte-format assertions in CI: it runs on
+engine-authored filler and proves sizes, offsets and tail preservation. What it cannot prove is
+that the real game accepts what we write, and that is the gap this harness closes.

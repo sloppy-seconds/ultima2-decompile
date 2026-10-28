@@ -448,6 +448,18 @@ Verification, in two independent layers:
   suite — a documented command that has silently stopped working is the real defect.
   Baseline moves (CP2 evidence) still need owner approval and a named reason in the gate log
   in `docs/phase4-state.md`.
+* **Save compatibility is checked against the real game, locally, on change — not in CI.**
+  `python3 tools/save_cross_load.py` loads the original's record into the engine and then has
+  the original load a record the engine wrote, reading both back out of live memory. It needs
+  `original/` and `references/` (gitignored) and it measures a binary that does not change, so
+  it is deliberately absent from `make test` and from every workflow. **Run it whenever save
+  handling changes**: `engine/src/core/save.c`, the write-back in `engine/src/core/world.c`,
+  the DS layout in `engine/src/core/state.h`, or the harness. Owner decision 2026-10-29;
+  `docs/save-format.md` § 9 has the recipe and § 8 the reason a byte-exact comparison across
+  the whole 256-byte window is not achievable (`DS:74/75` speed is calibrated at every startup
+  and merely lives inside the saved span). `save_check.c` keeps owning the byte-format
+  assertions in CI.
+
 * **Spice86 polling:** the memory API sustains ~250 req/s (`tools/poll_probe.py`).
   The old 3 Hz limit belonged to the windowed CFG view model, not to reads.
 
