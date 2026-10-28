@@ -223,17 +223,28 @@ Two lessons, both cheap and both paid for:
 accepted, and `engine/tests/gate_check.c` is the spec (45 checks, run from CP4).
 
 Modelled: the table for all five eras, the countdown and index rotation, the transit on the step onto
-the active cell, and the era change on the sector's tens digit with the world byte left alone.
+the active cell, and the era change on the sector's tens digit with the world byte left alone. The
+door is now also **drawn** — see the stamp note below.
 
 **Deliberately not modelled, each for a stated reason:**
 
-* **Slots 0 and 3.** Never transited, so `u2_gate_partner_era()` returns unknown and no door is offered
-  there. The spec asserts that unknown-ness on every era, so filling those slots with a guess goes red
-  rather than shipping a door that opens onto an invention.
-* **The `0xC0` stamp into the resident sector.** Two independent reasons: the substitute art for that
-  byte is under cleanroom control, and writing the resident grid marks the sector dirty while whether
-  the original persists a stamped gate into `mapxNN` on a save is untested. The gate is therefore
-  state and transit, not pixels, until someone measures the save question.
+* **Slots 0 and 3.** Never transited, so `u2_gate_partner_era()` returns unknown and no transit is
+  offered there. The spec asserts that unknown-ness on every era, so filling those slots with a guess
+  goes red rather than shipping a door that opens onto an invention. They **are** drawn, because the
+  original draws them: all four slots stamp in every era, and only the destination is unknown.
+* **The stamp into the resident sector.** The door is stamped into the **view**, not the map. The
+  original stamps `0xC0` into the resident grid, and whether that survives a save back into `mapxNN`
+  is untested — so the engine draws the door without dirtying the sector it stands on, which keeps an
+  unmeasured question out of the write path.
+
+**A wrong objection, removed.** An earlier revision of this page said the stamp was blocked partly
+because the substitute art for that byte is under cleanroom control. That was wrong and the owner
+pointed it out: the stamp byte was already known from the live grid, and the engine's own proven
+mapping takes it the rest of the way — map byte `0xC0` → staging `(0xC0>>1)&0xFE = 0x60` → art
+`0x60>>1 = 0x30`, which is the moongate record in `docs/tile-art-spec.md` (whose index is written in
+hex). The normal render path uses the player's own extracted tiles, so the cleanroom never applied.
+Only the `--cleanroom` substitute set would need a moongate drawn, and that is a separate task with its
+own procedure.
 * **The countdown unit.** The original's is wall-clock (~4.2 s per unit, measured with the player
   standing still). The engine is turn-driven, so `u2_gate_turn()` counts turns. That substitution is
   inferred from the idle auto-PASS advancing turns and is **not proven** — anyone wiring this to a

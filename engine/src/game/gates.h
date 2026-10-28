@@ -60,6 +60,23 @@ struct u2_overworld;
  */
 int u2_gate_cell(int era, int slot, int *x, int *y);
 
+/* The cell the door is standing on right now, or 0 when there is no door at all — which is
+ * the state at load, and stays the state until the first rotation. Independent of the
+ * partner table: in the original all four slots stamp in every era, including the two
+ * whose destination is unknown, so the door is visible even where the engine will not yet
+ * take you. Verified in era 0 by forcing expiries: slots 1, 2 and 3 all stamped.
+ *
+ * x and y are sector coordinates, not window coordinates. */
+int u2_gate_current_cell(const u2_ctx *ctx, const struct u2_overworld *ow, int *x, int *y);
+
+/* The staging byte the renderer needs for a door cell. The fill loop computes staging as
+ * (map_byte >> 1) & 0xFE and the flush halves it again to reach the art record, so a map
+ * byte of 0xC0 becomes staging 0x60 and art 0x30 — the moongate record in
+ * docs/tile-art-spec.md, whose index is written in hex. Derived from the engine's own
+ * proven mapping rather than copied out of the game, and it renders from the player's
+ * extracted tiles, so the cleanroom is not in play on the normal path. */
+#define U2_GATE_STAGING 0x60
+
 /*
  * The era a door leads to, or -1 when the pairing has never been observed.
  * Observed live, both directions for index 1 and both for index 2:

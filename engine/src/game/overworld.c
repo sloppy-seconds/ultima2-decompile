@@ -1223,6 +1223,20 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
                  ow->view_mode, NULL, U2_OVERWORLD_EMPTY_GATE);
 
+    /* The time door is stamped into the VIEW, not into the sector. The original stamps
+     * 0xC0 into the resident grid, and whether that survives a save back into mapxNN is
+     * untested — so the engine draws the door without dirtying the sector it stands on,
+     * which keeps an unmeasured question out of the write path. The staging byte is what
+     * the fill loop itself would produce for 0xC0, so the renderer's proven mapping does
+     * the rest and the art comes from the player's own extracted tiles. */
+    int gate_x = 0, gate_y = 0;
+    if (u2_gate_current_cell(ctx, ow, &gate_x, &gate_y)) {
+        const int col = gate_x - (ow->x - U2_VIEW_PLAYER_COL);
+        const int row = gate_y - (ow->y - U2_VIEW_PLAYER_ROW);
+        if (col >= 0 && col < U2_VIEW_COLS && row >= 0 && row < U2_VIEW_ROWS)
+            ow->view.tile[row * U2_VIEW_COLS + col] = U2_GATE_STAGING;
+    }
+
     u2_frame_clear(&ow->frame, U2_CGA_BLACK);
     /* The player is not terrain: the game's own staging buffer holds 0x78 at the
      * player's cell, which halves to art 60, a humanoid figure. That is evidence

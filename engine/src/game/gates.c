@@ -78,21 +78,27 @@ void u2_gate_turn(u2_ctx *ctx, struct u2_overworld *ow)
     ctx->state.gate_countdown--;
 }
 
-int u2_gate_transit(u2_ctx *ctx, struct u2_overworld *ow)
+int u2_gate_current_cell(const u2_ctx *ctx, const struct u2_overworld *ow, int *x, int *y)
 {
     /* No door exists until the first rotation stamps one. At load the index is 0 and the
      * slot-0 cell is ordinary ground; the original stamps nothing until the countdown
      * first expires (era 0, forced expiry, captures/spice86/era0-probe). */
     if (!ow->gate_stamped)
         return 0;
+    return u2_gate_cell(ctx->state.sector_first,
+                        u2_gate_slot(ctx->state.gate_index), x, y);
+}
 
-    const int era = ctx->state.sector_first;
+int u2_gate_transit(u2_ctx *ctx, struct u2_overworld *ow)
+{
     const int slot = u2_gate_slot(ctx->state.gate_index);
     int gx = 0, gy = 0;
-    if (!u2_gate_cell(era, slot, &gx, &gy))
+    if (!u2_gate_current_cell(ctx, ow, &gx, &gy))
         return 0;
     if (ow->x != gx || ow->y != gy)
         return 0;
+
+    const int era = ctx->state.sector_first;
 
     const int partner = u2_gate_partner_era(era, slot);
     if (partner < 0)

@@ -116,6 +116,26 @@ int main(int argc, char **argv)
     ow.x = 1; ow.y = 1;
     CHECK(u2_gate_transit(&ctx, &ow) == 0, "no transit unless the player is on the cell");
 
+    /* --- the door's own cell, which is what the renderer stamps --------- */
+    int gx = 0, gy = 0;
+    ctx.state.sector_first = 2;
+    ctx.state.gate_index = 2;                 /* slot 1 */
+    ow.gate_stamped = 0;
+    CHECK(u2_gate_current_cell(&ctx, &ow, &gx, &gy) == 0, "no cell while unstamped");
+    ow.gate_stamped = 1;
+    CHECK(u2_gate_current_cell(&ctx, &ow, &gx, &gy) == 1 && gx == 48 && gy == 24,
+          "stamped door at era2 slot1 = (48,24), got (%d,%d)", gx, gy);
+    ctx.state.gate_index = 4;                 /* slot 2 */
+    CHECK(u2_gate_current_cell(&ctx, &ow, &gx, &gy) == 1 && gx == 42 && gy == 24,
+          "the rotation moves the door: era2 slot2 = (42,24), got (%d,%d)", gx, gy);
+    /* The stamp renders through the engine's own proven mapping: map byte 0xC0 -> staging
+     * 0x60 -> art 0x30, which is the moongate record in docs/tile-art-spec.md. */
+    CHECK(U2_GATE_STAGING == (uint8_t)((0xC0 >> 1) & 0xFE),
+          "staging 0x%02x is what the fill loop makes of map byte 0xC0", U2_GATE_STAGING);
+    CHECK(u2_view_art(U2_GATE_STAGING) == 0x30,
+          "staging halves to art 0x30, the moongate tile, got 0x%02x",
+          u2_view_art(U2_GATE_STAGING));
+
     /* --- the non-circular check: read the table back out of the executable ------ */
     /* Everything above is the engine agreeing with itself and with a transcription.
      * This half is the engine agreeing with the bytes, and it is the only assertion here
