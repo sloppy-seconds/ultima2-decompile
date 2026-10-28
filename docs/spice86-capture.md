@@ -86,6 +86,10 @@ before, given `spice86_type.py` two paragraphs above. Two working routes exist:
   holding Xvfb + Spice86 + x11vnc + websockify, `DISPLAY=:99` inside, noVNC published on
   host `:6085`. `--player FILE` seeds a character, `--no-patch` leaves the arrow keys
   unpatched, `--down` tears it down. Read `deploy/spice86-novnc/README.md` before using it.
+* **Injecting keys into that container crashes Spice86** — `InvalidOperationException: Collection
+  was modified` in `CfgCpuViewModel.RegenerateGraphFromNodeAsync`, racing the pause
+  `send_keyboard_key` causes. Memory **reads** and screenshots are safe, so the working split is:
+  the human types in the browser, the host only watches. Use `--mcp-port 20181` on the read tools.
 
 So a capture that genuinely needs keypresses is not blocked. Say which route you used.
 

@@ -141,7 +141,12 @@ echo "--- status ---"
 podman ps --filter name="$CONTAINER" --format '{{.Names}}  {{.Status}}'
 podman logs "$CONTAINER" 2>&1 | tail -14
 echo
-echo "Open in a browser:   http://ai.lan:${NOVNC_PORT}/vnc.html"
+# Scaling is in the URL on purpose. Xvfb is 1440x900 and the Spice86 window is 1024x768
+# placed at (208,66), so noVNC's default (scaling off) shows the desktop 1:1 and the browser
+# pane crops the bottom of it -- which reads as "the game's status lines are missing" and is
+# nothing of the sort. resize=scale fits the whole desktop to the pane; autoconnect skips the
+# connect dialog. Found the hard way 2026-10-29.
+echo "Open in a browser:   http://ai.lan:${NOVNC_PORT}/vnc.html?resize=scale&autoconnect=true"
 echo "No password. If the page asks, click Skip/Continue."
 echo
 echo "Drive it from the host:"

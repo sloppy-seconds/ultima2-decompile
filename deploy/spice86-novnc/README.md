@@ -18,8 +18,13 @@ cd /var/home/paul/Projects/decompile-u2-v2
 ./deploy/spice86-novnc/up.sh            # builds on first run, then starts
 ```
 
-Then open **http://ai.lan:6085/vnc.html**, click into the canvas, and press `P` twice to
-load the seeded character. No password.
+Then open **http://ai.lan:6085/vnc.html?resize=scale&autoconnect=true**, click into the canvas,
+and press `P` twice to load the seeded character. No password.
+
+The two URL parameters are load-bearing, not decoration. Xvfb runs at 1440x900 and the Spice86
+window is 1024x768 at (208,66), so with noVNC's default scaling the browser pane crops the bottom
+of the desktop and the game's last two status lines look like they have gone missing. `resize=scale`
+fits the whole desktop to the pane. Without `autoconnect` you get a connect dialog first.
 
 ```sh
 ./deploy/spice86-novnc/up.sh --player tmp/<run>/player   # seed a different character
