@@ -13,7 +13,10 @@
 #           CORRECTION to a recalled detail worth recording: the cycle is TIME, not turns. The
 #           countdown ran at a steady rate with no input at all, so "every 8 steps" is wrong in
 #           the unit even though the 8 is right.
-#           Causal link unproven — see asm/2708 and docs/moongates.md § 6.
+#           ATTRIBUTION REFUTED 2026-10-29 — see asm/2708. The listing's shape matched the live
+#           rotation and that match was coincidence, not causation: a stop at 17D:2908 never
+#           fired across a window in which the gate rotated twice. The OBSERVED paragraph above
+#           stands on its own measurements and is nothing to do with this file.
 # func 2744..2775  len 0032 B  evidence: seed+reko
 # calls: L_0052b3
 # confidence: low (bytes proven by check_func.py)

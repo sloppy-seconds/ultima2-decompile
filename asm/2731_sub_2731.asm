@@ -8,8 +8,9 @@
 #           stores — and concluded no code names the byte. A `cmp` is a reader, and nothing
 #           looked for one. That refutation also cited mapx03, a castle sector, while every
 #           wilderness mapx has zero `0xC0` cells at all.
-#           NAME PROPOSED, NOT APPLIED: gate_tile_test. Causal link unproven; see asm/2708 and
-#           docs/moongates.md § 6.
+#           ATTRIBUTION REFUTED 2026-10-29 — see asm/2708. A stop at 17D:2908 across observed
+#           gate rotations never fired, so this region is not the rotation code and no name is
+#           proposed for it. The `0xC0` reading itself stands: that byte is the live stamp.
 # func 2731..2734  len 0004 B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

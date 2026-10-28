@@ -6,7 +6,9 @@
 #           NOT DECODED: what DS:70 is, what DS:06 is, and therefore what this accomplishes. It
 #           is deliberately left unnamed rather than guessed at; the live gate transit in
 #           docs/moongates.md § 1 changes DS:49 and the position, and neither is obviously DS:06.
-#           Causal link to the observed rotation unproven — see asm/2708.
+#           ATTRIBUTION REFUTED 2026-10-29 — see asm/2708. Not the rotation code; the stop at
+#           17D:2908 never fired across observed rotations. What DS:70 and DS:06 are remains
+#           undecoded and this file stays unnamed on purpose.
 # func 2735..2743  len 000F B  evidence: seed+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
