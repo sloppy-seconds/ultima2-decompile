@@ -343,15 +343,17 @@ save again. Any test character built by an older `maxout` and left on disk is si
 1 and will refuse `Q` until the byte is cleared with `u2_edit.py set <file> world 0`.
 
 **The sweep was run on 2026-10-29.** 271 save-shaped files were scanned across the project and
-`/var/tmp/u2`; 171 carried `world = 1` and 147 were repaired through the tool and re-verified
-(size still 384, byte reads 0). Every working seed is now on Earth — `engine/saves/PLAYER`,
-the container's `spice86-runs/seed-player`, and the scratch characters under `/var/tmp/u2/`.
-Two groups were deliberately left alone:
+`/var/tmp/u2`; 171 carried `world = 1`, and **170 were repaired** through the tool and
+re-verified (size still 384, byte reads 0). Every working seed is on Earth — `engine/saves/PLAYER`,
+the container's `spice86-runs/seed-player`, and every scratch character under `/var/tmp/u2/`.
 
-* **`captures/spice86/cp5-g26-layout/player`** — a named capture is the evidence record. That
-  file legitimately recorded a character on planet 1, and rewriting evidence to tidy up a tool
-  bug is exactly the kind of edit that makes a corpus untrustworthy.
-* **23 files under `/var/tmp/u2/spice86-runs/*/player`** — dead per-launch copies, and they are
-  owned by **root** because the container ran under `sudo podman` before that was fixed today.
-  They cannot be repaired without sudo, and nothing will ever load them again.
+One file was deliberately left wrong: **`captures/spice86/cp5-g26-layout/player`**. A named
+capture is the evidence record, and that capture genuinely recorded a character on planet 1.
+Rewriting evidence to tidy up a tool bug is how a corpus stops being trustworthy.
+
+The sweep also surfaced a second piece of fossil damage: **12,953 root-owned paths** under
+`/var/tmp/u2`, in `spice86-runs/` and `novnc-saves/` — the residue of the container runs that
+went through `sudo podman` before that was fixed the same day. They are `chown`ed back to the
+user now and none remain, so the 27 saves inside them could be repaired. This does not recur:
+the launchers are rootless, so new runs write as the user.
 
