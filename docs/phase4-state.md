@@ -1567,3 +1567,30 @@ problem, not a reconstruction of original behaviour. Still open: `cmd_U`'s pavin
 `tile_put`, so an opened door in the engine vanishes on the next creature move. It is now a
 one-line change with its own case in `site_state.py`, and it no longer interacts with
 persistence, because nothing persists.
+
+## The Q guards are implemented; enhanced mode saves anywhere (2026-10-29)
+
+`cmd_Q`'s chain, read off the bytes at file 0x3FC7 and recorded in `asm/3DC7_cmd_Q.asm`, has
+three guards in a fixed order: `DS:4A` (indoors) → `ONLY OUTDOORS!`, `DS:6D` → `ONLY ON
+EARTH!`, `DS:13 < 0x78` (aboard a vehicle) → `ONLY ON FOOT!`, then `ONE MOMENT PLEASE!` and
+the save. The engine had the first and had stubbed the other two as unreachable until CP6/CP7.
+Both had become reachable — vehicles shipped the same week, and `DS:6D` is a live byte — so all
+three are now wired to real state behind `u2_save_policy`, and `U2_SAVE_POLICY_ENHANCED`
+drops them for `--enhanced`, which is the owner's "save anywhere".
+
+Gate: `engine/tests/save_gate.py`, wired as **CP5 V3**, thirteen checks. Each case asserts the
+refusal text *and* that the record was untouched, or that the save really landed and the entry
+pair followed the live position. Two lessons the controls taught the hard way:
+
+* the first version's "nothing was saved" checks passed **trivially**, because a save with no
+  movement writes a byte-identical record — the entry pair only moves if the player did. Every
+  case now walks a step first, or the negative assertion means nothing.
+* making the on-foot guard real broke two things that had been leaning on it being a stub:
+  `vehicle_board.py` observed the tile BOARD leaves by saving and reading it back, which the
+  original cannot do aboard a vehicle (that case now saves under `--enhanced` and says why),
+  and `save_q_check.c` hand-rolled a world with no on-foot stamp — a state the game cannot be
+  in. Both were fixture problems, and the guard was right in each case.
+
+Still open: the engine has no writer for `DS:6D`, so the Earth gate only fires from a save
+record that carries the byte — which is exactly the case the original refuses, but it means
+picking up the item that sets it is not yet modelled. That is G44.

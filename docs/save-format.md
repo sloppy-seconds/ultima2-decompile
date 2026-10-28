@@ -298,6 +298,26 @@ What a wilderness save actually wrote, in sector 30, against the pristine file:
 * **`monx30`: 15 bytes**, three creature slots (29, 30, 31) that were empty in the shipped
   file and now carry x, y, hp, type and kind. Those are wandering spawns, persisted.
 
+### The engine now implements the guards, and enhanced mode drops them
+
+`u2_overworld_save()` runs all three, in the order the bytes put them, behind `u2_save_policy`
+so the save path never branches on fidelity: `U2_SAVE_POLICY_ORIGINAL` refuses, and
+`U2_SAVE_POLICY_ENHANCED` (selected by `--enhanced`) allows all three, which is the owner's
+"save anywhere" of 2026-10-29. Gate: `engine/tests/save_gate.py`, wired as CP5 V3.
+
+Two things that fell out of implementing it:
+
+* The engine had the outdoors guard and had stubbed the other two as "cannot happen until
+  CP6/CP7" — vehicles exist now, and `DS:6D` turned out to be a live byte rather than a planet
+  counter. A guard left stubbed because the state that feeds it looked unreachable is a
+  standing invitation to this exact mistake.
+* Making the on-foot guard real broke `vehicle_board.py`, which observed the tile BOARD leaves
+  by saving and reading the sector back — and the original cannot save while aboard a vehicle.
+  The gate was not wrong about the rule, only about the route to the disk, so that one case now
+  saves under `--enhanced` and says why in its comment. `save_q_check.c` also had to be fixed:
+  it hand-rolled a world without the on-foot stamp, which is a state the game cannot be in.
+
+
 ### The `DS:6D` gate is measured and still unexplained
 
 `asm/3DFA_offer_only_outdoors_earth` tests `DS:6D` and prints `ONLY ON EARTH!` when it is
