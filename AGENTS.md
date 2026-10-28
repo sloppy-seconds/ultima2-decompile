@@ -226,10 +226,16 @@ Verification, in two independent layers:
 ## 3. Working Rules
 
 * **Command-loop scope is ruled (owner, 2026-10-28e): implement all 26 handlers, and the
-  project is NOT code-complete while any unproven one stands.** Fourteen have execution
-  evidence and are ordinary work: **A B E F G I K L P Q R U X Z**. The other twelve —
-  **C D H J M N O S T V W Y** — have never been seen to run in any capture, and each one gets
-  an in-source marker in the engine implementation:
+  project is NOT code-complete while any unproven one stands.** The list of which letters are
+  unproven is **not written here**, because a hand-maintained copy of a derived fact drifts and
+  then lies — this bullet carried "twelve unproven: C D H J M N O S T V W Y" long after the
+  corpus had moved on, and the marker rule attached to it pointed at handlers that had since
+  gained execution evidence. **`python3 tools/cmd_handlers.py` is the authority**: it prints
+  the crosswalk, its `exec` column is the evidence, and it is a gate that exits non-zero when
+  the jump table, the filenames and the provenance lines disagree. Read it, do not recall it.
+
+  What the rule means in practice, independent of the current count: a handler that is
+  **implemented** but has never been observed executing carries an in-source marker —
 
   ```c
   /* UNPROVEN: cmd_C (CAST) has never been observed executing in a capture.
@@ -237,15 +243,19 @@ Verification, in two independent layers:
      code-complete until a capture exercises it. See docs/needs-gameplay.md. */
   ```
 
+  A letter that is unproven **and** unimplemented owes no marker, because it is an honest gap
+  rather than a stub that looks finished; `tools/cmd_marker_gate.py` enforces exactly that
+  distinction and is wired into `check_all.sh`.
+
   The marker is not a formality and not a TODO. **A checkpoint, a milestone, or the phase may
   not be declared done, signed off, or "complete" with unproven handlers still carrying it** —
   say "complete except the N unproven command handlers" instead, or go get the capture. This
   exists because a stub that looks implemented is worse than a gap that says what it is: the
   CP5 scope rule already learned that a plausible boolean standing in for a proven distribution
-  passes the tests that do not exist yet and reads as finished. Twelve handlers written from
-  static inference alone are twelve places where that can happen quietly.
+  passes the tests that do not exist yet and reads as finished. Every handler written from
+  static inference alone is another place where that can happen quietly.
   `python3 tools/cmd_handlers.py` prints the crosswalk and its `exec` column is the evidence;
-  it is the authority for which twelve, and it is a gate that exits non-zero when the jump
+  it is the authority for which ones, and it is a gate that exits non-zero when the jump
   table, the filenames and the provenance lines disagree.
 
 * **`asm/` is the one lookup table for address → behaviour. There is no second
