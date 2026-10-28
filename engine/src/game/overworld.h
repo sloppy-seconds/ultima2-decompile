@@ -47,6 +47,15 @@ typedef struct u2_overworld {
     uint8_t  pending_cmd;
     uint8_t  view_mode;            /* the DS:12 analogue: 0xFF in-world, 4 in a site */
     int      sector_hi, sector_lo;
+    /* Stands in for "a gate is actually standing on the map". In the original that is
+     * literally true — the door is a 0xC0 stamped into the resident sector — and the
+     * engine deliberately does not stamp (gates.h gives the two reasons). This is the
+     * proxy for the part of that fact that changes behaviour: at load NOTHING is stamped,
+     * and the first door appears only when the rotation first fires. Measured 2026-10-29
+     * in era 0: DS:6E=0 at load with no 0xC0 anywhere in the grid, and the gate appeared
+     * only after a forced expiry. Without this the engine would offer a door at slot 0
+     * from turn one, which the original does not. docs/moongates.md § 2. */
+    int      gate_stamped;
     /* Turn counter for --debug cli. `turns` advances once per resolved player
      * turn (it is bumped inside creature_turn, the one place every turn passes);
      * `logged_turn` remembers which turn was last written, so the dump happens

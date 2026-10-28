@@ -63,19 +63,36 @@ coordinates* — and it is right in every particular except the unit: **it is ti
 countdown ran at a steady rate while the player stood completely still. Grade: observed, and the
 "8 turns" half of the memory is corrected by the frame where nothing moved and the door turned anyway.
 
-### The countdown is not the gate timer
+### A wrong conclusion, retracted, and the trap that caused it
 
-Added after the commit, from the same logs, because the wording above overstates what was measured.
-`DS:6F` is a **general countdown that the gate code borrows**, not a gate-owned timer:
+An earlier draft of this page claimed `DS:6F` was a general timer the gate code merely
+borrows, because in era 0 it decremented for 130 s while `DS:6E` sat still and the stop at
+`17D:2908` never fired. **That is wrong and it has been reverted.** Era 0 rotates exactly
+like the other eras — forced proof at `captures/spice86/era0-probe`, where poking `DS:6F`
+to 1 produced, within one tick:
 
-- at load, both `DS:6E` and `DS:6F` are `0x00` — not 8. The engine's zero-initialised state matches
-  the original, so there is nothing to seed.
-- in **era 0** (sector 00) `DS:6F` fell from `0xfb` to `0xe5` over 130 s while `DS:6E` never moved and
-  the byte was **never reloaded to 8**. A stop armed at `17D:2908` in that sector never fired.
+```
+before        era=0 DS:6E=0x00 DS:6F=0xfe gates=[]
+after poke    era=0 DS:6E=0x00 DS:6F=0x01 gates=[]
+t+5s          era=0 DS:6E=0x02 DS:6F=0x08 gates=[(31,56)]
+```
 
-So the rotation is gated on something the countdown does not control, and era 0 is the counterexample
-that proves it. Whatever that gate is, it is still unfound — which is also why `asm/2708`–`2775` stays
-unnamed in § 6.
+and then slot 2 → `(33,56)` and slot 3 → `(35,56)`, all three matching the era-0 row of the
+table.
+
+**The trap, stated so it does not happen again: at load `DS:6F` is `0x00`, so it wraps to
+`0xff` and needs roughly 255 ticks — about 25 minutes at the measured rate — before the
+first expiry.** Any era-0 observation shorter than that cannot see a rotation no matter
+what the code does. This is the second time this session a too-short window produced a
+confident wrong answer; the first was the CAST damage formula.
+
+### What load state actually looks like
+
+One real finding came out of the retraction: **at load nothing is stamped.** `DS:6E = 0`,
+`DS:6F = 0`, and there is no `0xC0` anywhere in the grid — slot 0's cell is ordinary ground.
+The first door appears only when the rotation first fires. The engine models this with
+`ow->gate_stamped`, which is set by the rotation and required by the transit, and
+`gate_check.c` asserts the refusal.
 
 ## 3. The gate table — decoded, 12/12
 
@@ -158,13 +175,15 @@ matches everything above: `DS:1F = DS:49 * 8`, index `DS:1F + DS:6E`, a coordina
 mismatch path `mov $0x8,%al ; mov %al,0x6f` followed by `incb 0x6E ; incb 0x6E ; and $0x7,%al`.
 
 **That is a shape match, not a causal proof.** A stop armed at `17D:2908` in sector 00 did **not** fire
-during 20 s of standing and walking, and no stop has ever been armed in a sector where a gate was
-actually rotating. So the routine that demonstrably runs is not yet demonstrably *this* routine. The
-files are not renamed and no name is asserted; see their headers for the proposal.
+during 20 s of standing and walking — though that run is now known to be worthless as evidence, since
+20 s cannot contain an expiry from the loaded countdown and era 0 has since been shown to rotate. No
+stop has been armed in a sector where a gate was seen rotating and for long enough to span an expiry.
+So the routine that demonstrably runs is not yet demonstrably *this* routine. The files are not renamed
+and no name is asserted; see their headers for the proposal.
 
-**The experiment that would close it:** arm `bp_read --ip 2908` in a sector where the gate is known to
-rotate — sector 20, era 2, is now a known-good place — and confirm it is hit at the rotation, with
-`DS:6E` and the table index visible at the stop. Until then § 6 is the honest ceiling.
+**The experiment that would close it:** arm `bp_read --ip 2908` and then *force* the expiry by writing
+`DS:6F = 1`, which takes about five seconds instead of twenty-five minutes. That is exactly the recipe
+used in `captures/spice86/era0-probe`, minus the stop. Until then § 6 is the honest ceiling.
 
 ## 7. Engine status — implemented for the observed subset
 

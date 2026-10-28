@@ -27,14 +27,13 @@
 struct u2_overworld;
 
 /* Reload value for the countdown. asm/2744 does `mov $0x8,%al ; mov %al,0x6f`, and the
- * live run reloaded to exactly 8 on every rotation IN ERAS 1, 2 AND 3.
+ * live run reloaded to exactly 8 on every rotation, in every era watched — 1, 2 and 3
+ * through play, and era 0 by forcing an expiry (captures/spice86/era0-probe).
  *
- * Do not read this as "DS:6F is the gate timer". It is a general countdown the gate code
- * borrows, and it runs whether or not the gate code does: in era 0 (sector 00) DS:6F fell
- * from 0xfb to 0xe5 over 130 s while DS:6E never moved and the byte was never reloaded to
- * 8, and a stop armed at 17D:2908 in that sector never fired. So the rotation is gated on
- * something the countdown does not control, and era 0 is the counterexample that proves it.
- * See docs/moongates.md § 2 and § 6. */
+ * Worth knowing before anyone waits for a rotation: at load DS:6F is 0x00, so it wraps to
+ * 0xff and takes roughly 255 ticks — about 25 minutes at the measured rate — before the
+ * first expiry. An era-0 observation shorter than that proves nothing about whether the
+ * rotation runs there. That trap produced a wrong claim in this file once already. */
 #define U2_GATE_COUNTDOWN_RELOAD 8
 
 /* Observed at load, both bytes 0x00 (captures/spice86/moongate-cycle, first row after P).
@@ -72,7 +71,9 @@ int u2_gate_slot(uint8_t gate_index);
 
 /*
  * One world turn of the rotation: the countdown falls by one, and on reaching zero it
- * reloads to U2_GATE_COUNTDOWN_RELOAD and the index advances by 2 mod 8.
+ * reloads to U2_GATE_COUNTDOWN_RELOAD and the index advances by 2 mod 8. A rotation is
+ * also what puts a door on the map, so this is what sets ow->gate_stamped; before the
+ * first expiry there is no door anywhere, which is how the original behaves at load.
  *
  * The unit is the honest weak point. Measured live, DS:6F fell by one about every 4.2 s
  * with the player standing still, so the original's unit is TIME, not turns — the
@@ -81,13 +82,17 @@ int u2_gate_slot(uint8_t gate_index);
  * inferred from the idle auto-PASS advancing turns, and is NOT proven. Anyone wiring
  * this to a real-time backend should revisit it.
  */
-void u2_gate_turn(u2_ctx *ctx);
+void u2_gate_turn(u2_ctx *ctx, struct u2_overworld *ow);
 
 /*
  * If the player is standing on the active gate cell and that slot has an observed
  * partner, perform the transit: the era digit changes, the position becomes the same
  * slot in the partner era, and the rotation advances as it did live (countdown reloaded,
  * index +2 mod 8).
+ *
+ * Returns 0 with nothing done until the first rotation has stamped a door — at load the
+ * index points at slot 0 but no gate exists, and transiting there would be a door the
+ * original does not have.
  *
  * Returns 1 when a transit happened. There is no prompt and no key: the original
  * consumed the player within one tick of the step onto the cell, which is the opposite

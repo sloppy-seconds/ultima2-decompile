@@ -18,6 +18,7 @@
 #include "core/ctx.h"
 #include "core/state.h"
 #include "game/gates.h"
+#include "game/overworld.h"
 
 static int checks, fails;
 
@@ -78,19 +79,42 @@ int main(int argc, char **argv)
     ctx.state.gate_index = 0;
     ctx.state.gate_countdown = U2_GATE_COUNTDOWN_RELOAD;
     for (int i = 0; i < U2_GATE_COUNTDOWN_RELOAD - 1; ++i)
-        u2_gate_turn(&ctx);
+        u2_gate_turn(&ctx, NULL);
     CHECK(ctx.state.gate_index == 0, "index has not moved while the countdown runs");
-    u2_gate_turn(&ctx);                          /* the expiry */
+    u2_gate_turn(&ctx, NULL);                        /* the expiry */
     CHECK(ctx.state.gate_countdown == U2_GATE_COUNTDOWN_RELOAD,
           "countdown reloads to 8 on expiry, got %u", ctx.state.gate_countdown);
     CHECK(ctx.state.gate_index == 2, "index advances by 2 on expiry, got %u",
           ctx.state.gate_index);
     for (int cycle = 0; cycle < 3; ++cycle) {
         for (int i = 0; i < U2_GATE_COUNTDOWN_RELOAD; ++i)
-            u2_gate_turn(&ctx);
+            u2_gate_turn(&ctx, NULL);
     }
     CHECK(ctx.state.gate_index == 0, "index wraps 06 -> 00 after four rotations, got %u",
           ctx.state.gate_index);
+
+    /* --- the two transit refusals that need no sector load -----------------
+     * Both return before u2_world_load, so they run without a content directory.
+     * The positive legs (era2 slot1 <-> era1 slot1, era2 slot2 <-> era3 slot2) are the
+     * live observations in docs/moongates.md § 3; reproducing them here would need a
+     * sector store, and the table checks above already pin the coordinates they use. */
+    static u2_overworld ow;               /* static: it carries tiles and frame buffers */
+    memset(&ow, 0, sizeof ow);
+    ctx.state.sector_first = 2;
+    ctx.state.gate_index = 2;             /* slot 1 */
+    ow.x = 48; ow.y = 24;                 /* exactly era2 slot1, the live transit cell */
+    CHECK(u2_gate_transit(&ctx, &ow) == 0,
+          "no door before the first rotation stamps one (era 0 at load behaves so)");
+    ow.gate_stamped = 1;
+    ctx.state.gate_index = 0;             /* slot 0: stamped, but never observed a partner */
+    ow.x = 16; ow.y = 16;
+    CHECK(u2_gate_transit(&ctx, &ow) == 0, "era2 slot0 offers no door: partner unobserved");
+    ctx.state.gate_index = 6;             /* slot 3, same refusal */
+    ow.x = 19; ow.y = 52;
+    CHECK(u2_gate_transit(&ctx, &ow) == 0, "era2 slot3 offers no door: partner unobserved");
+    ctx.state.gate_index = 4;             /* slot 2, but the player is not standing on it */
+    ow.x = 1; ow.y = 1;
+    CHECK(u2_gate_transit(&ctx, &ow) == 0, "no transit unless the player is on the cell");
 
     /* --- the non-circular check: read the table back out of the executable ------ */
     /* Everything above is the engine agreeing with itself and with a transcription.

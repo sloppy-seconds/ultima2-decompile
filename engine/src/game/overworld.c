@@ -1733,7 +1733,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         /* One world turn of the door rotation. The original's countdown is wall-clock and
          * this is turn-based; see gates.h for why that substitution is stated rather than
          * hidden. */
-        u2_gate_turn(ctx);
+        u2_gate_turn(ctx, ow);
     }
     ctx->frame = NULL;
     return 0;

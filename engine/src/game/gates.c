@@ -62,13 +62,17 @@ int u2_gate_slot(uint8_t gate_index)
     return (gate_index & 0x7) / 2;
 }
 
-void u2_gate_turn(u2_ctx *ctx)
+void u2_gate_turn(u2_ctx *ctx, struct u2_overworld *ow)
 {
     /* Observed sequence is 8,7,6,...,2,1 and then the next tick reloads to 8 with the
      * index advanced — the reload happens ON the 1, not on a tick at zero. */
     if (ctx->state.gate_countdown <= 1) {
         ctx->state.gate_countdown = U2_GATE_COUNTDOWN_RELOAD;
         ctx->state.gate_index = (uint8_t)((ctx->state.gate_index + 2) & 0x7);
+        /* The rotation is what puts a door on the map. Before the first one there is
+         * nothing to step on, even though the index already points at slot 0. */
+        if (ow)
+            ow->gate_stamped = 1;
         return;
     }
     ctx->state.gate_countdown--;
@@ -76,6 +80,12 @@ void u2_gate_turn(u2_ctx *ctx)
 
 int u2_gate_transit(u2_ctx *ctx, struct u2_overworld *ow)
 {
+    /* No door exists until the first rotation stamps one. At load the index is 0 and the
+     * slot-0 cell is ordinary ground; the original stamps nothing until the countdown
+     * first expires (era 0, forced expiry, captures/spice86/era0-probe). */
+    if (!ow->gate_stamped)
+        return 0;
+
     const int era = ctx->state.sector_first;
     const int slot = u2_gate_slot(ctx->state.gate_index);
     int gx = 0, gy = 0;

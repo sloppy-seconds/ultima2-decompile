@@ -3,7 +3,7 @@
 #           call opcode is all this range holds.
 # func 3794..3794  len 001 B  evidence: seed+reko (jump table cs:0730 entry I)
 # provenance: live:airport (+4 other harvests), static
-#           entry executed in 7 of 177 harvests; derived by tools/provenance_from_traces.py
+#           entry executed in 7 of 178 harvests; derived by tools/provenance_from_traces.py
 # confidence: high (handler role proven; split is a map-boundary artifact)
 # notes: stop-trunc — do not "fix" to `call`; operand bytes are outside range
 cmd_I:
