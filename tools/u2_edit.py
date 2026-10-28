@@ -142,8 +142,16 @@ ARMOURS = ['SKIN', 'CLOTH', 'LEATHER', 'CHAIN', 'PLATE', 'REFLECT', 'POWER', 'NO
 ITEMS = ['RING', 'WAND', 'STAFF', 'BOOTS', 'CLOAK', 'HELM', 'GEM', 'ANKH',
          'RED GEM', 'SKULL KEY', 'GREEN GEM', 'BRASS BUTTON', 'BLUE TASSLE',
          'STRANGE COIN', 'GREEN IDOL', 'TRI-LITHIUM']
-CLASS_NAMES = {0: 'fighter', 1: 'mage', 2: 'paladin', 3: 'thief'}
+CLASS_NAMES = {0: 'FIGHTER', 1: 'CLERIC', 2: 'WIZARD', 3: 'THIEF'}
+# Corrected 2026-10-29. This read {1: 'mage', 2: 'paladin'}, which is wrong in both entries and
+# the error was ours, not the game's: the shipped manual and this tool's own help text both say
+# CLERIC and WIZARD, and the authority is the class group of the indexed name pool —
+# asm/4C55_name_pool.asm pool[72..75] = FIGHTER, CLERIC, WIZARD, THIEF, indexed as
+# pool[0x48 + class]. "Paladin" is a Ultima III class and does not exist in this binary.
 RACE_NAMES = {0: 'human', 1: 'elf', 2: 'dwarf', 3: 'hobbit'}
+# The ten spell names, pool[36..45], indexed by the readied slot DS:63. Slot 0 is NONE.
+SPELL_NAMES = ['NONE', 'LIGHT', 'DOWN LADDER', 'UP LADDER', 'PASSWALL', 'SURFACE',
+               'PRAYER', 'MAGIC MISSILE', 'BLINK', 'KILL']
 
 # A durable test character: strong, unkillable, fully kitted.
 # Power armour (6) + quick sword (9) + keys and torches, one of every item and
@@ -151,8 +159,16 @@ RACE_NAMES = {0: 'human', 1: 'elf', 2: 'dwarf', 3: 'hobbit'}
 # the TEST character was observed live with str=50 (BCD 0x50).
 MAXOUT = {'str': 40, 'agi': 40, 'sta': 40, 'cha': 40, 'wis': 40, 'int': 40,
           'hp': 9999, 'food': 999999, 'gold': 9999, 'exp': 9999}
-ARMOUR_BASE = 0x76      # weapons owned, DS:76+i
+ARMOUR_BASE = 0x76      # weapons owned, DS:76+i  (the name is wrong; the comment is right)
 ITEM_BASE = 0xD6        # items held, DS:D6+i
+# Spell stock, DS:B6+i, ten slots, indexed by the readied-spell number DS:63. The index base is
+# the SPELLS group of the name pool (asm/4C55_name_pool.asm pool[36..45]): 0 NONE, 1 LIGHT,
+# 2 DOWN LADDER, 3 UP LADDER, 4 PASSWALL, 5 SURFACE, 6 PRAYER, 7 MAGIC MISSILE, 8 BLINK, 9 KILL.
+# asm/3139_cast_spell_flow reads DS:B6[DS:63] and answers NO SPELL! when it is zero, then
+# decrements it in packed decimal — so these are BCD counts and spells are CONSUMABLES, not
+# memorised slots. Slot 0 is NONE and is left alone.
+SPELL_BASE = 0xB6
+SPELL_SLOTS = 10
 
 
 def set_counts(d, base, n, value):
@@ -235,6 +251,9 @@ def show(d):
     print('exp     %d' % get(d, 'exp'))
     print('entry   (%d, %d)' % (get(d, 'entry_x'), get(d, 'entry_y')))
     print('spell   %d' % get(d, 'spell'))
+    stock = [(SPELL_NAMES[i], d[SPELL_BASE + i - BASE]) for i in range(1, SPELL_SLOTS)]
+    stock = [(n, c) for n, c in stock if c]
+    print('spells  %s' % (', '.join('%s x%d' % sc for sc in stock) or '(none)'))
     w, a = get(d, 'weapon'), get(d, 'armour')
     print('wield   %d (%s)' % (w, WEAPONS[w] if w < len(WEAPONS) else '?'))
     print('wearing %d (%s)' % (a, ARMOURS[a] if a < len(ARMOURS) else '?'))
@@ -296,13 +315,22 @@ def main():
         if len(a.args) != 2:
             sys.exit('set needs FIELD VALUE')
         f, v = a.args
-        if f == 'items':
+        if f == 'spells':
+            # Stock every spell slot the caster can actually ready (1..9; slot 0 is NONE).
+            n = int(v)
+            if not 0 <= n <= 99:
+                sys.exit('spells count must be 0..99 — it is stored as packed decimal')
+            for i in range(1, SPELL_SLOTS):
+                d[SPELL_BASE + i - BASE] = ((n // 10) << 4) | (n % 10)
+            print('spells 1..%d -> %d each' % (SPELL_SLOTS - 1, n))
+        elif f == 'items':
             sys.exit("there is no single 'items' field; the 16 slots live at DS:D6+i "
                      "(see ITEMS in this file), or run `maxout`")
-        if f not in FIELDS:
-            sys.exit('unknown field %r; known: %s' % (f, ', '.join(sorted(FIELDS))))
-        put(d, f, v)
-        print('%s -> %s' % (f, v))
+        elif f not in FIELDS:
+            sys.exit('unknown field %r; known: %s, spells' % (f, ', '.join(sorted(FIELDS))))
+        else:
+            put(d, f, v)
+            print('%s -> %s' % (f, v))
     else:
         sys.exit('unknown command')
 
@@ -310,6 +338,14 @@ def main():
         f.write(bytes(d))
     chk = load(out)
     if a.cmd == 'set':
+        if a.args[0] == 'spells':
+            # Read back a slot that must have changed, not the count we just computed.
+            want = ((int(a.args[1]) // 10) << 4) | (int(a.args[1]) % 10)
+            if chk[SPELL_BASE + 1 - BASE] != want:
+                sys.exit('write did not land: spell slot 1 reads back 0x%02x' %
+                         chk[SPELL_BASE + 1 - BASE])
+            print('wrote %s' % out)
+            return
         got = get(chk, a.args[0])
         # name and sex are not integers. Running int() on them raised ValueError
         # AFTER the write had already landed, so a successful edit printed a
