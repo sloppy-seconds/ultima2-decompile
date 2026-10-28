@@ -105,6 +105,14 @@ exact byte-for-byte fidelity.
   reason (nobody edits a reference), it is gitignored, and it is *not* a source of truth about
   this binary. Read `docs/external-ultima3-remake.md` before using it — that file carries the
   licence line (MIT code, not-ours art) and the two quarantines.
+* **`references/win/` is a third-party rewrite, not a copy of this binary.** The owner
+  added it on 2026-10-29: John Alderson's *Windows Native Ultima II* v1.01 (2000) — a
+  native Win32 MFC **reimplementation** that reads the same data files, plus a set of
+  community-sourced planet maps. It is read-only for the same reasons, it is gitignored,
+  and it is **not** evidence about `original/ultimaii.exe` — the author himself lists the
+  places where his arithmetic diverges. Read `docs/external-windows-port.md` before
+  touching it; that file carries the rewrite-not-recompile evidence and the measured
+  divergence between its `MAPG` maps and our `mapx` files.
 * **`references/apple/` is the Apple II original, and it is game content.** Three 140 KB
   UCSD p-System volume images the owner added: the 6502 build the DOS port descends from.
   Reading it is allowed and it is now load-bearing, because it is how the lineage claim in § 1
@@ -492,7 +500,7 @@ self-describing and carries its own exclusion list with reasons. `docs/plan-cros
 | `bestiary/` | third-party creature data joined to our tile table by bitmap identity. `bestiary.tsv` and `matches.md` are our own derived facts; `cache/` and `view.html` hold copyrighted art rips in seven platform variants. Read `docs/bestiary.md` before using it, and note the cleanroom entries. | `cache/` and `view.html` **gitignored** |
 | `captures/` | runtime captures and screenshots | **gitignored** |
 | `original/` | working copy of the game files — the executable **plus** its sidecar content (`mapxNN` sector maps, `monxNN` monster data, `tlkxNN` NPC dialogue, `pic*` pictures, the `player` save). Ultima II is not a single-file game: the 37 KB exe is the engine and the pack is ~94 files, about 2.2 MB | **gitignored** |
-| `references/` | `ultima2/` is the pristine read-only backup; `ultima3/` is an owner-added third-party MIT remake clone (see `docs/external-ultima3-remake.md`); `apple/` is the Apple II 6502 original as p-System disk images (see `docs/apple2-reference.md`) | **gitignored** |
+| `references/` | `ultima2/` is the pristine read-only backup; `ultima3/` is an owner-added third-party MIT remake clone (see `docs/external-ultima3-remake.md`); `apple/` is the Apple II 6502 original as p-System disk images (see `docs/apple2-reference.md`); `win/` is an owner-added third-party Win32 rewrite and its substitute planet maps (see `docs/external-windows-port.md`) | **gitignored** |
 | `deploy/` | containerised runtimes. `spice86-novnc/` runs the original game with its own Xvfb + x11vnc + noVNC, so a headed capture needs nothing from the host; `novnc/` does the same for the engine build. `up.sh` in each is the entry point | tracked (the staged `u2-sdl` binary is not) |
 | `decompiled/` | bulk decompiler output, regenerable | **gitignored** |
 | `tmp/` | per-launch game copies | **gitignored** |
