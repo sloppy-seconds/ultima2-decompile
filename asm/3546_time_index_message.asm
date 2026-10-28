@@ -3,6 +3,21 @@
 # name-evidence: five inline strings, file 0x3752 "ANOS: 2112 A.D.", 0x3768
 #           "ANOS: LEGENDS!", 0x377D "ANOS: 9,000,000 B.C.", 0x3798
 #           "ANOS: 1423 B.C.", 0x37AE "ANOS: 1990 A.D."
+# TENSION WITH THE WORLD BYTE — unresolved, see docs/needs-gameplay.md G45: the index here is
+#           DS:49, the sector TENS digit. asm/7030_space_collision also writes DS:49, and it
+#           writes it from DS:6D — the world byte (0 Earth, 1..9 planets, 0x0A deep space),
+#           set beside 'YOU ARE ORBITING ' and 'YOU ARE IN DEEP SPACE.'. One byte, two
+#           documented meanings, and they cannot both be right as stated:
+#             * if tens is the era, then eras are 0..4 and the mapx set runs to tens 9, so
+#               5..9 are not eras — yet every tens group has exactly one wilderness sector X0
+#               plus its sites, which is what a WORLD looks like, not an era.
+#             * if tens is the world, then this routine's five arms label worlds as time
+#               periods, and 'YOU ARE ORBITING' would be a time-travel message.
+#           The Apple twin does not settle it either: it derives its index as (x >> 1) + 1,
+#           arithmetic that turns ten things into five, which fits eras-from-a-ten-valued
+#           thing and not a direct copy. What would settle it is named in G45: read DS:49 and
+#           the ANOS line across a time-travel event, and separately across a planet landing,
+#           and see which one moves the tens digit.
 # func 3546..3564  len 001F B  evidence: seed+reko
 # dispatch (observed: the dec/je chain and each call target):
 #   %di == 1 -> "ANOS: 9,000,000 B.C."  (call at file 0x377A)

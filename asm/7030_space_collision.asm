@@ -12,6 +12,13 @@
 #             * `mov 0x6d,%al ; mov %al,0x49` copies it into DS:49, the sector TENS digit.
 #               The world you are on and the high digit of the sector number are the same
 #               value, which is how MAPXNN reaches a planet's sectors at all.
+#           TENSION, unresolved (docs/needs-gameplay.md G45): asm/3546 reads that same DS:49
+#           as the TIME-PERIOD index (0 LEGENDS, 1 9,000,000 B.C., 2 1423 B.C., 3 1990 A.D.,
+#           4+ 2112 A.D.). So DS:49 is documented as both a world and an era, and the mapx set
+#           (tens 0..9, each group with exactly one wilderness X0 plus its sites) fits the
+#           world reading better than the era reading. Neither has been observed moving.
+#           Settled by watching DS:49 across a time-travel event and, separately, a planet
+#           landing — see G45 for the recipe.
 #           asm/3DFA refuses the save when this byte is non-zero, with the message
 #           'ONLY ON EARTH!'. asm/6999_space_status reads it as an index.
 # func 7030..7241  len 0212 B  evidence: call+reko
