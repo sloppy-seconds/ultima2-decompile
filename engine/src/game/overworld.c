@@ -885,6 +885,37 @@ uint8_t u2_unlock_spend_key(uint8_t keys)
     return (uint8_t)out;
 }
 
+/* asm/44D4 (X-IT). The guard order is the byte order and it is observable: a mounted player on
+ * a non-grass, non-water cell still gets the on-foot test first, so an on-foot character is
+ * answered " WHAT?" whatever is under them. mode_a is [DS:14] = tile >> 1, so 0x04 is grass
+ * (map 0x08) and 0x00 is water (map 0x00..0x01). The water arm admits the ship alone: you may
+ * only drop the ship where you are afloat, which is the tile its own BOARD arm left behind. */
+int u2_dismount_rule(uint8_t stamp, uint8_t mode_a)
+{
+    if (stamp >= 0x78u)
+        return U2_DISMOUNT_ON_FOOT;
+    if (mode_a == 0x04u)
+        return U2_DISMOUNT_OK;
+    if (mode_a == 0x00u && stamp == U2_MODE_SHIP)
+        return U2_DISMOUNT_OK;
+    return U2_DISMOUNT_NOT_HERE;
+}
+
+/* `mov 0x13,%al ; add %al,%al` then the write through the cell pointer: 0x22->0x44 horse,
+ * 0x24->0x48 ship, 0x26->0x4C plane, 0x28->0x50 rocket. The exact inverse of the shift BOARD
+ * reads, which is what makes the boarding rule "the tile is carried", not "the tile is gone". */
+uint8_t u2_dismount_tile(uint8_t stamp)
+{
+    return (uint8_t)(stamp << 1);
+}
+
+/* `mov 0x47,%al ; add %al,%al ; clc ; adc $0x78,%al` — the on-foot stamp is class-dependent.
+ * Every capture shows 0x78 because every capture so far was a fighter (pclass 0). */
+uint8_t u2_foot_stamp(uint8_t pclass)
+{
+    return (uint8_t)(0x78u + 2u * pclass);
+}
+
 
 /* Public wrapper over the same subtraction the PASS arm uses, so a test can
  * drive it directly. Returns 1 when the subtraction underflowed (death), and

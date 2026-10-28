@@ -672,6 +672,22 @@ else
     bad "CP5 V3: the save guards disagree with cmd_Q at file 0x3FC7"
 fi
 
+# --- V4: X-IT is the dismount BOARD's twin -------------------------------------------
+#
+# asm/44D4 writes 2*[DS:13] back through the cell pointer and restores DS:13 to 0x78 + 2*pclass.
+# That is the inverse of BOARD's shift right, and it is what makes the boarding rule "the tile
+# is carried" rather than "the tile is destroyed". The gate runs the reachable arms end to end
+# (on foot, horse on grass, ship on water, plane on grass) and site_check.c covers the arm no
+# scripted foot start can reach (a non-ship vehicle over water) plus the class-dependent stamp.
+# The dismount arms are byte-proven and unplayed: the three harvests that ran cmd_X pressed
+# every letter on a foot character, so only the " WHAT?" arm has ever executed.
+if U2_BIN=./u2 python3 tests/vehicle_dismount.py > "$WORK/v4.log" 2>&1; then
+    ok "CP5 V4: X-IT returns the vehicle tile and the class-dependent foot stamp"
+else
+    sed 's/^/        /' "$WORK/v4.log" | tail -10
+    bad "CP5 V4: the dismount disagrees with asm/44D4"
+fi
+
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
 #
 # asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is

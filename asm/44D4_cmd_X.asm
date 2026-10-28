@@ -27,8 +27,10 @@
 #   standing on water, which is what the ship arm left behind when you boarded.
 #   Grade: bytes for every step above. Not observed: no harvest has an X-IT on a vehicle
 #   (the three harvests that ran cmd_X were the cmd-letters sweeps, which press every
-#   letter on a foot character in a grass sector). The engine has cmd_X unimplemented
-#   still; this header is the record, not a claim that it is wired.
+#   letter on a foot character in a grass sector). WIRED 2026-10-29: the engine implements
+#   it as cmd_X in engine/src/game/commands.c. tests/vehicle_dismount.py (CP5 V4) covers the
+#   reachable arms end to end; site_check.c covers the "-NOT HERE!" arm and the class-
+#   dependent foot stamp, neither of which a scripted foot start can reach.
 #   NB the last line is the same expression as asm/080D's: the on-foot stamp is
 #   class-dependent, 0x78 + 2*pclass, not the constant 0x78 every capture happens to show.
 cmd_X:

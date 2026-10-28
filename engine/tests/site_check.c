@@ -215,6 +215,40 @@ int main(int argc, char **argv)
     CHECK(u2_unlock_spend_key(0x10) == 0x09, "10 keys spends to 09, borrowing across the nibble");
     CHECK(u2_unlock_spend_key(0x01) == 0x00, "the last key spends to zero");
 
+    /* asm/44D4 (X-IT, the dismount). The rule is unit-tested rather than only end to end,
+     * because the "-NOT HERE!" arm cannot be reached from a scripted foot start: it needs a
+     * non-ship vehicle standing on water, which in play means a plane flown over the sea and
+     * that is the ungated flight loop (G43). The bytes are proven; the route is not. */
+    CHECK(u2_dismount_rule(0x78, 0x04) == U2_DISMOUNT_ON_FOOT,
+          "on foot over grass is still ' WHAT?' — the on-foot test comes first");
+    CHECK(u2_dismount_rule(0x7E, 0x04) == U2_DISMOUNT_ON_FOOT,
+          "a non-fighter on foot is still on foot (0x7E >= 0x78)");
+    CHECK(u2_dismount_rule(0x22, 0x04) == U2_DISMOUNT_OK,
+          "horse over grass dismounts");
+    CHECK(u2_dismount_rule(0x24, 0x00) == U2_DISMOUNT_OK,
+          "ship over water dismounts — the ship's own clause");
+    CHECK(u2_dismount_rule(0x22, 0x00) == U2_DISMOUNT_NOT_HERE,
+          "horse over water is '-NOT HERE!': only the ship may be dropped afloat");
+    CHECK(u2_dismount_rule(0x26, 0x00) == U2_DISMOUNT_NOT_HERE,
+          "plane over water is '-NOT HERE!' too");
+    CHECK(u2_dismount_rule(0x26, 0x06) == U2_DISMOUNT_NOT_HERE,
+          "neither grass nor water (forest, mode_a 0x06) refuses the dismount");
+    /* The tile put back is 2*[DS:13], the exact inverse of BOARD's shift right. */
+    CHECK(u2_dismount_tile(0x22) == 0x44, "horse returns the 0x44 tile");
+    CHECK(u2_dismount_tile(0x24) == 0x48, "ship returns the 0x48 tile");
+    CHECK(u2_dismount_tile(0x26) == 0x4C, "plane returns the 0x4C tile");
+    CHECK(u2_dismount_tile(0x28) == 0x50, "rocket returns the 0x50 tile");
+    /* The on-foot stamp is class-dependent: 0x78 + 2*pclass (asm/44D4 and asm/080D agree).
+     * Every capture shows 0x78 because every capture so far was a fighter. */
+    CHECK(u2_foot_stamp(0) == 0x78, "FIGHTER dismounts to 0x78, the value every capture shows");
+    CHECK(u2_foot_stamp(1) == 0x7A, "CLERIC dismounts to 0x7A");
+    CHECK(u2_foot_stamp(2) == 0x7C, "WIZARD dismounts to 0x7C");
+    CHECK(u2_foot_stamp(3) == 0x7E, "THIEF dismounts to 0x7E");
+    /* And the restored stamp must still read as on foot to the guards that compare against
+     * 0x78 — the Q on-foot gate and cmd_E both use >= 0x78, so a class-dependent value must
+     * not be mistaken for a vehicle. */
+    CHECK(u2_foot_stamp(3) >= 0x78, "0x7E still passes every 'on foot' comparison in the game");
+
     printf("site_check: %d checks, %d failures%s\n", checks, fails,
            skipped ? " (data cross-check skipped)" : "");
     return fails != 0;

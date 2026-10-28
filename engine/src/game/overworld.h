@@ -299,4 +299,17 @@ uint8_t u2_unlock_replacement(uint8_t ground_tile);
 /* One packed-decimal key spent (asm/435E's stc/mov/cmc/sbb/das/cmc). */
 uint8_t u2_unlock_spend_key(uint8_t keys);
 
+/* asm/44D4 (X-IT, the dismount) — the guard chain, in the order the bytes test it.
+ * `mode_a` is [DS:14], the tile under the player shifted right one. */
+#define U2_DISMOUNT_ON_FOOT  0   /* [DS:13] >= 0x78: nothing to destroy -> " WHAT?" */
+#define U2_DISMOUNT_NOT_HERE 1   /* neither grass nor water-above-a-ship -> "-NOT HERE!" */
+#define U2_DISMOUNT_OK       2
+int u2_dismount_rule(uint8_t stamp, uint8_t mode_a);
+/* The tile X-IT puts back under the player: 2*[DS:13], the exact inverse of BOARD's shift. */
+uint8_t u2_dismount_tile(uint8_t stamp);
+/* The on-foot stamp X-IT restores: 0x78 + 2*pclass. Class-dependent, not the constant 0x78
+ * every capture shows, because every capture so far was a fighter. Same expression as
+ * asm/080D; see asm/44D4_cmd_X.asm and docs/needs-gameplay.md G41. */
+uint8_t u2_foot_stamp(uint8_t pclass);
+
 #endif /* U2_OVERWORLD_H */

@@ -405,6 +405,48 @@ static u2_cmd_result cmd_W(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* asm/44D4 cmd_X: X-IT, the dismount — the other half of the boarding rule the vehicle handoff
+   could not find. BOARD consumes the tile and sets DS:13; X-IT writes 2*[DS:13] back through
+   the same cell pointer and returns the player to foot, so the tile was never destroyed, only
+   carried. The guard order is the byte order: on foot there is nothing to destroy (" WHAT?"),
+   then the cell under the player decides — grass anywhere, or water if and only if it is the
+   ship, since the ship may only be dropped afloat. Anything else is "-NOT HERE!".
+
+   The restored stamp is 0x78 + 2*pclass, not the constant 0x78: every capture shows 0x78
+   because every capture so far was a fighter. See asm/44D4_cmd_X.asm and G41.
+
+   Not observed end to end: the three harvests that ran cmd_X pressed every letter on a foot
+   character in a grass sector, so they exercised the " WHAT?" arm only. The dismount arms are
+   byte-proven and unplayed; the "-NOT HERE!" arm is not even reachable from a foot start (it
+   needs a non-ship vehicle standing on water, i.e. a plane flown over the sea, which is G43
+   territory), so it is covered at unit level in tests/site_check.c. Gate: vehicle_dismount.py. */
+static u2_cmd_result cmd_X(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_XIT);
+
+    const uint8_t stamp = ctx->state.player_stamp;
+    const uint8_t mode_a = (uint8_t)(u2_world_tile_at(&ow->world, ow->x, ow->y) >> 1);
+
+    switch (u2_dismount_rule(stamp, mode_a)) {
+    case U2_DISMOUNT_ON_FOOT:
+        seam_str_out(ctx, U2_S_XIT_WHAT);
+        break;
+    case U2_DISMOUNT_NOT_HERE:
+        seam_str_out(ctx, U2_S_XIT_NOT_HERE);
+        break;
+    default:
+        /* A terrain write, same reasoning as BOARD: the tile has to survive the creature turn
+         * that follows, or the vehicle vanishes the moment anything moves. */
+        u2_world_terrain_put(&ow->world, ow->x, ow->y, u2_dismount_tile(stamp));
+        ctx->state.player_stamp = u2_foot_stamp(ctx->state.pclass);
+        break;
+    }
+
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* asm/437E_cmd_V: VIEW.
  *
  * DS:DB is items_held[5], and U2_T_ITEMS[5] is "HELM" — so the gate is literally "do you hold a
@@ -787,7 +829,8 @@ static u2_cmd_result cmd_L(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      not the per-item selection cmd_V walks.
  *   W  the armour menu needs armour ownership and the strength gate; asm/43F3's menu is read
  *      but the ownership bytes are not modelled.
- *   X  destroy item.
+ *   X  implemented 2026-10-29 as the dismount (asm/44D4); it was listed here as "destroy item"
+ *      from the string alone, which was the wrong reading of the letter.
  *   Y  asm/4542 prints "YELL WHAT?" plus one 0x8d glyph and falls through; like N, the
  *      continuation is unresolved, and the 0x8d glyph mapping is a CP9 decision.
  *
@@ -822,7 +865,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */
     cmd_V, /* V  view: asm/437E, needs a HELM held and sector digit < 4; the map overlay is NOT modelled */
     cmd_W, /* W  wear armour: asm/43F3, full menu then digit then ownership and strength gates */
-    NULL,  /* X  not implemented: destroy item */
+    cmd_X, /* X  X-IT dismount: asm/44D4, returns the tile and the class-dependent foot stamp */
     NULL,  /* Y  see the note above */
     cmd_Z, /* Z  status screen: asm/4568, a full-page overwrite, no turn passes */
 };

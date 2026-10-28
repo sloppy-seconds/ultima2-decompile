@@ -335,6 +335,12 @@ MANIFEST = [
     ("U2_S_LAUNCH_PLANE_REF_B",    "38B0_cmd_L.asm",            ("run", 0x3C2A, 23, "MISSING A BRASS BUTTON!")),
     ("U2_S_LAND_PLANE",            "38B0_cmd_L.asm",            ("run", 0x3D5D, 11, "LAND PLANE.")),
     ("U2_S_LAND_NOT_HERE",         "38B0_cmd_L.asm",            ("run", 0x3D75, 19, "LAND--NOT HERE!!!!!")),
+    # asm/44D4 (X-IT, the dismount). " WHAT?" here is the on-foot refusal, a different site
+    # from the identical text in cmd_E and cmd_B; the extractor keeps one entry per site so a
+    # missing string names the handler that lost it.
+    ("U2_S_XIT",                   "44D4_cmd_X.asm",            ("run", 0x46D7, 4,  "X-IT")),
+    ("U2_S_XIT_WHAT",              "44D4_cmd_X.asm",            ("run", 0x46E6, 6,  " WHAT?")),
+    ("U2_S_XIT_NOT_HERE",          "44D4_cmd_X.asm",            ("run", 0x4715, 10, "-NOT HERE!")),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
