@@ -1082,12 +1082,20 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
 
     /* The two bytes the original carries into the world and the engine never set
      * until site entry needed them: DS:13 is the sprite stamped into the map cell
-     * (0x78 on foot, constant across every in-world capture) and DS:12 is the view
-     * mode, 0xFF in-world and 4 inside a site. cmd_E's on-foot gate reads the
-     * first, so without this it would answer "-ONLY ON FOOT!".
+     * and DS:12 is the view mode, 0xFF in-world and 4 inside a site. cmd_E's on-foot
+     * gate reads the first, so without this it would answer "-ONLY ON FOOT!".
      * The overworld already carried 0xFF locally in ow->view_mode; now the
-     * state block agrees with it. */
-    ctx->state.player_stamp   = 0x78;
+     * state block agrees with it.
+     *
+     * NOT the constant 0x78. asm/080D computes the on-foot stamp as 0x78 + 2*pclass, and
+     * asm/44D4 restores the same expression on dismount, so the value at world open has to
+     * come from the class or the three non-Fighter classes enter the world stamped wrong.
+     * It read 0x78 for as long as it did because every capture and every seeded test
+     * character was a Fighter, which hides it completely: a Fighter's stamp IS 0x78.
+     * Measured against the original 2026-10-29 — a class-2 Wizard read DS:13 = 0x7A on
+     * foot (captures/spice86/shop-window-transport, docs/needs-gameplay.md G41).
+     * Gate: tests/foot_stamp.py, all four classes. */
+    ctx->state.player_stamp   = u2_foot_stamp(ctx->state.pclass);
     ctx->state.view_mode      = ow->view_mode;
 
     /* CP5 W1 wiring: the creature table. asm/22D5 reads 256 bytes of monxNN into

@@ -1597,14 +1597,20 @@ route found where the travel mode changes without `cmd_B`.** BOARD consumes a ti
 mode from the tile under the player; the shoppe skips the tile entirely and writes the mode. The
 vehicle work modelled only BOARD, so this is a missing branch, not a detail.
 
-**OPEN DEFECT, found by the same reading.** `overworld.c` sets `ctx->state.player_stamp = 0x78`
+**OPEN DEFECT — NOW FIXED, same day.** `overworld.c` set `ctx->state.player_stamp = 0x78`
 unconditionally at world open. But `asm/080D` and `asm/44D4` both compute the on-foot stamp as
 `0x78 + 2*pclass`, and G41 is now closed with a live sample: a class-2 Wizard read `DS:13 = 0x7A`
-on foot. **Three of four classes are stamped wrong the moment the engine enters the world** — cleric
-`0x7A`, wizard `0x7C`, thief `0x7E`. It went unnoticed because every capture and every seeded test
-character so far was a Fighter, which is the artifact G41 suspected. Not fixed here: it touches the
-CP2 byte-comparison baseline path and wants its own gate with a non-Fighter fixture, so it is
-recorded rather than patched mid-stream.
+on foot. **Three of four classes were stamped wrong the moment the engine entered the world** —
+cleric `0x7A`, wizard `0x7C`, thief `0x7E`. It went unnoticed because every capture and every
+seeded test character so far was a Fighter, which is the artifact G41 suspected — and that is the
+whole lesson: a constant that is right for the only class anyone ever tested reads as verified.
+
+Fixed to `u2_foot_stamp(ctx->state.pclass)`, the same rule function `cmd_X` already used for the
+dismount, so the expression now has one author in the engine. Gate: `tests/foot_stamp.py` (CP5 V5),
+all four classes, with the control run — restoring the constant reports FIGHTER ok and the other
+three `got 0x78`, which is the shape of how this hid. **CP2 is unaffected and still green**: every
+fixture there is a Fighter, whose stamp is 0x78 either way, so the baseline concern raised when this
+was recorded did not materialise.
 
 Two prices came out of the same session and they split a decode in half — see
 `asm/20AB_bcd_price_from_stats.asm`: the horse at 32 gp is exactly what that routine produces, and

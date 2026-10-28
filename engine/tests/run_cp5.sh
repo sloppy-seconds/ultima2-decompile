@@ -705,6 +705,22 @@ else
     bad "CP5 V4: the dismount disagrees with asm/44D4"
 fi
 
+# --- V5: the on-foot stamp at world open is class-dependent ------------------------------
+#
+# asm/080D computes 0x78 + 2*pclass and asm/44D4 restores the same expression, but the engine
+# hardcoded 0x78 at world open. A Fighter's stamp IS 0x78, so every seeded test character in the
+# project -- all Fighters -- passed against the constant and the defect was invisible rather than
+# merely untested. Closed from the original on 2026-10-29: a class-2 Wizard read DS:13 = 0x7A on
+# foot (captures/spice86/shop-window-transport, docs/needs-gameplay.md G41).
+# Control, run 2026-10-29: with the constant restored the gate reports FIGHTER ok and CLERIC /
+# WIZARD / THIEF all "got 0x78" -- the exact shape of how this hid.
+if U2_BIN=./u2 python3 tests/foot_stamp.py > "$WORK/v5.log" 2>&1; then
+    ok "CP5 V5: all four classes enter the world with the class-dependent on-foot stamp"
+else
+    sed 's/^/        /' "$WORK/v5.log" | tail -8
+    bad "CP5 V5: DS:13 at world open disagrees with asm/080D for some class"
+fi
+
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
 #
 # asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is
