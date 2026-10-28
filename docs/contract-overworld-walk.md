@@ -199,6 +199,16 @@ not tidy and they are not wrong.
 
 ## Next contract: premise check on "time-door spawning"
 
+> **REFUTED 2026-10-29 — the section below does not establish what it says it establishes, and it
+> cost this project six days of a closed question.** Two defects, both measured since: (1) it censused
+> `mov $0xc0,%al`, which finds *stores*, and concluded no code names the byte — but `asm/2731` is
+> `cmp $0xc0,%al`, a reader, and nothing looked for one; (2) its evidence was `mapx03`, which is a
+> **castle** sector, while every wilderness map (`mapx00/10/20/30/40`) contains **zero** `0xC0` cells,
+> so there is nothing authored in the overworld for that code to find. Time doors **are** placed at
+> runtime, at fixed coordinates from a table, on a countdown. See `docs/moongates.md`, which is the
+> observed account and supersedes this section. What survives below is the `asm/5EF2` caution about
+> grid writes through registers, which was a real correction at the time.
+
 The work brief asked for a contract on time-door spawning. Before writing one the premise was
 tested, and **it does not survive**. Grade: measured, by byte census over `original/mapxNN`
 and the Apple `M/AP.NN`.

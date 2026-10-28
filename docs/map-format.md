@@ -195,7 +195,19 @@ trustworthy.
   `PUT /api/memory/<addr>/byte` with body `{"value": N}`, one byte at a time.
 - **The MCP screenshot tool needs the patched build.** Stock upstream returns raw
   PNG bytes where base64 is required and the client rejects it.
-- **`pgrep -f Spice86` matches its own shell.** Check ports instead.
+- **`pgrep -f Spice86` matches its own shell.** Check ports instead. The same trap kills a
+  `pkill -f gate_watch.py` dead: the invoking shell's own command line contains the pattern, so the
+  signal lands on the shell and the command exits 143 with the watcher unharmed. Use the bracket
+  trick — `pgrep -f 'gate_watc[h]\.py'` — or kill by PID.
+- **The stamped grid at `DS:1800` is the `mapxNN` grid shifted DOWN two rows.** Measured 2026-10-29:
+  comparing 4096 live bytes against `mapx20` byte-for-byte gives 1020 disagreements; applying a 2-row
+  shift leaves 8, and those 8 are the genuine runtime stamps (creatures, and a time door). Anything
+  that diffs live state against the file must apply the shift first or it will report a mostly-fake
+  delta. This is also the origin of the `(x,25)` vs `(x,23)` discrepancy in
+  `docs/contract-overworld-walk.md`.
+- **The grid holds small state values, not art indices.** `0x00`, `0x08`, `0x0c`, `0x10`, `0x20` are
+  the common ones. `0xC0` appears only when the game stamps a time door, so a census of the file for
+  `0xC0` says nothing about what the live grid will contain.
 - **Never run the game in place.** It rewrites its own `player` file; always use
   a run copy.
 
