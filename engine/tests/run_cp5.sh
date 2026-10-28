@@ -639,6 +639,23 @@ else
     bad "CP5 V1: BOARD or the per-mode food charge disagrees with asm/2FAD / asm/253B"
 fi
 
+# --- V2: a site transition writes no sector file, and the enhanced knob writes one ----
+#
+# The original persists the player record and nothing else: measured 2026-10-29 over noVNC in
+# sector 31, where mapx31, monx31, mapx30 and monx30 all came back byte-identical to pristine
+# after several town entries and exits (docs/save-format.md § 10, docs/map-format.md § 10).
+# The engine used to flush both files on entering and leaving a site on a mis-cited routine
+# (asm/22FD is a boots gate, not a store), which made it remember a world the game forgets.
+# The control ran red first: BOARD dirties the map, the transition wrote it, and the paved cell
+# was on disk. --keep-site-state is the owner's opt-in for the opposite behaviour and is
+# refused in original mode, so both directions of this gate are load-bearing.
+if U2_BIN=./u2 python3 tests/site_state.py > "$WORK/v2.log" 2>&1; then
+    ok "CP5 V2: leaving a site writes no sector file; --enhanced --keep-site-state does"
+else
+    sed 's/^/        /' "$WORK/v2.log" | tail -8
+    bad "CP5 V2: sector persistence on a site transition disagrees with the measurement"
+fi
+
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
 #
 # asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is

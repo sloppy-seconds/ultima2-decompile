@@ -54,6 +54,13 @@ static void usage(const char *argv0)
         "                  idle polls before the engine auto-PASSes. 0 = the original's\n"
         "                  fixed value, -1 = disabled for pure turn-based play, N = that\n"
         "                  many. Intended for --enhanced; the original offers no such knob.\n"
+        "  --keep-site-state\n"
+        "                  enhanced only: leave a town, tower or dungeon with its sector\n"
+        "                  files updated, so opened doors and wounded creatures persist in\n"
+        "                  that sector. The original writes no sector file on a transition\n"
+        "                  (measured 2026-10-29: only `player` is ever written back), so\n"
+        "                  original mode refuses this flag. Saving with Q always wrote a\n"
+        "                  dirty sector and still does.\n"
         "  --dump-map FILE render one frame of the overworld to FILE as PPM\n"
         "                  (needs --data-dir with the game files; no display needed)\n"
         "  --dump-each     print the grid after every screen change (frame log)\n"
@@ -216,6 +223,9 @@ int main(int argc, char **argv)
              * disables it for pure turn-based play. Only meaningful in enhanced
              * mode: the original has one fixed value and no way to change it. */
             ctx.auto_pass_polls = atoi(argv[++i]);
+        } else if (strcmp(a, "--keep-site-state") == 0) {
+            /* Validated after the loop: --enhanced may appear on either side of it. */
+            ctx.keep_site_state = 1;
         } else if (strcmp(a, "--script") == 0 && i + 1 < argc) {
             ctx.script_path = argv[++i];
         } else if (strcmp(a, "--save-dir") == 0 && i + 1 < argc) {
@@ -286,6 +296,16 @@ int main(int argc, char **argv)
             usage(argv[0]);
             return 2;
         }
+    }
+
+    /* --keep-site-state is an enhanced-mode knob. Refusing it in original mode is the
+     * whole point: the original writes no sector file on a transition, so a default-mode
+     * run that persisted town state would be inventing behaviour, quietly, and the CP2
+     * byte-comparison baseline would be measuring something the game never did. */
+    if (ctx.keep_site_state && ctx.fidelity != U2_FIDELITY_ENHANCED) {
+        fprintf(stderr, "u2: --keep-site-state needs --enhanced; the original persists "
+                        "no sector state on a transition (docs/save-format.md \u00a7 10)\n");
+        return 2;
     }
 
     if (trace_arg && u2_trace_open(&ctx, trace_arg) != 0) {

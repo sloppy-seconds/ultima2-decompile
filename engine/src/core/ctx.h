@@ -93,6 +93,14 @@ typedef struct u2_ctx {
      * only `enhanced` should ever set this. There is no fidelity-mode axis in the
      * engine yet (u2_mode is a renderer axis), so nothing sets it today. */
     int auto_pass_polls;
+    /* Keep site state across a transition: write the outgoing sector's map and creature
+     * table back to the content directory when leaving a town, tower or dungeon.
+     * OFF by default and enhanced-only, because the original does not do it — measured
+     * 2026-10-29 across several town entries and exits, where mapx31, monx31, mapx30 and
+     * monx30 all came back byte-identical to pristine and only `player` was written.
+     * The save path (Q) is separate and always writes a dirty sector, which asm/2305
+     * supports; this knob is only about the transition. Gate: tests/site_state.py. */
+    int keep_site_state;
     /* Program-flow signals set by the title flow and read by u2_game_run.
      * `restart_requested` reproduces the original's creation tail, which calls
      * the startup routine (runtime 0x0100) and so re-presents the splash; the

@@ -261,12 +261,18 @@ static void site_enter(u2_ctx *ctx, u2_overworld *ow, int digit,
     ctx->state.entry_x = (uint8_t)ow->x;
     ctx->state.entry_y = (uint8_t)ow->y;
 
-    /* asm/22FD stores the sector being left. The engine stores only what is
-     * dirty, which is the same set: the grid and the creature table are written
-     * by the stamp and the creature turn, and nothing else mutates them. */
+    /* Sync the creature table into the world buffer so a later save sees current state.
+     * Do NOT write the sector: the original writes no sector file on a transition. The
+     * comment here used to read "asm/22FD stores the sector being left" and flushed both
+     * files, but asm/22FD is `mov 0x6d,%al ; or %al,%al ; je` — a boots gate with no I/O —
+     * and the real store is asm/2305, reached from the save path below. Measured 2026-10-29:
+     * mapx31/monx31/mapx30/monx30 byte-identical to pristine after several town entries and
+     * exits, only `player` written. Gate: tests/site_state.py. */
     u2_monsters_store(ctx, &ow->world);
-    if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
-    if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+    if (ctx->keep_site_state) {
+        if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
+        if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+    }
 
     ow->sector_lo = digit;
     ctx->state.sector_second = (uint8_t)digit;
@@ -326,9 +332,14 @@ static void site_leave(u2_ctx *ctx, u2_overworld *ow)
     ow->sector_lo = 0;
     ctx->state.sector_second = 0;
 
+    /* Same rule as site_enter(): sync in memory, write nothing unless the enhanced
+     * knob asked for it. Leaving a site re-reads the pristine sector, which is what
+     * closes an opened door and heals a wounded guard in the original. */
     u2_monsters_store(ctx, &ow->world);
-    if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
-    if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+    if (ctx->keep_site_state) {
+        if (ow->world.map_dirty) (void)u2_world_store(ctx, &ow->world, 1);
+        if (ow->world.mon_dirty) (void)u2_world_store(ctx, &ow->world, 0);
+    }
 
     (void)site_reload(ctx, ow);
 }
