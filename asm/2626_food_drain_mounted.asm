@@ -29,7 +29,9 @@
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 # THIS FILE IS ALSO A TILE RULE, and that half was never read until 2026-10-29. After the
 #           second subtract (which happens inside `call L_002775`, the foot tail) the
-#           verdict is taken here, at runtime 0x2851..0x2862:
+#           verdict is taken here, at runtime 0x2651..0x2662 (file 0x2851..0x2862 — the
+#           first draft of this note wrote the file offsets and called them runtime, which
+#           is the oldest labelling trap in the project):
 #
 #             cmp $0xff,%al ; je reject          ; the foot ladder already refused it
 #             mov 0x29,%al ; and $0x7f,%al
@@ -44,6 +46,23 @@
 #           table would have had to be guessed into existence. The 0x60 test is redundant
 #           against the ladder (0x60 >= 0x16 already rejects it) but the bytes test it
 #           explicitly ahead of the divert, so the engine does too.
+#
+#           WALKED 2026-10-29, which is what G40 asked for: `captures/spice86/g40-horse-shallows`.
+#           Sector 20 at (18,40) is map 0x0c with shallow water (0x04) to the right and below and
+#           land above, so one cell tests both directions. On foot, Right moved onto the shallows.
+#           With [DS:13] = 0x22, Up moved onto land (the control: mounted movement works) and both
+#           Right and Down refused — position unchanged, `DS:13` read back at the instant of each
+#           key. `ExecutedInstructions` carries the horse arm (runtime 0x2557..) and this verdict
+#           block (runtime 0x2651..0x2662), so the reject is the rule firing and not a key lost on
+#           the way in. **The engine's `u2_mode_passable` already implements exactly this and needed
+#           no change.**
+#           Method note, because the old caveat said a poked mode may be gone by the time the key
+#           is processed: it is, and the fix is to hold it. `DS:13` was rewritten in a tight
+#           in-process loop across the key press (recipe: docs/spice86-capture.md pattern 3) and
+#           read back at the press, so every mounted row here is `observed`, not
+#           `observed-under-a-forced-byte-that-may-have-been-restored`. What is still forced-poke
+#           rather than boarded is the mode itself: no capture has reached 0x22 through the transport
+#           shoppe headlessly.
 #           Grade: bytes. Never observed: no capture has walked a horse or a plane, so the
 #           shallows refusal has no live sample and is graded inferred-from-bytes.
 sub_2626:

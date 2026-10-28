@@ -15,6 +15,10 @@
 #           asm/2626_food_drain_mounted. So the horse has NO tile rule of its own and pays
 #           whatever asm/2626 decides — which is the foot ladder plus two rejects of its
 #           own, not 'the same ladder as foot'. See that file.
+# WALKED 2026-10-29: this arm was entered live with [DS:13] held at 0x22 across the key press,
+#           and the verdict of asm/2626 refused shallow water and accepted land —
+#           captures/spice86/g40-horse-shallows, whose ExecutedInstructions carry runtime
+#           0x2557.. and the verdict block. Closes G40.
 sub_2557:
 L_002757:
         call L_0060c7

@@ -1791,3 +1791,25 @@ keys into it over MCP crashes Spice86** — `InvalidOperationException: Collecti
 `CfgCpuViewModel.RegenerateGraphFromNodeAsync`, racing the pause that `send_keyboard_key` causes.
 Reads are fine. Let the human type and keep the host side read-only.
 
+## G40 closed: the horse really does refuse shallow water (2026-10-29)
+
+`captures/spice86/g40-horse-shallows` — sector 20 at (18,40), chosen by scanning every wilderness
+sector for a shallow cell (`0x04`) with three or more foot-walkable neighbours, so one standing spot
+tests land above, shallows right and shallows below.
+
+On foot, Right walked into the shallows. With `DS:13` **held** at `0x22` across the key press, Up
+walked onto land (the control that makes the refusals mean something — without it, "refused" would
+be indistinguishable from "mounted cannot move" or "key lost"), and both Right and Down refused with
+the position unchanged and the frame printing `EAST--INVALID MOVE!` / `SOUTH--INVALID MOVE!`.
+`ExecutedInstructions` carries the horse arm and the verdict block, so the rule fired.
+
+Two things worth keeping cold. **The engine needed no change** — `u2_mode_passable()` already rejects
+`mode == 0x02` on the horse and plane arms, transcribed from the same bytes, and this is the first
+live confirmation the transcription matches the original. And **`DS:13` is volatile**: the one-shot
+`--poke` the `stepcost` session used can be restored by the time the key lands, which is why every
+mounted row here was driven by the in-process hold loop and read back at the press. A poked mode that
+you did not confirm at the moment of input is not a controlled experiment.
+
+Still forced rather than boarded: no capture has bought or boarded a horse headlessly, so whatever a
+real boarding writes beyond `DS:13` is untested.
+

@@ -190,6 +190,17 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A one-shot memory poke is not a controlled experiment when the program owns the byte,
+  and a refusal needs a control that proves the actor can act at all.** Two failures were avoided only
+  by construction, and both are generic. First, a mode byte was poked to drive a rule that reads it, and
+  the program restores that byte, so a single poke can be gone by the time the input is processed even
+  though the poke read back correctly — the write lands, the read confirms, and the experiment is still
+  invalid. The fix is to hold the value in a tight loop across the input and read it back at the instant
+  of the input, and to record that read in the result row. Second, the rule under test was a refusal, and
+  "it did not move" is equally consistent with the rule firing, the actor being unable to move at all, or
+  the input being lost. The row that makes a refusal mean something is the one where the same actor moves
+  onto a tile the rule does not touch. A harness that reports only the refusals reports nothing.
+
 * **2026-10-29 — A disassembly dialect's operand syntax is a correctness surface, and a finding that
   quotes a literal has to prove the operand is an immediate.** Reading a listing produced "the routine
   aims two cells east and three south of the player" from instructions rendered as `adc 0x2,al` and
