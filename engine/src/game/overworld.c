@@ -1449,10 +1449,16 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 break;
             default: {
                 /* asm/435E: spend one key, then pave the cell with the ground the
-                 * player is standing on. */
+                 * player is standing on. terrain_put, not tile_put: creature_turn() runs
+                 * immediately below and rebuilds the grid from map_base, so a tile_put
+                 * paving is erased before the player's next key -- the door would
+                 * re-close the instant it was opened. Measured in the original
+                 * 2026-10-29: openings survived a walk through a town with 32 live
+                 * creatures. Gate: tests/site_state.py case C, which failed here
+                 * (cell came back 0xa0) before this line changed. */
                 ctx->state.keys = u2_unlock_spend_key(ctx->state.keys);
                 const uint8_t ground = u2_world_tile_at(&ow->world, ow->x, ow->y);
-                u2_world_tile_put(&ow->world, tx, ty, u2_unlock_replacement(ground));
+                u2_world_terrain_put(&ow->world, tx, ty, u2_unlock_replacement(ground));
                 break;
             }
             }

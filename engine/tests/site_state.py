@@ -138,6 +138,38 @@ def main():
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
+    # --- case C: an opened door must survive the creature turn that follows it ---
+    #
+    # asm/435E paves the door cell with the ground under the player, and the walk loop runs
+    # creature_turn() immediately after the unlock. The engine's restamp rebuilds the grid
+    # from map_base, so a paving written with tile_put alone is gone before the player's next
+    # key — the door re-closes the instant it was opened. Measured in the original 2026-10-29:
+    # two doors stayed paved across a walk through a town with 32 live creatures. So the
+    # paving has to go through terrain_put, and this case is what keeps it there.
+    work = tempfile.mkdtemp(prefix="u2-site-c-")
+    try:
+        G.seed(work, tiles={(3, 0): 0xA0})          # a door one cell east of the player
+        pp = os.path.join(work, "save", "PLAYER")
+        p = bytearray(open(pp, "rb").read())
+        p[0x65 - 0x36] = 0x05                        # keys: the unlock costs one
+        open(pp, "wb").write(bytes(p))
+        mon_before = open(os.path.join(work, "content", "monx00"), "rb").read()
+
+        run(work, ["U", "RIGHT"] + ["DOWN"] * 6 + ["Q"], name="c")
+
+        paved = G.map_byte(work, 3, 0)
+        check(paved == GRASS,
+              "unlocked door is still paved after the creature turn and reached the save "
+              "(cell (3,0) = %#02x, expected %#02x)" % (paved, GRASS))
+        # Precondition, asserted rather than assumed: if nothing moved, the restamp never ran
+        # and the case above would pass without proving anything.
+        mon_after = open(os.path.join(work, "content", "monx00"), "rb").read()
+        check(mon_after != mon_before,
+              "precondition: a creature moved, so the restamp really ran between the unlock "
+              "and the save")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
     print("SITE STATE: %s" % ("FAIL (%d)" % len(fails) if fails else "PASS"))
     return 1 if fails else 0
 

@@ -142,9 +142,10 @@ static inline void u2_world_tile_put(u2_world *w, int x, int y, uint8_t v)
  * sample in captures/spice86/ship-port-boniface read [DS:14] go 0x24 -> 0x00 on BOARD
  * and it stayed water for every step after, which is only possible if the write
  * outlives the redraws. NOTE, not fixed here: the door-paving write in the UNLOCK arm
- * (asm/435E, called from the walk loop) has the same requirement and still uses
- * u2_world_tile_put(). Changing it is a separate ticket with its own gate, because it
- * is shipped behaviour and the vehicle work has no business silently rewriting it.
+ * (asm/435E, called from the walk loop) now uses this for the same reason — changed
+ * 2026-10-29 after tests/site_state.py case C showed the tile_put paving being erased by the
+ * creature turn that immediately follows an unlock. It is shipped behaviour, so it got its own
+ * gate rather than riding along with the vehicle work.
  */
 static inline void u2_world_terrain_put(u2_world *w, int x, int y, uint8_t v)
 {
