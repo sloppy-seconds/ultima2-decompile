@@ -666,9 +666,9 @@ static u2_cmd_result launch_plane(u2_ctx *ctx, u2_overworld *ow)
  *
  * Not modelled, and deliberately so rather than guessed:
  *   * the return-point triple DS:69/DS:6A/DS:6B and the save call at asm/24FD. Those bytes
- *     are not in state.h, DS:6D (the guard on the whole block) is the byte state.h names
- *     boots_count, and the pair belongs to the planet subsystem CP7 has not started. Writing
- *     an invented equivalent would be worse than leaving the gap.
+ *     are not in state.h, DS:6D (the guard on the whole block) is the world byte — Earth 0,
+ *     planets 1..9, deep space 0x0A — and the pair belongs to the planet subsystem CP7 has
+ *     not started. Writing an invented equivalent would be worse than leaving the gap.
  *   * the two 256-byte table clears at DS:272/DS:372 and the calls at asm/6B99 / asm/2490.
  *     asm/437E (cmd_V) clears the same two tables and the source of the continent art it
  *     goes with is unidentified, per that handler's own note.

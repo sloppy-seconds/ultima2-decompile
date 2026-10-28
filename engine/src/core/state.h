@@ -216,12 +216,25 @@ typedef struct u2_state {
     /* 0x66 */ uint8_t tools;          /* packed decimal, ceiling 99. asm/2CF6
                                         * adds 1, asm/277B subtracts 1. */
     /* 0x67 */ uint8_t reserved_67[6];
-    /* 0x6D */ uint8_t boots_count;    /* non-zero gates the paralysis save at
-                                        * runtime 0x22FD. STALE COPY — after a thief
-                                        * stole the boots this still read 1 while the
-                                        * live gate DS:D9 (items_held[BOOTS]) went
-                                        * to 0. Resist checks read items_held, never
-                                        * this byte. */
+    /* 0x6D */ uint8_t world;          /* WHICH WORLD the player is on. 0 = Earth,
+                                        * 1..9 = the planets, 0x0A = deep space. Written by
+                                        * asm/7030 (`mov $0xa,%al` beside 'YOU ARE IN DEEP
+                                        * SPACE.', and a second store beside 'YOU ARE
+                                        * ORBITING '), read back as a dispatch (`cmp $0x0`,
+                                        * `$0x1`, `$0x2` …) and copied into DS:49 — the
+                                        * sector TENS digit — so the world byte and the
+                                        * sector's high digit are the same fact. It is why
+                                        * asm/3DFA's refusal reads 'ONLY ON EARTH!': that is
+                                        * a literal description of the test, not a metaphor.
+                                        * NAMED WRONG FOR TWO YEARS: this byte was called
+                                        * boots_count because tools/u2_edit.py wrote a boots
+                                        * count into it, and state.h then named the field
+                                        * after our own write. Boots are items_held[BOOTS]
+                                        * at DS:D9 (see below), which is what the paralysis
+                                        * resist actually reads — and that is the whole
+                                        * explanation of the 'STALE COPY' note that used to
+                                        * sit here: the byte never was boots, so of course a
+                                        * thief stealing boots left it alone. */
     /* 0x6E */ uint8_t reserved_6E[6];
     /* 0x74 */ uint16_t speed;        /* THE GAME SPEED. Two writers, one consumer.
                                         * Seeded at startup by asm/06AC_clock_tick_wait,
@@ -434,7 +447,7 @@ _Static_assert(U2_OFF(worn_armour)    == 0x062, "worn_armour moved");
 _Static_assert(U2_OFF(torches)        == 0x064, "torches moved");
 _Static_assert(U2_OFF(keys)           == 0x065, "keys moved");
 _Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
-_Static_assert(U2_OFF(boots_count)    == 0x06D, "boots_count moved");
+_Static_assert(U2_OFF(world)         == 0x06D, "world moved");
 _Static_assert(U2_OFF(weapons_owned)  == 0x076, "weapons_owned moved");
 _Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
 _Static_assert(U2_OFF(owned_armour)   == 0x080, "owned_armour moved");

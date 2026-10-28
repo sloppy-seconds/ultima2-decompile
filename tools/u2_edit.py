@@ -57,7 +57,12 @@ Equipment, consumables and inventory ARE located and editable:
     DS:61  readied weapon index   (0 HANDS .. 9 QUICK SWORD)
     DS:62  worn armour index      (0 SKIN .. 6 POWER, 7 NONE)
     DS:64/65/66  torches / keys / tools   (BCD, one byte each)
-    DS:6D  boots count            (non-zero gates the paralysis save)
+    DS:6D  WORLD: 0 Earth, 1..9 the planets, 0x0A deep space. NOT boots — boots are
+               items_held[BOOTS] at DS:D9, listed under ITEMS below. This tool used to
+               carry a 'boots' field here and `maxout` wrote 1 into it, which silently moved
+               the character off Earth and made every save refuse with ONLY ON EARTH!. The
+               engine's own state.h then named the byte boots_count after our write. If a
+               record shows DS:6D = 1 and nobody put a planet there, this is why.
     DS:76+i  weapons owned, one count per weapon
     DS:D6+i  items held, 16 slots, one count per item
 
@@ -128,7 +133,7 @@ FIELDS = {
     'torches': (0x64, 1, 99, 'bcd'),
     'keys':   (0x65, 1, 99, 'bcd'),
     'tools':  (0x66, 1, 99, 'bcd'),
-    'boots':  (0x6D, 1, 255, 'int'),     # non-zero gates the paralysis save
+    'world':  (0x6D, 1, 10, 'int'),      # 0 Earth, 1..9 planets, 0x0A deep space
 }
 
 WEAPONS = ['HANDS', 'DAGGER', 'MACE', 'AXE', 'BOW', 'SWORD',
@@ -233,8 +238,9 @@ def show(d):
     w, a = get(d, 'weapon'), get(d, 'armour')
     print('wield   %d (%s)' % (w, WEAPONS[w] if w < len(WEAPONS) else '?'))
     print('wearing %d (%s)' % (a, ARMOURS[a] if a < len(ARMOURS) else '?'))
-    print('torches %d  keys %d  tools %d  boots %d'
-          % (get(d, 'torches'), get(d, 'keys'), get(d, 'tools'), get(d, 'boots')))
+    print('torches %d  keys %d  tools %d  world %d%s'
+          % (get(d, 'torches'), get(d, 'keys'), get(d, 'tools'), get(d, 'world'),
+             '' if get(d, 'world') == 0 else '  <- NOT Earth: Q will refuse to save'))
     held = [(ITEMS[i], d[ITEM_BASE + i - BASE]) for i in range(16)]
     held = [(n, c) for n, c in held if c]
     print('items   %s' % (', '.join('%s x%d' % hc for hc in held) or '(none)'))
@@ -271,11 +277,14 @@ def main():
         put(d, 'torches', 50)
         put(d, 'keys', 20)
         put(d, 'tools', 20)
-        put(d, 'boots', 1)
+        # No boots line here on purpose. Boots are items_held[BOOTS], and the item pool below
+        # already gives one of every item including BOOTS. The `put(d,'boots',1)` this used to
+        # carry wrote DS:6D, which is the world byte: every maxout character was quietly on
+        # planet 1 and could not save.
         set_counts(d, ARMOUR_BASE, len(WEAPONS), 1)   # own every weapon
         set_counts(d, ITEM_BASE, 16, 1)               # one of every item
         print('maxout applied: stats/hp/food/gold/exp, QUICK SWORD, POWER armour,')
-        print('               50 torches, 20 keys, 20 tools, boots,')
+        print('               50 torches, 20 keys, 20 tools (boots come from the item pool),')
         print('               all %d weapons and all %d items x1' % (len(WEAPONS), 16))
     elif a.cmd == 'setpos':
         if len(a.args) != 2:

@@ -506,12 +506,11 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
         echo_cmd(ctx, U2_S_Q_OUTDOORS);
         return 1;
     }
-    if (!pol->allow_off_earth && ctx->state.boots_count != 0) {
-        /* DS:6D. state.h names it boots_count and flags it a stale copy; what it IS is open
-         * (docs/needs-gameplay.md G44), but the gate is measured: non-zero refuses the save,
-         * which is why every maxout character — it holds boots — has been silently refused.
-         * The engine has no writer for this byte yet, so today it fires only when a save
-         * record carries it, which is exactly the case the original refuses. */
+    if (!pol->allow_off_earth && ctx->state.world != 0) {
+        /* DS:6D is the world byte: 0 = Earth, 1..9 = the planets, 0x0A = deep space, and it
+         * is copied into DS:49 (the sector tens digit) by asm/7030. The message is literal.
+         * The engine has no space travel yet, so this only ever fires from a save record that
+         * carries a non-zero world — which is exactly the case the original refuses. */
         echo_cmd(ctx, U2_S_Q_EARTH);
         return 1;
     }

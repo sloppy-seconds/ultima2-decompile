@@ -13,9 +13,11 @@ The chain is cmd_Q at file 0x3FC7, read off the bytes (objdump of original/ultim
 Two of these the engine had stubbed away on assumptions that have since died: the comment said
 DS:6D is a planet counter that cannot be non-zero until CP7, and DS:13 is a vehicle stamp that
 cannot be set until CP6. Vehicles landed the same week this gate was written, and DS:6D is a
-live byte that blocks the save for any character holding boots — which is every `maxout`
-character, and is what made a persistence measurement come out wrong earlier the same day.
-See captures/spice86/save-wilderness and docs/save-format.md § 10.
+live byte that refuses the save for any character not on Earth — which is what it has always
+meant (world 0 = Earth, 1..9 = the planets, 0x0A = deep space; see G44 and
+`asm/3DFA_offer_only_outdoors_earth.asm`). The CP7 guess was right; the boots name on it was
+ours, written by `tools/u2_edit.py`. See captures/spice86/save-wilderness and
+docs/save-format.md § 10.
 
 Enhanced mode is the owner's call of 2026-10-29: save anywhere. It is a policy, not an edit to
 the loop — u2_overworld_save() consults u2_save_policy and nothing else, which is the reason
@@ -37,7 +39,7 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SEED = os.path.join(REPO, "engine", "tests", "cp5_fight_seed.py")
 
 GRASS, TILE_HORSE = 0x08, 0x44
-DS6D = 0x6D - 0x36          # boots_count, the byte the Earth gate reads
+DS6D = 0x6D - 0x36          # the world byte (0 Earth): non-zero is what the Earth gate reads
 ENTRY_X = 0x5A - 0x36       # the pair the save rewrites with the live position
 ENTRY_Y = 0x5B - 0x36
 SITE_X, SITE_Y = 2, 0
