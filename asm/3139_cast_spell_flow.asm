@@ -104,6 +104,20 @@
 #             The `jb` after the second `cmc` is taken when the creature SURVIVED, the
 #           opposite of how the idiom reads at a glance; invert it and the death path
 #           looks like the survival path.
+#           KILL (slot 9) AND BLINK (slot 8) OBSERVED 2026-10-29 —
+#           captures/spice86/g46-kill-blink, same tower, same rig.
+#           KILL: L_003501 calls the same target scan and, on a match, jumps straight to the
+#           death path with NO damage step. Proven by the discriminator: a creature held at
+#           full HP 0x99 — which MAGIC MISSILE leaves alive at 0x47 — had its slot erased
+#           outright (mon_hp 0, mon_type 0). The frame shows the award landing on the
+#           character: GOLD 9999 -> 0006 and EXP 9999 -> 0001, both wrapped BCD, so KILL
+#           does pay out and the amount comes from the creature's own entry.
+#           BLINK: both exits observed. The random odd cell is rejected as often as not
+#           (`CAST-BLINK-FAILED!` on attempt 1), and on attempt 2 the position went
+#           (5,5) -> (7,15) — both odd, inside 1..15, exactly the `and $0xf ; or $0x1`
+#           shape. So "BLINK can fail" is confirmed and the gate is the same asm/1451
+#           site-cell validity call the ladder spells use, not a separate rule.
+#           Still unobserved in this file: PASSWALL (4), SURFACE (5) and PRAYER (6).
 #           NOT FOUND: a 50%-shaped test for PRAYER, a grid write for PASSWALL, an exit-to-surface
 #           path for SURFACE. Absence in this header is not absence in the binary — the branches
 #           from 4..9 run on into the rest of the range and dungeons are parked (AGENTS.md § 3).

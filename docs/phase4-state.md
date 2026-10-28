@@ -1842,3 +1842,22 @@ one was refused. Odd rule, and it is the game's.
 `cmd_D` ran for the first time in this capture, which halves the never-executed-handler gap: `cmd_N`
 (NEGATE TIME) is now the only letter with no execution evidence.
 
+## CAST's KILL and BLINK arms, observed (2026-10-29)
+
+`captures/spice86/g46-kill-blink` — same tower, same rig, two more of `asm/3139`'s dispatch arms
+moved from inferred to observed. This is the first evidence against D14's premise that every spell
+effect is unreachable without a dungeon: KILL, BLINK, LIGHT and the ladder spells were all filmed in
+a tower.
+
+* **KILL (slot 9)** calls the shared target scan and, on a match, jumps to the death path with **no
+  damage step**. The discriminator is deliberate: the held creature was at full HP `0x99`, which
+  MAGIC MISSILE leaves alive at `0x47`, and its slot was erased outright. The award landed on the
+  character — `GOLD 9999 → 0006`, `EXP 9999 → 0001`, both wrapped BCD — so KILL pays out and the
+  amount comes from the creature's entry, not from a table in the executable.
+* **BLINK (slot 8)** showed both exits: `CAST-BLINK-FAILED!` when the random odd cell was a wall,
+  and `(5,5) → (7,15)` on the next attempt — both coordinates odd, inside 1..15, exactly the
+  `and $0xf ; or $0x1` shape. Its gate is the same `asm/1451` site-cell validity call the ladder
+  spells use, so there is no separate BLINK rule to model.
+
+Left unobserved in the dispatch: PASSWALL (4), SURFACE (5), PRAYER (6). G46 stays open for those.
+
