@@ -99,6 +99,10 @@ typedef struct u2_save_policy {
 
 extern const u2_save_policy U2_SAVE_POLICY_ORIGINAL;
 
+/* Enhanced mode: every guard dropped, so the player saves anywhere. Selected by fidelity at
+ * the call site; u2_overworld_save() itself never looks at the mode. */
+extern const u2_save_policy U2_SAVE_POLICY_ENHANCED;
+
 /*
  * The Q handler. Echoes the prompt and any gate refusal into the CMD window,
  * then performs the save the original performs at file 0x24FD: entry pair

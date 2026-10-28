@@ -80,6 +80,12 @@ static void open_world(u2_ctx *ctx, u2_overworld *ow)
     u2_world_load(ctx, &ow->world, 1, id);
     ow->x = 30; ow->y = 40;
     ow->sector_hi = 2; ow->sector_lo = 0;
+    /* overworld_open() sets the on-foot stamp (DS:13 = 0x78) on the way into the world, and
+     * this shortcut bypasses it. Without this line the fixture is a state the game cannot be
+     * in — a character in the world with no sprite stamped — and the Q on-foot guard added
+     * 2026-10-29 correctly refuses it with ONLY ON FOOT!. The guard is right and the fixture
+     * was quietly relying on the guard being a stub. */
+    ctx->state.player_stamp = 0x78;
 }
 
 int main(int argc, char **argv)

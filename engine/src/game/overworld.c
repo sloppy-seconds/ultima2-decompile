@@ -42,6 +42,11 @@
 
 const u2_save_policy U2_SAVE_POLICY_ORIGINAL = { 0, 0, 0 };
 
+/* Enhanced mode saves anywhere (owner, 2026-10-29). The original refuses indoors, off the
+ * Earth byte, and aboard a vehicle; the enhanced game drops all three, so the whole of the
+ * fidelity difference is this struct and nothing in the save path branches on mode. */
+const u2_save_policy U2_SAVE_POLICY_ENHANCED = { 1, 1, 1 };
+
 /* Echo one message through the CMD window: the word lands after the waiting
  * prompt, the game's newline scrolls it up, a fresh prompt prints below —
  * the same compound print the original uses for direction echoes
@@ -494,16 +499,28 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 {
     echo_cmd(ctx, U2_S_Q_PROMPT);
 
-    /* The three location guards (asm/3DE4/3DFA). Only the outdoors gate has
-     * live state yet: the engine has no planets until CP7 (DS:6D) and no
-     * vehicles until CP6 (DS:13), so those two pass trivially — the policy
-     * hooks exist so CP11 can open all three without touching this loop. */
+    /* The three location guards, in the order the bytes put them (cmd_Q, file 0x3FC7):
+     * DS:4A then DS:6D then DS:13. Order is observable — a character indoors, holding boots
+     * and aboard a vehicle still gets ONLY OUTDOORS!, because that test comes first. */
     if (!pol->allow_indoors && ow->sector_lo != 0) {
         echo_cmd(ctx, U2_S_Q_OUTDOORS);
         return 1;
     }
-    if (!pol->allow_off_earth) { /* DS:6D == 0: always Earth until CP7 */ }
-    if (!pol->allow_in_vehicle) { /* DS:13 >= 0x78: always on foot until CP6 */ }
+    if (!pol->allow_off_earth && ctx->state.boots_count != 0) {
+        /* DS:6D. state.h names it boots_count and flags it a stale copy; what it IS is open
+         * (docs/needs-gameplay.md G44), but the gate is measured: non-zero refuses the save,
+         * which is why every maxout character — it holds boots — has been silently refused.
+         * The engine has no writer for this byte yet, so today it fires only when a save
+         * record carries it, which is exactly the case the original refuses. */
+        echo_cmd(ctx, U2_S_Q_EARTH);
+        return 1;
+    }
+    if (!pol->allow_in_vehicle && ctx->state.player_stamp < 0x78) {
+        /* DS:13: 0x78 and above is on foot, and the vehicle stamps (0x22 horse, 0x24 ship,
+         * 0x26 plane, 0x28 rocket) are below it. Same test cmd_E uses. */
+        echo_cmd(ctx, U2_S_Q_FOOT);
+        return 1;
+    }
 
     echo_cmd(ctx, U2_S_Q_MOMENT);
 

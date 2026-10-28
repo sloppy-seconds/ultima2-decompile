@@ -118,17 +118,20 @@ static u2_cmd_result cmd_J(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
-/* CAPTURE-CONFIRMED: cmd_Q saves. It was one of the six letters implemented inside
-   u2_overworld_loop, and it moves here first because it is the only one of the six whose
-   whole body is a call to something already public — so the migration tests the dispatch
-   rather than the behaviour. asm/3DE4 refuses indoors with ONLY OUTDOORS! and asm/3DFA saves
-   outdoors echoing ONE MOMENT PLEASE!; both live in u2_overworld_save(), which owns the
+/* CAPTURE-CONFIRMED: cmd_Q saves. asm/3DE4 refuses indoors with ONLY OUTDOORS! and asm/3DFA
+   saves outdoors echoing ONE MOMENT PLEASE!; both live in u2_overworld_save(), which owns the
    printing, so this handler adds nothing and must not: the original's Q arm prints no CR and
-   no prompt of its own, which is why it does not call cmd_done(). */
+   no prompt of its own, which is why it does not call cmd_done().
+
+   The only thing chosen here is the policy: original mode runs all three guards, enhanced mode
+   drops them and saves anywhere (owner, 2026-10-29). Gate: tests/save_gate.py. */
 static u2_cmd_result cmd_Q(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)letter;
-    (void)u2_overworld_save(ctx, ow, &U2_SAVE_POLICY_ORIGINAL);
+    const u2_save_policy *pol = (ctx->fidelity == U2_FIDELITY_ENHANCED)
+                                    ? &U2_SAVE_POLICY_ENHANCED
+                                    : &U2_SAVE_POLICY_ORIGINAL;
+    (void)u2_overworld_save(ctx, ow, pol);
     return U2_CMD_DONE;
 }
 

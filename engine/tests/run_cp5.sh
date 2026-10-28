@@ -656,6 +656,22 @@ else
     bad "CP5 V2: sector persistence on a site transition disagrees with the measurement"
 fi
 
+# --- V3: the three Q guards, and enhanced mode dropping them -------------------------
+#
+# cmd_Q's chain, read off the bytes at file 0x3FC7: DS:4A (indoors) -> ONLY OUTDOORS!,
+# DS:6D -> ONLY ON EARTH!, DS:13 < 0x78 (aboard a vehicle) -> ONLY ON FOOT!, else
+# ONE MOMENT PLEASE! and the save runs. The engine had the first one and had stubbed the other
+# two away as "cannot happen until CP6/CP7" — and both had become possible: vehicles exist now,
+# and DS:6D is a live byte that refuses the save for any character holding boots, which is
+# exactly how a persistence measurement came out wrong on 2026-10-29. Enhanced mode drops all
+# three (owner's call): the difference is a policy struct, not a branch in the save path.
+if U2_BIN=./u2 python3 tests/save_gate.py > "$WORK/v3.log" 2>&1; then
+    ok "CP5 V3: Q refuses indoors / off-earth / mounted; --enhanced saves anywhere"
+else
+    sed 's/^/        /' "$WORK/v3.log" | tail -10
+    bad "CP5 V3: the save guards disagree with cmd_Q at file 0x3FC7"
+fi
+
 # --- C5: the force field is traversable and costs 1000 HP; a ring stops it -----------
 #
 # asm/24B5_force_field_event, reached from inside the passability routine asm/2423. Tile 0x5C is

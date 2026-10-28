@@ -66,9 +66,15 @@ def board_case(name, tile, items, want_mode, want_left, want_word):
     # B then Q, on the same pristine seed (the run above saved nothing, so the tile the
     # first run consumed is back on disk). The save is what makes the tile BOARD wrote
     # observable, because u2_world_store only runs for a dirty sector.
+    #
+    # The save runs under --enhanced, and it has to: asm/3DFA's third guard refuses Q with
+    # ONLY ON FOOT! whenever DS:13 < 0x78, and a character who has just boarded is by
+    # definition below that. The original cannot save aboard a vehicle, so the faithful mode
+    # has no way to reach the disk from here — the assertion is about the tile BOARD leaves,
+    # not about the save path. The refusal itself is gated in tests/save_gate.py.
     mon_path = os.path.join(work, "content", "monx00")
     mon_size_before = os.path.getsize(mon_path)
-    G.run_stdout(work, ["B", "Q"], name="save")
+    G.run_stdout(work, ["B", "Q"], name="save", extra=["--enhanced"])
 
     errs = []
     if G.pos(d) != G.ENTRY:

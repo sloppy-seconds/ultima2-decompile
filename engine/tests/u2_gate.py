@@ -118,11 +118,16 @@ def map_byte(work, x, y):
     return open(os.path.join(work, "content", "mapx00"), "rb").read()[y * 64 + x]
 
 
-def run_stdout(work, keys, name="case"):
+def run_stdout(work, keys, name="case", extra=()):
     """Run the engine and return its stdout as text.
 
     The headless renderer prints the vram grid, so this is how a gate reads what the
     player would have seen. Same seed, same fresh dir rules as run().
+
+    `extra` carries launch flags the case needs (--enhanced, --keep-site-state). It exists
+    because a gate sometimes has to *observe* through a path the original closes: the Q
+    on-foot guard (asm/3DFA, file 0x4017) refuses a save while aboard a vehicle, so the only
+    way to see the tile BOARD left behind is to save from an enhanced run.
     """
     keys_path = os.path.join(work, "k-%s" % name)
     with open(keys_path, "w") as f:
@@ -131,7 +136,7 @@ def run_stdout(work, keys, name="case"):
     r = subprocess.run([ENGINE, "--headless", "--play-map", "--cleanroom",
                         "--data-dir", os.path.join(work, "content"),
                         "--save-dir", os.path.join(work, "save"),
-                        "--script", keys_path, "--dump-state"],
+                        "--script", keys_path, "--dump-state", *extra],
                        check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                        text=True)
     return r.stdout
