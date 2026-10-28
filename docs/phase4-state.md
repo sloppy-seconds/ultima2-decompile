@@ -1494,3 +1494,51 @@ overwritten, and `references/ultima2/` is the pristine copy to restore from.
 - `cmd_X` (`asm/44D4`) is now decoded as the dismount and is still unimplemented. It is a
   letter with execution evidence, so its `NULL` slot is a real gap; it is outside the vehicle
   handoff's letter list and needs its own ticket.
+
+## The engine writes sector files the original never writes — OPEN DEFECT (2026-10-29)
+
+`site_enter()` and `site_leave()` in `engine/src/game/overworld.c` write the outgoing sector
+back to disk — `u2_monsters_store()` unconditionally, and `u2_world_store()` for anything
+marked dirty. The comment justifying it read `asm/22FD stores the sector being left`.
+
+**Both halves of that are false.** `asm/22FD` is `mov 0x6d,%al ; or %al,%al ; je` — a test of
+`boots_count` and a branch, which `state.h` independently records as the paralysis-save gate.
+It is not a store and has no I/O in it; see its header. And the original writes **no** sector
+file under any transition: measured live on 2026-10-29 across several town entries and exits,
+`mapx31`, `monx31`, `mapx30` and `monx30` in the run dir were byte-identical to the pristine
+copies, with only `player` changed (`docs/save-format.md` § 10).
+
+So the engine persists state the game discards. Observable consequences, all of them wrong in
+the same direction — the engine remembers a world the original forgets:
+
+| situation | original | engine today |
+| --- | --- | --- |
+| open a door, leave, re-enter | door closed, grid re-read | door stays closed (grid re-read), but the paved `mapx` was written to disk first |
+| wound a guard, leave, re-enter | guard at authored HP, back at his cell | HP and positions persisted, so he stays wounded and displaced |
+| kill everything in a town, re-enter | town repopulates from `monxNN` | town stays cleared |
+
+**The fix is a deletion, not an addition**: drop the store calls from `site_enter()` and
+`site_leave()`, and let `site_reload()` be the only thing that touches sector files on a
+transition. It needs a gate that fails first — the control is a wound-and-re-enter case, seed
+a creature, damage it, cross the site edge, and assert the live `mon_hp` equals the authored
+byte again. Against the current engine that assertion goes red, which is the point.
+
+**It has already damaged a game file.** `original/monx71` was found rewritten (mtime
+2026-10-23 15:57, same second as `monx70`, monster coords and HP drifted) — a run of an older
+engine build using `original/` as its data dir. Restored from `references/ultima2/` on
+2026-10-29 with the owner's approval; the damaged copy is preserved at
+`/var/tmp/u2-harvest-quarantine/monx71-damaged-20261028`. `original/` now matches the pristine
+backup on every file. This is also why the `map`→`monx` prefix bug above mattered: it was the
+same routine, and it is what made the damage silent.
+
+### UNLOCK paving — rationale corrected, ticket still open
+
+The earlier note here said the `asm/435E` paving "re-closes on restamp" and treated that as a
+bug to fix by writing through to `map_base`. Tonight's measurement changes the reasoning, not
+the conclusion: the original keeps an opening for the whole visit (~38 cells churned by
+creature movement, both openings intact) and then drops it on reload. The engine's
+`map_base` rebuild on a creature turn is therefore **more** destructive than the game, and
+`terrain_put()` is the right call for the paving — but as a fix for an engine-invented
+problem, not a reconstruction of original behaviour. Worth doing in the same commit as the
+deletion above, because once nothing is persisted the two are the same question: what does the
+grid look like after a creature turn.
