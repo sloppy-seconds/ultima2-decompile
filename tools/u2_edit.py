@@ -106,9 +106,11 @@ FIELDS = {
     'str':    (0x4B, 1, 99, 'bcd'),
     'agi':    (0x4C, 1, 99, 'bcd'),
     'sta':    (0x4D, 1, 99, 'bcd'),
-    # 0x4E/0x4F are the DISPUTED pair: state.h labels them cha/wis, the live
-    # findings table lists wis/cha. Not provable from a character where both are
-    # equal. See docs/spice86-live-findings.md section 11.
+    # 0x4E/0x4F were the DISPUTED pair until 2026-10-29: state.h said cha/wis, the
+    # live findings table said wis/cha, and every maxout character had them equal so
+    # nothing could tell. Settled by captures/spice86/d13-cha-vs-wis — a character
+    # with 0x4E=20 and 0x4F=40 printed CHARISMA-20 / WISDOM-40 and priced a horse off
+    # 0x4E. state.h was right; the findings table is corrected.
     'cha':    (0x4E, 1, 99, 'bcd'),
     'wis':    (0x4F, 1, 99, 'bcd'),
     'int':    (0x50, 1, 99, 'bcd'),

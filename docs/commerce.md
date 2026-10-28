@@ -262,9 +262,10 @@ on its own registers — the band prints `CMD: TRANSACT-PASS` — but `T,Right` 
 queued together at `--delay 0.02` both fell through to `CMD: PASS`, and `17B7` never
 executed. The original quote came from a **human driving over VNC**; the documented headless
 recipe does not reproduce it. G23 now carries that as the blocker, plus a cheap bonus: every
-maxout character has `DS:4E == DS:4F`, which is exactly why `tools/u2_edit.py` still marks
+maxout character has `DS:4E == DS:4F`, which is exactly why `tools/u2_edit.py` still marked
 the cha/wis labels DISPUTED, and one quote with the two bytes set **unequal** would settle
-that field dispute as a side effect.
+that field dispute as a side effect. **It did, on 2026-10-29 — see "Charisma affects costs"
+below; `DS:4E` is charisma and the labels are no longer disputed.**
 
 ### Charisma affects costs — owner-confirmed
 
@@ -276,14 +277,19 @@ and nothing else, and its output decreases as those two rise. That is corroborat
 direction from an independent source, and it is the strongest support the reading has.
 
 It is still **not** proof of the arithmetic, and the printer decode above strengthened the
-case that something is wrong with the model, since 200 is unreachable. There is a second
-hole the recollection does not cover: **`[DS:4E]` may be wisdom, not charisma.**
-`engine/src/core/state.h` and `docs/spice86-live-findings.md` disagree, and every seeded
-character has the two bytes equal, so the identity is unproven. If the labels are swapped
-this routine reads `int + wisdom`, and the charisma recollection points at some *other*
-mechanism still unfound. What the recollection buys is a **falsifiable prediction**: a
-low-charisma character should be quoted a **higher** price at the same vendor for the same
-item — and setting `DS:4E` and `DS:4F` apart is what tells us which byte this even is.
+case that something is wrong with the model, since 200 is unreachable. There was a second
+hole the recollection did not cover: **`[DS:4E]` might be wisdom, not charisma.**
+
+**CLOSED 2026-10-29, and the recollection survived the test.** `captures/spice86/d13-cha-vs-wis`
+seeded the first character ever with the two bytes unequal (`DS:4E = 0x20`, `DS:4F = 0x40`,
+`DS:50 = 0x40`). The `Z` screen printed `CHARISMA-20` / `WISDOM-40`, so `DS:4E` is charisma and
+`engine/src/core/state.h` was right while `docs/spice86-live-findings.md` § 11 had them swapped.
+Then the same character bought the same horse at the same TRANSPORT shoppe for **52 gp** where the
+maxed character paid 32 — which is the falsifiable prediction above coming out exactly as stated:
+**lower charisma, higher price**, at the same vendor, for the same item, and it is also what
+`asm/20AB` computes (`0x40 + 0x20 = 0x60`, bit length 7, `DI = 5` → 52; reading `DS:4F` would have
+printed 32). The charisma recollection therefore points at this mechanism and not at some other
+one still unfound.
 
 **What is settled regardless:** there is no price table, the printed price and the charged
 price are the same operand pair, and the pair is written by a routine whose output depends

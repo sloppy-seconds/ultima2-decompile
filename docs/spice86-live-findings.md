@@ -503,9 +503,9 @@ offset, not hex strings: `segment=2238, offset=75`.
 | `0x4B` | STRENGTH | BCD | |
 | `0x4C` | AGILITY | BCD | gates weapon equip: `index*8 < AGILITY` |
 | `0x4D` | STAMINA | BCD | |
-| `0x4E` | WISDOM **or** CHARISMA | BCD | order not provable from this character — see note |
-| `0x4F` | CHARISMA **or** WISDOM | BCD | order not provable from this character — see note |
-| `0x50` | INTELLIGENCE | BCD | attribute order is STR, AGI, STA, WIS, CHA, INT |
+| `0x4E` | CHARISMA | BCD | **proven 2026-10-29** — see the section below |
+| `0x4F` | WISDOM | BCD | **proven 2026-10-29** — see the section below |
+| `0x50` | INTELLIGENCE | BCD | attribute order is STR, AGI, STA, CHA, WIS, INT |
 | `0x51` / `0x52` | HP | BCD, high pair first | `0x40 0x00` = 4000 |
 | `0x53..0x55` | food | BCD, 3 bytes | the turn odometer: -19 per move, -10 per pass |
 | `0x56` / `0x57` | EXP | BCD | display site runtime `0x5167` loads `[56]`,`[57]` |
@@ -549,7 +549,28 @@ The display appends a literal `S` for the plural (`asm/4881`) and skips it for
 index 3 only, because `BOOTS` is already plural — which is what proves this table
 is the one in use.
 
+### Proven 2026-10-29: `0x4E` is CHARISMA and `0x4F` is WISDOM
+
+The old text of this section said the order was not provable and listed the two
+bytes as `WISDOM or CHARISMA` / `CHARISMA or WISDOM`, which disagreed with
+`engine/src/core/state.h`. **The struct was right and this table was the bug** —
+which is the standing rule of § 11 ("where the two disagree, `state.h` wins and
+this section is the bug"), now with the evidence to back it.
+
+`captures/spice86/d13-cha-vs-wis`: a Wizard seeded with `DS:4E = 0x20`,
+`DS:4F = 0x40`, `DS:50 = 0x40`, and the `Z` status screen drawn live. It printed
+`CHARISMA-20` and `WISDOM-40`, so the byte under the CHARISMA label is `0x4E`.
+Frame `a-z-screen.png`.
+
+The same character then bought a horse for **52 gold** where the maxed character
+yesterday paid 32 for the same horse, which is what `asm/20AB` predicts for a
+routine reading `int + [DS:4E]` and not what it predicts for `[DS:4F]`. Owner
+played, frame `b-horse-52gp.png`, gold read live as `DS:58/59 = 99 47`.
+
 ### Not proven: which of `0x4E` / `0x4F` is WIS and which is CHA
+
+**Retracted — see the section above.** Kept as a heading so a reader who arrives
+from an old link finds the answer rather than a gap.
 
 The test character has WISDOM 10 and CHARISMA 10, so the live block cannot tell
 them apart, and the save bytes match either reading. `engine/src/core/state.h`

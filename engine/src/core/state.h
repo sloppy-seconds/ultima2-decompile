@@ -176,8 +176,13 @@ typedef struct u2_state {
     /* 0x4B */ uint8_t stat_str;
     /* 0x4C */ uint8_t stat_agi;
     /* 0x4D */ uint8_t stat_sta;
-    /* 0x4E */ uint8_t stat_cha;
-    /* 0x4F */ uint8_t stat_wis;
+    /* 0x4E */ uint8_t stat_cha;      /* PROVEN charisma 2026-10-29, not a guess: a
+                                        * character with 0x4E=0x20 and 0x4F=0x40 printed
+                                        * CHARISMA-20 on the Z screen, and asm/20AB priced a
+                                        * horse off this byte (52 gp, not the 32 gp that
+                                        * 0x4F would give). docs/spice86-live-findings.md
+                                        * § 11 had the pair swapped and is corrected. */
+    /* 0x4F */ uint8_t stat_wis;      /* PROVEN wisdom by the same capture */
     /* 0x50 */ uint8_t stat_int;
     /* 0x51 */ uint8_t hp;            /* set to 4 at creation */
     /* 0x52 */ uint8_t unk_52;        /* adjacent to hp; no assignment traced yet */

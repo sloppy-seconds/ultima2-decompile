@@ -1,7 +1,8 @@
 # bcd_price_from_stats — derives a BCD amount into DS:27/28 from int + charisma
 # name-evidence: seeds the price pair DS:27/28 AND a second pair DS:29/2A to 0004,
 #           derives a loop count from the bit length of [DS:50]+[DS:4E] (int + the
-#           byte at DS:4E -- see DOUBT, its identity is disputed), then runs a
+#           byte at DS:4E -- PROVEN 2026-10-29 to be CHARISMA, see the resolution below),
+#           then runs a
 #           swap-and-add BCD sequence DI times, leaving the result in DS:27/28 -- the
 #           same operand pair asm/17B7 hands to the 4-digit BCD printer and asm/2052
 #           charges. Three inbound callers: 17B2 (the tavern food quote),
@@ -72,10 +73,9 @@
 #           file, so the two prices observed today come from the same file and only one of them
 #           routes through here. Whoever reads 19D7's weapon branch should expect a separate price
 #           path, probably a table.
-#           Two things this does NOT settle. The DS:4E charisma-vs-wisdom dispute is untouched --
-#           both bytes are 0x40 on every maxout character including this one, so the datapoint
-#           cannot discriminate, though equally it is not invalidated by the ambiguity. And the
-#           tavern's observed '0200' is still unreproduced and still not in the sequence; G23
+#           Two things this does NOT settle. ~~The DS:4E charisma-vs-wisdom dispute~~ is
+#           CLOSED 2026-10-29 (see the resolution below), so the only thing still open here is
+#           the tavern's observed '0200', still unreproduced and still not in the sequence; G23
 #           carries it. The DOUBT below stands in full except that "do not describe this routine as
 #           the price formula until it reproduces a number the game actually printed" is now
 #           satisfied for one number out of two.
@@ -109,7 +109,22 @@
 #     Grade: corroboration of direction and of one reachable value, from a third-party source.
 #     Still not bytes. The DS:4E charisma-vs-wisdom dispute is untouched by it -- the wiki names
 #     charisma, which is a second reason to hope the label is right, and still not proof.
-#   * WHICH STAT IS [DS:4E] IS NOT SETTLED, and this file's name leans on it.
+#   * WHICH STAT IS [DS:4E] — CLOSED 2026-10-29, and it is CHARISMA. Two independent
+#     observations from `captures/spice86/d13-cha-vs-wis`, on a Wizard seeded with
+#     `DS:4E = 0x20`, `DS:4F = 0x40`, `DS:50 = 0x40` (the first character ever with the two
+#     bytes unequal, which is the only shape that can discriminate them):
+#       - the `Z` status screen printed `CHARISMA-20` and `WISDOM-40`, so the byte the game
+#         labels CHARISMA is `DS:4E`. `engine/src/core/state.h` was right;
+#         `docs/spice86-live-findings.md` § 11 had them swapped and is corrected.
+#       - the same character bought a horse at the TRANSPORT shoppe for **52 gp**, where the
+#         maxed character one day earlier paid 32 gp for the same horse. That is exactly what
+#         this routine predicts and it discriminates the two bytes: reading `int + [DS:4E]` =
+#         `0x40 + 0x20 = 0x60`, bit length 7, `DI = 4 + 8 - 7 = 5` -> **52**; reading
+#         `[DS:4F]` would give bit length 8, `DI = 4` -> 32, which is not what was charged.
+#         Owner played; gold read live as `DS:58/59 = 99 47`.
+#     So "int + cha" in this file is now a statement about bytes and not a label on hope, and
+#     the file name is earned. The original note is kept below for the record.
+#   * (superseded) WHICH STAT IS [DS:4E] IS NOT SETTLED, and this file's name leans on it.
 #     tools/u2_edit.py records the dispute: engine/src/core/state.h labels DS:4E
 #     charisma and DS:4F wisdom, docs/spice86-live-findings.md lists them the other way
 #     round, and it cannot be resolved from a character where both bytes are equal --
