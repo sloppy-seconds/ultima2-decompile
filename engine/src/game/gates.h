@@ -26,19 +26,23 @@
 
 struct u2_overworld;
 
-/* Reload value for the countdown. asm/2744 does `mov $0x8,%al ; mov %al,0x6f`, and the
- * live run reloaded to exactly 8 on every rotation, in every era watched — 1, 2 and 3
- * through play, and era 0 by forcing an expiry (captures/spice86/era0-probe).
+/* Reload value for the countdown: 8, OBSERVED LIVE, in every era watched — 1, 2 and 3
+ * through play and era 0 by forcing an expiry (captures/spice86/era0-probe).
  *
- * Worth knowing before anyone waits for a rotation: at load DS:6F is 0x00, so it wraps to
- * 0xff and takes roughly 255 ticks — about 25 minutes at the measured rate — before the
- * first expiry. An era-0 observation shorter than that proves nothing about whether the
- * rotation runs there. That trap produced a wrong claim in this file once already. */
+ * Do NOT attribute this to asm/2744. An earlier revision of this file cited that routine,
+ * and a stop armed at 17D:2908 across observed rotations refuted the attribution the same
+ * day — see docs/moongates.md § 6. The number is sound because it was measured in memory;
+ * the code that produces it is still undiscovered. */
 #define U2_GATE_COUNTDOWN_RELOAD 8
 
 /* Observed at load, both bytes 0x00 (captures/spice86/moongate-cycle, first row after P).
  * The engine's zero-initialised state matches, so there is nothing to seed here — which is
- * worth recording because a countdown that reloads to 8 looks like it should start at 8. */
+ * worth recording because a countdown that reloads to 8 looks like it should start at 8.
+ *
+ * And before anyone waits for a rotation to happen on its own: from 0x00 the byte wraps to
+ * 0xff and needs roughly 255 turns before the first expiry — about 25 minutes of standing
+ * still at the idle auto-PASS rate, or two minutes of walking. A watch shorter than that
+ * proves nothing. Poke DS:6F=1 to force one in seconds. */
 #define U2_GATE_COUNTDOWN_AT_LOAD 0
 
 /* Gate indices are byte offsets 0, 2, 4, 6 into an 8-byte era row. */
@@ -75,12 +79,14 @@ int u2_gate_slot(uint8_t gate_index);
  * also what puts a door on the map, so this is what sets ow->gate_stamped; before the
  * first expiry there is no door anywhere, which is how the original behaves at load.
  *
- * The unit is the honest weak point. Measured live, DS:6F fell by one about every 4.2 s
- * with the player standing still, so the original's unit is TIME, not turns — the
- * recalled "every 8 steps" is wrong in the unit even though the 8 is right. The engine
- * is turn-driven, so this counts turns and not seconds; the mapping between the two is
- * inferred from the idle auto-PASS advancing turns, and is NOT proven. Anyone wiring
- * this to a real-time backend should revisit it.
+ * The unit is TURNS, and that is measured rather than assumed: 12 direction keys sent one
+ * at a time with a 0.55 s gap all landed, and DS:6F fell by exactly 12 — 1.00 drops per
+ * landed turn — while idling 20 s moved it only 2 (captures/spice86/turn-or-second).
+ * Standing still looks like a slow clock because a turn also ends on the idle auto-PASS
+ * timeout (asm/08FF), measured at about one every 10 s. So the recalled "every 8 turns"
+ * was right throughout; an earlier note here "corrected" it to time and was itself wrong.
+ * It also means the engine's turn-driven loop needs no substitution — the original counts
+ * turns and so does this.
  */
 void u2_gate_turn(u2_ctx *ctx, struct u2_overworld *ow);
 

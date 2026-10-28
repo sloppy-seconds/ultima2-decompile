@@ -46,7 +46,7 @@ One gate is active at a time. It is replaced on a fixed cycle driven by two byte
 
 | byte | role | observed |
 | --- | --- | --- |
-| `DS:6F` | countdown | reloaded to exactly **8** on each rotation, then decrements about every **4.2 s** with no input at all |
+| `DS:6F` | countdown | reloaded to exactly **8** on each rotation, and falls by one **per turn** — measured at 1.00 drops per landed turn |
 | `DS:6E` | gate index | advances by **2**, wrapped to 3 bits, so the cycle is `00 → 02 → 04 → 06 → 00` |
 
 The full rotation as watched in era 2, with the gate cell in the live grid:
@@ -59,9 +59,28 @@ The full rotation as watched in era 2, with the gate cell in the live grid:
 | `0x06` | `(19,52)` |
 
 This is the owner's recollection — *one door active, a new one every 8 turns, always at the same
-coordinates* — and it is right in every particular except the unit: **it is time, not turns.** The
-countdown ran at a steady rate while the player stood completely still. Grade: observed, and the
-"8 turns" half of the memory is corrected by the frame where nothing moved and the door turned anyway.
+coordinates* — and **it is right in every particular.** An earlier draft of this page claimed the unit
+was time rather than turns; that was wrong, and the correction is below.
+
+### Turns, not seconds — a wrong "correction" retracted
+
+The claim was: `DS:6F` fell about every 4.2 s with the player standing still, therefore the cycle is
+time and the recalled "every 8 turns" was wrong in the unit. The owner's answer was that the game runs
+on turns and a turn also ends on the idle auto-PASS timeout, so standing still *is* turns, just slow
+ones. That is right, and it is measured (`captures/spice86/turn-or-second`):
+
+| condition | turns | `DS:6F` drop | drops per turn |
+| --- | --- | --- | --- |
+| idle, 20 s, no input | ~2 auto-PASS turns | 2 | 1.0 |
+| 12 direction keys, 0.55 s apart, all 12 verified as moving the player | 12 | 12 | **1.00** |
+
+One drop per turn, exactly. The idle rate measured here is about one auto-PASS turn every 10 s, so the
+earlier 4.2 s figure was itself an artifact of a session where keys were being pressed.
+
+**The lesson, and it is the third one today:** a rate measured while standing still is a turn rate
+through a timeout, and calling it "time" is a distinction that was never there. Measure the thing the
+model actually claims — here, spend turns deliberately and count — before "correcting" someone's
+recollection of how their own game works.
 
 ### A wrong conclusion, retracted, and the trap that caused it
 
@@ -167,23 +186,36 @@ G39 rocket.
 3. **"You enter a gate with `E`, like a town" is wrong.** Towns and towers need `E` on a gate cell. A
    time door fires on the step onto the tile, consumed within one tick.
 
-## 6. The attribution that is NOT proven
+## 6. The attribution: proposed, then refuted
 
 `asm/2708`, `asm/2731`, `asm/2735` and `asm/2744` are an unreviewed bulk-wave region whose shape
-matches everything above: `DS:1F = DS:49 * 8`, index `DS:1F + DS:6E`, a coordinate pair read from
-`%cs:0x2798(%di)`, a `call` to the map tile pointer at `asm/50B3`, a `cmp $0xc0,%al`, and on the
-mismatch path `mov $0x8,%al ; mov %al,0x6f` followed by `incb 0x6E ; incb 0x6E ; and $0x7,%al`.
+looks exactly like the mechanic: `DS:1F = DS:49 * 8`, index `DS:1F + DS:6E`, a coordinate pair read
+from `%cs:0x2798(%di)`, a `call` to the map tile pointer at `asm/50B3`, a `cmp $0xc0,%al`, and on the
+mismatch path `mov $0x8,%al ; mov %al,0x6f` then `incb 0x6E ; incb 0x6E ; and $0x7,%al`. An earlier
+revision of this page, and of those four headers, said that was the rotation.
 
-**That is a shape match, not a causal proof.** A stop armed at `17D:2908` in sector 00 did **not** fire
-during 20 s of standing and walking — though that run is now known to be worthless as evidence, since
-20 s cannot contain an expiry from the loaded countdown and era 0 has since been shown to rotate. No
-stop has been armed in a sector where a gate was seen rotating and for long enough to span an expiry.
-So the routine that demonstrably runs is not yet demonstrably *this* routine. The files are not renamed
-and no name is asserted; see their headers for the proposal.
+**It is not. Refuted the same day by the experiment this page proposed.** A stop armed at `17D:2908`
+in era 2, with the expiry forced by `DS:6F = 1`, sat there for 120 s across **two demonstrated
+rotations** — `DS:6E` advanced and the `0xC0` stamp moved to a new cell inside the armed window — and
+the breakpoint never fired:
 
-**The experiment that would close it:** arm `bp_read --ip 2908` and then *force* the expiry by writing
-`DS:6F = 1`, which takes about five seconds instead of twenty-five minutes. That is exactly the recipe
-used in `captures/spice86/era0-probe`, minus the stop. Until then § 6 is the honest ceiling.
+```
+armed on 17D:2908
+NO STOP within 120s at 17D:2908
+```
+
+So the shape match was coincidence, or at best a different path over the same data. **The behaviour on
+this page is fully observed and stands on its own measurements; the routine that implements it is
+still undiscovered.** The four files stay unnamed, their headers now say refuted, and the table at
+file `0x2998` remains confirmed by 15 live cells regardless of who reads it.
+
+Two lessons, both cheap and both paid for:
+
+* **A plausible shape is not a causal link.** The bytes matched the behaviour in every particular and
+  were still the wrong routine. Only a stop across a demonstrated instance counts.
+* **Arm the stop and then force the trigger.** The first attempt failed because a 20 s window cannot
+  contain a 25-minute countdown. Forcing `DS:6F = 1` makes the experiment take seconds, and it is the
+  difference between a negative result and a meaningless one.
 
 ## 7. Engine status — implemented for the observed subset
 

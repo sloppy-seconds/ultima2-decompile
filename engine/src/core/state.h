@@ -276,16 +276,19 @@ typedef struct u2_state {
                                         * sit here: the byte never was boots, so of course a
                                         * thief stealing boots left it alone. */
     /* 0x6E */ uint8_t gate_index;     /* TIME-DOOR rotation index. Steps by 2 and is masked
-                                       * to 3 bits (asm/2744: `incb 0x6e` twice then
-                                       * `and $0x7,%al`), so it cycles 00,02,04,06 and the
-                                       * active slot is index/2. Observed live 2026-10-29:
-                                       * frozen while the countdown runs, advancing by 2 when
-                                       * it expires. docs/moongates.md § 2. */
+                                       * to 3 bits, so it cycles 00,02,04,06 and the active
+                                       * slot is index/2. OBSERVED LIVE 2026-10-29: frozen
+                                       * while the countdown runs, +2 when it expires, in
+                                       * every era including 0. Not attributed to any routine
+                                       * — the asm/2744 citation that stood here was refuted
+                                       * by a stop across observed rotations. docs/
+                                       * moongates.md § 2 and § 6. */
     /* 0x6F */ uint8_t gate_countdown; /* TIME-DOOR countdown, reloaded to exactly 8 on each
-                                       * rotation (asm/2744 `mov $0x8,%al ; mov %al,0x6f`).
-                                       * Measured falling about every 4.2 s with the player
-                                       * standing still, so the original's unit is TIME and
-                                       * the recalled "every 8 steps" is wrong in the unit.
+                                       * rotation (measured in memory, not attributed to code).
+                                       * ONE PER TURN, measured: 12 landed direction keys moved
+                                       * it exactly 12, idling 20 s moved it 2, because a turn
+                                       * also ends on the idle auto-PASS (asm/08FF) at roughly
+                                       * one per 10 s. The recalled "every 8 turns" is correct.
                                        * Both bytes are inside the saved record, so the
                                        * rotation state persists across a save. */
     /* 0x70 */ uint8_t reserved_70[4];  /* 0x70..0x73 */
