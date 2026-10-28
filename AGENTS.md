@@ -11,27 +11,30 @@ exact byte-for-byte fidelity.
 > `disasm/phase1-summary.md`, `disasm/phase2-summary.md` and `disasm/phase3-summary.md`.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
-> `docs/phase4-implementation.md`. **The vehicle state machine was worked on 2026-10-29 and is
-> part-done: read `docs/handoff-vehicle-state-machine.md`, whose status block at the head corrects
-> three rows of its own § 1 table and answers two of § 6's four questions.** W1 (BOARD), W2
-> (per-mode passability), W3 (per-mode food) and W4/W5 (`cmd_L`) are implemented, W1/W2/W3 are
-> gated as CP5 P1 and V1, and the session stopped at a pre-existing engine defect —
-> `u2_world_store` writes a dirty map to the `monx` filename — recorded in
-> `docs/phase4-state.md` § OPEN DEFECT, which is the next thing to fix because it blocks gating
-> BOARD's tile write. The byte evidence for every rule, the capture recipe, and the ten traps that
-> cost this session time are all still in that file. Nothing in it is speculative; the one
-> genuinely open question (the plane's airborne flag, W6) is marked as needing a capture and not a
-> guess, and is now `docs/needs-gameplay.md` G43.** To start a fresh agent, read
-> `docs/handoff-2026-10-28f.md` first (**current entry point** — **§ 1 is the open owner
-> decisions D3/D8/D9/D10; § 2 carries a correction that changes a ruling already made: the
-> command-loop evidence split is 22 proven / 4 unproven (D N V W), not 14/12, so eight handlers
-> previously left unimplemented for lack of evidence now have it**; 1219 `asm/` files, whole-binary
-> md5 green, CI green on all three workflows, pushed through `97a75ee`; the command dispatcher
-> exists at `engine/src/game/commands.c` in the `asm/0A1F` shape with `cmd_H`/`cmd_J` landed; the
-> marker gate `tools/cmd_marker_gate.py` has 15 controls and is wired into CI; `asm/4C50` is now
-> known to render a string table as invented instructions and is NOT trustworthy as code; § 3 is
-> the ranked queue, § 5 is the copy-paste capture recipes, § 6 is the hazards that cost this
-> session time), then
+> `docs/phase4-implementation.md`. **The vehicle state machine is done except `cmd_L`'s flight-loop
+> gating: read `docs/handoff-vehicle-state-machine.md` for the byte evidence, but note its status
+> block at the head corrects three rows of its own § 1 table, and two things it named as blockers
+> have since closed — `u2_world_store` no longer writes a dirty map to the `monx` filename, and
+> BOARD's tile write is gated (CP5 V1) via `u2_world_terrain_put`.** W1 (BOARD), W2 (per-mode
+> passability), W3 (per-mode food) and W4/W5 (`cmd_L`) are implemented and W1/W2/W3 are gated as
+> CP5 P1 and V1. The one genuinely open question there (the plane's airborne flag, W6) is marked as
+> needing a capture and not a guess, and is now `docs/needs-gameplay.md` G43.** To start a fresh
+> agent, read `docs/handoff-2026-10-29.md` first (**current entry point** — **§ 2 is the part that
+> matters: six recorded decodes proved wrong, four of them written by this project inside a week
+> (`cmd_T`'s one-cell ray, `cmd_Y`'s "unresolved" fall-through which was a complete freeform input
+> loop, the class names in our own editor, and an on-foot stamp hardcoded to the one value a Fighter
+> would agree with); § 1 is open owner decisions D11–D14 (the cheat-code flag, `DS:25`, the
+> charisma-vs-wisdom dispute, whether `cmd_C` ships gates without effects); 1222 `asm/` files,
+> whole-binary md5 green, `check_all` green, pushed through `ea50a1e`, 15 of 26 handlers implemented
+> and only D and N never executed; § 3 is the ranked queue, § 4 is facts worth knowing cold (the
+> sector's ones digit IS the site kind; the stamped grid at `DS:1800` is not the raw `mapx` bytes),
+> § 5 is the copy-paste capture recipes including the live owner-play loop, § 6 is the hazards that
+> cost this session time), then
+> `docs/handoff-2026-10-28f.md` (the queue it supersedes: the command-loop evidence split was
+> corrected from 14/12 to 22 proven / 4 unproven, the command dispatcher landed at
+> `engine/src/game/commands.c` in the `asm/0A1F` shape, the marker gate
+> `tools/cmd_marker_gate.py` gained 15 controls and went into CI, and `asm/4C50` was shown to render
+> a string table as invented instructions and is NOT trustworthy as code), then
 > `docs/handoff-2026-10-28e.md` (the queue it supersedes: the forced-keep corrections went 36 → 0,
 > the rendering-gap list emptied, three documented dispositions were retracted, and both mutation
 > harnesses were gates that exited 0 while printing FAIL), then
