@@ -267,3 +267,35 @@ harness rather than left as prose:
 `engine/tests/save_check.c` still owns the byte-format assertions in CI: it runs on
 engine-authored filler and proves sizes, offsets and tail preservation. What it cannot prove is
 that the real game accepts what we write, and that is the gap this harness closes.
+
+## 10. The player record is the only thing the game writes back (measured 2026-10-29)
+
+Everything above describes the one file the original persists. What it does **not** persist
+turned out to matter more than what it does, and it took an owner-driven live session over
+noVNC to measure rather than inference:
+
+| file | after playing in it, vs pristine |
+| --- | --- |
+| `player` | **written** — the only one |
+| `mapx31` (town) | byte-identical |
+| `monx31` (town) | byte-identical |
+| `mapx30` (wilderness) | byte-identical |
+| `monx30` (wilderness) | byte-identical |
+
+Measured across several town entries and exits in one session, diffing the run dir against
+`references/ultima2/`. So the save format is not "small" so much as **exclusive**: the world
+has no persistence at all. Opened doors, damaged monsters, aggro, killed creatures — none of
+it survives leaving the sector, because none of it is ever written anywhere.
+
+The practical consequences, each of which cost someone a wrong assumption:
+
+* **Towns reset on entry, and so does everything else.** Owner's phrasing, and correct:
+  "towns reset every time you enter them". Recalling a door as "stays open" was right about
+  the visit and wrong about the reload — see `docs/needs-gameplay.md` G30.
+* **A test that walks a character into a sector by editing the save has no valid return
+  point.** `site_enter()` records `entry_x/entry_y` as the wilderness cell to go back to; a
+  save-seeded town position skips that bookkeeping, so leaving lands the player on whatever
+  the stale field said. This is what put the owner in the sea on the first attempt, and it is
+  a property of the tool, not a game bug.
+* **Nothing in the engine may write sector files.** `site_enter()`/`site_leave()` used to, on
+  a mis-attributed routine — see `asm/22FD_sub_22fd.asm` and `docs/phase4-state.md`.

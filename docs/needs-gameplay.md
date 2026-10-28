@@ -905,34 +905,35 @@ showed `UNLOCK DIRECTION-Pass` followed by `EAST--INVALID MOVE!`, because the ar
 after the prompt had given up and was consumed as an ordinary move instead. The fix is
 timing, not aim — `--keys U,Right --delay 0.05`. Runs `unlock1`.
 
-**Persistence question — answered by the owner, not yet by a capture.** Recalled
-(owner, 2026-10-28b): "when a door is opened it stays open" — the opened cell survives
-leaving and re-entering the sector. That is a constraint, not a detail. The engine's
-`site_reload()` re-reads `mapxNN` on entry, so if the opening survives in the original,
-either the opened state is carried somewhere other than the re-read map buffer, or the
-buffer is written and something persists it. Per the rule that an item closes on a named
-capture and not on a belief, this stays open until measured — and an owner report is the
-pointer at where to measure, not the measurement.
+**Persistence question — MEASURED 2026-10-29, and the recollection was half right.**
+Recalled (owner, 2026-10-28b): "when a door is opened it stays open". Answered at the bytes
+on 2026-10-29 by an owner-driven live session over noVNC (`deploy/spice86-novnc`, sector 31,
+character seeded onto the village gate at (34,20) in sector 30 so the game recorded its own
+return point), reading `DS:0x1800` over the HTTP API between steps:
 
-**Capture that closes it — agent-drivable; fold it into the next unattended play run**
-(the owner's suggestion, rather than spending a run of its own):
+* **within one visit the opening is durable.** Two doors opened at (42,17) and (49,17), both
+  paved to `0x70` (the paving the player stood on). The player then walked through a town
+  with 32 live creatures; ~38 cells were churned by movement and **both openings survived**.
+  So the original does not rebuild the grid from a pristine copy on a creature turn.
+* **across a visit nothing survives.** Leaving and re-entering closed them. `mapx31` in the
+  run dir was byte-identical to pristine, as were `monx31`, `mapx30`, `monx30`. **The only
+  file the game writes back is `player`.** See `docs/save-format.md` § 10 and
+  `docs/map-format.md` § 10.
 
-1. Sector **31 (Port Boniface)** — confirmed town, `docs/place-names.md`; the owner reports
-   it has many doors, so finding a `0xA0` cell adjacent to a walkable spot is cheap.
-2. `--player` + `tools/u2_edit.py setpos` next to a door cell; read that cell in the sector
-   grid at `DS:0x1800`.
-3. Open it with one burst — `--keys U,<dir> --delay 0.05` — because the prompt polls with a
-   bounded counter and prints `PASS` when it gives up (see above).
-4. Leave the sector through the town edge, then re-enter.
-5. Read the same cell, and diff the whole `DS:0x1800` grid against pristine `mapx31`. If the
-   cell is still open and the rest of the grid matches the file, the opened state lives
-   outside the map buffer. If the grid differs from the file at that cell, the door was
-   written into the resident buffer — then the question becomes what writes it back after a
-   reload, and the answer is a writer worth naming in `asm/`.
+So the recollection was right about the thing nobody had thought to separate — the opening
+*does* stay open, for as long as you are in the sector — and wrong about persistence, which
+the original does not have. The step that made this answerable was not the walk, it was
+entering the town the way the game does: a save-seeded town position has no valid wilderness
+return, which is what produced a bogus "it put me in the wrong place" on the first attempt.
 
-Name the capture directory when it runs, and record what the engine does on the same path:
-if the original persists and the engine does not, that is a behavioural bug with its own
-ticket.
+**Still open, and it needs a named capture directory.** The rule is that a gameplay item
+closes on a capture, not on a live session that was read over an API and left in a container
+run dir under `/var/tmp`. The scripted re-run is exactly the sequence above — open a door,
+damage a guard, leave, re-enter, diff the grid and the six creature arrays against pristine —
+headless, harvested as `door-persistence`. That moves the corpus from 167 harvests to 168 and
+`tools/cmd_handlers.py --write-provenance` legitimately rewrites those denominators; the
+provenance gate went red on exactly that arithmetic when a *save* probe harvested by accident,
+which is why this one has to be a deliberate harvest and not a side effect.
 
 ### G29 — sector crossing on the west land bridge: scroll or teleport
 

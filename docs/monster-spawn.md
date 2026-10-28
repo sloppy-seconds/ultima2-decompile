@@ -1259,3 +1259,30 @@ coordinate rolls and their bounds, the terrain lookup, the nine-arm table, the
 lowest-set-bit selector, and the `decb` rollback on a mismatch. Not proven, and still a
 guess if implemented: nothing structural — the remaining unknowns are the exact distribution
 of `rand_byte` and whether a door opened in a sector survives a reload.
+
+## 16. Creature state is re-derived on entry — HP, roster and aggro (2026-10-29)
+
+Owner-driven live session, sector 31, read over the Spice86 HTTP API. The owner attacked a
+guard to draw aggro, was chased out, left the town and re-entered. Afterwards the guards were
+back at their authored cells and no longer hostile. The bytes say more than that:
+
+| array | live DS vs authored `monx31` | reading |
+| --- | --- | --- |
+| `mon_hp` | **32/32 identical** | the damaged guard is back at his authored 255 |
+| `mon_type` | 32/32 | the roster is exactly the authored one |
+| `mon_role` | 32/32 | no scripted state carried over |
+| `mon_x` | 17/32 | drifted since entry — expected, monsters wander |
+| `mon_y` | 19/32 | same |
+| `mon_kind` | 29/32 | three slots differ; **unexplained, not guessed at** |
+
+`mon_hp` is the decisive column. HP is precisely the field one would persist if creature
+state were persisted, and it came back equal to the authored byte on every slot. Combined with
+§ 10 of `docs/map-format.md` — `monx31` on disk unchanged — the mechanism is a plain reload
+from the pristine file, not a restore from a shadow copy.
+
+What is **not** explained here: the three `mon_kind` differences, and where aggro itself lives.
+The session observed aggro behaviourally (a guard chasing) and observed its disappearance
+behaviourally, but nobody has read a byte that says "this creature is hostile". Anyone
+implementing aggro should find that byte rather than invent one, and should re-run this
+comparison as the control: if aggro has a home in DS, it must be a field that resets on entry
+for the right reason and not one that happens to look clean.

@@ -305,3 +305,31 @@ sector's mapx.**
 So: no conclusion about sector 21, and the mechanism and the generality of `0x70` remain open.
 Whatever method is used to reach a non-paving sector must first be proven to change the sector at
 all - the save's sector pair is not sufficient on its own.
+
+## 10. The sector grid is re-derived on entry; the game never writes it (2026-10-29)
+
+§ 9 established that `mapx` carries baked creature art. The follow-on question was whether
+the game ever writes the grid back after mutating it — paving an opened door, clearing baked
+art, stamping a creature. It does not.
+
+Measured live in sector 31 over noVNC: doors were opened (each paving itself with the ground
+the player stood on, per `asm/435E_open_write_tile.asm`), the player walked through a town
+with 32 live creatures, and then left and re-entered. Afterwards `mapx31` in the run dir was
+**byte-identical to the pristine copy**, as was `mapx30`. The only file the session changed
+was `player`.
+
+Two things this settles:
+
+* **Within a visit the grid is durable.** The opened doors survived the walk — roughly 38
+  cells were changed by creature movement and the two openings were not among the reverted
+  ones. So the original does not rebuild the grid from a pristine copy on every creature
+  turn.
+* **Across a visit nothing survives.** Re-entry re-reads the pristine file, so every terrain
+  edit is undone. An opened door is not restorable *by design*, not by an engine limitation.
+
+The engine's `map_base` is therefore an engine construct serving § 9's problem (telling baked
+art from terrain at load), and it must not be read as a model of the original's memory. Where
+the engine rebuilds `map` from `map_base` on a creature turn, it is **more** destructive than
+the game: an edit made through `u2_world_tile_put()` alone vanishes on the next creature move,
+where the original keeps it for the whole visit. `u2_world_terrain_put()` writes both arrays
+and is the correct call for any terrain edit that is meant to last the visit.
