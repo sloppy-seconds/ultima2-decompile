@@ -66,12 +66,27 @@
 #           `and $0xf ; or $0x1` each result (random ODD 1..15) into DS:23/DS:24, runs a validity
 #           call (L_001651) that can fail into the -FAILED! path at L_003432, and then writes
 #           DS:23 -> DS:00 and DS:24 -> DS:01. It overwrites the player position directly.
-#           LOCATED but not attributed: a creature-HP subtract at L_0034bc
-#           (`mov 0x177(%di),%al ; cmc ; sbb 0x20,%al ; cmc ; mov %al,0x177(%di) ; jb`), with the
-#           amount in DS:20. Which spell index dispatches here is NOT established, so neither
-#           "MAGIC MISSILE does damage" nor "KILL destroys" is proven by this file — and the claim
-#           that MAGIC MISSILE scales with level is unverified twice over: DS:20's derivation is
-#           untraced and there is no level field anywhere in state.h, only BCD experience.
+#           ATTRIBUTED 2026-10-29, and the "not attributed" above is RETRACTED: the
+#           creature-HP subtract at L_0034bc is MAGIC MISSILE. Slot 7 dispatches to
+#           L_0034ad, which calls the target scan (asm/330C_cast_target_finder.asm) and
+#           on a match computes the amount and subtracts it. Live, headless, in
+#           captures/spice86/cmd-c-magic-missile:
+#             amount: DS:20 = 2*DS:56 + 0x1e + CF, and the `cmc ; sbb` idiom subtracts
+#           DS:20 + 1, not DS:20. Measured at two points and both exact: DS:56 = 0x99
+#           gives DS:20 = 0x51 and HP 0x99 -> 0x47; DS:56 = 0x01 gives DS:20 = 0x20 and
+#           HP 0x99 -> 0x78.
+#             "scales with level" is wrong in shape, not just unproven: DS:56 is the HIGH
+#           BCD byte of experience (state.h, with its naming wart recorded), there is no
+#           level field, and a binary doubling of a BCD digit is not monotone — 0x99
+#           yields 82 damage and 0x01 yields 33.
+#             survived -> the slot keeps the reduced HP and NOTHING prints. died (HP <=
+#           the amount) -> L_0030d1 clears mon_hp/mon_type/mon_kind and the frame reads
+#           `KILLED--GOLD+3--EXP.+00`, the gold awarded in BCD and wrapping: a 9999-gold
+#           character went to 0002 on +3. EXP.+00 because the synthetic slot used for the
+#           test carried no kind table entry — the award itself is not decoded.
+#             The `jb` after the second `cmc` is taken when the creature SURVIVED, the
+#           opposite of how the idiom reads at a glance; invert it and the death path
+#           looks like the survival path.
 #           NOT FOUND: a 50%-shaped test for PRAYER, a grid write for PASSWALL, an exit-to-surface
 #           path for SURFACE. Absence in this header is not absence in the binary — the branches
 #           from 4..9 run on into the rest of the range and dungeons are parked (AGENTS.md § 3).
@@ -90,8 +105,10 @@
 #           the 60 harvests" — that is exactly the hand-kept claim cmd_handlers.py got wrong
 #           eight times, and it has not been re-derived against the 141-harvest corpus. Do not
 #           cite it. cmd_C itself is confirmed executed in 2 harvests.
-# confidence: high for the gate order and the constants (all direct reads); low for what each
-#           per-spell branch beyond 1..3 does, which is dungeon behaviour and parked
+# confidence: high for the gate order and the constants (all direct reads) and high for
+#           slot 7 (dispatch, target scan, amount and both exits were observed live
+#           2026-10-29); low for what each per-spell branch beyond 1..3 and 7 does,
+#           which is site behaviour and parked (AGENTS.md § 3)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 cast_spell_flow:
 L_003339:

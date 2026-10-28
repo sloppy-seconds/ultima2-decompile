@@ -1,0 +1,97 @@
+# cast_target_finder — the CAST target scan: the first creature, slot 31 down to 1,
+#           whose mon_type is non-zero, whose mon_kind equals DS:25, and whose
+#           mon_x/mon_y are exactly DS:00+DS:02 and DS:01+DS:03. Found -> returns with
+#           DI = the slot and ZF clear; nothing matched -> AL = 0, ZF set.
+# func 330C..334C  len 0041 B  evidence: call
+# name-evidence: reached only from the CAST dispatch (asm/3139_cast_spell_flow.asm
+#           L_0034ad = slot 7 and L_003501 = slots 6 and 9), and every one of the
+#           three tests was confirmed live on 2026-10-29 in captures/spice86/
+#           cmd-c-magic-missile (a scripted hit, a scripted kill, and three refusals).
+#
+# TRAP, and it produced a wrong answer the same day this was decoded: the two adds are
+#           `adc 0x2,%al` and `adc 0x3,%al` with NO `$`. In gas AT&T that is a MEMORY
+#           operand — DS:02 and DS:03 — not the constants 2 and 3. Read as immediates
+#           the scan aims two cells east and three south of the player, which is a
+#           parity-impossible window (site cells are odd, odd+3 is even) and made the
+#           spell look dead. DS:02/DS:03 are a SIGNED facing delta: measured live as
+#           (01,00) on entering the tower, (00,FF) after one Left turn, and unchanged
+#           by Down. So the spell hits the creature standing in the cell you face.
+#           The 8-bit wrap is real and it is in the game's favour: (5,5) facing (0,-1)
+#           aims at (5,4), not (5,260) — a driver that adds in 16 bits misses.
+#
+# GRADES. observed: the three tests, the scan order (31 downwards, so the highest live
+#           slot wins), the facing bytes, and that a match is required — a cast with an
+#           empty facing cell printed `CAST-MAGIC MISSILE-FAILED!` and still spent the
+#           scroll. inferred: that mon_kind is a floor index and DS:25 the caster's
+#           floor. It fits (the ladder spells move DS:25 against a 0xf bound, and the
+#           kind test is then "same floor as me") and it is a second independent
+#           corroboration of the D12 reading of DS:25, but nothing here separates floor
+#           from any other per-slot class, so do not rename DS:25 on the strength of it.
+# measured: in the sector-20 tower the natural table had mon_kind 0 at slots 0 and 1
+#           only (slot 0 empty), so with DS:25 = 0 the kind test admits exactly one
+#           creature. Three scripted refusals were that test failing, not the position
+#           test; the one natural success (frame d) was slot 1 wandering into the
+#           facing cell.
+#
+# provenance: live:cmd-c-magic-missile; entry stopped at runtime 0x330C with
+#           tools/bp_read.py four times and the arrays dumped at the stop, which is
+#           the only way this was settled — a poke-then-press race against the site
+#           tick lost three times before that (recipe: docs/spice86-capture.md).
+# confidence: high for the three tests and the facing semantics (bytes plus live
+#           confirmation at both return exits); low for what mon_kind means.
+# bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+sub_330c:
+L_00350c:
+        mov    $0x0,%bh
+L_00350e:
+        mov    $0x1f,%bl
+L_003510:
+        .byte 0x8b,0xfb  # forced-kept: gas re-encodes 'mov    %bx,%di' differently
+L_003512:
+        mov    0x197(%di),%al
+L_003516:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_003518:
+        jne L_003522
+L_00351a:
+        dec    %di
+L_00351b:
+        jne L_003512
+L_00351d:
+        mov    $0x0,%al
+L_00351f:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_003521:
+        ret
+L_003522:
+        mov    0x1b7(%di),%al
+L_003526:
+        cmp    0x25,%al
+L_00352a:
+        jne L_00351a
+L_00352c:
+        mov    0x0,%al
+L_00352f:
+        clc
+L_003530:
+        adc    0x2,%al
+L_003534:
+        cmp    0x137(%di),%al
+L_003538:
+        jne L_00351a
+L_00353a:
+        mov    0x1,%al
+L_00353d:
+        clc
+L_00353e:
+        adc    0x3,%al
+L_003542:
+        cmp    0x157(%di),%al
+L_003546:
+        jne L_00351a
+L_003548:
+        .byte 0x8b,0xc7  # forced-kept: gas re-encodes 'mov    %di,%ax' differently
+L_00354a:
+        .byte 0x0a,0xc0  # forced-kept: gas re-encodes 'or     %al,%al' differently
+L_00354c:
+        ret
