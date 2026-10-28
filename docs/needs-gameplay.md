@@ -690,14 +690,29 @@ not inferred: offsets `3782`, `37DC`, `4542` present). Screenshots show the CMD 
    reading `M1CS*RT`. That is the fall-through into `asm/4551` being *not* `cmd_done`, observed.
    It is why the second run excluded Y, and it vindicates leaving N and Y unimplemented: the
    engine's `cmd_Y` would have had to invent a return that the bytes do not have.
+   **RETRACTED 2026-10-29 — the observation was right and the reading was backwards.**
+   `asm/4551..asm/4567` is a complete freeform input loop: spin on the key seam, echo each
+   character, end on Enter (`cmp $0xd,%al` at `asm/4559`), print the Enter, then `cmd_done` at
+   `asm/4565`. The letters that "never dispatched" were the yell being echoed, and the loop does
+   reach `cmd_done` — it cannot do so until a CR arrives. Nothing in the range writes memory, so
+   the yell is display-only. What blocked this for four days was that the loop lay cut into seven
+   fragments each headed "behavior not yet reviewed", so nobody read the range as a routine; the
+   owner's recollection of the manual is what sent the re-read. `cmd_Y` is implemented and gated
+   (`engine/tests/cmd_yell.py`, including the swallow case this finding got wrong).
 2. **`cmd_J`'s message overstates its body.** `JUMP...WHEE...` with no jump anywhere in the
-   routine and no tail-call hiding one. Now observed, not inferred.
+   routine and no tail-call hiding one. Now observed, not inferred. The shipped manual, recalled
+   by the owner on 2026-10-29, describes J as a deliberate joke — "jump up and down", for
+   frustration, touching nothing. So the overstatement is the feature. See
+   `docs/third-party-claims.md` § 1 and the header of `asm/37DC_cmd_J.asm`.
 3. **The crosswalk was lying.** Checking all 26 entries against the current 141-harvest corpus
    found 8 grades wrong: C H J M O S Y were recorded against a 60-harvest corpus that grew
    without the lines being refreshed, and **`cmd_T` had live citations in a format
    `cmd_handlers.py` cannot parse, so it printed `--` for a handler 24 pre-existing harvests
    already contained.** The real split is **22 proven / 4 unproven**, and the four are
    **D, N, V, W** — not 12. Full write-up: `4ad5d81`.
+   *(Note, 2026-10-29: that split was true of the 141-harvest corpus of its own day and the corpus
+   has grown since. `python3 tools/cmd_handlers.py` is the authority for the current numbers; this
+   line is a record of what that session found, not a count to quote.)*
 
 **PARKED by the owner 2026-10-28e, with a redirect.** D, N, V and W stay unimplemented and the
 remaining evidence work on them waits. The owner's instruction was to park the unproven ones and
@@ -730,10 +745,12 @@ capture exercises them, so the capture is the only thing that closes the marker.
 What each one needs, in the order that makes the session cheap (group by setup, per the section
 above — one seeded character, one sector, a run down the letters):
 
-- **H, J, Y** — print a message and are done. `HYPER WHAT?`, `JUMP...WHEE...`, `YELL WHAT?` plus
-  one `0x8d` glyph. The interesting part is what they do *not* do: `cmd_J`'s message promises a
-  jump the body never performs, and `cmd_N`/`cmd_Y` fall through into fragments whose end is not
-  established. A capture settles whether the fall-through reaches `cmd_done` at all.
+- **H, J** — print a message and are done. `HYPER WHAT?` and `JUMP...WHEE...`. The interesting
+  part is what they do *not* do: `cmd_J`'s message promises a jump the body never performs, and
+  the manual says that is on purpose (see finding 2 above).
+- **Y** — no longer in this group. `asm/4542` falls into a freeform echo loop at `asm/4551..4567`
+  terminated by Enter, implemented and gated. `cmd_N` is the letter still falling through into a
+  fragment whose end is not established.
 - **C, S, O, T** — print a prompt ending in a dash and consume a direction, like `U` already does.
   The direction is the whole question: which cell is aimed at, and what the effect is when the
   aim lands. `S`'s effect is already modelled in `combat.c` for CP5 ticket C6 and merely unwired.

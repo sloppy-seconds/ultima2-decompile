@@ -190,6 +190,21 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A routine cut into fragments by a mechanical first pass stays invisible until
+  someone reads the address range as one stream, and a mechanical pass will happily fragment a
+  complete routine into pieces too small to recognise.** A command handler's body was seven
+  fragments of two to five bytes each — a key poll, a spin, a terminator test, an echo, a loop
+  back, a print, a return — and every one was headed "behavior not yet reviewed", so the range
+  read as an unresolved tail for days. The tell was a live capture that had been logged as a
+  defect: keys typed after the command "accumulated as text and never dispatched", which was an
+  unrecognised freeform-input feature, not a broken dispatcher. Two harness rules fall out. When a
+  handler's body ends in a fall-through rather than a return, disassemble the whole contiguous
+  range to the next known entry point before calling it unresolved; and when a capture shows an
+  input anomaly, check for a loop that only a terminator exits before writing it up as a failure to
+  return. A third-party description of the game (here, the shipped manual, by owner recollection)
+  is a legitimate pointer at a range worth re-reading — it cannot establish what the bytes do, but
+  it can supply the reason to look.
+
 * **2026-10-29 — A timer-expiry gate must pin the subject in the state, and the way to do that is
   to set the state from a captured snapshot rather than induce it through play.** A gate asserting
   that a status counter decays was written by inducing the status from an in-game adversary and

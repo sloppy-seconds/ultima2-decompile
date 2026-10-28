@@ -27,6 +27,23 @@ and a prediction that fails is a finding in its own right.
 | Charisma affects **prices** | `asm/20AB_bcd_price_from_stats` derives a price from `[DS:50] + [DS:4E]`, and higher stats give a *lower* number; the grocery table's 52 gp is the 6th value the loop can produce | corroborated twice from two third-party sources; still not proof, and the `DS:4E` charisma-vs-wisdom dispute is untouched |
 | **gremlins steal food** | `asm/12DB_dungeon_events.asm` prints `A GREMLIN STOLE SOME FOOD!` | site exists; the claimed *fixed 100 units* is unverified and is worth checking, because CP5 C6 already found one "fixed" theft in this game was really a rolled BCD decrement |
 
+### A second source: the official manual, by owner recollection (2026-10-29)
+
+Different provenance from the cheat sheet above, and it should be kept visibly separate: this is
+not a document held in the repo. The owner recalled two things from the shipped manual, grade
+`recalled`, and both were then checked against the bytes. Both agreed, and in both cases the bytes
+said something the manual could not.
+
+| manual claim (recalled) | byte evidence | verdict |
+| --- | --- | --- |
+| `J` lets the character "jump up and down", a way to release frustration; it crosses nothing and touches no mechanic | `asm/37DC_cmd_J.asm` is three instructions — `call str_out`, the string, `jmp cmd_done` — with no write of any kind | **corroborated, and the bytes go further**: a handler with no write cannot touch a mechanic. The emptiness is the feature, so it is not a stub to be finished. |
+| `Y` takes freeform text and ends it with Enter | `asm/4542_cmd_Y.asm` falls into `asm/4551..4567`: spin on the key seam, echo each character, `cmp $0xd,%al` to end, print the Enter, `cmd_done` | **corroborated**, and it resolved a capture this project had misread for four days — see `docs/needs-gameplay.md` finding #1. The range writes nothing, so the yell evaporates. |
+
+The useful generalisation, and the reason both rows are in this file rather than in prose: a
+manual can explain *why* a byte pattern is deliberate, which a disassembly cannot. It cannot
+establish *what* the pattern does, and in both cases above the bytes were already sufficient —
+what the recollection supplied was the reason to re-read a range nobody had bothered with.
+
 ## 2. Claims the binary does not corroborate (yet)
 
 - **"Negate Time needs a strange coin."** ~~No `STRANGE COIN` string exists anywhere in `asm/`~~

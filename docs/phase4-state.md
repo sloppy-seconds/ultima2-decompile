@@ -165,13 +165,18 @@ placement was solved 2026-10-28 and it is tile `0x5C`, measured in `captures/spi
 
 **CP6 — towns + the full command set is the next checkpoint, and its owner decision is now made.**
 The engine has no command loop, and the command loop is upstream of era display, speed wiring,
-towns and time travel. **Owner ruling 2026-10-28e: implement all 26 handlers**, with the twelve
-that no capture has ever seen run — `C D H J M N O S T V W Y` — each carrying an in-source
-`UNPROVEN:` marker, and **no checkpoint or phase may be called code-complete while any marker
-stands**. The fourteen with execution evidence are `A B E F G I K L P Q R U X Z`. The rule lives in
-`AGENTS.md` § 3, not only here, because a handoff gets superseded and a working rule must not.
-`python3 tools/cmd_handlers.py` prints the crosswalk and its `exec` column is that evidence;
-the gate fails when the jump table, the filenames and the provenance lines disagree.
+towns and time travel. **Owner ruling 2026-10-28e: implement all 26 handlers**, with any letter no
+capture has ever seen run carrying an in-source `UNPROVEN:` marker, and **no checkpoint or phase may
+be called code-complete while any marker stands**. The rule lives in `AGENTS.md` § 3, not only here,
+because a handoff gets superseded and a working rule must not.
+
+`python3 tools/cmd_handlers.py` is the authority for which letters are proven and which are not; it
+prints the crosswalk, its `exec` column is the evidence, and the gate fails when the jump table, the
+filenames and the provenance lines disagree. **This section deliberately names no letters.** An
+earlier version hardcoded "twelve unproven / fourteen proven" and went stale twice without anyone
+noticing, because the corpus grows every time a capture is harvested and prose does not. Which
+handlers are still `NULL`, and the specific thing each one lacks, is in the table comment in
+`engine/src/game/commands.c` — also not duplicated here on purpose.
 
 **Owner-independent work that does not need the above.** In rough value order, each with the
 tool that measures it rather than a number copied from a diary:
@@ -1170,6 +1175,75 @@ found; it was dropped, not diagnosed, and should not be re-introduced blind.
 | Clean-tree rebuild | `bash tools/assemble_clean.sh` | 1299/1299 cleaned, 37,344 B identical |
 | Original untouched | md5 `fe884d5117971073ac8097cc7a6aca25` | unchanged |
 | Engine test | `make -C engine test` | CP0 11/11, CP1 9/9, CP2 12/12 PASS |
+
+---
+
+## TODO: enhanced-mode cheat codes behind `cmd_Y` (owner, 2026-10-29, scoped not built)
+
+The owner asked for a Doom-style cheat system, entered through `Y`, as a nod to id. It is a good
+carrier for a reason that is not nostalgia: `asm/4542` already reads freeform text until Enter and
+**writes nothing at all**, so the text-entry plumbing is something the game ships rather than
+something the engine would invent. `cmd_Y` is implemented and gated as of the same day; the cheat
+layer is not, and nothing below is built.
+
+**It must not live behind `--dev`.** That flag's ruling is explicit — *"`--dev` may add observation
+and an exit path. It may never change game behaviour. Not a damage number, not a spawn, not a
+message, not which tile is passable."* That sentence rules out the two most desirable codes by
+name, in the same terms, and `--dev` exists precisely because unrequested behaviour once masqueraded
+as fidelity. Cheats are the loudest possible version of that mistake.
+
+**So it needs its own flag, off by default.** `--enhanced` is not the right home either as things
+stand: enhanced is currently "same rules and state as the original, but better presented", and a
+god mode is not better presentation, it is new gameplay. Naming that honestly beats stretching the
+existing category, and off-by-default keeps every gate and the CP2 byte-comparison baseline exactly
+where they are.
+
+**The mapping, with honest verdicts.** Doom codes, and what Ultima II can actually back:
+
+| code | U2 equivalent | verdict |
+| --- | --- | --- |
+| `idclev##` | warp to sector `##` (00–99) | clean, and the most useful thing on this list — **but see the `DS:49` caution below** |
+| `idclip` | `u2_mode_passable()` always accepts | clean; one function, already covered by 12 mode cases in CP5 P1 |
+| `iddqd` | HP to max + a guard at the damage site | clean; HP is 2-byte BCD so "100%" is 9999, and the death test is `damage > hp`, not `>=` |
+| `idmypos` | print sector + x,y in hex | clean, **and it is pure observation, so it is legal under `--dev` today with no new ruling** |
+| `idbeholdA` | grant the HELM so `cmd_V` shows the world map | clean — the automap analogue already exists |
+| `idbeholdS` | strength boost | clean, but stats wrap above 99 (proven, no ceiling guard on any add site) |
+| `idkfa` / `idfa` | fill weapon/armour slots, POWER armour, max gold | partial — U2 has **no ammo and no keys**, so half the code has nothing to map onto |
+| `idchoppers` | ready the best weapon | **blocked**: `cmd_R` (ready weapon) is still a `NULL` slot |
+| `iddt` | bypass `cmd_V`'s `sector_second < 4` gate | partial |
+| `idbeholdR / I / L / V` | radiation suit / invisibility / light / invulnerability | mostly invention. `V` is `iddqd`'s second half; `L` is the dungeon LIGHT spell, which `AGENTS.md` § 3 parks |
+| `idspispopd` | duplicate of `idclip` | redundant — Doom needed two because they were two engines |
+| `idmus##` | — | does not map. The only audio seam is `speaker_tone`; there are no music tracks to select |
+
+**Rules that bind whoever builds it.**
+
+- Original mode's `cmd_Y` stays exactly as the bytes have it: echo, no writes. The cheat parser is
+  additive and reachable only with the flag on. Gateable directly — assert Y mutates nothing in
+  original mode, which `cmd_yell.py` already does for the plain case.
+- **Every cheat must announce itself.** Owner rule, 2026-10-26: an action or an effect with no
+  message is a defect. And per the enhanced-effects precedent, the wording must be **visibly
+  engine-authored, not dressed up as game text** — `HIT POINTS FULL — CHEAT` is right, a string in
+  the game's own voice would be wrong.
+- Echo through `char_print_wrap` (`L_0055f4`), the seam the original uses, so long input wraps the
+  same way.
+- Licence: the code *names* are a short functional homage and fine to keep verbatim; do not copy
+  id's manual prose into the repo, and author the table and every message ourselves.
+
+**`idclev` touches an open question.** Sector warping writes `DS:49`, and that byte has the G45
+collision — `asm/3546` reads it as the era index while `asm/7030` writes it from the world byte.
+A warp should set the sector digits and say so in a comment, not quietly invent world semantics
+nobody has pinned down.
+
+**A false promise to deflate before it matters.** `idclip` and `idclev` look like they would unblock
+the capture queue — G35's tavern, G39's rocket, G40's horse beside shallows. They would not. Those
+captures need the **original** binary to walk somewhere, and cheats exist only in our engine. The
+original is served by `tools/u2_edit.py setpos` and `--player` seeding, which already warp from
+outside. So this buys playability and engine-test convenience, not evidence — a good reason to build
+it, and not a reason to file it against the queue.
+
+**Suggested order:** `idmypos` under `--dev` (no ruling needed, immediate debugging value) → the
+flag decision → `idclev` and `idclip` → the stat and item codes → `idchoppers` whenever `cmd_R`
+lands.
 
 ---
 
