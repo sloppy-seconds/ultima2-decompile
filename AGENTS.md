@@ -19,11 +19,14 @@ exact byte-for-byte fidelity.
 > passability), W3 (per-mode food) and W4/W5 (`cmd_L`) are implemented and W1/W2/W3 are gated as
 > CP5 P1 and V1. The one genuinely open question there (the plane's airborne flag, W6) is marked as
 > needing a capture and not a guess, and is now `docs/needs-gameplay.md` G43.** **Scoped handoffs are
-> the entry point for their own topic, not history:** `docs/handoff-commerce-transact.md` (assessed
-> 2026-10-29 — what is and is not evidenced for `cmd_T`; **there is no TALK command, `T` does both
-> jobs**; selling is evidenced end to end and talking is data-ready but mechanism-blind, so build the
-> selling branch and leave the talking branch a `NULL` slot, and run G23 before writing any pricing
-> code because `asm/20AB` is known to fail a real observation), and `docs/moongates.md` (time doors:
+> the entry point for their own topic, not history:** `docs/handoff-commerce-transact.md` (**executed
+> 2026-10-29, the day it was written — read its § 0 status block first**; `cmd_T` is now implemented
+> in `engine/src/game/commerce.c` and gated by `make test-cp6`, and the headline is that three of its
+> four "not evidenced" items closed statically: the grocery quote was `0020` and not `0200`, the axe
+> was 20 and not 25, `asm/1590` is a quadrant-and-site-kind switch rather than the menu-versus-line
+> fork, and the tlkx record index is the creature role byte minus `0x80`. The talking branch is
+> still unimplemented, now by reason rather than by blindness: the engine has no tlkx loader), and
+> `docs/moongates.md` (time doors:
 > observed mechanic, decoded table, engine implementation, and three recorded self-corrections worth
 > reading for method as much as content).** To start a fresh
 > agent, read `docs/handoff-2026-10-29b.md` first (**current entry point** — the overnight run that

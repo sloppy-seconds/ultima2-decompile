@@ -198,6 +198,25 @@ observable if anything samples between the two.
 
 ### Where it goes cold, precisely
 
+> **CORRECTION 2026-10-29, later the same day — it did not go cold, and the number was wrong.**
+> The section below records a real decode and a false observation. Stopping the CPU at
+> `asm/17B7` during a headless grocery purchase showed the printer loading `DS:27/28 = 00 20`,
+> and the frame reads `THE FOOD HERE COSTS 0020 / PER 100, WANT ONE?` — not `0200`
+> (`captures/spice86/g23-food-live`). Stopping at `asm/2052` on the same purchase showed the
+> same pair and gold fell 9999 → 9979, so the printed price and the charged price are one
+> operand pair and the charge is 20, not 40. `asm/20AB` called with the grocery's `AL=3` on a
+> maxed character produces exactly `DS:27/28 = 0020` and `DS:29/2A = 0012`, and the live stop
+> read both pairs. The unreachable-200 problem was a transposed digit in a hand-copied screen.
+>
+> The same run refuted the second failing observation, an axe quoted at 25 gp: the weapons
+> shoppe does route through `asm/20AB` (`asm/1F00` passes the menu digit straight in), and
+> menu item 3 quotes and charges **20** (`captures/spice86/g23-weapons`). One pricing path
+> for the shops, plus two shops that bypass it with a literal. The per-shop index is in
+> `asm/20AB_bcd_price_from_stats`'s header.
+>
+> What follows stays as written because the method is the point: a decode that disagrees with
+> an observation is the decode being tested, and here the observation lost.
+
 **No site was found that writes `0x02,0x00` into `DS:27/28` for the vendor food quote.**
 The static path into the printer is `asm/15B7` (`jmp L_001999`) → `asm/1799` (prints
 `THE FOOD HERE COSTS `) → `asm/17B2` (`mov $0x3,%al; call L_0022ab`) → `asm/17B7`
@@ -556,6 +575,67 @@ above and the 7/7 tile match: **measured**. "The scan resolves the DI branch": *
 it follows from the loop's two exits. The direction→delta writer: **unknown**, and the
 `10AA`/`10BF`/`1086` family is now ruled out rather than merely unexamined.
 
+### 5d. The ray, the fork and the selector — closed 2026-10-29
+
+The three open items § 5c and `docs/handoff-commerce-transact.md` § 4 left behind were all in
+the same eight bytes plus the fragments after them, and all three are now read.
+
+**The direction→delta writer is `asm/2362`, the same aim gate cmd_A/S/U/O use.** `asm/405D`
+stores the call as `.byte 0xe8 0x02 0xe3` — a forced-keep, because the vendored assembler
+re-encodes the displacement — so no `# calls:` line ever carried the edge and `asm/2362`'s own
+caller list concluded from that silence that TRANSACT was not in the family. It is. The gate
+zeroes `DS:1F/20/19/1A`, polls for a key, prints the direction word (`NORTH`, `SOUTH`, `EAST`,
+`WEST`, at file `0x25B0..0x25E5`) and does `decb`/`incb` on `DS:19` (x) or `DS:1A` (y). On
+timeout it prints `PASS` and leaves by `asm/0A30`, which is the `CMD: TRANSACT-PASS` line. The
+samples that all read `(1,1)` were teardown reads, taken after the creature-wander writers had
+reused the pair.
+
+**The ray is exactly two cells, and the sign row is transparent by design.** `asm/407C` reads
+the cell at the cursor and `asm/407F`'s `js` skips the next test when the tile's high bit is
+set — which is what every shop-sign letter is in the stamped grid. `asm/4081` then requires
+`0x7C`. `asm/4085` steps the cursor by the same delta and `asm/409F` requires `0x68`. So: near
+cell = a sign letter or `0x7C`, far cell = the merchant marker. Both live purchases and the
+grocery reproduce sit on that geometry, and the 2026-10-23 sweep failed because it stood beside
+the wrong marker, not because the ray was longer.
+
+**The menu-versus-line fork is `asm/4075`, not `asm/1590`.** The slot scan at `asm/23E6`
+decrements `DI` from 31 to 1 and returns the slot holding a creature on the cursor cell, or 0.
+`DI != 0` is the talking branch (`asm/40C0`: role bit 7 set → `asm/4209` → the tlkx printer
+`asm/154E`; clear → the creature-type chain, the `street_*` handlers). `DI == 0` is the map-tile
+branch, and on a hit `asm/40A3` jumps to `asm/1590`.
+
+**And `asm/1590` is a quadrant switch, not a fork.** It tests the player's own `X` and `Y`
+against `0x20` and then `[DS:4A]`, the site kind, for eight destinations:
+
+| player cell | site kind 2 (town) | any other kind |
+| --- | --- | --- |
+| `x>=0x20, y<0x20` | `asm/1D1D` armour shoppe | `asm/1799` grocery |
+| `x<0x20, y<0x20` | `asm/1E4F` weapons shoppe | `asm/1AE0` clue seller |
+| `x>=0x20, y>=0x20` | `asm/1F75` transport shoppe | `asm/1841` cleric shrine |
+| `x<0x20, y>=0x20` | `asm/15E4` the pub | `asm/19AF` wizard shoppe |
+
+Three live purchases land on three different cells of that table, and none of them was seeded
+knowing it. The shipped data corroborates the rest: run over the fifty sign/NPC pairings
+`tools/shop_access.py` enumerates, the sign text names the predicted shop wherever the sign
+names a shop at all — `WEAPONS`, `ARMOURY`, `TRANSPORT`, `PUB`, `CLERGY`, `ORACLE`, `SEER`,
+`WIZARDRY`, `DELI`, `COOK`, across six sectors of both kinds. That also explains § 2's finding
+of "no town-to-town catalogue variation": there is none, because the variation is *within* the
+sector. Two sectors of the same kind sell the same eight things in the same eight places.
+
+**The tlkx selection rule, which § 4.5 of the handoff called completely unknown:** the record
+index is the creature's role byte. `asm/40C0` branches on bit 7 of `[slot+0x1D7]`, `asm/4209`
+computes `AL = role - 0x80`, and `asm/154E` walks the sector's loaded `tlkxNN` buffer at
+`[DS:476]` counting NULs until `AL` of them have passed, then prints that record. Stopped live
+with `AL=0x02` for the role-`0x82` Jester at (48,26) in sector 31, whose second record is
+`RONALL MC DONALL SINGS: TRY OUR NEW RIDE THROUGH!`. Where on screen the line renders is still
+not established — the captures taken 0.3–1.1 s after the key show the `TRANSACT-WEST` line and
+then the next prompt, with no dialogue line between them.
+
+**Grades for this section.** The gate, the two-cell ray, the fork, the eight destinations and
+the tlkx index: **measured** (bytes, plus live stops at `asm/17B7`, `asm/2052`, `asm/20AB`,
+`asm/154E` and `asm/421A`). The sign-table corroboration: **measured** over the shipped data.
+The dialogue line's screen placement: **not established**.
+
 
 **The earlier claim stays withdrawn.**
 
@@ -594,7 +674,7 @@ go-ahead and a per-function `check_func.py` run for each new range.
 | --- | --- |
 | ~~Find the branch that selects between the two spell catalogues~~ **closed same day** — there is no town branch; the two lists are the cleric shrine and the wizard shop, each class-gated | resolved above |
 | ~~Find the real price source~~ **closed 2026-10-23 for the mechanism** — `DS:27/28` is the price operand, printed by `asm/51A5` and charged by `asm/2052`; see § 3b | resolved above |
-| **G23** — read `DS:27/28/29/2A` and `DI` live at runtime `17B7` and `2052` during a vendor purchase, to settle whether the food price is a constant or is derived from `int + cha` | the one datum § 3b cannot get statically; registered in `docs/needs-gameplay.md` |
+| ~~**G23** — read `DS:27/28/29/2A` and `DI` live at runtime `17B7` and `2052` during a vendor purchase, to settle whether the food price is a constant or is derived from `int + cha`~~ **closed 2026-10-29** — it is derived, the printed pair and the charged pair are the same two bytes, and the printed number was `0020` and not `0200`. `captures/spice86/g23-food-live`, `captures/spice86/g23-weapons`; § 3b's correction and § 5d | resolved above |
 | Walk each shop routine's arithmetic to confirm every price is computed | closes the § 1 limit |
 | Split `asm/19D7` into its real routines | boundary change, needs approval + `check_func.py` per range |
-| Confirm `[DS:46]` is gender and find the class byte the `NOT A CLERIC/WIZARD` guards test | the guards exist; the tested field is not yet named |
+| ~~Confirm `[DS:46]` is gender and find the class byte the `NOT A CLERIC/WIZARD` guards test~~ **the class byte is `DS:47`** — `asm/1841` tests `[DS:47] == 1` before the shrine and `asm/19AF`'s successor fragment tests `[DS:47] == 2` before the magic shoppe. `[DS:46]` is untouched by this finding | resolved in part |

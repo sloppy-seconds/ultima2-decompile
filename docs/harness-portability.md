@@ -190,6 +190,50 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A call graph built from rendered mnemonics silently drops every edge the
+  reconstruction stores as raw bytes, and a caller list derived from it will then state a
+  negative.** A command's call to the shared direction gate was stored as a forced-keep byte
+  sequence because the vendored assembler re-encodes the displacement, so no `# calls:` line ever
+  carried it, and the gate's own header concluded from that silence that the command was not one of
+  its callers — a conclusion the file repeated for days and that propagated into a second document
+  as "this command aims by a different mechanism". The edge was there in the bytes the whole time.
+  Harness implication: derive call and jump edges by scanning opcodes and resolving displacements
+  over the raw image, and treat the listing's `call` text as a convenience view; then diff the two
+  and make a disagreement a gate failure rather than a silent omission. Any "X is not a caller of Y"
+  that rests on absence of a metadata line should say so, because absence of a derived line is not
+  absence in the binary.
+
+* **2026-10-29 — Two open blockers were hand-copied numbers, and a decode that disagreed with them
+  was treated as the suspect part.** A price quoted as `0200` and an item priced at 25 were each
+  recorded as observations, each was checked against a routine that could not produce it, and each
+  then blocked a work item for days — one of them was written into a reconstruction header as
+  "this routine is known to fail a real observation", which is the worst place for a wrong number
+  to live because it teaches the next agent to distrust correct bytes. Both numbers were
+  transcription errors: a breakpoint at the print site and one at the charge site, driven by a
+  scripted purchase, showed the routine's output and the gold delta agreeing exactly. Harness
+  implication: a behavioural claim that hinges on a rendered number must name a frame *and* a
+  memory read taken at the moment of the render, and a document that reports a mismatch between a
+  decoded formula and an observation should carry both artifacts or say which is a copy. Prefer
+  "the observation is a transcription" over "the decode is wrong" when only one of them is
+  unverified.
+
+* **2026-10-29 — A positional dispatch is cheap to corroborate against shipped content data, and
+  the corroboration is stronger than the derivation.** Once a routine turned out to switch on which
+  quadrant of a sector the player stood in, the claim was testable without play: the data files name
+  the places, and running the rule over every sign/NPC pairing in the shipped set showed the sign
+  text naming the predicted shop wherever a sign names a shop at all, across sectors of both kinds.
+  That converts "plausible shape match" into a measured agreement over dozens of independent cases
+  for the cost of one script. Harness implication: when a decode implies a rule over authored
+  content, look for a content-side enumeration of the same rule and gate against it; a rule that
+  predicts names it was never fitted to is the cheapest strong evidence available.
+
+* **2026-10-29 — A capture tool that buffers when redirected reads as a tool that found nothing.**
+  A breakpoint harness run in the background with its stdout to a file printed an empty file while
+  the trap had fired, because block buffering holds the output until exit; the operator's only
+  signal was "no stop", which is also what a missed stop looks like. Harness implication: any
+  long-lived capture or watcher should line-buffer or flush after each record, and should print an
+  armed/heartbeat line immediately, so silence is distinguishable from an empty buffer.
+
 * **2026-10-29 — A one-shot memory poke is not a controlled experiment when the program owns the byte,
   and a refusal needs a control that proves the actor can act at all.** Two failures were avoided only
   by construction, and both are generic. First, a mode byte was poked to drive a rule that reads it, and

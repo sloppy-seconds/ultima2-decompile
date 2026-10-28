@@ -5,6 +5,30 @@ point — read `AGENTS.md` first, then `docs/handoff-2026-10-29b.md` for general
 because the commerce question was assessed on 2026-10-29 and the answer is "build half of it", and the
 boundary between the two halves is the part that is easy to get wrong and expensive to rediscover.
 
+---
+
+## 0. STATUS — executed 2026-10-29, same day. Read this before § 3 and § 4; four of § 4's
+seven "not evidenced" items closed, and two of them closed by refuting the observation that made
+them open.
+
+| § 5 step | outcome |
+| --- | --- |
+| 1. G23 | **done, and it refuted two observations.** `captures/spice86/g23-food-live`: `bp_read --ip 17B7` stopped mid-quote with `DS:27..2A = 00 20 00 12`, `--ip 2052` stopped on the same purchase with the same pair, gold `9999 → 9979`. The grocery quote is **`0020`, not `0200`** — a transposed digit in a hand-copied screen, and `asm/20AB` reproduces both pairs exactly. `captures/spice86/g23-weapons`: the axe is **20, not 25**, and the weapons shoppe *does* route through `asm/20AB` (`asm/1F00` passes the menu digit). **One pricing path**, plus two shops that bypass it with a literal. § 4.1 is closed. |
+| 2. decode `asm/1590` | **done, and it was not the fork.** It is a quadrant switch on the player's own `X`/`Y` against `0x20`, then a site-kind test, for eight destinations — table in `docs/commerce.md` § 5d and in `asm/1590_transact_shop_selector`'s header, corroborated by the fifty shipped sign/NPC pairings. The menu-versus-line fork is `asm/4075`: whether the slot scan found a creature. § 4.3 and § 4.4 are closed. |
+| 3. build the selling branch | **built**: `engine/src/game/commerce.{c,h}`, `cmd_T` in `commands.c`, the direction arm in `overworld.c`, 21 new extractor entries, and `make test-cp6` (`engine/tests/run_cp6.sh` + `commerce_check.c`, 38 pure checks + the four shops end to end against a synthetic sector). Selector, both catalogues that are read, the class gates, the quote, yes/no, the BCD charge and the owned-count arrays. |
+| 4. leave the talking branch a `NULL` slot | **left, and it is no longer blind.** The mechanism is decoded and observed: `asm/40C0` branches on bit 7 of `[slot+0x1D7]`, `asm/4209` computes `role - 0x80`, `asm/154E` prints that record out of the loaded `tlkxNN` buffer at `[DS:476]`. Stopped live with `AL=0x02` for a role-`0x82` Jester. § 4.5's "completely unknown" is closed; what is left is the engine half — there is no `tlkx` loader in `core/world.c` and the `street_*` literals have no extractor entries. |
+
+Still open after this run, and named where they are implemented: the cleric shrine, the magic
+shoppe, the pub and the clue seller are dispatched but not implemented (each gap is commented at
+its branch in `commerce.c` with the reason — the spell-slot question, the chatter table, the clue
+pool). Where the dialogue line renders on screen is not established. `[DS:46]` as gender is
+untouched. The ray's `0x7C` near-cell case is read but has never been the accepted tile in a live
+purchase except in the grocery reproduction.
+
+Repo at time of writing: `main`, tree clean, `check_all` green, CP0–CP6 green.
+
+---
+
 Repo at time of writing: `main` at `5546e3a`, pushed, tree clean, `check_all` green, CP0–CP5 green,
 1222 files in `asm/`, 180 capture directories. **The authority for which handlers are implemented and
 which have execution evidence is `python3 tools/cmd_handlers.py`** — do not trust any count quoted
