@@ -9,11 +9,17 @@
 #           the site kind: DS:4A == 2 (a town) falls through to 15E4 and gets the pub, anything
 #           else takes the trampoline. So the name is right for the body and wrong for the entry
 #           point -- a caller that lands on 15E1 never sees a pub at all.
-# note: the whole door to this routine, measured live 2026-10-26 in sector 82. cmd_T must aim at
-#           a cell holding 0x68 (asm/409F); the vendor dispatcher at asm/1590 then requires the
-#           PLAYER at X >= 0x20 AND Y >= 0x20 -- both tests are `jb 15ba`, so a low X or a low Y
-#           diverts to the other catalogue, which is the weapons shoppe and was seen on screen
-#           from (11,52) -- and only then does asm/15D6's site-kind test pick pub or trampoline.
+# note: the whole door to this routine, measured live 2026-10-26 in sector 82 and CORRECTED
+#           2026-10-29 from the bytes of asm/1590 (see that file's header for the full table).
+#           cmd_T must aim at a cell holding 0x68 (asm/409F) with a sign or 0x7C between; the
+#           dispatcher then tests the PLAYER's position, and the pub is the cell
+#           **x < 0x20 AND y >= 0x20** of a site kind 2 — not "X >= 0x20 AND Y >= 0x20" as this
+#           note said. The two tests are `jb 15A2` and `jb 15AC`, two different targets, not
+#           one; reading them as one is what produced the wrong quadrant, and the sign table in
+#           tools/shop_access.py agrees with the corrected reading (PUB at (13,57) and ADAMS at
+#           (7,57) in sector 82, DRUNK/OFFENDERS in 92, SWASHBUCKLERS in 32 — all west/south).
+#           asm/15D6's site-kind test then picks the pub (kind 2) or the trampoline to the
+#           wizard shoppe (anything else).
 #           The pub itself was NOT reached: at both qualifying markers tried, (11,52) and (51,49),
 #           the aim answered `FUNNY.. NO RESPONSE?`, which is the ray failing to find a
 #           transacting NPC, not a wrong branch. That is what is still open.

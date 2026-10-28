@@ -6,6 +6,26 @@
 #           crosses the sign band and reaches at least two cells; how far it actually goes, and
 #           whether the sign row is transparent to it by design or simply not a stop condition,
 #           is NOT established. Do not write cmd_T to a one-cell test.
+#           RAY EXTENT RESOLVED, later the same day, from the bytes rather than from another
+#           observation. The span is one routine and it is exactly two steps:
+#             405D  call L_002562   -- the aim gate asm/2362, see the note below
+#             4060  call L_0025e6   -- cursor = player + delta, then the slot scan
+#             406E  reject if [DS:4A] == 0
+#             4075  if the scan left DI != 0 -> 40C0, the CREATURE path (talk to whoever is
+#                   standing on the cursor cell: role bit 7 -> tlkx, else the street chain)
+#             407C  map_tile_ptr(cursor) ; 407F `js 4085` skips the next test when the tile
+#                   has its high bit set -- which is what a shop sign letter is
+#             4081  reject unless the cell == 0x7C
+#             4085  cursor += delta ; map_tile_ptr again
+#             409F  reject unless that cell == 0x68
+#             40A3  jmp 1590        -- SUCCESS: the vendor dispatcher
+#           So: the near cell must be a sign letter (high bit) or 0x7C, and the far cell must
+#           be the 0x68 marker. The sign row is transparent BY DESIGN — it is the accepted
+#           near cell, not an obstacle the ray happens to ignore. Both live purchases sit on
+#           this geometry: sector 32 (38,5) sign (38,4) marker (38,3), and sector 22 (48,53)
+#           sign (48,52) marker (48,51). The grocery was reproduced from (55,21) with 0x7C at
+#           (55,20) and the marker at (55,19), which is the cell the 2026-10-23 sweep stood
+#           beside and missed.
 #           This also retires a wrong blocker note. On 2026-10-29 an earlier pass concluded that no
 #           0x68 marker had a walkable cell adjacent to it, from a scan that compared raw mapx tile
 #           bytes against the stamped grid at DS:1800 as if they were one representation (they are
@@ -22,7 +42,7 @@
 # calls: L_0051df (str_out), L_0025e6 (cursor init + slot scan seed), L_0055f4 (emit),
 #        L_0052b3 (map_tile_ptr) x2
 # provenance: live:armour-buy, food-buy; static
-#           entry executed in 28 of 180 harvests; derived from ExecutedInstructions. This line
+#           entry executed in 31 of 185 harvests; derived from ExecutedInstructions. This line
 #           previously carried the live citations but no executed count, and tools/cmd_handlers.py
 #           parses only the `entry executed in N of M` form -- so TRANSACT was reported as never
 #           exercised while 24 harvests already contained it. The crosswalk's `--` was a format
@@ -66,13 +86,24 @@
 #     monx31 Merchant spawn cells (7/7), which says the map marks where a transactor
 #     stands, not that 0x68 means Merchant in general. Do not generalise it to other
 #     sectors without checking.
-#   * Which path a live talk takes is NOT established. The creature path is entered when
-#     BL != 0 and BL is the low byte of DI, which asm/23E6 sets to 31 -- so on the face of
-#     it the creature path is always taken and the map-tile path is dead code. It plainly
-#     is not dead, because the armour shop opened. So something between 23E6 and 4075
-#     changes DI (a scan loop that decrements it, almost certainly in the 2402..241E
-#     fragments), and **that loop has not been read**. Until it is, the sentence above
-#     beginning "if BL != 0" describes the branches, not the runtime behaviour.
+#   * Which path a live talk takes is now established, and the DOUBT above about the scan
+#     loop is closed: asm/23E6_find_creature_at_cursor scans slots 31 down to 1 for a
+#     creature standing on the cursor cell and returns with DI = that slot, or DI = 0 when
+#     the scan is exhausted. asm/4075's `cmp bl,0 ; jne 40C0` is therefore live in both
+#     directions: a creature on the cursor takes the talk path, an empty cursor falls through
+#     to the map-tile path. Slot 0 is never examined (`dec %di ; jne` exits on zero) and
+#     monx31 slot 0 is a populated Guard — real gap or intentional reserve is still not
+#     established.
+#   * RESOLVED, what writes the delta: asm/405D calls asm/2362_aim_state_clear, the same aim
+#     gate cmd_A, cmd_S, cmd_U and cmd_O use. It zeroes DS:1F/20/19/1A, polls for a key, and
+#     on a direction key prints the direction word and does `decb/incb` on DS:19 (x) or
+#     DS:1A (y) — NORTH is `fe 0e 1a 00`, SOUTH `fe 06 1a 00`, EAST `fe 06 19 00`, WEST
+#     `fe 0e 19 00`, all read out of the file at 0x25B0..0x25E5. On timeout it prints PASS and
+#     leaves via asm/0A30, which is the `CMD: TRANSACT-PASS` line. The reason this was missed
+#     is that asm/405D stores the call as `.byte 0xe8 0x02 0xe3` — a forced-keep — so the
+#     `# calls:` metadata never carried the edge and asm/2362's own caller list concluded from
+#     that silence that cmd_T was not in the family. It is. The samples that all read (1,1)
+#     were taken at teardown, after the creature-wander writers had overwritten the pair.
 #   * The delta DS:19/1A read (1,1) in every live sample taken so far -- after T,Up,
 #     T,Down, T,Left, T,Right AND after five movement keys that demonstrably moved the
 #     player. So whatever writes the delta from a direction is none of what has been

@@ -4,10 +4,15 @@
 #           DS:19/DS:1A are the aim deltas: asm/3F37 (cmd_S's fall-through) turns around and
 #           computes the target as ([DS:00]+[DS:19], [DS:01]+[DS:1A]) into DS:23/DS:24.
 # callers:  asm/4307 (cmd_U UNLOCK), asm/3F37 (cmd_S STEAL), asm/3C2E (cmd_O OFFER),
-#           asm/2BBE, asm/35EB. That set is the whole aim-gate family, and it is worth naming
-#           because two nearby commands are NOT in it: cmd_C takes no direction at all
-#           (asm/310B), and cmd_T aims by a cursor initialiser and slot scan instead
-#           (asm/23E6). "The direction commands" is not a uniform set.
+#           asm/405D (cmd_T TRANSACT), asm/2BBE, asm/35EB. That set is the whole aim-gate
+#           family, and it is worth naming because two nearby commands are NOT in it:
+#           cmd_C takes no direction at all (asm/310B), and cmd_Y is a freeform text loop.
+#           cmd_T's membership was missed until 2026-10-29 because asm/405D stores the call as
+#           `.byte 0xe8 0x02 0xe3` — a forced-keep, since the vendored assembler re-encodes the
+#           displacement — so no `# calls:` line ever carried the edge and this header
+#           concluded from that silence that cmd_T aimed by a cursor initialiser instead. It
+#           does both: the gate here sets DS:19/1A from the direction key, and asm/23E6 then
+#           builds the cursor out of them.
 # provenance: live
 #           entry observed in ExecutedInstructions of 54 of the 142 harvests that carry a flow
 #           dump (controls: 0x4F4D 142/142). The continuation at 0x2370 shows in the same 54.

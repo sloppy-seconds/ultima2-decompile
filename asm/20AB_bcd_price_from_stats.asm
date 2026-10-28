@@ -73,6 +73,30 @@
 #           file, so the two prices observed today come from the same file and only one of them
 #           routes through here. Whoever reads 19D7's weapon branch should expect a separate price
 #           path, probably a table.
+#           BOTH OF THOSE OBSERVATIONS ARE NOW RETRACTED, and the routine survives both. They
+#           were re-measured on 2026-10-29 by stopping the CPU inside the game during real
+#           headless purchases instead of reading gold after the fact:
+#             GROCERY: asm/17B7 was stopped mid-quote and left DS:27..2A = 00 20 00 12, and the
+#               frame reads `THE FOOD HERE COSTS 0020 / PER 100, WANT ONE?` — not 0200. The
+#               number this file could not produce was a transposition. AL=3 on a maxed
+#               character gives DI=3, and the walk's third term is 20. captures/spice86/
+#               g23-food-live.
+#             AXE: the weapons shoppe DOES route through this routine — asm/1F03 is
+#               `mov [DS:1F],%al ; call L_0022ab`, the menu digit straight in. Stopped at
+#               asm/20AB it entered with AL=0x03 for menu item 3 and left DS:27/28 = 00 20; the
+#               frame reads `FOR YOU ONLY 0020` and gold fell 9999 -> 9979. The axe was never
+#               25. captures/spice86/g23-weapons.
+#           The per-shop index, now read at all six call sites: grocery 3 (constant, asm/17B2),
+#           transport 4 (constant, asm/1FAD), armour 2*digit (asm/1DD8 does `add %al,%al`),
+#           weapons digit (asm/1F00), cleric shrine digit (asm/1931), wizard shoppe digit
+#           (asm/1A78). There is ONE pricing path for the shops, plus two shops that bypass it
+#           entirely with a literal: the tavern drink (0005, asm/15E1) and the clue seller
+#           (digit in the hundreds byte, asm/1B42). "Probably a table" was the wrong shape of
+#           answer; the index is a menu position.
+#           One arithmetic slip in this header, corrected here: the third-party grocery check
+#           worked `AL=4` at minimum stats and claimed DI=6 -> 0052. The table below puts 52 at
+#           DI=5, and the grocery's AL is the constant 3, which at 0x10/0x10 gives bit length 6
+#           and DI = 3+8-6 = 5 -> 0052. The wiki's number agrees once the caller is the right one.
 #           Two things this does NOT settle. ~~The DS:4E charisma-vs-wisdom dispute~~ is
 #           CLOSED 2026-10-29 (see the resolution below), so the only thing still open here is
 #           the tavern's observed '0200', still unreproduced and still not in the sequence; G23
