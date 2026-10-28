@@ -22,12 +22,19 @@
 # GRADES. observed: the three tests, the scan order (31 downwards, so the highest live
 #           slot wins), the facing bytes, and that a match is required — a cast with an
 #           empty facing cell printed `CAST-MAGIC MISSILE-FAILED!` and still spent the
-#           scroll. inferred: that mon_kind is a floor index and DS:25 the caster's
-#           floor. It fits (the ladder spells move DS:25 against a 0xf bound, and the
-#           kind test is then "same floor as me") and it is a second independent
-#           corroboration of the D12 reading of DS:25, but nothing here separates floor
-#           from any other per-slot class, so do not rename DS:25 on the strength of it.
-# measured: in the sector-20 tower the natural table had mon_kind 0 at slots 0 and 1
+#           scroll.
+#           REFUTED 2026-10-29, and it was this file's own inference: that mon_kind is a floor
+#           index and DS:25 the caster's floor. DS:25 IS the site floor (proven by the ladder
+#           spells in captures/spice86/d12-ladder-ds25 — see asm/3139 and state.h), but mon_kind
+#           is not a floor: in the sector-24 tower the creatures standing on floor 0 carry
+#           mon_kind 0..15 simultaneously, and monx24 is all zeros, so the kinds are generated at
+#           load rather than authored per floor. What the second test really is, measured:
+#           `mon_kind == the caster's floor number`. Odd, and it is the game's. Live flip: at
+#           DS:25 = 1 a held creature with mon_kind = 1 in the facing cell was hit (HP
+#           0x99 -> 0x47), where the same poke with mon_kind = 0 was refused. So do not read a
+#           kind match as "same floor as me". Whether the comparison means anything in a
+#           genuinely multi-floor dungeon is untested; the sector-24 tower has one usable floor.
+# measured: in the sector-24 tower the natural table had mon_kind 0 at slots 0 and 1
 #           only (slot 0 empty), so with DS:25 = 0 the kind test admits exactly one
 #           creature. Three scripted refusals were that test failing, not the position
 #           test; the one natural success (frame d) was slot 1 wandering into the

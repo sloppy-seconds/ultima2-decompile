@@ -95,20 +95,27 @@ typedef struct u2_state {
                                         DS:00/01 pair above is not yet established by
                                         the asm, so both are kept rather than merged. */
     /* 0x24 */ uint8_t player_y;      /* asm/50B3_map_tile_ptr.asm */
-    /* 0x25 */ uint8_t reserved_25;   /* NOT reserved, probably the site floor index, and left
-                                         * unnamed on purpose until a capture proves it.
-                                         * Evidence: the DOWN LADDER / UP LADDER branches of
-                                         * asm/3139_cast_spell_flow read it and bound it with
-                                         * `cmp $0xf,%al` (a 0..15 floor count), and it is the
-                                         * only value those branches change — which is what makes
-                                         * "same position, next floor down/up" the natural reading.
-                                         * It is also read at L_0034e6 in the BLINK branch. A third
-                                         * party write-up asserted the floor semantics on 2026-10-29
-                                         * and the bytes are friendly to it, but friendly is not
-                                         * proven: renaming this needs a capture that goes down a
-                                         * ladder and reads DS:25 before and after. Until then the
-                                         * name stays reserved_25 and the note stays here — a wrong
-                                         * name is worse than no name (AGENTS.md § 3). */
+    /* 0x25 */ uint8_t site_floor;    /* THE SITE FLOOR INDEX — proven 2026-10-29 by
+                                         * captures/spice86/d12-ladder-ds25, which is the capture
+                                         * this field waited on.
+                                         * Observed: in the sector-24 tower, casting UP LADDER
+                                         * took it 0 -> 1 and DOWN LADDER took it back 1 -> 0,
+                                         * through the game's own `incb`/`decb` at asm/3139's
+                                         * ladder arms; pressing D (cmd_D, DESCEND) on a 0x20
+                                         * down-ladder cell left the site and left it at 0xFF,
+                                         * i.e. a decrement below zero with no guard.
+                                         * Corroborating structure, all measured: a tower's
+                                         * mapxNN is exactly 16 pages of 256 bytes, matching the
+                                         * `cmp $0xf,%al` bound on this byte; asm/1451 computes
+                                         * word[DS:472] + AL*256 + y*16 + x with AL = the
+                                         * candidate floor; and asm/68C0 reads the dungeon grid
+                                         * through [DS:25]*256 as its page selector.
+                                         * What it is NOT: a creature attribute. See
+                                         * asm/330C_cast_target_finder.asm — the CAST target scan
+                                         * compares this byte against mon_kind, and mon_kind is
+                                         * demonstrably not a floor.
+                                         * It is also the byte the BLINK branch hands to asm/1451
+                                         * before it overwrites the position. */
     /* 0x26 */ uint8_t moved_flag;    /* the accept tail of the walk loop xors it
                                          * with 0xFF (runtime 0x09E9) and it is
                                          * zeroed at 0x09F7; a rejected step never

@@ -28,6 +28,23 @@
 #              recollection from a completely different direction; 2 and 3 (DOWN/UP LADDER)
 #              move DS:25 against a 0xf bound and additionally require DS:4A == 4; 4..9 branch
 #              on into the rest of the range.
+# LADDER ARMS, re-read from the bytes and WALKED 2026-10-29 (captures/spice86/d12-ladder-ds25).
+#           The earlier one-line summary above was loose in three places, all corrected here.
+#           1. The `cmp $0xf,%al` bound is tested on a reload of DS:25, not on DS:4A, and the
+#              value handed to the validity call is DS:25 +/- 1 — the candidate floor.
+#           2. The validity call is asm/1451_site_cell_open_on_floor: it reads the cell at
+#              DS:23/DS:24 on the CANDIDATE floor and the callers fail on `jne`, so the move is
+#              allowed only when that byte is ZERO (open). That is why UP LADDER printed
+#              -FAILED! at the sector-24 tower entry cell (floor 1 there is 0x80, a wall) and
+#              succeeded at a cell where floor 1 is open.
+#           3. Tower and dungeon are SWAPPED. Slot 2 (DOWN LADDER) takes the decrement path only
+#              when DS:4A == 4 and otherwise falls into the increment path; slot 3 (UP LADDER)
+#              jumps to the increment path when DS:4A == 4 and otherwise decrements. So in a
+#              dungeon the two spells do the opposite of what they do in a tower. Observed in a
+#              tower only: UP took DS:25 0 -> 1, DOWN took it back 1 -> 0, UP again 0 -> 1.
+#           Also observed: at DS:25 == 0 the DOWN LADDER arm branches away (L_0034a2) instead of
+#           decrementing, and cmd_D (pressing D on a 0x20 down-ladder cell) left the site to the
+#           world map and left DS:25 at 0xFF — a decrement with no guard at the bottom.
 #           There is no key read, no direction and no cursor anywhere in steps 1-7. CAST aims
 #           at nothing; the spells that need a position are dungeon-side.
 # CAPTURE-CONFIRMED 2026-10-29 — captures/spice86/cmd-c-cast-tower/ (wizard MAGUS, the tower in

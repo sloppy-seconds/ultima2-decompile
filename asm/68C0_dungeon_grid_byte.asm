@@ -11,7 +11,10 @@
 #           dungeon bytes (measured), with dungeon player/monster coords in 0..15 (measured).
 #           The "y*16+x against a 64-wide grid" anomaly in docs/spice86-live-findings.md S12 is
 #           resolved: the array is the dungeon grid (16-wide, paged by [DS:25]), not the overworld
-#           sector grid. [DS:25] as a floor/page selector is inferred; it is 0 in every capture.
+#           sector grid. [DS:25] as a floor/page selector is PROVEN 2026-10-29: the ladder
+#           spells move [DS:25] by one and asm/1451_site_cell_open_on_floor reads the candidate
+#           floor through exactly this page arithmetic (capture: spice86/d12-ladder-ds25). A
+#           tower's mapxNN is 16 pages of 256 bytes, matching the `cmp $0xf` bound on the byte.
 # provenance: measured (asm/68C0 body + live DS dumps: word[DS:472]=0x1800, [DS:25]=0, dungeon
 #           coords 0..15) + inferred (page/floor semantics of [DS:25])
 # func 68C0..68EC  len 002D B  evidence: call+reko
