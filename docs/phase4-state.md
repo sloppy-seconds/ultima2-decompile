@@ -1861,3 +1861,22 @@ a tower.
 
 Left unobserved in the dispatch: PASSWALL (4), SURFACE (5), PRAYER (6). G46 stays open for those.
 
+### and confirmed against what the player sees (`captures/spice86/mm-owner-play`)
+
+The owner then played the original in the browser himself — noVNC, host read-only, no scripted pokes —
+and this closed the one link in the MAGIC MISSILE model that memory alone could not reach.
+
+* **`DS:02/03` is the cell the corridor shows you.** He walked up, turned, said the creature "was right
+  in front of me", pressed `C`, and the frame reads `CAST-MAGIC MISSILE` then
+  `KILLED--GOLD+13--EXP.+03`. Every earlier hit had a creature the driver held in place, so the facing
+  delta had only ever been checked against memory. It now agrees with the picture, and the renderer
+  demonstrably draws the occupant of the facing cell while it lives.
+* **The award is per-creature.** Scripted paid `+3/+00`; this paid `+13/+03`. Same spell, same floor,
+  different victim. The selection mechanism is still undecoded, but "constant" is now refuted rather
+  than assumed.
+* **The owner independently found the location gate before reading about it** — MAGIC MISSILE refused
+  on the overworld. Worth recording because the correction matters: the gate is `DS:4A >= 4` and **4 is
+  a tower**, so towers cast and only the overworld and the settlement kinds refuse.
+* **A stray `S` gave a third live `cmd_S`**: `STEAL DIRECT-PASS`, exactly the `asm/3F25` decode — print
+  `STEAL DIRECT-`, fall through to the outcome word.
+

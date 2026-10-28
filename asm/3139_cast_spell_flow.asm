@@ -100,7 +100,12 @@
 #           the amount) -> L_0030d1 clears mon_hp/mon_type/mon_kind and the frame reads
 #           `KILLED--GOLD+3--EXP.+00`, the gold awarded in BCD and wrapping: a 9999-gold
 #           character went to 0002 on +3. EXP.+00 because the synthetic slot used for the
-#           test carried no kind table entry — the award itself is not decoded.
+#           test carried no kind table entry.
+#           THE AWARD IS PER-CREATURE, not a constant — corrected 2026-10-29 by
+#           captures/spice86/mm-owner-play, the first natural owner-play kill: same spell,
+#           same tower floor, and the frame reads `KILLED--GOLD+13--EXP.+03` with GOLD
+#           0004 -> 0017 and EXP 0000 -> 0003 to match. So both numbers come from the victim's
+#           own entry. How they are selected is still NOT decoded.
 #             The `jb` after the second `cmc` is taken when the creature SURVIVED, the
 #           opposite of how the idiom reads at a glance; invert it and the death path
 #           looks like the survival path.

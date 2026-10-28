@@ -18,6 +18,14 @@
 #           by Down. So the spell hits the creature standing in the cell you face.
 #           The 8-bit wrap is real and it is in the game's favour: (5,5) facing (0,-1)
 #           aims at (5,4), not (5,260) — a driver that adds in 16 bits misses.
+#           CONFIRMED AGAINST THE RENDERED VIEW 2026-10-29, which is the one link in this
+#           model that had never been filmed. Every prior hit was a creature the driver held
+#           in the facing cell, so the delta had only ever been checked against memory. In
+#           owner play (captures/spice86/mm-owner-play) the player walked up, turned, said
+#           the creature "was right in front of me" in the 3D view, pressed C, and the frame
+#           shows `CAST-MAGIC MISSILE` then `KILLED--GOLD+13--EXP.+03` with GOLD 0004 -> 0017
+#           and EXP 0000 -> 0003. So DS:02/03 is what the corridor shows ahead of you, and
+#           the renderer does draw the occupant of the facing cell while it is alive.
 #
 # GRADES. observed: the three tests, the scan order (31 downwards, so the highest live
 #           slot wins), the facing bytes, and that a match is required — a cast with an
