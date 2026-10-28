@@ -1813,3 +1813,32 @@ you did not confirm at the moment of input is not a controlled experiment.
 Still forced rather than boarded: no capture has bought or boarded a horse headlessly, so whatever a
 real boarding writes beyond `DS:13` is untested.
 
+## D12 closed: `DS:25` is the site floor index (2026-10-29)
+
+`captures/spice86/d12-ladder-ds25` — the ladder capture `state.h` was waiting on. In the sector-24
+tower, UP LADDER took `DS:25` `0 → 1` and DOWN LADDER took it back `1 → 0`, through the game's own
+`incb`/`decb`; pressing `D` on a `0x20` down-ladder cell left the site to the world map and left the
+byte at `0xFF`, an unguarded decrement below zero. The field is now `site_floor`.
+
+Three corrections came out of re-reading the arms (`asm/3139`'s new LADDER ARMS note): the `cmp $0xf`
+bound is on `DS:25` and the value validated is the **candidate floor**; the validity call is
+`asm/1451_site_cell_open_on_floor` (renamed), which requires the cell at `DS:23/24` on that floor to
+be **zero**, which is why UP LADDER fails at the tower entry cell and works one column over; and
+**the tower and dungeon arms are swapped** — in a dungeon the two spells move the floor counter the
+opposite way. The swap is a byte reading, not an observation; dungeons stay parked.
+
+Corroboration, all measured: a tower's `mapxNN` is exactly 16 pages of 256 bytes matching the `0xf`
+bound, `asm/1451` and `asm/68C0` both page the site grid by `floor*256`, and the live grid at
+`DS:1800` is byte-identical to `mapx24` for floors 0 and 1 — the site grid is the raw file, unlike
+the stamped overworld grid.
+
+**And an inference of my own from earlier the same day is refuted.** `asm/330C` had suggested the CAST
+target scan's `mon_kind == DS:25` test meant "same floor as me". It does not: the sector-24 tower's
+floor-0 creatures carry `mon_kind` 0..15 at once and `monx24` is all zeros, so the kinds are generated
+at load. The gate is literally "the creature's kind index equals the caster's floor number", and it is
+live — at `DS:25 = 1` a held `mon_kind = 1` creature in the facing cell was hit where a `mon_kind = 0`
+one was refused. Odd rule, and it is the game's.
+
+`cmd_D` ran for the first time in this capture, which halves the never-executed-handler gap: `cmd_N`
+(NEGATE TIME) is now the only letter with no execution evidence.
+
