@@ -1764,3 +1764,30 @@ Recipe in `docs/spice86-capture.md`, patterns 3 and 4.
 What this does **not** settle: the other site-side branches (PASSWALL, SURFACE, PRAYER, BLINK's
 validity rule, KILL's award) and whether `mon_kind` is a floor index. Registered as G46.
 
+## D13 closed: `DS:4E` is charisma, and the price routine reads it (2026-10-29)
+
+`captures/spice86/d13-cha-vs-wis` — the first character ever seeded with `DS:4E ≠ DS:4F`
+(`0x20` and `0x40`, `int` held at `0x40`), which is the only shape that can discriminate the pair.
+Two independent observations, and they agree:
+
+* **The `Z` status screen printed `CHARISMA-20` and `WISDOM-40`.** The byte under the CHARISMA
+  label is `DS:4E`. `engine/src/core/state.h` was right; `docs/spice86-live-findings.md` § 11 had
+  them swapped and is corrected, with its "not proven" section retracted rather than deleted.
+* **The same character bought the same horse for 52 gp** where the maxed character one day earlier
+  paid 32 gp. That is what `asm/20AB` computes for `int + [DS:4E]` (`0x60`, bit length 7,
+  `DI = 4+8-7 = 5` → 52) and not what it computes for `[DS:4F]` (bit length 8, `DI = 4` → 32).
+  Owner played over noVNC; gold read live as `DS:58/59 = 99 47`, frame `b-horse-52gp.png`.
+
+The owner's recollection that charisma moves prices survives the falsifiable test `docs/commerce.md`
+§ 5b set for it — lower charisma, higher price, same vendor, same item — so it points at this
+mechanism and not at a second one still unfound. `asm/20AB`'s DOUBT on the field identity is closed
+and its name is earned; `tools/u2_edit.py` no longer marks the pair DISPUTED.
+
+Still open in the same area, unchanged: the tavern's `0200` food quote is unreproduced and is not in
+the reachable sequence. That is G23's remaining half.
+
+One hazard found on the way, worth knowing before anyone drives the noVNC container: **injecting
+keys into it over MCP crashes Spice86** — `InvalidOperationException: Collection was modified` in
+`CfgCpuViewModel.RegenerateGraphFromNodeAsync`, racing the pause that `send_keyboard_key` causes.
+Reads are fine. Let the human type and keep the host side read-only.
+

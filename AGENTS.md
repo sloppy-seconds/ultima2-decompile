@@ -23,9 +23,10 @@ exact byte-for-byte fidelity.
 > matters: six recorded decodes proved wrong, four of them written by this project inside a week
 > (`cmd_T`'s one-cell ray, `cmd_Y`'s "unresolved" fall-through which was a complete freeform input
 > loop, the class names in our own editor, and an on-foot stamp hardcoded to the one value a Fighter
-> would agree with); § 1 is open owner decisions D11–D14 (the cheat-code flag, `DS:25`, the
-> charisma-vs-wisdom dispute, whether `cmd_C` ships gates without effects); 1222 `asm/` files,
-> whole-binary md5 green, `check_all` green, pushed through `ea50a1e`, 15 of 26 handlers implemented
+> would agree with); § 1 is open owner decisions D11, D12 and D14 (the cheat-code flag, `DS:25`,
+> whether `cmd_C` ships gates without effects — D13's charisma-vs-wisdom dispute closed the same
+> day by `captures/spice86/d13-cha-vs-wis`: `DS:4E` is charisma); 1222 `asm/` files,
+> whole-binary md5 green, `check_all` green, pushed through `958f299`, 15 of 26 handlers implemented
 > and only D and N never executed; § 3 is the ranked queue, § 4 is facts worth knowing cold (the
 > sector's ones digit IS the site kind; the stamped grid at `DS:1800` is not the raw `mapx` bytes),
 > § 5 is the copy-paste capture recipes including the live owner-play loop, § 6 is the hazards that
