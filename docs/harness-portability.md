@@ -190,6 +190,39 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — Prove a claimed disk write by diffing the data directory, never by trusting a
+  routine's inferred role.** A reconstruction wrote the outgoing sector back to its data files
+  on every level transition because a comment said the routine it cited "stores the sector
+  being left". The routine was a one-byte test and a branch with no I/O in it, and the real
+  program turned out to write exactly one file of the whole set, ever, under no transition at
+  all. The engine therefore persisted state the game discarded, which is invisible to every
+  test that never leaves and re-enters. Method: keep a checksum manifest of the working data
+  directory, snapshot it before and after the transition the reconstruction claims writes, and
+  let the diff be the evidence. It is cheap, it is independent of the disassembly, and it
+  catches the whole class — including a reconstruction that writes nothing where the original
+  writes something.
+
+* **2026-10-29 — A byte-format test on synthetic data proves the format description, not the
+  interop.** A suite that asserted sizes, offsets and tail preservation against engine-authored
+  filler stayed green while nothing checked whether the real program could read the engine's
+  output or vice versa. Both directions failed differently once measured, and one of them only
+  worked after the harness stopped using a template file the program treats as a creation form
+  rather than a loadable record. Method: for any persisted format, build a cross-load harness
+  with two directions — real artifact into the reconstruction's reader, reconstruction's writer
+  into the real program — and read the comparison out of the live process rather than a file the
+  program rewrites as it runs. Mark such a harness local and on-change, not CI: it needs
+  copyrighted inputs that stay out of git, and re-running it every push measures a binary that
+  has not changed since it last passed.
+
+* **2026-10-29 — A tolerance list that prints nothing is indistinguishable from one that never
+  fired.** The cross-load comparison above differed from the real program's memory in exactly
+  two bytes, and those bytes were a runtime calibration that happened to live inside the saved
+  span, so no byte-exact assertion could ever hold. Excluding them silently would have hidden
+  both the reason and any future change; the harness now prints what both sides held for every
+  excluded range on every run. Method: any tolerated difference states its reason and its
+  observed values, and the first version of the harness should be the strict one, so the
+  exclusion is earned by a real diff rather than guessed in advance.
+
 * **2026-10-29 — A one-instruction fragment has no meaning until its jump target's role is
   known, and a fragment that holds both an accept and a reject trampoline will be summarised
   wrongly by anyone reading its first line.** A dispatch arm whose entire body was `jmp X` was

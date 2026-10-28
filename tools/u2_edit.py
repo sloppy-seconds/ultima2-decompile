@@ -18,6 +18,16 @@ Sector is stored as two DECIMAL DIGITS (DS:49/4A are patched into the filename
 MAPXFF by asm/2290), so sector 20 is the pair 2,0 - not the integer 20. A
 numeric read of that pair yields 512, which is a trap worth knowing.
 
+TRAP (2026-10-29): do not setpos into a SITE sector. The ones digit of the sector
+is the site kind (0 wilderness, 1/2/3 town, 4 tower, 5 dungeon), and leaving a
+site restores entry_x/entry_y as the return cell and forces the ones digit back to
+0. A town position placed here by hand has no wilderness return recorded, so the
+first step out of the town dumps the character wherever the stale entry pair
+points - measured as a landing in open sea. Put the character on the WILDERNESS
+gate cell instead and press E in game: the entry routine records the return point
+itself. Gate cells are found by tile>>2 (5 village, 6 town, 7 tower, 8 castle,
+9 dungeon) - see site_for_tile() in engine/src/game/overworld.c.
+
 Fields, all proven by live correlation or by cited asm in state.h:
 
     save  DS    field
