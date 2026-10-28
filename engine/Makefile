@@ -25,7 +25,7 @@ SRCS     := src/main.c \
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 clean content content-check sdl sdl-run play help
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 clean content content-check sdl sdl-run play help
 
 all: $(BIN)
 
@@ -61,7 +61,7 @@ run: $(BIN)
 headless: $(BIN)
 	./$(BIN) --headless --script tests/title.keys --dump-state
 
-test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5
+test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6
 
 test-cp0: $(BIN)
 	bash tests/run_cp0.sh
@@ -85,6 +85,14 @@ test-cp4: $(BIN)
 # docs/phase4-state.md § CP5.
 test-cp5:
 	bash tests/run_cp5.sh
+
+# CP6 commerce: src/game/commerce.c is the TRANSACT ray, the asm/1590 vendor selector and
+# the shops it reaches. The pure half (price walk, selector table, BCD charge) runs anywhere;
+# the behavioural half drives ./u2 against a synthetic sector and SKIPs only when the content
+# strings cannot be extracted, which is the same rule CP1 runs under. See tests/run_cp6.sh and
+# docs/commerce.md.
+test-cp6:
+	bash tests/run_cp6.sh
 
 # CP9 placeholder. SDL2 must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.

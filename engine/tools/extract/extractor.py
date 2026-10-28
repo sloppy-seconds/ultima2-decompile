@@ -348,6 +348,44 @@ MANIFEST = [
     ("U2_S_XIT",                   "44D4_cmd_X.asm",            ("run", 0x46D7, 4,  "X-IT")),
     ("U2_S_XIT_WHAT",              "44D4_cmd_X.asm",            ("run", 0x46E6, 6,  " WHAT?")),
     ("U2_S_XIT_NOT_HERE",          "44D4_cmd_X.asm",            ("run", 0x4715, 10, "-NOT HERE!")),
+    # cmd_T (TRANSACT) and the shops it reaches. See docs/commerce.md and engine/src/game/
+    # commerce.c for what each one is.
+    #
+    # The three index-addressed ones are single-segment db lines. Everything else here is a
+    # run locator because the shop literals are multi-segment (the menus carry the binary's
+    # newline glyph between lines) or carry a leading glyph byte, and the engine emits the
+    # newline itself rather than passing a raw 0x0d/0x8d through str_out — same convention as
+    # U2_S_VIEW_HELM_A/B. Offsets were read back from original/ultimaii.exe and each was
+    # confirmed to be the bytes named, at that address.
+    ("U2_S_TRANSACT",              "4050_cmd_T.asm",  0),
+    ("U2_S_NO_RESPONSE",           "40A6_yell_no_response.asm", 0),
+    ("U2_S_DONT_HAVE_THAT_MUCH",   "2052_gold_spend_price.asm", 0),
+    # The four shop bodies live in asm/19D7 (the G22 boundary defect: one file, several
+    # routines). Armour first, then weapons, then transport.
+    ("U2_S_ARMOUR_MENU",           "19D7_magic_shop_menu.asm", ("run", 0x1F21, 97, "     THE ARMOUR SHOPPE:")),
+    ("U2_S_SHOP_THANKS",           "19D7_magic_shop_menu.asm", ("run", 0x1F92, 23, "THANKS FOR COMING BY...")),
+    ("U2_S_SHOP_AH_YES",           "19D7_magic_shop_menu.asm", ("run", 0x1FB3,  9, "AH! YES! ")),
+    ("U2_S_SHOP_FOR_YOU_ONLY",     "19D7_magic_shop_menu.asm", ("run", 0x1FC9, 14, "FOR YOU ONLY ")),
+    ("U2_S_SHOP_HOW_BOUT",         "19D7_magic_shop_menu.asm", ("run", 0x1FF1, 15, "HOW 'BOUT IT? ")),
+    ("U2_S_SHOP_OH_WELL",          "19D7_magic_shop_menu.asm", ("run", 0x201E,  9, "OH, WELL.")),
+    ("U2_S_SHOP_SOLD",             "19D7_magic_shop_menu.asm", ("run", 0x2032,  5, "SOLD!")),
+    ("U2_S_WEAPONS_MENU",          "19D7_magic_shop_menu.asm", ("run", 0x2053, 85, "  THE WEAPONS SHOPPE:")),
+    ("U2_S_SHOP_AH_YES_A",         "19D7_magic_shop_menu.asm", ("run", 0x20D9, 11, "AH! YES! A ")),
+    ("U2_S_TRANSPORT_MENU",        "19D7_magic_shop_menu.asm", ("run", 0x2179, 51, "WELCOME, TO THE TRANSPORT")),
+    ("U2_S_TRANSPORT_DEAL",        "19D7_magic_shop_menu.asm", ("run", 0x21C3, 21, "GOLD, DEAL, OK? --- ")),
+    ("U2_S_TRANSPORT_BYE",         "19D7_magic_shop_menu.asm", ("run", 0x21F2, 17, "O.K. BYE THEN...")),
+    ("U2_S_TRANSPORT_RIDE",        "19D7_magic_shop_menu.asm", ("run", 0x220E, 13, "RIDE SWIFTLY!")),
+    # The grocery quote (asm/1799 -> asm/17B2 -> asm/17B7 -> asm/17C5) and its two answers.
+    ("U2_S_FOOD_COSTS",            "1799_tavern_food_price.asm", 0),
+    ("U2_S_FOOD_PER100",           "17C5_sub_17c5.asm",        ("run", 0x19C9, 19, "PER 100, WANT ONE? ")),
+    ("U2_S_FOOD_NO",               "17E9_sub_17e9.asm",        ("run", 0x19EC,  2, "NO")),
+    # The grocery's yes-answer has no asm fallback at all: asm/17F5 is a bulk-wave fragment
+    # that still renders the literal as `.byte` data, so there is no quoted text to search for
+    # and these two come out empty without the user's copy. Callers guard, the same way they
+    # guard U2_T_* when the name pool is absent.
+    ("U2_S_FOOD_YES_A",            "17F5_sub_17f5.asm",        ("run", 0x19F5,  4)),
+    ("U2_S_FOOD_YES_B",            "17F5_sub_17f5.asm",        ("run", 0x19FA, 27)),
+    ("U2_S_THANK_YOU_AGAIN",       "181A_tavern_thanks.asm",     0),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

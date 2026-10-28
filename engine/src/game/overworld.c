@@ -15,6 +15,7 @@
 #include "game/ai.h"           /* u2_ai_creature_turn: the monsters' turn */
 #include "game/combat.h"      /* u2_combat_attack, u2_attack */
 #include "game/monsters.h"    /* u2_monsters_at: who is standing there */
+#include "game/commerce.h"    /* u2_commerce_transact: the TRANSACT ray and its shops */
 #include "game/gates.h"       /* u2_gate_transit, u2_gate_turn: the time doors */
 #include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
@@ -1532,6 +1533,32 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 break;
             }
             }
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            creature_turn(ctx, ow);
+            continue;
+        }
+
+        /* A direction arriving while TRANSACT- is on the line is the ray, not a step.
+         * asm/405D calls the same aim gate cmd_A and cmd_U use (asm/2362), which prints the
+         * direction word and leaves the delta in DS:19/1A; asm/4060 then seeds the cursor
+         * and asm/4063 stores the gate's own counter byte. The word therefore lands on the
+         * TRANSACT- line, exactly as `CMD: TRANSACT-NORTH` reads in the captures.
+         *
+         * The ray does not move the player, and it is a turn: every exit from asm/4050 is a
+         * tail jump (asm/1590, asm/0A33, asm/4209, asm/4249) and the two refusal exits
+         * reach the post-command tail like any other command. */
+        if (ow->pending_cmd == 'T' && word != NULL) {
+            ow->pending_cmd = 0;
+            seam_str_out(ctx, word);              /* no CR: same line as TRANSACT- */
+            u2_commerce_transact(ctx, ow, dx, dy);
+            /* A purchase moves gold, food, the mount byte or an owned count, and the band
+             * would otherwise go on showing the pre-purchase number for the rest of the
+             * session. The original's post-command tail reaches the status block; the
+             * engine's creature_turn() does not redraw it, so the redraw belongs here,
+             * where the mutation happened. u2_status_draw restores the cursor, which is
+             * why it is safe to print the prompt after it. */
+            u2_status_draw(ctx);
             seam_char_print(ctx, '\r');
             seam_str_out(ctx, U2_S_CMD_PROMPT);
             creature_turn(ctx, ow);

@@ -59,10 +59,15 @@ static uint8_t bcd_dec1(uint8_t v)
  * `letter` is passed so a shared helper can name which command it was reached from. That
  * matters more than it sounds: the aim prompt is not one routine the handlers call, it is a
  * family that shares asm/2362, and the callers of that routine are exactly cmd_U (through
- * asm/4307), cmd_S (through asm/3F37), cmd_O and two unnamed sites (asm/2BBE, asm/35EB).
- * cmd_C is NOT one of them -- it takes no direction, which is corrected in its own header --
- * and cmd_T aims by a different mechanism altogether (a cursor initialiser plus a slot scan,
- * asm/23E6), so "the direction commands" is not a set you can treat uniformly.
+ * asm/4307), cmd_S (through asm/3F37), cmd_O, cmd_T (through asm/405D) and two unnamed sites
+ * (asm/2BBE, asm/35EB). cmd_C is NOT one of them -- it takes no direction, which is corrected
+ * in its own header -- and "the direction commands" is not a set you can treat uniformly.
+ *
+ * cmd_T's membership is worth the note because it was missed. asm/405D stores the aim call as
+ * `.byte 0xe8 0x02 0xe3` -- a forced-keep, because the vendored assembler re-encodes the
+ * displacement -- so the `# calls:` metadata never listed it and asm/2362's own header
+ * concluded from that silence that cmd_T aimed by some other mechanism. It does not; the call
+ * edge was hidden by the listing, not absent from the binary.
  */
 typedef u2_cmd_result (*cmd_fn)(u2_ctx *ctx, u2_overworld *ow, uint8_t letter);
 
@@ -257,6 +262,23 @@ static u2_cmd_result cmd_A(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     (void)letter;
     seam_str_out(ctx, U2_S_ATTACK);
     ow->pending_cmd = 'A';
+    return U2_CMD_AWAIT;
+}
+
+/* asm/4050 cmd_T: TRANSACT. Print "TRANSACT-", take a direction from the same aim gate as
+ * cmd_A and cmd_U, and let asm/4050's ray decide whether anything will deal with you. The
+ * whole of what happens next -- the two-cell ray, the quadrant selector, the shops -- lives
+ * in game/commerce.c, because it is a subsystem and not a command.
+ *
+ * Same AWAIT shape as cmd_A, for the same reason: the original consumes the direction inside
+ * the handler chain (asm/2362 polls up to 65536 times and prints PASS when it gives up,
+ * which is the `CMD: TRANSACT-PASS` line seen in captures), so the letter alone is not a
+ * completed turn. */
+static u2_cmd_result cmd_T(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_TRANSACT);
+    ow->pending_cmd = 'T';
     return U2_CMD_AWAIT;
 }
 
@@ -882,10 +904,12 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      directly, so the aiming is settled. The effect is asm/3F5D_steal_attempt, modelled in
  *      combat.c for CP5 ticket C6 but not wired to a world-map direction. What a thief playtest
  *      still has to say is the TARGET SET, not the aim.
- *   T  asm/4050 TRANSACT does NOT use the asm/2362 aim family -- it seeds a cursor with
- *      asm/23E6 and scans slots, which is a different shape and is why it cannot share the
- *      unlock/steal plumbing. It needs the street-merchant tables (asm/412C, asm/41D9),
- *      which is CP6.
+ *   T  implemented 2026-10-29. asm/4050 DOES call the asm/2362 aim gate (at asm/405D, hidden
+ *      behind a forced-keep byte so the call edge was never listed), and then it seeds a
+ *      cursor with asm/23E6 and scans slots -- so it uses the aim family AND its own cursor
+ *      scan, which is why it could not share the unlock/steal plumbing wholesale. The shops are
+ *      game/commerce.c; the street-merchant half (asm/412C, asm/41D9, the tlkx printer at
+ *      asm/154E) is still CP6.
  *   V  "VIEW WHAT?" and the helm view need an inventory view; the Z screen has the lists but
  *      not the per-item selection cmd_V walks.
  *   W  the armour menu needs armour ownership and the strength gate; asm/43F3's menu is read
@@ -924,7 +948,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_Q, /* Q  save: asm/3DE4 refuses indoors, asm/3DFA saves outdoors */
     NULL,  /* R  not implemented: ready weapon */
     NULL,  /* S  see the note above */
-    NULL,  /* T  see the note above */
+    cmd_T, /* T  transact: asm/4050, the ray and the shops in game/commerce.c */
     cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */
     cmd_V, /* V  view: asm/437E, needs a HELM held and sector digit < 4; the map overlay is NOT modelled */
     cmd_W, /* W  wear armour: asm/43F3, full menu then digit then ownership and strength gates */
