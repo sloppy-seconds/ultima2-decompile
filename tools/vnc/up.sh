@@ -28,7 +28,7 @@ port_busy() {
 }
 
 if [ "${1:-}" = "--down" ]; then
-    sudo -n podman rm -f "$CONTAINER" >/dev/null 2>&1 && echo "stopped" || echo "nothing to stop"
+    podman rm -f "$CONTAINER" >/dev/null 2>&1 && echo "stopped" || echo "nothing to stop"
     exit 0
 fi
 
@@ -41,21 +41,16 @@ for p in "$NOVNC_PORT" "$VNC_PORT"; do
     fi
 done
 
-if ! sudo -n podman info >/dev/null 2>&1; then
-    echo "sudo podman needs a password. Run 'sudo -v' and retry." >&2
-    exit 1
-fi
-
-if [ "${1:-}" = "--rebuild" ] || ! sudo -n podman image exists "$IMAGE"; then
+if [ "${1:-}" = "--rebuild" ] || ! podman image exists "$IMAGE"; then
     echo "building $IMAGE (first build installs packages, ~1-2 min) ..."
-    sudo -n podman build -t "$IMAGE" "$HERE"
+    podman build -t "$IMAGE" "$HERE"
 else
     echo "reusing image $IMAGE"
 fi
 
 echo "starting $CONTAINER ..."
-sudo -n podman rm -f "$CONTAINER" >/dev/null 2>&1 || true
-sudo -n podman run -d --name "$CONTAINER" \
+podman rm -f "$CONTAINER" >/dev/null 2>&1 || true
+podman run -d --name "$CONTAINER" \
     --network host \
     --env "GEOMETRY=${GEOMETRY:-1024x768x8}" \
     --env "DISPLAY_NUM=$DISPLAY_NUM" \
@@ -68,18 +63,18 @@ sudo -n podman run -d --name "$CONTAINER" \
 sleep 8
 if ! port_busy "$NOVNC_PORT"; then
     echo "FAILED: nothing is listening on host port $NOVNC_PORT after 8s." >&2
-    echo "  container status: $(sudo -n podman ps --filter name="$CONTAINER" --format '{{.Status}}')" >&2
+    echo "  container status: $(podman ps --filter name="$CONTAINER" --format '{{.Status}}')" >&2
     echo "  last log lines:" >&2
-    sudo -n podman logs "$CONTAINER" 2>&1 | tail -6 >&2
+    podman logs "$CONTAINER" 2>&1 | tail -6 >&2
     echo "  novnc log inside the container:" >&2
-    sudo -n podman exec "$CONTAINER" tail -6 /tmp/novnc.log >&2 2>/dev/null || true
+    podman exec "$CONTAINER" tail -6 /tmp/novnc.log >&2 2>/dev/null || true
     exit 1
 fi
 
 echo
 echo "--- status ---"
-sudo -n podman ps --filter name="$CONTAINER" --format '{{.Names}}  {{.Status}}'
-sudo -n podman logs "$CONTAINER" 2>&1 | tail -4
+podman ps --filter name="$CONTAINER" --format '{{.Names}}  {{.Status}}'
+podman logs "$CONTAINER" 2>&1 | tail -4
 echo
 echo "Open in a browser:   http://ai.lan:$NOVNC_PORT/vnc.html"
 echo "No password. If the page asks for one, click Skip/Continue."

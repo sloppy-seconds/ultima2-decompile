@@ -10,8 +10,11 @@
 #   ./up.sh --no-patch      # leave arrow keys unpatched (use the numpad)
 #   ./up.sh --name LABEL    # container name (default u2-spice86)
 #
-# Needs `sudo podman` on this host (AGENTS.md). If the sudo ticket has expired the script
-# says so instead of hanging on a password prompt behind a pipe.
+# Runs ROOTLESS (`podman`, no sudo), like every other project container on this host.
+# Root's store and the rootless store are separate: an image built once with `sudo podman`
+# is invisible here, so the first rootless run rebuilds it. That is the correct outcome, not
+# a bug to paper over — see docs/phase4-state.md, "TODO: VNC desktop container for remote
+# watching", constraint 1.
 set -euo pipefail
 
 IMAGE=u2-spice86-novnc
@@ -39,21 +42,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if ! sudo -n podman info >/dev/null 2>&1; then
-    echo "sudo podman needs a password. Run 'sudo -v' and retry." >&2
-    exit 1
-fi
-
 if [ "$DOWN" = 1 ]; then
-    sudo -n podman rm -f "$CONTAINER" >/dev/null 2>&1 && echo "stopped $CONTAINER" || echo "no $CONTAINER"
+    podman rm -f "$CONTAINER" >/dev/null 2>&1 && echo "stopped $CONTAINER" || echo "no $CONTAINER"
     exit 0
 fi
 
-if [ "$REBUILD" = 1 ] || ! sudo -n podman image exists "$IMAGE"; then
+if [ "$REBUILD" = 1 ] || ! podman image exists "$IMAGE"; then
     echo "building $IMAGE (context is the project root; first build pulls ~250 MB) ..."
     # -f with the context at the repo root, so COPY can reach tools/patch_arrows.py.
     # .dockerignore is what keeps the GPL build and the game files out of the context.
-    sudo -n podman build -t "$IMAGE" -f "$HERE/Containerfile" "$ROOT"
+    podman build -t "$IMAGE" -f "$HERE/Containerfile" "$ROOT"
 else
     echo "reusing image $IMAGE (use --rebuild to refresh)"
 fi
@@ -83,7 +81,7 @@ port_busy() {
 # Tear the previous instance down BEFORE checking ports: a container holding 6085 is the
 # most common thing that will be holding 6085, and checking first means every restart fails
 # against itself. That is exactly what the first version of this script did.
-sudo -n podman rm -f "$CONTAINER" >/dev/null 2>&1 || true
+podman rm -f "$CONTAINER" >/dev/null 2>&1 || true
 sleep 1
 
 for p in "$NOVNC_PORT" "$HTTP_PORT" "$MCP_PORT" "$GDB_PORT"; do
@@ -129,7 +127,7 @@ fi
 echo "starting $CONTAINER ..."
 # :z / :ro,z — SELinux. Without the label the container starts, Spice86 starts, and the
 # only trace is a permission denied inside it (deploy/novnc/README.md trap #1).
-sudo -n podman run -d --name "$CONTAINER" \
+podman run -d --name "$CONTAINER" \
     --network host \
     "${ENV_ARGS[@]}" \
     -v "$ROOT/tools/spice86:/opt/spice86:ro,z" \
@@ -140,8 +138,8 @@ sudo -n podman run -d --name "$CONTAINER" \
 sleep 12
 echo
 echo "--- status ---"
-sudo -n podman ps --filter name="$CONTAINER" --format '{{.Names}}  {{.Status}}'
-sudo -n podman logs "$CONTAINER" 2>&1 | tail -14
+podman ps --filter name="$CONTAINER" --format '{{.Names}}  {{.Status}}'
+podman logs "$CONTAINER" 2>&1 | tail -14
 echo
 echo "Open in a browser:   http://ai.lan:${NOVNC_PORT}/vnc.html"
 echo "No password. If the page asks, click Skip/Continue."
@@ -149,5 +147,5 @@ echo
 echo "Drive it from the host:"
 echo "  python3 tools/spice86_screenshot.py /var/tmp/u2.png --mcp-port ${MCP_PORT}"
 echo "  python3 tools/spice86_type.py --keys Escape,p --mcp-port ${MCP_PORT}"
-echo "Logs:   sudo podman logs -f ${CONTAINER}"
+echo "Logs:   podman logs -f ${CONTAINER}"
 echo "Stop:   ${HERE}/up.sh --down"

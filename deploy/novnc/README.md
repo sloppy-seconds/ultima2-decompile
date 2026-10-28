@@ -12,7 +12,7 @@ the same shape pointed at our own binary.
 cd /var/home/paul/Projects/decompile-u2-v2
 make -C engine sdl                                  # the binary is built on the host
 cp engine/u2-sdl deploy/novnc/u2-sdl
-sudo podman build -t u2-novnc:latest deploy/novnc/
+podman build -t u2-novnc:latest deploy/novnc/
 
 mkdir -p /var/tmp/u2/novnc-saves
 cp /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
@@ -20,7 +20,7 @@ cp original/player /var/tmp/u2/novnc-saves/PLAYER
 tools/u2_edit.py set /var/tmp/u2/novnc-saves/PLAYER sector 20
 tools/u2_edit.py setpos /var/tmp/u2/novnc-saves/PLAYER 20 20
 
-sudo podman run -d --name u2-novnc \
+podman run -d --name u2-novnc \
   -p 6081:6081 \
   -v "$PWD/original:/content:ro,z" \
   -v /var/tmp/u2/novnc-saves:/saves:z \

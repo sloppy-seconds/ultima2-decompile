@@ -11,7 +11,7 @@
 #
 # Build from the PROJECT ROOT (patch_arrows.py is copied out of tools/):
 #
-#   sudo podman build -t u2-spice86-novnc -f deploy/spice86-novnc/Containerfile .
+#   podman build -t u2-spice86-novnc -f deploy/spice86-novnc/Containerfile .
 #
 # Use deploy/spice86-novnc/up.sh, which does that plus the mounts and the port picks.
 

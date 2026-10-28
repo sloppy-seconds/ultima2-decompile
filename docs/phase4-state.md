@@ -1244,8 +1244,13 @@ and no `Xvfb`.
 
 **Constraints to honour when it gets built.**
 
-1. **`sudo podman` is required on `ai`**, and passwordless sudo must be re-tested
-   (`sudo -n echo SUCCESS`) rather than assumed.
+1. **Project containers run ROOTLESS on `ai`** — plain `podman`, no sudo. Corrected
+   2026-10-29: this line used to read "`sudo podman` is required", which was never true of
+   project work and is what put the two `up.sh` launchers on `sudo -n podman`. Root's store
+   and the rootless store are **separate image and container stores**, so an image built once
+   with `sudo podman` is invisible to rootless `podman` and gets rebuilt rather than reused.
+   `sudo podman` is only for root's system services (litellm, traefik, open-webui and
+   friends). Quadlet / systemd units for the always-on set are root's and still need sudo.
 2. **`0.0.0.0` exposure needs a password at minimum.** VNC auth over plain HTTP is
    weak; on a LAN it is a judgement call, so make it deliberately and record it, and
    prefer an SSH tunnel (`ssh -L 5900:localhost:5900 ai`) as the default recipe with
@@ -1351,8 +1356,9 @@ watching setup, but for *playing our engine* rather than watching the original.
 **Do not duplicate the existing section.** `## TODO: VNC desktop container for remote
 watching` above already works out the display plumbing (Xvfb, `x11vnc -forever -shared`,
 `websockify 6080 -> 5900`, browser at `http://ai.lan:6080/vnc.html`) and the constraints that
-apply to any container on this host: `sudo podman` is required and passwordless sudo must be
-re-tested rather than assumed, quadlet edits need `systemctl daemon-reload` plus a stop /
+apply to any container on this host: project containers run **rootless** (`podman`, no sudo;
+this used to say `sudo podman` is required — corrected 2026-10-29, and the two `up.sh`
+launchers were changed with it), quadlet edits need `systemctl daemon-reload` plus a stop /
 `podman rm -f` / start cycle, `0.0.0.0` exposure needs a password at minimum with an SSH
 tunnel as the default recipe, and **game files never go in the image** — content is mounted
 read-only and passed with `--data-dir`. Read that section first; the delta here is only
