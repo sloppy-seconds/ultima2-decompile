@@ -1,5 +1,19 @@
-# space_collision — space navigation hazards (hitting the sun)
-# name-evidence: string 'U HIT THE SUN!'
+# space_collision — space navigation, and the writer of the world byte DS:6D
+# name-evidence: string 'U HIT THE SUN!'; also 'YOU ARE IN DEEP SPACE.', 'YOU ARE ORBITING ',
+#           'LANDING REQUESTED!', 'REQUEST DENIED!', 'HYPERWARP ENGAGED!', 'SHIP OFF COURSE!'
+# THE WORLD BYTE: this is the only writer of DS:6D in the tree, and what it writes fixes the
+#           meaning of the byte (G44, 2026-10-29):
+#             * `mov $0xa,%al ; mov %al,0x6d` immediately before 'YOU ARE IN DEEP SPACE.'
+#               -- so 0x0A is deep space.
+#             * a second `mov %al,0x6d` beside 'YOU ARE ORBITING ' -- the byte names a world.
+#             * the dispatch on it is `cmp $0x0` (Earth), `$0x1`, `$0x2`, ... and `cmp $0xa`
+#               inside the landing path, which answers 'REQUEST DENIED!': you cannot land in
+#               deep space.
+#             * `mov 0x6d,%al ; mov %al,0x49` copies it into DS:49, the sector TENS digit.
+#               The world you are on and the high digit of the sector number are the same
+#               value, which is how MAPXNN reaches a planet's sectors at all.
+#           asm/3DFA refuses the save when this byte is non-zero, with the message
+#           'ONLY ON EARTH!'. asm/6999_space_status reads it as an index.
 # func 7030..7241  len 0212 B  evidence: call+reko
 # strings: "U HIT THE SUN!"; "t&"; "Oy"; "YOU ARE IN DEEP SPACE." (+14 more)
 # calls: L_000911, L_0051df (str_out), L_006ec4, L_00737a, L_007384, L_007489

@@ -11,15 +11,34 @@
 #           refusal is why an earlier measurement concluded the game never writes sector
 #           files at all. It does; the save just had not run. Forcing DS:6D = 0 with a poke
 #           made the same Q succeed immediately.
-# OPEN: what DS:6D IS. state.h names it boots_count and marks it a STALE COPY; an earlier
-#           session already flagged the contradiction. Behaviour is measured, identity is not.
-#           docs/needs-gameplay.md G44.
+# WHAT DS:6D IS (G44, solved 2026-10-29): the WORLD byte. 0 = Earth, 1..9 = the planets,
+#           0x0A = deep space. So 'ONLY ON EARTH!' is a literal description of the test, not
+#           a metaphor, and the engine comment that guessed "planets, not boots" was right.
+#           Evidence, all from the bytes:
+#             * asm/7030_space_collision writes `mov $0xa,%al ; mov %al,0x6d` immediately
+#               before printing 'YOU ARE IN DEEP SPACE.', and stores a second value beside
+#               'YOU ARE ORBITING ' — so the byte names where you are, not what you hold.
+#             * the same file dispatches on it: `cmp $0x0` / `$0x1` / `$0x2` … and `cmp $0xa`
+#               inside the 'LANDING REQUESTED!' path, which answers 'REQUEST DENIED!' — you
+#               cannot land in deep space.
+#             * `mov 0x6d,%al ; mov %al,0x49` copies it into DS:49, the sector TENS digit,
+#               so the world byte and the sector's high digit are the same fact.
+#             * asm/38B0 (cmd_L, LAUNCH) tests it before launching.
+#             * the game's own intro text: 'ACROSS THE FACE OF THE EARTH' … 'TO THE PLANETS
+#               OF OUR SOLAR SYSTEM' (file 0x623 and 0x7f5).
+#           WHY IT WAS MISNAMED FOR TWO YEARS: tools/u2_edit.py defined a 'boots' field at
+#           DS:6D and `maxout` wrote 1 into it, so every maxout character was silently on
+#           planet 1 and could not save — and state.h then named the byte boots_count after
+#           our own write. Boots are items_held[BOOTS] at DS:D9, which is what the paralysis
+#           resist actually reads. That is also the whole explanation of the old 'STALE COPY'
+#           note: the byte never was boots, so a thief stealing boots left it alone.
+#           The shipped `player` record carries 0x00 here — Earth, savable.
 # func 3DFA..3E4F  len 0056 B  evidence: seed+reko
 # calls: L_000c30, L_000c33, L_0024fd, L_0051df (str_out)
 # provenance: live:play-test (+2 other harvests), static; the two refusals and the accepted
 #           save are from the 2026-10-29 save-wilderness session
 # confidence: high for the behaviour (both refusals and the accepted save were observed with
-#           screenshots); low for what DS:6D means
+#           screenshots) and high for what the byte is (world index, from asm/7030's writes)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 offer_only_outdoors_earth:
 L_003ffa:
