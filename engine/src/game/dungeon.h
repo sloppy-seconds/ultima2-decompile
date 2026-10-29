@@ -62,6 +62,7 @@
 
 #include <stdint.h>
 #include "core/ctx.h"
+#include "core/world.h"
 #include "game/commands.h"
 
 typedef struct u2_overworld u2_overworld;

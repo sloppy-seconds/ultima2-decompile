@@ -253,6 +253,30 @@ PY
         fi
     fi
 
+    # ---- 6c. a kill must not box the player in ------------------------------
+    # The freeze the owner hit on 2026-10-29, live, on the first dungeon kill. The kill
+    # path calls u2_monsters_restamp, which indexes y*64+x into a buffer that inside a
+    # site is 16 pages of 16x16, so the page rebuild stamped every live creature onto
+    # floors the player was not standing on and put phantoms in the corridor. ADVANCE then
+    # refused cells nothing occupied, which from the chair is a frozen game: the process
+    # was alive, the keyboard was live, only movement had stopped.
+    #
+    # Differential again, for the same reason as 6b: one state record per process. Run A
+    # kills and stops. Run B kills and advances. If the kill left the page sane, B is one
+    # cell further than A. If the phantom-stamp bug is back, the advance is refused and the
+    # two positions are identical.
+    if run_case stampA 'E\nI\nA\nA\nA\n' "$WORK/stampA.out" \
+       && run_case stampB 'E\nI\nA\nA\nA\n0xf0\n' "$WORK/stampB.out"; then
+        pa=$(pos_of "$WORK/stampA.out"); pb=$(pos_of "$WORK/stampB.out")
+        if [ -n "$pa" ] && [ "$pa" = "$pb" ]; then
+            bad "CP7 stamp: still frozen after a kill — ADVANCE from $pa was refused by a phantom stamp"
+        elif [ -z "$pa" ] || [ -z "$pb" ]; then
+            bad "CP7 stamp: no position in the state dump"
+        else
+            ok "CP7 stamp: the corridor is still walkable after a kill ($pa -> $pb)"
+        fi
+    fi
+
     # ---- 7. floors ----------------------------------------------------------
     # cmd_D on a 0x20 cell in a dungeon increments [DS:25], and the grid the engine
     # reads is now the page that byte names — which is the floor term asm/1451 has

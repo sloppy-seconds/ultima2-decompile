@@ -140,10 +140,28 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
     if (ctx == NULL || w == NULL || !w->map_loaded)
         return;
 
+    /* Inside a site the same 4096-byte buffer is NOT a 64x64 sector. It is 16 pages of
+     * 16x16 indexed by a floor byte, so the y*64+x arithmetic below is nonsense there:
+     * a creature at page 0 cell (5,5) lands at byte 325, which is page 1, every live
+     * creature gets stamped on a floor the player is not standing on, and the cells
+     * around the player get stamped by creatures that are elsewhere. A live session froze
+     * on exactly this on 2026-10-29, on the first kill, because the kill path is one of
+     * this function's five callers: the page was rebuilt, phantom stamps appeared in the
+     * corridor, and ADVANCE refused cells nothing occupied.
+     *
+     * Same job, correct arithmetic. The site-kind test is the one dungeon.h documents for
+     * u2_site_is_dungeon(); it is repeated rather than called because this file is linked
+     * into standalone CP5 harnesses that do not carry the dungeon module, and a stamp
+     * routine that cannot link is a stamp routine nobody runs.
+     *
+     * This is AGENTS.md section 3's dungeon/overworld quarantine being load-bearing rather
+     * than tidy: the two grids share a buffer and a byte offset and nothing else. */
+    const u2_state *s = &ctx->state;
+    const int dungeon = (s->sector_second == 4 || s->sector_second == 5);
+
     for (int i = 0; i < U2_SECTOR_TILES; i++)
         w->map[i] = w->map_base[i];
 
-    const u2_state *s = &ctx->state;
     for (int i = 0; i < U2_MON_SLOTS; i++) {
         if (s->mon_type[i] == 0)
             continue;                       /* asm/0A74: an empty slot is type 0 */
@@ -156,6 +174,16 @@ void u2_monsters_restamp(u2_ctx *ctx, u2_world *w)
          * found it the day it was written. */
         if (!(s->mon_x[i] || s->mon_y[i]))
             continue;
+        if (dungeon) {
+            /* One creature per page cell, ORed into the low nibble so a rock cell keeps
+             * its 0x80. The floor is the creature's own [DI+0x1B7] byte, which in a
+             * dungeon asm/147F fills with slot>>1 — floor 0..15, not a kind index. */
+            const int fl = (int8_t)s->mon_kind[i];
+            u2_world_dungeon_put(w, fl, s->mon_x[i], s->mon_y[i],
+                                 u2_world_dungeon_at(w, fl, s->mon_x[i], s->mon_y[i])
+                                     | s->mon_type[i]);
+            continue;
+        }
         /* Deliberately a mon_type test and NOT a mon_hp test — asm/0A74's own rule. A
          * creature at zero hp is drawn and walks in the original (measured 2026-10-26: a
          * poked-to-zero slot moved (27,48)->(28,49)->(28,50) with its type intact), so the
