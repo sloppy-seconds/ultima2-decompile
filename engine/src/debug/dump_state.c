@@ -120,8 +120,7 @@ static int emit_raw(const u2_state *s, char *out, int outsz)
     uint8_t light[2]  = { s->torches, s->moved_flag };
 
     struct { const char *name; const uint8_t *p; int n; } f[] = {
-        { "pos", pos, 2 }, { "sector", sector, 2 }, { "hp", hp, 2 },
-        { "food", food, 3 }, { "exp", exp, 2 }, { "gold", gold, 2 },
+        { "pos", pos, 2 }, { "sector", sector, 2 }, { "hp", hp, 2 },        { "food", food, 3 }, { "exp", exp, 2 }, { "gold", gold, 2 },
         { "items", s->items_held, 16 },
         /* The travel mode, which is the same byte as the sprite stamped into the player's
          * cell (DS:13). A turn log that cannot say whether the player was aboard anything

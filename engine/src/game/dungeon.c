@@ -497,6 +497,11 @@ int u2_dungeon_key(u2_ctx *ctx, u2_overworld *ow, uint8_t ch)
  * starvation borrow falls into the same death tail the overworld uses. */
 void u2_dungeon_tick(u2_ctx *ctx, u2_overworld *ow)
 {
+    /* asm/1151 runs the spawner at runtime 0x1360 and the sweep immediately after it,
+     * both before the light tail at 0x1491, so an emptied slot is refilled on the
+     * following turn rather than only on entry. That is what the bytes do and it is
+     * why a dungeon cannot be cleared permanently by fighting. */
+    u2_dungeon_creatures(ctx, ow);
     u2_dungeon_light_step(ctx);
     (void)u2_overworld_spend_food(ctx, 0x10u);
     u2_dungeon_probe(ctx, ow);
@@ -531,6 +536,114 @@ void u2_dungeon_enter(u2_ctx *ctx, u2_overworld *ow)
 }
 
 /* ------------------------------------------------------------- creatures ---- */
+
+/* asm/50D8_sign_of_al. The value reaching the store is a unit step, never a distance. */
+static int dg_sign(uint8_t al)
+{
+    if (al == 0) return 0;
+    return ((int8_t)al < 0) ? -1 : 1;
+}
+
+/* asm/143C -> asm/144C -> asm/1451. The Phase 2 map cut one function into three
+ * fragments, which is the same cut-in-half failure that hid cmd_I, cmd_D and cmd_K;
+ * read alone, asm/143C looks like a floor test that returns a magic 0xFF and asm/144C
+ * like a one-instruction stub.
+ *
+ * Together they are: if the creature's floor byte is not the player's floor, return
+ * 0xFF; otherwise return the cell byte at (nx, ny) ON THE CREATURE'S FLOOR, with ZF
+ * set iff it is zero. asm/1451's own header has the addressing: page base + floor*256
+ * + y*16 + x, formed in one 8-bit register so an out-of-range coordinate wraps inside
+ * its page instead of walking into the next one.
+ *
+ * The 0xFF return is indistinguishable from a cell that literally holds 0xFF. Named in
+ * the header rather than patched, because patching it would be inventing a third answer
+ * the original does not have. */
+static int dg_probe_cell(const u2_ctx *ctx, const u2_overworld *ow,
+                         int di, int nx, int ny)
+{
+    const int fl = (int8_t)ctx->state.mon_kind[di];
+    if (fl != (int8_t)ctx->state.site_floor) return 0xFF;
+    return u2_world_dungeon_at(&ow->world, fl, nx, ny);
+}
+
+u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow)
+{
+    u2_state *st = &ctx->state;
+    u2_dg_ai_report rep = { 0 };
+    const int px = ow->x, py = ow->y;
+
+    /* asm/1151 runtime 0x1360. */
+    u2_dungeon_spawn(ctx, ow);
+
+    /* Slots 31 down to 1; slot 0 is never examined, the same blind spot as the
+     * overworld sweep at asm/0A6D and asm/23E6. */
+    for (int di = 0x1f; di >= 1; di--) {
+        if (st->mon_type[di] == 0) continue;          /* runtime 0x1370 */
+        rep.examined++;
+
+        int sx = dg_sign((uint8_t)(px - st->mon_x[di]));
+        int sy = dg_sign((uint8_t)(py - st->mon_y[di]));
+
+        /* runtime 0x1397: `cmp $0xf,%al ; jae` past the negation. */
+        if (st->mon_hp[di] < 0x0f) {
+            sx = -sx;
+            sy = -sy;
+            rep.fled++;
+        }
+
+        int done = 0;
+        for (int axis = 0; axis < 2 && !done; axis++) {
+            const int step = (axis == 0) ? sx : sy;
+            if (step == 0) continue;                  /* 0x13BB / 0x13F5 */
+
+            const uint8_t nx = (uint8_t)(st->mon_x[di] + (axis == 0 ? step : 0));
+            const uint8_t ny = (uint8_t)(st->mon_y[di] + (axis == 1 ? step : 0));
+
+            /* runtime 0x13CF: `cmp 0x0,%al` is a MEMORY operand against the player's
+             * cell, not a literal 0 — this tree writes immediates with `$`. Reaching
+             * the player is asm/12DB's problem and is not decoded, so the creature
+             * does not move. Same outcome the overworld sweep reaches on contact. */
+            if (nx == px && ny == py) { rep.contacts++; done = 1; break; }
+
+            const int r = dg_probe_cell(ctx, ow, di, nx, ny);
+            if (r == 0) {
+                /* fallthrough to the move */
+            } else if (r == 0xFF) {
+                rep.off_floor++;
+                continue;                             /* 0x13E9 -> try the other axis */
+            } else if (r & 0x7f) {
+                /* The original goes to the move path here, and the move path is what
+                 * rejects on the low three bits — so a cell occupied by another
+                 * creature ends this creature's turn rather than trying the other
+                 * axis. Rock (0x80) has a zero low nibble after masking and falls
+                 * through to try the other axis instead. Asymmetric, and faithful. */
+                if (r & 0x07) { rep.bump++; done = 1; break; }
+            } else {
+                continue;                             /* 0x80 rock: other axis */
+            }
+
+            /* runtime 0x1437. The nibble dance, in the original's order: stash the
+             * destination in the prev_x/prev_y scratch arrays, point the cell cursor at
+             * the OLD cell and clear its low nibble, install the destination, then point
+             * at the NEW cell and OR the type in. DS:1F7/DS:217 are pure scratch here and
+             * the engine has no fields for them, which is the one part of this span the
+             * transcription does not mirror byte for byte. */
+            const int fl = (int8_t)st->mon_kind[di];
+            const int ox = st->mon_x[di], oy = st->mon_y[di];
+            u2_world_dungeon_put(&ow->world, fl, ox, oy,
+                                 u2_world_dungeon_at(&ow->world, fl, ox, oy) & 0xF0);
+            st->mon_x[di] = nx;
+            st->mon_y[di] = ny;
+            u2_world_dungeon_put(&ow->world, fl, nx, ny,
+                                 u2_world_dungeon_at(&ow->world, fl, nx, ny)
+                                     | st->mon_type[di]);
+            rep.moved++;
+            done = 1;
+        }
+        (void)done;
+    }
+    return rep;
+}
 
 /* asm/147F, validated 54/54 slots by tools/dungeon_spawn_check.py against
  * captures/spice86/dungeon-35-live and airport32. */

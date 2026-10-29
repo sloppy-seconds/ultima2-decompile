@@ -216,6 +216,43 @@ PY
         esac
     fi
 
+    # ---- 6b. the sweep: dungeon creatures walk ------------------------------
+    # asm/1151 runtime 0x135E..0x148E. The assertion is on the authored walker in slot 2,
+    # three cells west down the corridor, and it is a DIFFERENTIAL between two runs rather
+    # than a before/after inside one: --dump-state emits one record per process, so there
+    # is no per-turn series to read. Run A enters and stops; run B enters and takes one
+    # ADVANCE, which is one asm/1151 tick. Same seed, same prefix, so the only difference
+    # between the two walker positions is the sweep.
+    #
+    # It is a differential and not a count on purpose. The spawner refills empty slots every
+    # turn, so "the creature table changed" is true with the movement half deleted and
+    # would certify a sweep that never ran. Slot 2's coordinates cannot come from the
+    # spawner, because asm/147F only touches empty slots.
+    if run_case walkA 'E\nI\n' "$WORK/walkA.out" && run_case walkB 'E\nI\n0xf0\n' "$WORK/walkB.out"; then
+        python3 - "$WORK/walkA.out" "$WORK/walkB.out" <<'PY'
+import re, sys
+
+def walker(path):
+    """The authored slot-2 creature's (x, y) in the run's final state record."""
+    txt = open(path, errors="replace").read()
+    x = re.findall(r'"mon_x":"([0-9a-f ]+)"', txt)
+    y = re.findall(r'"mon_y":"([0-9a-f ]+)"', txt)
+    if not (x and y):
+        return None
+    return (int(x[-1].split()[2], 16), int(y[-1].split()[2], 16))
+
+a, b = walker(sys.argv[1]), walker(sys.argv[2])
+print(f"        walker after entry {a}, after entry + one tick {b}")
+# Authored at (3,5). Run A must still show that; run B must not.
+sys.exit(0 if a == (3, 5) and b is not None and b != (3, 5) else 1)
+PY
+        if [ $? -eq 0 ]; then
+            ok "CP7 walk: the dungeon sweep moves a creature on a turn the player did not touch it"
+        else
+            bad "CP7 walk: the authored walker never moved (asm/1151's sweep is not running)"
+        fi
+    fi
+
     # ---- 7. floors ----------------------------------------------------------
     # cmd_D on a 0x20 cell in a dungeon increments [DS:25], and the grid the engine
     # reads is now the page that byte names — which is the floor term asm/1451 has

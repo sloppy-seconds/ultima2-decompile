@@ -46,6 +46,7 @@ MOUTH = 0x24
 
 ENTRY = (4, 4)   # the world-map cell the mouth sits on
 GUARD = (5, 4)   # one cell north of the arrival cell, so the first ATTACK has a target
+WALKER = (3, 5)  # west end of the corridor, off every other test's path
 
 # Placed relative to the ARRIVAL cell, not the world-map cell: asm/342A gives the
 # street sites (0x1f, 0x3e) and the tower and dungeon mouths both arrive at (5,5),
@@ -127,11 +128,19 @@ def player() -> bytes:
 
 
 def monx() -> bytes:
-    """One authored creature standing where the first ATTACK will look.
+    """Two authored creatures: one the first ATTACK will look for, one that has to walk.
 
     asm/147F fills EMPTY slots, so an authored creature survives the spawner and
     stays exactly where it was put. The loader's layout is x at 0..31, y at 32..63,
     hp at 64..95, type at 96..127, kind at 128..159, role at 160..191.
+
+    Slot 2 exists for the CP7 movement gate and is the reason this is not one creature.
+    It sits at the far end of the y=5 corridor with enough HP to pursue, and the sweep
+    must bring it down the corridor toward (5,5) a cell per turn. Slot 1 cannot do that
+    job: it is already adjacent to the arrival cell, so its first pursuit step lands on
+    the player and asm/1151 declines the move. A gate written on slot 1 would therefore
+    pass with the sweep deleted, which is the shape of gate this project has been bitten
+    by twice and refuses now.
     """
     m = bytearray(256)
     m[1] = GUARD[0]
@@ -139,6 +148,12 @@ def monx() -> bytes:
     m[64 + 1] = 0x10                 # hp, the low end of the asm/147F envelope
     m[96 + 1] = 0x01                 # dungeon type 1
     m[128 + 1] = 0x00
+
+    m[2] = WALKER[0]
+    m[32 + 2] = WALKER[1]
+    m[64 + 2] = 0x40                 # hp, well above the flee threshold at 0x0f
+    m[96 + 2] = 0x02                 # dungeon type 2
+    m[128 + 2] = 0x00                # floor 0, the page the player arrives on
     return bytes(m)
 
 

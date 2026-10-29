@@ -268,8 +268,8 @@ MANIFEST = [
     # asm/1151's two darkness lines both carry a trailing 0x8d line marker, so the db line
     # reads `db "IT'S DARK!",0x8d,0x00`; the offsets below stop before the marker and the
     # caller prints the CR, which is the asm/3BE4 convention used everywhere else.
-    ("U2_S_ITS_DARK",          "1151_dungeon_darkness.asm", ("run", 0x149F, 10, "IT'S DARK!")),
-    ("U2_S_TORCH_BURNED_OUT",  "1151_dungeon_darkness.asm", ("run", 0x14B7, 17, "TORCH BURNED OUT!")),
+    ("U2_S_ITS_DARK",          "1151_dungeon_turn.asm", ("run", 0x149F, 10, "IT'S DARK!")),
+    ("U2_S_TORCH_BURNED_OUT",  "1151_dungeon_turn.asm", ("run", 0x14B7, 17, "TORCH BURNED OUT!")),
     # GET's site arm (asm/363B, runtime 0x36C3). " CHEST!" keeps its leading space because
     # the binary has it, and "IT CONTAINS " follows the same str_out call separated by the
     # 0x8d marker, so the caller emits the CR between them.

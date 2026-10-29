@@ -112,6 +112,53 @@ u2_cmd_result u2_dungeon_get(u2_ctx *ctx, u2_overworld *ow);
  * a step takes the counter to zero. Returns 1 when there is light to draw with. */
 int u2_dungeon_light_step(u2_ctx *ctx);
 
+/* One dungeon creature turn: asm/1151 runtime 0x135E..0x148E.
+ *
+ * This is the paged-grid twin of u2_ai_creature_turn, and the two cannot share code.
+ * Four differences, each of them a byte:
+ *
+ *   The step vector is asm/152E, not asm/4F11. asm/152E is `stc; cmc; sbb` then
+ *   asm/50D8's sign, so it is a plain sign(player - creature) with NO `add al,al` pair.
+ *   asm/4F11's doubling is what makes an overworld creature take the short way round a
+ *   64x64 torus; a 16x16 page has edges and no wrap, so the dungeon must not copy it.
+ *
+ *   The grid is indexed by the creature's OWN floor, [DI+0x1B7], not by the sector grid.
+ *   In a dungeon that byte is not a kind index at all: asm/147F writes `slot >> 1` into
+ *   it, which over 32 slots is exactly floor 0..15, and asm/143C refuses a move unless
+ *   it equals [DS:25]. Same byte, different meaning, which is the dungeon/overworld
+ *   quarantine in AGENTS.md section 3 being load-bearing rather than stylistic.
+ *
+ *   A creature below 15 HP has its vector NEGATED: it flees. The overworld's twin of that
+ *   same threshold regenerates instead (asm/2122), so the two grids disagree about what
+ *   a wounded monster does.
+ *
+ *   The stamp is a nibble, not a cell. Moving clears the low nibble of the old cell and
+ *   ORs mon_type into the new one, leaving the terrain bits alone.
+ *
+ * Two asymmetries are reproduced because the bytes have them, not because they are tidy:
+ * a destination holding another creature ENDS the creature's turn instead of falling
+ * through to the other axis (runtime 0x13EB goes to the move path, and the move path
+ * rejects at 0x1430 with `jmp` to the next slot), and rock at 0x80 does try the other
+ * axis. A cell byte of exactly 0xFF is also ambiguous between "wall" and "wrong floor",
+ * because asm/143C signals the floor mismatch with that same literal; the shipped maps
+ * cannot produce it, since every authored value is a multiple of 0x10 and a stamp is
+ * 1..7, but the collision is real and named here rather than hidden.
+ *
+ * What a creature reaching the PLAYER does is NOT implemented. Runtime 0x1508 lives in
+ * asm/12DB_dungeon_events and is a separate decode; until it is done a creature that
+ * would step onto the player simply does not move, which is what the overworld sweep
+ * does on contact (see ai.h: the original has no attack-on-contact). */
+typedef struct u2_dg_ai_report {
+    int examined;    /* non-empty slots the sweep looked at                     */
+    int moved;       /* slots that changed cell                                */
+    int fled;        /* slots whose vector was negated for being under 15 HP    */
+    int off_floor;   /* slots refused by asm/143C's floor test                 */
+    int bump;        /* slots that ended their turn on another creature's cell  */
+    int contacts;    /* slots that would have stepped onto the player (unhandled)*/
+} u2_dg_ai_report;
+
+u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow);
+
 /* asm/147F: fill empty creature slots with a random dungeon creature whose HP is
  * computed rather than authored. Called on entering a site and after a kill. */
 int u2_dungeon_spawn(u2_ctx *ctx, u2_overworld *ow);

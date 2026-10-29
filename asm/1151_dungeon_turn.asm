@@ -1,11 +1,39 @@
-# dungeon_darkness — dark-dungeon / torch-burned-out handling
-# name-evidence: strings 'IT'S DARK!' / 'TORCH BURNED OUT!'
+# dungeon_turn — the whole dungeon creature turn: spawn, sweep, then the light tail
+# name-evidence: strings 'IT'S DARK!' / 'TORCH BURNED OUT!' named the tail, and the tail
+#           is only the last third. Read in full 2026-10-29 for G54, the span is three
+#           jobs in order:
+#             0x1360  call asm/147F          fill empty creature slots
+#             0x1364..0x148E                 the per-slot sweep, slots 31 down to 1
+#             0x1491..                       the light counter, IT'S DARK! / TORCH BURNED OUT!
+#           The sweep is the dungeon twin of asm/0A6D on the overworld and cannot share
+#           code with it: the step vector is asm/152E with no torus doubling, the grid is
+#           indexed by the creature's own floor byte [DI+0x1B7] rather than the sector
+#           grid, a creature under 15 HP has its vector NEGATED and flees where the
+#           overworld regenerates it instead, and a move re-stamps a nibble rather than a
+#           cell. asm/147F running every turn is why a dungeon cannot be cleared by
+#           fighting: an emptied slot is refilled on the next tick.
+#           The per-slot body: asm/152E for the vector, the 0x0f HP test, then two axes
+#           tried x-first. A candidate equal to the player's cell leaves for asm/12DB at
+#           runtime 0x1508 (undecoded, and `cmp 0x0,%al` there is a MEMORY operand against
+#           [DS:00], not a literal 0 — this tree writes immediates with `$`). Otherwise
+#           asm/143C gates the cell, and the move at 0x142C re-reads it and rejects on the
+#           low three bits before the nibble dance at 0x1437 clears the old cell's low
+#           nibble and ORs [DI+0x197] into the new one.
+#           Asymmetry worth knowing: a destination holding ANOTHER creature ends the
+#           slot's turn outright (0x13EB goes to the move path, which jumps to the next
+#           slot), while rock at 0x80 falls through to try the other axis.
+#           The old name was not wrong, only half the function. Renamed rather than
+#           duplicated, per the one-lookup-table rule.
 # func 1151..12DA  len 018A B  evidence: seed+reko
 # strings: "IT'S DARK!"; "TORCH BURNED OUT!"
 # calls: L_000a6f, L_001378, L_001491, L_0014cd, L_0014db, L_001508, L_00163c, L_00164c (+7 more)
 # provenance: live:airport (+5 other harvests), static
 #           entry executed in 6 of 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+#           sweep body read in full 2026-10-29 for G54; engine twin is
+#           u2_dungeon_creatures() in engine/src/game/dungeon.c, gated by CP7 section 6b
+# confidence: high for the sweep shape and the nibble stamp (bytes read end to end, and
+#           the vector and floor gate each cross-check an already-named routine);
+#           still low for what 0x1508 does on reaching the player
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 dungeon_darkness:
 L_001351:

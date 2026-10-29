@@ -2326,3 +2326,52 @@ Three hours later the creatures draw, and the reason it looked blocked is worth 
   directory through `u2_world_load_strokes()`, exactly like the tile atlas, and the test
   seed borrows `original/monsters` at run time. A content directory without it draws an
   empty corridor and says so on stderr.
+
+### CP7 addendum: G54, the dungeon sweep (2026-10-29)
+
+Dungeon creatures now walk. `u2_dungeon_creatures()` transcribes `asm/1151` runtime
+`0x135E..0x148E`, and the finding is that this is a **second AI**, not a variant of the
+first. The item that opened G54 said "the pursuit vector is already decoded and does not
+care which grid it is on", and that was wrong in a way worth keeping: the dungeon has its
+own vector at `asm/152E`, and the overworld's `asm/4F11` doubles the axis difference twice
+before taking its sign specifically so a creature takes the short way round a 64x64 torus.
+A 16x16 page has edges. Copying the overworld vector would have produced creatures that
+walk through the west wall and reappear in the east.
+
+Four differences, each one a byte, and none inferable from the overworld side:
+
+* **Vector.** `asm/152E`: `stc; cmc; sbb` then the sign, no doubling.
+* **Grid.** Cells are looked up on the creature's own floor, `[DI+0x1B7]`, gated against
+  `[DS:25]` by `asm/143C`. In a dungeon that byte is not a kind index at all — `asm/147F`
+  writes `slot >> 1`, which over 32 slots is exactly floor 0..15. Same byte, other meaning.
+* **Wounded behaviour.** Under 15 HP the vector is negated and the creature flees. The
+  overworld's twin of that same threshold regenerates instead.
+* **Stamp.** A move clears the low nibble of the old cell and ORs `mon_type` into the new
+  one. Terrain bits untouched.
+
+`asm/1151` was called `dungeon_darkness` from its two strings; the strings are the last
+third of it, so it is `dungeon_turn` now. `asm/143C` and `asm/144C` were unnamed stubs and
+are the first two thirds of one function with `asm/1451`, the same cut-in-half failure that
+hid `cmd_I`, `cmd_D` and `cmd_K`.
+
+Two asymmetries are reproduced because the bytes have them. A destination holding another
+creature **ends the slot's turn** rather than trying the other axis, while rock at `0x80`
+does try the other axis. And a cell byte of exactly `0xFF` is ambiguous between "wall" and
+"wrong floor", because `asm/143C` signals the mismatch with that same literal; the shipped
+maps cannot produce it, and the collision is named rather than patched, because patching it
+would invent a third answer the original does not have.
+
+**The gate is a differential, and it had to be.** `--dump-state` emits one record per
+process, so there is no per-turn series to compare. Run A enters, run B enters plus one
+ADVANCE, and slot 2's authored walker goes `(3,5) -> (4,5)`. Slot 2 specifically, because
+the spawner refills empty slots every turn — a test that asserted "the creature table
+changed" would pass with the movement half deleted. Emptying the loop bound was shown to
+make it red. Two controls failed before the right one was found, and both failures were
+instructive: a `getenv` stub did not compile under `-Werror` and the suite reported PASS
+against the previous binary, and a `sed -i` with a `/` in the replacement silently did
+nothing. A control that does not build is a control that never ran.
+
+**One behaviour change to flag for playtest.** `asm/147F` runs inside `asm/1151` every
+turn, so an emptied slot refills on the next tick. A dungeon cannot be cleared by fighting.
+That is what the bytes say, it was invisible before because nothing swept, and it is now
+visible in the noVNC build.
