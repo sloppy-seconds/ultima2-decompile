@@ -386,6 +386,17 @@ MANIFEST = [
     ("U2_S_FOOD_YES_A",            "17F5_sub_17f5.asm",        ("run", 0x19F5,  4)),
     ("U2_S_FOOD_YES_B",            "17F5_sub_17f5.asm",        ("run", 0x19FA, 27)),
     ("U2_S_THANK_YOU_AGAIN",       "181A_tavern_thanks.asm",     0),
+    # cmd_R (READY WEAPON) and cmd_N (NEGATE TIME). Both were first observed executing on
+    # 2026-10-29 in captures/spice86/cmd-nr-live, which is also where every branch below was
+    # seen on a frame rather than only in the listing.
+    ("U2_S_READY_WEAPON_MENU",     "3E50_cmd_R.asm",             ("run", 0x4053, 75, "READY WEAPON:")),
+    ("U2_S_READY_NOT_AGILE_A",     "3ED4_ready_weapon_agility_gate.asm", ("run", 0x40E6, 16, " <-THOU ART NOT ")),
+    ("U2_S_READY_NOT_AGILE_B",     "3ED4_ready_weapon_agility_gate.asm", ("run", 0x40F7, 22, "AGILE ENOUGH TO WIELD!")),
+    ("U2_S_READY_OK",              "3ED4_ready_weapon_agility_gate.asm", 0),
+    ("U2_S_NEGATE_TIME",           "3BCE_cmd_N.asm",             0),
+    ("U2_S_NEGATE_NO_CHARGES",     "3BE4_sub_3be4.asm",          ("run", 0x3DED, 19, "YOU'RE NOT EINSTEIN")),
+    ("U2_S_NEGATE_HOW",            "3BE4_sub_3be4.asm",          ("run", 0x3DE7,  5, " HOW?")),
+    ("U2_S_COIN_RUB",              "3C04_coin_rub.asm",          ("run", 0x3E14, 17, "YOU RUB A COIN...")),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:
@@ -668,7 +679,13 @@ def c_escape(data):
         elif 0x20 <= b < 0x7F:
             out.append(chr(b))
         else:
-            out.append("\\x%02x" % b)
+            # Octal, never \xNN. A C hex escape consumes every following hex digit, so the
+            # literal "\x0d1-DA" is ONE escape (0x0d1, truncated to 0xd1) and not CR followed by
+            # '1'. The game's newline is 0x0D/0x8D and the text after it is very often a digit, so
+            # the greedy form silently rewrote it: the READY WEAPON menu came out as
+            # "READY WEAPON:Q-DA ... U-SW ... Y-QU", each first digit of a line raised by 0x20.
+            # An octal escape is capped at three digits, so "\0151-DA" is CR then '1'.
+            out.append("\\%03o" % b)
     return '"' + "".join(out) + '"'
 
 

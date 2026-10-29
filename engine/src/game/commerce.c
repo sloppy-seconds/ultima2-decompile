@@ -294,11 +294,19 @@ static u2_transact_result shop_armour(u2_ctx *ctx)
 
 /* asm/1E4F. Price index is the digit itself, confirmed live: menu 3 (AX) entered
  * asm/20AB with AL=0x03 and left DS:27/28 = 00 20, and the charge took exactly 20
- * (captures/spice86/g23-weapons). */
+ * (captures/spice86/g23-weapons).
+ *
+ * The offer prefix is "AH! YES! ", the same literal the armour shoppe uses, and that call is
+ * made by the frame rather than the listing. The binary holds a second offer literal
+ * "AH! YES! A " at 0x1ED9, and a listing-only reading assigned it here — which rendered menu 3
+ * as "AH! YES! A AXE". captures/spice86/g23-weapons/w5-axe.png shows "AH! YES! AXE", so the
+ * shoppe does not use it. Who does is unresolved: it sits in the same string neighbourhood as
+ * the magic shoppe's menu, and no capture has run the wizard shoppe, so it stays unassigned
+ * rather than being moved somewhere plausible. */
 static u2_transact_result shop_weapons(u2_ctx *ctx)
 {
 #ifdef U2_T_WEAPONS_N
-    return sell_from_catalogue(ctx, U2_S_WEAPONS_MENU, U2_S_SHOP_AH_YES_A, 8, 0,
+    return sell_from_catalogue(ctx, U2_S_WEAPONS_MENU, U2_S_SHOP_AH_YES, 8, 0,
                                U2_T_WEAPONS, U2_T_WEAPONS_N,
                                ctx->state.weapons_owned,
                                (int)sizeof ctx->state.weapons_owned, 0);

@@ -85,6 +85,19 @@ void seam_char_out(u2_ctx *ctx, uint8_t ch)
 void seam_str_out(u2_ctx *ctx, const char *s)
 {
     u2_trace(ctx, "str_out", "4FDF", "len=%zu", strlen(s));
+    /* The message band is four rows and scrolls, so a frame shows only the tail of a long
+     * exchange. Logging the string itself makes the trace a complete transcript of what the game
+     * was asked to print, which is what the CP6 gate asserts against. Newlines are shown as '|'
+     * so a phrase stays on one trace line and can be grepped whole. u2_trace is a no-op when
+     * tracing is off, so this costs nothing on a normal run. */
+    {
+        char flat[160];
+        size_t n = 0;
+        for (const char *p = s; *p && n + 1 < sizeof flat; p++)
+            flat[n++] = (*p == '\r' || *p == '\n') ? '|' : (char)(*p & 0x7F);
+        flat[n] = '\0';
+        u2_trace(ctx, "str_out", "4FDF", "text=%s", flat);
+    }
     /* str_out's loop (asm/4FF0..asm/4FFE) calls char_print per byte. */
     for (const char *p = s; *p; p++)
         seam_char_print(ctx, (uint8_t)*p);

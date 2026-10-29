@@ -38,6 +38,23 @@
 #  define ARMOUR_NAME(i) ""
 #endif
 
+/* The weapon pool, indexed the same way: asm/3EA5 does `adc $0x13,%al` before the pool printer,
+ * and 0x13 is the WEAPONS group base the extractor already folds into U2_T_WEAPONS. So the READY
+ * WEAPON menu number indexes the pool directly, 0 = HANDS .. 9 = QUICK SWORD — which is the same
+ * index space as state.h's readied_weapon (DS:61). */
+#ifdef U2_T_WEAPONS_N
+#  define WEAPON_NAME(i) (((i) >= 0 && (i) < U2_T_WEAPONS_N) ? U2_T_WEAPONS[(i)] : "")
+#else
+#  define WEAPON_NAME(i) ""
+#endif
+
+/* DS:E3 is not a separate counter and must not be modelled as one: items_held is 16 slots from
+ * DS:D6, so DS:E3 is items_held[13], and the name table at file 0x501D calls slot 13 STRANGE
+ * COIN. That is what NEGATE TIME spends — the byte has exactly three sites in the binary, all of
+ * them in asm/3BCE..asm/3C04, and the seeded capture's value of 0x01 was simply maxout's one
+ * strange coin (captures/spice86/cmd-nr-live). */
+#define ITEM_STRANGE_COIN 13
+
 /* asm/45B8: `stc ; cmc ; sbb $0x1,%al ; das ; cmc` — a packed-decimal subtract of one, so the
  * nibble borrows in decimal and not in hex: 0x10 becomes 0x09, not 0x0F. Item counts are BCD
  * everywhere in this binary; treating them as binary is the same class of mistake as reading the
@@ -280,6 +297,114 @@ static u2_cmd_result cmd_T(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     seam_str_out(ctx, U2_S_TRANSACT);
     ow->pending_cmd = 'T';
     return U2_CMD_AWAIT;
+}
+
+/* asm/3E50 cmd_R: READY WEAPON — cmd_W's shape again, one array over.
+ *
+ *   print the menu (nine entries, 1-DA .. 9-QU)
+ *   read a digit into DS:1F and echo it
+ *   print the weapon NAME from the pool (`adc $0x13,%al` + asm/508C)
+ *   ownership: [DS:76 + digit] == 0 and digit != 0  ->  " NOT OWNED!"
+ *   agility gate: digit*8 >= [DS:4C]  ->  " <-THOU ART NOT / AGILE ENOUGH TO WIELD!"
+ *   success: " READY." and DS:61 = digit
+ *
+ * Two things worth saying out loud because both are places a similar-looking handler goes wrong.
+ * The gate is **agility** (DS:4C), not strength — cmd_W uses DS:4B and the two are otherwise
+ * identical, so copying the armour handler is the trap. And the comparison is against the raw
+ * packed byte, so agility 40 displayed is 0x40 = 64 stored, and digit 9 (72) is out of reach for
+ * a maxed character while digit 8 is not.
+ *
+ * Every branch is on a frame, not just in the listing: `AXE READY.` with DS:61 = 03, `MACE NOT
+ * OWNED!` with DS:77 poked to 0, and the agility refusal at digit 9, all in
+ * captures/spice86/cmd-nr-live. Digit 0 is HANDS and the original lets it through the ownership
+ * test (`or %al,%al ; je` past it) — recorded, not tidied away. */
+static u2_cmd_result cmd_R(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+    seam_str_out(ctx, U2_S_READY_WEAPON_MENU);
+
+    int digit = -1;
+    while (digit < 0) {
+        u2_key k;
+        if (seam_key_wait(ctx, &k) == 0)
+            break;                       /* input exhausted: no original counterpart */
+        if (k.ch >= '0' && k.ch <= '9') {
+            digit = k.ch - '0';
+            seam_char_print(ctx, (char)('0' + digit));
+        }
+    }
+    if (digit < 0) { cmd_done(ctx); return U2_CMD_DONE; }
+
+    seam_str_out(ctx, WEAPON_NAME(digit));
+
+    const int owned = (digit == 0) ||
+                      (digit < (int)sizeof ctx->state.weapons_owned &&
+                       ctx->state.weapons_owned[digit] != 0);
+    if (!owned) {
+        seam_str_out(ctx, U2_S_NOT_OWNED);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    if ((unsigned)(digit * 8) >= (unsigned)ctx->state.stat_agi) {
+        /* The original's literal is one str_out with the newline glyph mid-string
+           (" <-THOU ART NOT \x8dAGILE ENOUGH TO WIELD!"). The engine emits the newline itself
+           rather than passing a raw 0x8D through str_out, same convention as cmd_V's helm line. */
+        seam_str_out(ctx, U2_S_READY_NOT_AGILE_A);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_READY_NOT_AGILE_B);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    seam_str_out(ctx, U2_S_READY_OK);
+    ctx->state.readied_weapon = (uint8_t)digit;      /* DS:61 */
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* asm/3BCE cmd_N: NEGATE TIME. The last of the 26 letters that had never been seen running in
+ * any harvest, and it turned out to be a fall-through rather than a routine of its own:
+ *
+ *   print "NEGATE TIME"
+ *   if [DS:E3] == 0  ->  " HOW?" newline "YOU'RE NOT EINSTEIN", done
+ *   else                  ->  fall into asm/3C04, the coin rub: spend one, print
+ *                             "YOU RUB A COIN...", and store 0x14 into DS:26A
+ *
+ * [DS:E3] is items_held[STRANGE COIN] — see ITEM_STRANGE_COIN — so the cost of stopping time is
+ * one strange coin, and 0x14 is the creature-move freeze counter, which asm/2199 refuses on and
+ * which the engine already honours in ai.c. The counter then ticks down one per command like the
+ * paralysis bytes (asm/0C54/asm/0C5B), which is why status_tick had to learn about it.
+ *
+ * Observed live 2026-10-29 (captures/spice86/cmd-nr-live): with one strange coin, `N` printed
+ * `CMD: NEGATE TIME` then `YOU RUB A COIN...` and DS:26A went 00 -> 0x14 (read 0x13 one command
+ * later, i.e. it had been set and had ticked); with the byte poked to 0 it printed
+ * `NEGATE TIME HOW?` / `YOU'RE NOT EINSTEIN` and changed nothing.
+ *
+ * The Apple II build has the same pair as its own routine ($7DC6: print, then `STA $D9` with 20),
+ * which asm/3C04's header records — so this is a mechanic the game shipped, not a DOS artifact. */
+static u2_cmd_result cmd_N(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+    seam_str_out(ctx, U2_S_NEGATE_TIME);
+
+    if (ctx->state.items_held[ITEM_STRANGE_COIN] == 0) {
+        seam_str_out(ctx, U2_S_NEGATE_HOW);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_NEGATE_NO_CHARGES);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    /* asm/3C04: `stc ; cmc ; sbb $0x1,%al ; das ; cmc` — the same one-step packed-decimal
+     * subtract asm/45B8 uses for X-IT, so the coin count borrows in decimal. */
+    ctx->state.items_held[ITEM_STRANGE_COIN] =
+        bcd_dec1(ctx->state.items_held[ITEM_STRANGE_COIN]);
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_COIN_RUB);
+    ctx->state.counter_26A = 0x14;
+    cmd_done(ctx);
+    return U2_CMD_DONE;
 }
 
 /* asm/42F1 cmd_U: print "UNLOCK DIRECTION-" and fall into the same kind of aim gate. The
@@ -942,11 +1067,11 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* K  not implemented */
     cmd_L, /* L  launch plane/rocket: asm/38B0, its own flight loops, gated on the item named */
     cmd_M, /* M  ready a spell by number: asm/3B92, echoes the spell NAME */
-    NULL,  /* N  see the note above */
+    cmd_N, /* N  negate time: asm/3BCE, spends a STRANGE COIN and freezes creature movement */
     NULL,  /* O  see the note above */
     cmd_P, /* P  PASS: asm/3DBC. The space bar is a different site, in overworld.c */
     cmd_Q, /* Q  save: asm/3DE4 refuses indoors, asm/3DFA saves outdoors */
-    NULL,  /* R  not implemented: ready weapon */
+    cmd_R, /* R  ready weapon: asm/3E50, menu then NAME then ownership and the AGILITY gate */
     NULL,  /* S  see the note above */
     cmd_T, /* T  transact: asm/4050, the ray and the shops in game/commerce.c */
     cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */

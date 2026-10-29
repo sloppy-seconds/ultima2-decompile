@@ -80,9 +80,18 @@ static int bcd_sbb(unsigned a, unsigned sub, int borrow_in, unsigned *out);
  */
 /* asm/0C33. One decrement per non-zero counter. Called from creature_turn() AND from the refused
  * step path, because the original reaches the tick on a refused input as well as on a turn — see
- * the long note in creature_turn(). Kept separate so both call sites share one body. */
+ * the long note in creature_turn(). Kept separate so both call sites share one body.
+ *
+ * The counter set is four bytes, not three: asm/0C33 ticks DS:26B, and asm/0C54/asm/0C5B tick
+ * DS:26A the same way (`mov [DS:26A],%al ; or %al,%al ; je` then `decb [DS:26A]`). DS:26A is the
+ * creature-move freeze counter (G27), and it was left out of this function while nothing in the
+ * engine could set it. cmd_N (NEGATE TIME) sets it to 0x14 by spending a STRANGE COIN, so an
+ * engine that set it and never ticked it would freeze every creature on the map permanently.
+ * Measured in the original on 2026-10-29: after one NEGATE TIME the byte read 0x14 and fell to
+ * 0x13 by the next command (captures/spice86/cmd-nr-live). */
 static void status_tick(u2_ctx *ctx)
 {
+    if (ctx->state.counter_26A)   ctx->state.counter_26A--;
     if (ctx->state.paral_legs)  ctx->state.paral_legs--;
     if (ctx->state.paral_arms)  ctx->state.paral_arms--;
     if (ctx->state.paral_sleep) ctx->state.paral_sleep--;

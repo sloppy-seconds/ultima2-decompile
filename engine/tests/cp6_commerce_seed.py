@@ -85,6 +85,18 @@ def main(out_dir: str, case: str) -> int:
     p[0x59 - 0x36] = 0x99                    # GOLD 9999
     p[0x5A - 0x36] = px                      # entry cell: where the world drops you
     p[0x5B - 0x36] = py
+    # Command-letter cases need the inventories the handlers gate on. All three are ordinary
+    # save bytes (file offset = DS - 0x36), and each one is the byte the handler actually reads:
+    p[0x4C - 0x36] = 0x40                    # agility, packed: 0x40 = 64, so digit 8 passes
+    #                                       # and digit 9 (72) does not. cmd_R's gate.
+    p[0x4B - 0x36] = 0x40                    # strength, for cmd_W next door
+    for i in range(1, 10):
+        if i == 7:
+            continue                         # leave one unowned so the NOT OWNED branch is
+        p[0x76 + i - 0x36] = 1               # reachable in a scripted run (7-LI)
+    p[0xE3 - 0x36] = 1                       # items_held[13] = STRANGE COIN, which is what
+    #                                       # NEGATE TIME spends. DS:E3 is inside items_held;
+    #                                       # it is not a separate counter (see commands.c).
     with open(os.path.join(save, "PLAYER"), "wb") as f:
         f.write(bytes(p))
     return 0

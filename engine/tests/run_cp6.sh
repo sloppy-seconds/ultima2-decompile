@@ -69,8 +69,16 @@ else
         printf "$keys" > "$WORK/$label.keys"
         ./u2 --headless --play-map --cleanroom --data-dir "$WORK/$label/content" \
              --save-dir "$WORK/$label/save" --script "$WORK/$label.keys" \
-             --dump-each --dump-state > "$out" 2>&1
+             --trace="$out.trace" --dump-each --dump-state > "$out" 2>&1
+        # Flatten the transcript: the engine prints a menu in several str_out calls (the literal,
+        # then the pool name, then the price), so a phrase like "AH! YES! CLOTH" spans three of
+        # them. Joining every text= field into one stream is what makes a whole-phrase grep work.
+        sed -n 's/.*text=//p' "$out.trace" 2>/dev/null | tr -d '\n' > "$out.txt"
     }
+    # Text assertions read the transcript, not the final frame: the message band is four rows and
+    # scrolls, so a long exchange loses its opening lines off the top of the screen and a frame
+    # grep silently under-checks. said OUTFILE "phrase".
+    said() { grep -qF -- "$2" "$1.txt" 2>/dev/null; }
     gold_of() { sed -n 's/.*"gold":\([0-9]\{1,\}\).*/\1/p' "$1" | tail -1; }
     field_of() { sed -n 's/.*"'"$2"'":"\([^"]*\)".*/\1/p' "$1" | tail -1; }
 
@@ -79,16 +87,16 @@ else
     #     (captures/spice86/armour-buy), so this is the engine matching the game and not
     #     matching itself.
     if run_case armour armour 'T\n0xf0\n1\nY\n' "$WORK/armour.out"; then
-        grep -q "AH! YES! CLOTH" "$WORK/armour.out" \
+        said "$WORK/armour.out" "AH! YES! CLOTH" \
             && ok "CP6 T: the ray reaches the armour shoppe and echoes the pool name" \
             || { bad "CP6 T: no armour name from (38,5) north"; sed -n '21,24p' "$WORK/armour.out"; }
-        grep -q "YOU ONLY 0012" "$WORK/armour.out" \
+        said "$WORK/armour.out" "YOU ONLY 0012" \
             && ok "CP6 T: CLOTH quotes 0012, the number the original quoted live" \
             || bad "CP6 T: expected 'FOR YOU ONLY 0012'"
         [ "$(gold_of "$WORK/armour.out")" = "9987" ] \
             && ok "CP6 T: gold 9999 -> 9987, the observed charge" \
             || bad "CP6 T: gold is $(gold_of "$WORK/armour.out"), expected 9987"
-        grep -q "SOLD!" "$WORK/armour.out" \
+        said "$WORK/armour.out" "SOLD!" \
             && ok "CP6 T: the yes branch prints SOLD!" \
             || bad "CP6 T: no SOLD! on a yes answer"
     else
@@ -101,18 +109,27 @@ else
         [ "$(gold_of "$WORK/decline.out")" = "9999" ] \
             && ok "CP6 T: answering N leaves gold at 9999 (asm/202B is past the branch)" \
             || bad "CP6 T: a declined purchase took gold: $(gold_of "$WORK/decline.out")"
-        grep -q "OH, WELL." "$WORK/decline.out" \
+        said "$WORK/decline.out" "OH, WELL." \
             && ok "CP6 T: the refusal line is the original's OH, WELL." \
             || bad "CP6 T: expected 'OH, WELL.' on a no answer"
     fi
 
     # (c) weapons: same shape, price index = the digit itself, so item 1 is 0008 and item 3
-    #     is 0020 — the axe number the live stop at asm/20AB produced.
+    #     is 0020 — the axe number the live stop at asm/20AB produced. The offer line is
+    #     "AH! YES! AXE" in the original's own frame (captures/spice86/g23-weapons/w5-axe.png),
+    #     so the shoppe does name the item it is offering; what it does not do is enumerate the
+    #     pool the way cmd_W's menu does, and that is the gap asserted next.
     if run_case weapons weapons 'T\n0xf0\n3\nY\n' "$WORK/weapons.out"; then
-        grep -q "YES! A AXE" "$WORK/weapons.out" \
+        said "$WORK/weapons.out" "AH! YES! AXE" \
             && ok "CP6 T: the north-west half of a town is the weapons shoppe" \
             || bad "CP6 T: no weapons name from (9,5) north"
-        grep -q "YOU ONLY 0020" "$WORK/weapons.out" \
+        for other in MACE PHASER "QUICK SWORD"; do
+            said "$WORK/weapons.out" "$other" \
+                && bad "CP6 T: the weapons shoppe enumerated the pool (found $other)" \
+                || true
+        done
+        ok "CP6 T: the weapons shoppe offers one item and does not list the pool"
+        said "$WORK/weapons.out" "YOU ONLY 0020" \
             && ok "CP6 T: AX quotes 0020, the number asm/20AB was stopped leaving" \
             || bad "CP6 T: expected 'FOR YOU ONLY 0020' for menu item 3"
         [ "$(gold_of "$WORK/weapons.out")" = "9979" ] \
@@ -123,10 +140,10 @@ else
     # (d) transport: no menu digit at all — the horse price is the constant 4 — and the
     #     purchase mounts, which is the only place outside cmd_B the travel mode changes.
     if run_case transport transport 'T\n0xf0\nY\n' "$WORK/transport.out"; then
-        grep -q "GOLD, DEAL, OK" "$WORK/transport.out" \
+        said "$WORK/transport.out" "GOLD, DEAL, OK" \
             && ok "CP6 T: the south-east half of a town is the transport shoppe" \
             || bad "CP6 T: no transport offer from (38,40) north"
-        grep -q "0032" "$WORK/transport.out" \
+        said "$WORK/transport.out" "0032" \
             && ok "CP6 T: a horse quotes 0032 at maxed stats" \
             || bad "CP6 T: expected the horse price 0032"
         [ "$(gold_of "$WORK/transport.out")" = "9967" ] \
@@ -140,7 +157,7 @@ else
     # (e) grocery: a village's north-east half, the constant index 3, and the food byte
     #     moving by ONE in packed decimal (asm/181A), which is not what "PER 100" suggests.
     if run_case grocery grocery 'T\n0xf0\nY\n' "$WORK/grocery.out"; then
-        grep -q "COSTS 0020" "$WORK/grocery.out" \
+        said "$WORK/grocery.out" "COSTS 0020" \
             && ok "CP6 T: the grocery quote is 0020, not the 0200 this project repeated for a week" \
             || { bad "CP6 T: expected 'THE FOOD HERE COSTS 0020'"; sed -n '21,24p' "$WORK/grocery.out"; }
         [ "$(gold_of "$WORK/grocery.out")" = "9979" ] \
@@ -154,7 +171,7 @@ else
     # (f) the pub is dispatched and unimplemented. Silence is the honest answer, and it is
     #     asserted so that a future half-implementation cannot land quietly.
     if run_case pub pub 'T\n0xf0\n' "$WORK/pub.out"; then
-        if grep -qE "WELCOME TO THE PUB|1-BUY" "$WORK/pub.out"; then
+        if said "$WORK/pub.out" "WELCOME TO THE PUB" || said "$WORK/pub.out" "1-BUY"; then
             bad "CP6 T: the pub printed a menu, and commerce.c says it is not implemented"
         else
             ok "CP6 T: the pub quadrant stays silent, matching the documented gap"
@@ -165,14 +182,67 @@ else
     #     and neither may open a shop.
     for c in nosign nomarker; do
         if run_case "$c" "$c" 'T\n0xf0\n' "$WORK/$c.out"; then
-            grep -q "FUNNY, NO R" "$WORK/$c.out" \
+            said "$WORK/$c.out" "FUNNY, NO R" \
                 && ok "CP6 T: ${c} ray refuses with FUNNY, NO RESPONSE!" \
                 || { bad "CP6 T: ${c} should refuse; got:"; sed -n '21,24p' "$WORK/$c.out"; }
-            grep -q "SHOPPE\|COSTS" "$WORK/$c.out" \
-                && bad "CP6 T: ${c} refused and opened a shop anyway" \
-                || ok "CP6 T: ${c} opens nothing"
+            if said "$WORK/$c.out" "SHOPPE" || said "$WORK/$c.out" "COSTS"; then
+                bad "CP6 T: ${c} refused and opened a shop anyway"
+            else
+                ok "CP6 T: ${c} opens nothing"
+            fi
         fi
     done
+    # --- the two command letters first observed on 2026-10-29 -----------------
+    # cmd_R (READY WEAPON) and cmd_N (NEGATE TIME). Both are gated here because both were
+    # read-only-until-this-week, and cmd_N is the letter that had never executed in any harvest.
+
+    # (h) ready a weapon you own and are agile enough for. The seed owns 1..9 except 7, and
+    #     agility is 0x40 = 64 packed, so digit 8 passes and digit 9 (72) does not.
+    if run_case armour cmdr-ok 'R\n3\n' "$WORK/cmdr-ok.out"; then
+        said "$WORK/cmdr-ok.out" "AXE READY." \
+            && ok "CP6 R: READY WEAPON echoes the pool NAME and readies the digit" \
+            || { bad "CP6 R: expected 'AXE READY.'"; sed -n '21,24p' "$WORK/cmdr-ok.out"; }
+    fi
+    if run_case armour cmdr-owned 'R\n7\n' "$WORK/cmdr-owned.out"; then
+        said "$WORK/cmdr-owned.out" "NOT OWNED" \
+            && ok "CP6 R: an unowned weapon is refused on [DS:76 + digit]" \
+            || bad "CP6 R: expected NOT OWNED for the weapon the seed does not hold"
+        said "$WORK/cmdr-owned.out" " READY." \
+            && bad "CP6 R: readied a weapon the seed does not own" \
+            || ok "CP6 R: the refusal path leaves nothing readied"
+    fi
+    if run_case armour cmdr-agile 'R\n9\n' "$WORK/cmdr-agile.out"; then
+        said "$WORK/cmdr-agile.out" "AGILE ENOUGH TO WIELD!" \
+            && ok "CP6 R: digit 9 fails the AGILITY gate (9*8=72 > packed 0x40=64)" \
+            || bad "CP6 R: expected the agility refusal at digit 9"
+        said "$WORK/cmdr-agile.out" "STRONG ENOUGH" \
+            && bad "CP6 R: used cmd_W's strength gate instead of agility" \
+            || ok "CP6 R: the gate is agility, not the armour handler's strength"
+    fi
+
+    # (i) NEGATE TIME spends a STRANGE COIN (items_held[13], which is what DS:E3 is) and sets the
+    #     creature-move freeze counter, which then ticks like the paralysis bytes.
+    if run_case armour cmdn 'N\n' "$WORK/cmdn.out"; then
+        said "$WORK/cmdn.out" "YOU RUB A COIN" \
+            && ok "CP6 N: with a strange coin, NEGATE TIME falls into the coin rub" \
+            || { bad "CP6 N: expected 'YOU RUB A COIN...'"; sed -n '21,24p' "$WORK/cmdn.out"; }
+        items=$(sed -n 's/.*"items":"\([^"]*\)".*/\1/p' "$WORK/cmdn.out" | tail -1)
+        case "$items" in
+            *"00 00 00 00 00 00 00 00 00 00 00 00 00 00"*)
+                ok "CP6 N: the strange coin was spent (items_held[13] -> 0)" ;;
+        *)  bad "CP6 N: items did not lose the coin: $items" ;;
+        esac
+        para=$(sed -n 's/.*"paralysis":"\([^"]*\)".*/\1/p' "$WORK/cmdn.out" | tail -1)
+        case "$para" in
+            "14 "*) ok "CP6 N: DS:26A set to 0x14, the creature-move freeze" ;;
+        *)  bad "CP6 N: DS:26A is '$para', expected 14 ..." ;;
+        esac
+    fi
+    if run_case armour cmdn2 'N\nN\n' "$WORK/cmdn2.out"; then
+        said "$WORK/cmdn2.out" "EINSTEIN" \
+            && ok "CP6 N: with no coin left it refuses and changes nothing" \
+            || { bad "CP6 N: expected the second N to refuse"; sed -n '21,24p' "$WORK/cmdn2.out"; }
+    fi
 fi
 
 printf '\n'
