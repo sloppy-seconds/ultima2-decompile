@@ -1966,3 +1966,52 @@ times in one screen.
 **Also corrected by a frame, not a listing:** the weapons shoppe's offer prefix. The binary holds
 `AH! YES! ` and `AH! YES! A `; the code had the second, and `w5-axe.png` shows `AH! YES! AXE`. See
 `docs/commerce.md` § 5e.
+
+## cmd_S lands, three owner corrections, and a Z teardown that was not (2026-10-29)
+
+Three of the owner's recollections about the unimplemented letters were checked against the
+bytes, and all three were better than what this project had written down.
+
+* **`cmd_S` is not combat.** This file and `commands.c` both said its effect was "modelled in
+  `combat.c` for CP5 ticket C6 and merely unwired". That conflated `asm/3F5D_steal_attempt`
+  (the player robbing a shoppe) with `asm/0FCD_combat_thief_steal` (a THIEF monster emptying
+  one of the player's slots mid-fight). The only thing they share is the English word. The
+  real command is now implemented and gated.
+* **`cmd_F` is not the attack arm.** `asm/35C9` gates on `[DS:13] == 0x24`, the ship stamp from
+  `asm/2FAD`'s BOARD dispatch, so FIRE is the frigate's cannon and off the ship the entire
+  command is `FIRE WHAT?`. Then it prints ` DIRECT-` and uses the aim gate: an aimed cannon.
+  `cmd_A` is the attack. The old note was a guess from the word.
+* **`cmd_G` is parked with dungeons** (owner, same day), alongside `cmd_D` and G47.
+
+**What `cmd_S` turned out to be.** The same two-cell ray as TRANSACT, at the same merchant
+marker, through the same `asm/2362` gate — whose call sits at `asm/3F36` as a bare forced-keep
+`e8`, the third time that storage choice has hidden a real edge. No creature scan anywhere.
+Two coin-flip rolls, then the quadrant the *player* is standing in decides which category falls
+off the shelf: village north-east gives food, town north-east gives armour, town north-west gives
+weapons, and everything else is `NO LUCK!`. A THIEF skips one of the two rolls rather than being
+required, so the recollection that it "probably needs a thief" is half right, and "can steal from
+shops" is entirely right. The high-end goods are unreachable by construction: `roll & 3` and
+`roll & 7` with a `+1`, so REFLECT and POWER armour and the QUICK SWORD can never be stolen.
+
+The branch table is gated purely (`u2_steal_loot_for`, 14 checks, including all five cells that
+must *not* pay). The end-to-end half asserts the invariant the rolls cannot make deterministic —
+printed line and mutated bytes must agree — plus a case with `--rng-state 000000000000` to force
+the success arm, because the default seed refused it on forty consecutive runs and a gate that
+only ever sees `NO LUCK!` would pass a broken FOOD branch.
+
+**And `cmd_S` exposed a real defect in `cmd_Z`.** The CP5 gate "Z leaves no trace" compares a run
+that opened the status page against a run that did not, using `S` as the inert probe key. `S` was
+inert because it was unimplemented. The moment it printed anything, the diff showed the next
+command's text landing two rows too high: `cmd_Z` snapshots the `u2_vram` on the way in and puts
+it back on the way out, but the text cursor the seams actually walk is
+`ctx->state.cursor_row/cursor_col` (DS:2E/2F), and `u2_status_draw_full` leaves that wherever the
+item lists ended. The teardown's own comment claimed "the cursor goes back with it", which was
+true of the vram's drawing position and false of the one that matters. Fixed by snapshotting the
+text cursor and both margins alongside the vram.
+
+Worth saying about the gate itself: it was not wrong, and it should not be weakened. It was
+designed to compare whole screens rather than grep for item names precisely so a broken teardown
+could not pass, and it caught this the first time the probe key produced output. The lesson is
+about probe keys, not about the assertion — an inert probe is a gate that is quietly checking
+nothing, and "inert" is a property of the world that can expire without warning when someone
+implements the letter you were leaning on.

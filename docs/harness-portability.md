@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A regression gate whose probe input is inert is a gate that is quietly checking
+  nothing, and inertness expires.** A screen-diff test compared "open the overlay, dismiss it,
+  press K" against "press K", where K was a command letter the engine had never implemented. It
+  had passed for weeks. The moment K was implemented and started printing, the diff went red and
+  showed the overlay's teardown had been restoring the wrong cursor variable all along — the
+  snapshot covered the structure that *owned* the drawing position, while every printer walked a
+  different field with a similar name, in a struct that also happened to be named as though it
+  held the player's position when it held a staged candidate cell. Two rules: pick probe inputs
+  that produce observable output, because a probe that changes nothing can only ever detect
+  nothing; and when a teardown claims to leave no trace, verify it by making the next action
+  visible rather than by asserting on the screen at the moment of teardown. The gate itself was
+  right and should not be relaxed — it was built to diff whole screens precisely so a plausible
+  re-draw could not pass, and it did its job the first time the probe had any effect.
 * **2026-10-29 — An emitter that escapes bytes into a source literal has to know that language's
   escape grammar, not just its escape character, and the failure it produces is a plausible wrong
   string rather than a compile error.** The string extractor emitted every non-printable byte as a

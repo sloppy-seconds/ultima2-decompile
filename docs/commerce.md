@@ -668,6 +668,35 @@ one nobody has seen printed, is exactly the situation where a listing picks the 
 complete confidence.** The frame cost nothing and the wrong prefix had already been written into
 code.
 
+### 5f. STEAL uses this same ray, and pays out by quadrant — 2026-10-29
+
+`cmd_S` was filed in `commands.c` as combat-adjacent and "already modelled in `combat.c`", which
+was wrong twice over: it is not combat, and the routine it was confused with
+(`asm/0FCD_combat_thief_steal`) is a monster stealing from the player. What `asm/3F25` actually
+does is aim **this same two-cell ray** — near cell a sign or `0x7C`, far cell the merchant marker
+`0x68` — through the same `asm/2362` gate, whose call sits at `asm/3F36` as a bare forced-keep
+`e8`.
+
+There is no menu, no price and no creature scan. Two rolls decide luck, and then the § 5d quadrant
+table decides what category of goods simply appears in the inventory:
+
+| site kind | player's quadrant | result |
+| --- | --- | --- |
+| village (1) | north-east | `STEAL FOOD!` — `[DS:53] += 1`, the same byte buying food moves |
+| town (2) | north-east | `STEAL ARMOUR!` — random of 4, `[DS:96 + i + 1] += 1` |
+| town (2) | north-west | `STEAL WEAPONS!` — random of 8, `[DS:76 + i + 1] += 1` |
+| anything else | — | `NO LUCK!` |
+
+Three things worth having written down. The selector has eight cells and this table has three
+filled ones, so a correctly-aimed steal at a transport shoppe, a shrine, a pub, a magic shoppe or
+a clue seller is `NO LUCK!` **by design and not by omission** — that is the whole of what the game
+can do. The `+1` in both array writes means slot 0 is never stolen (HANDS) and, as a side effect,
+so is the top of each list: REFLECT and POWER armour and the QUICK SWORD are unreachable. And
+nothing is taken *from* the vendor, because there is no stock to take from; the owned-count arrays
+just go up.
+
+A THIEF (`[DS:47] == 3`) skips one of the two rolls and is not required for the command to work.
+
 ## 6. Why G21 was never answered — a boundary defect (this is G22)
 
 `asm/19D7_magic_shop_menu.asm` declares `# func 19D7..2027`, **0x651 bytes**, and
