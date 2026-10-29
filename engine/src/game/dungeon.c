@@ -345,15 +345,16 @@ static void dg_scan_build(const u2_ctx *ctx, const u2_overworld *ow, dg_scan *s)
  * the four pixels inside one video byte get lit. So one record paints a run of one to
  * four pixels, and a creature is a list of those runs.
  *
- * The base pointer is where the honesty goes. asm/68ED has two arms:
- *   di == 1 (nearest):  base = [DS:474] + (stamp << 8)   -> the stamp's own 256-byte block
- *   di >= 2 (further):  base = [DS:474] + cs:[0x697E+di] -> NO stamp term
- * The ladder table is 00 00 80 C0 E0 F0 F8 FC, and every one of those offsets lands
- * inside block 0, which is empty — so read literally, the original draws a sprite only
- * for a creature in the cell directly ahead, and every creature further off is
- * invisible. That is what the bytes do, so that is what this does, and the alternative
- * readings (the ladder indexes inside the type's block; or [DS:474] is re-pointed per
- * creature before the call) are recorded rather than assumed. A capture settles it.
+ * The base pointer is where the design shows. asm/68ED has two arms:
+ *   di == 1 (nearest):  base = [DS:474] + (stamp << 8)   -> the type's own 256-byte block
+ *   di >= 2 (further):  base = [DS:474] + cs:[0x697E+di] -> block 0's tail, no type term
+ * That second arm looks like a dropped operand and is not one. Blocks 1..7 each hold one
+ * full-detail creature; block 0's tail holds the ladder the far arm indexes — 24 records
+ * at 0x080, 6 at 0x0C0, 4 at 0x0E0, 2 at 0x0F0, 1 at 0x0F8, which plot as a 6x4 blob, then
+ * 2x3, 2x2, 1x2, 1x1. A deliberately typeless simplification series: the nearest creature
+ * gets its own art and everything further out gets a generic silhouette, because at that
+ * size the type would not be legible. Plotting the shapes is what established this, and it
+ * is stronger evidence here than a screenshot would have been.
  */
 static const uint8_t DG_PATTERN[8] = { 0xff, 0x11, 0x88, 0xcc, 0x33, 0x00, 0x00, 0x00 };
 static const uint8_t DG_DEPTH_LADDER[8] = {

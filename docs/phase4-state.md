@@ -2302,18 +2302,22 @@ Three hours later the creatures draw, and the reason it looked blocked is worth 
   three-byte reading produces plausible garbage that still looks vaguely like a shape,
   which is the dangerous kind of wrong.
 * The confirmation was a plot, not a proof: eight 256-byte blocks, seven distinct creature
-  silhouettes, block 0 empty. `asm/07F3`'s `CX = 0x800` = 8 × 256 is what says the block
-  index is the dungeon type, and the near arm's `add ax,[DS:474]` over the stamp byte
-  scales by exactly 256, which agrees.
-* **One thing is genuinely unresolved and the engine reproduces the bytes rather than a
-  theory about them.** The far arm of `asm/68ED` overwrites `ax` with `[DS:474]` *after*
-  `ah` held the stamp, so the type term is dropped, and the depth ladder
-  `cs:697E = 00 00 80 C0 E0 F0 F8 FC` then lands every further depth inside empty block 0.
-  Read literally, the original draws a sprite only for a creature in the cell directly
-  ahead and every creature further off is invisible. That is what `u2_dungeon_sprites()`
-  does. A capture would promote or refute the literal reading, and it is agent-drivable
-  now — but it is a confirmation, not a prerequisite, which is the whole difference between
-  this and how the item was filed.
+  silhouettes, and a shared distance ladder in block 0's tail. `asm/07F3`'s `CX = 0x800`
+  = 8 × 256 is what says the block index is the dungeon type, and the near arm's
+  `add ax,[DS:474]` over the stamp byte scales by exactly 256, which agrees.
+* **One reading I got wrong the same afternoon, and the shapes themselves refuted it.** The
+  far arm of `asm/68ED` overwrites `ax` with `[DS:474]` *after* `ah` held the stamp, so the
+  type term is dropped — and my first conclusion was that the ladder must therefore land in
+  an empty block 0, so the original drew a sprite only for the creature directly ahead.
+  Wrong, and wrong in the instructive way: block 0 is not empty, it merely starts with a
+  zero byte, so a parser that begins at offset 0 sees nothing. The ladder offsets are
+  absolute into block 0's tail, and plotted they are a 6x4 blob, then 2x3, 2x2, 1x2, 1x1 —
+  a deliberately **typeless distance-simplification series**. The nearest creature gets its
+  own art; everything further out gets a generic silhouette, because at that size the type
+  would not be legible. The far arm dropping the type term is the design, not a bug.
+  The lesson is not "capture beats static": plotting the data settled it better than the
+  screenshot I had scheduled would have. A static reading that predicts something absurd
+  should send you back to the bytes, not into a run.
 * The gate asserts sprites with a **control**, not a threshold: the same run with and
   without `monsters` in the content directory, and the centre band must differ (591 vs 490
   pixels). Disabling the sprite pass was shown to make it red. A bare "ink > N" assertion

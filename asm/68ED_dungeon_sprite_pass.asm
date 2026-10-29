@@ -16,14 +16,18 @@
 # Plotting the file that way yields seven distinct creature silhouettes and an empty
 # block 0, which is the confirmation that the framing was right.
 #
-# The block layout falls out of asm/07F3's CX = 0x800: 2048 bytes is eight blocks of 256,
-# and the near arm's `add ax,[DS:474]` over the stamp byte scales by exactly 256, so
-# block index == dungeon type. What is NOT settled is the far arm: it overwrites ax with
-# [DS:474] AFTER ah held the stamp, so the type term is dropped and the ladder table
-# cs:697E = 00 00 80 C0 E0 F0 F8 FC lands every further depth inside empty block 0.
-# Read literally, the original draws a sprite only for a creature in the cell directly
-# ahead. The engine reproduces the bytes rather than the theory, and a capture is what
-# would promote or refute the literal reading.
+# The block layout falls out of asm/07F3's CX = 0x800: 2048 bytes is eight blocks of 256.
+# Blocks 1..7 each hold ONE full-detail creature, and block 0's tail (0x080..0x0FF) holds
+# the depth ladder cs:697E = 00 00 80 C0 E0 F0 F8 FC indexes into: 24 records at 0x080,
+# 6 at 0x0C0, 4 at 0x0E0, 2 at 0x0F0, 1 at 0x0F8. Plotted, those are a 6x4 blob, then
+# 2x3, 2x2, 1x2, 1x1 — a deliberately typeless simplification series.
+#
+# So the far arm dropping the type term is the design and not a bug. The nearest creature
+# gets its own art; everything further out gets a generic silhouette, because at that size
+# the type would not be legible anyway. The near arm's `add ax,[DS:474]` over the stamp
+# byte scales by exactly 256, which is what makes block index == dungeon type, and the two
+# arms are consistent with each other once the ladder is read as an absolute offset into
+# block 0 rather than as a displacement inside the type's block.
 # func 68ED..6998  len 00AC B  evidence: call+reko
 # calls: L_006aa3, L_006b3a
 # provenance: static, read in full 2026-10-29 for CP7. [DS:474] = 0x2900 is read out of
