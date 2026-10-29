@@ -3,7 +3,8 @@
 #           exists and no word equal to its runtime address appears anywhere in the
 #           image. The live chain is asm/35F3 (store slot index to [DS:20]) ->
 #           asm/3603 (call the RNG L_005417) -> asm/3606 (`or $0x20,%al;
-#           mov %al,0x1F`, so the damage byte is rand|0x20, i.e. 32..63) ->
+#           mov %al,0x1F`, so the damage byte is rand|0x20 — every byte with bit 5 set, floor 32
+#           and ceiling 255, NOT 32..63 as this header used to say) ->
 #           asm/360E -> here, which rebuilds DI from [DS:20] and `jmp L_002e19`
 #           into asm/2C19_monster_hp_subtract. After the subtract returns it tests
 #           the site kind (`cmpb $0x4,[DS:4A]`) and, below tower, stamps 0x8 into a
