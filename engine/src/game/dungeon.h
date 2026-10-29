@@ -145,17 +145,20 @@ int u2_dungeon_light_step(u2_ctx *ctx);
  * cannot produce it, since every authored value is a multiple of 0x10 and a stamp is
  * 1..7, but the collision is real and named here rather than hidden.
  *
- * What a creature reaching the PLAYER does is NOT implemented. Runtime 0x1508 lives in
- * asm/12DB_dungeon_events and is a separate decode; until it is done a creature that
- * would step onto the player simply does not move, which is what the overworld sweep
- * does on contact (see ai.h: the original has no attack-on-contact). */
+ * What a creature reaching the PLAYER does is asm/12DB_dungeon_events runtime 0x1508, and
+ * it is NOT a general attack: one roll in four, and only dungeon types 2, 5 and 7 act —
+ * a blown torch, a stolen food unit, and sleep. Types 1, 3, 4 and 6 reach you and do
+ * nothing. See dg_contact() for the arms and for the one branch of that routine the engine
+ * still understates (the failed roll falls into an armour-gated spell block that is not
+ * decoded). */
 typedef struct u2_dg_ai_report {
-    int examined;    /* non-empty slots the sweep looked at                     */
-    int moved;       /* slots that changed cell                                */
-    int fled;        /* slots whose vector was negated for being under 15 HP    */
-    int off_floor;   /* slots refused by asm/143C's floor test                 */
-    int bump;        /* slots that ended their turn on another creature's cell  */
-    int contacts;    /* slots that would have stepped onto the player (unhandled)*/
+    int examined;    /* non-empty slots the sweep looked at                      */
+    int moved;       /* slots that changed cell                                 */
+    int fled;        /* slots whose vector was negated for being under 15 HP     */
+    int off_floor;   /* slots refused by asm/143C's floor test                  */
+    int bump;        /* slots that ended their turn on another creature's cell   */
+    int contacts;    /* slots whose candidate step was the player's cell         */
+    int effects;     /* contacts that landed one of the three asm/12DB arms      */
 } u2_dg_ai_report;
 
 u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow);

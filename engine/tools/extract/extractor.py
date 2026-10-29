@@ -270,6 +270,14 @@ MANIFEST = [
     # caller prints the CR, which is the asm/3BE4 convention used everywhere else.
     ("U2_S_ITS_DARK",          "1151_dungeon_turn.asm", ("run", 0x149F, 10, "IT'S DARK!")),
     ("U2_S_TORCH_BURNED_OUT",  "1151_dungeon_turn.asm", ("run", 0x14B7, 17, "TORCH BURNED OUT!")),
+    # asm/12DB's three dungeon contact arms. Each is reached from runtime 0x1508 when a
+    # creature's candidate step is the player's cell, gated on a roll under 0x40 and on the
+    # creature's type: 2 blows the torch, 5 is the gremlin that steals food, 7 puts you to
+    # sleep. All three carry the same 8d 00 tail as the two above, so the CR is part of the
+    # emitted bytes and the caller must not add a second one.
+    ("U2_S_TORCH_BLOWN_OUT",   "12DB_dungeon_events.asm", ("run", 0x15B5, 24, "YOUR TORCH IS BLOWN OUT!")),
+    ("U2_S_GREMLIN_STOLE",     "12DB_dungeon_events.asm", ("run", 0x15DD, 26, "A GREMLIN STOLE SOME FOOD!")),
+    ("U2_S_STRONG_MAGIC",      "12DB_dungeon_events.asm", ("run", 0x1614, 24, "YOU FEEL A STRONG MAGIC!")),
     # GET's site arm (asm/363B, runtime 0x36C3). " CHEST!" keeps its leading space because
     # the binary has it, and "IT CONTAINS " follows the same str_out call separated by the
     # 0x8d marker, so the caller emits the CR between them.

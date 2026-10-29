@@ -566,6 +566,77 @@ static int dg_probe_cell(const u2_ctx *ctx, const u2_overworld *ow,
     return u2_world_dungeon_at(&ow->world, fl, nx, ny);
 }
 
+/* asm/12DB_dungeon_events runtime 0x1508: a creature whose candidate step is the
+ * PLAYER's cell.
+ *
+ * This is the answer to "should they attack me on contact", and the answer is no, not in
+ * the general case. The bytes roll once and only act on a roll under 0x40 — one attempt in
+ * four — then switch on the creature's dungeon type, and only three of the seven types do
+ * anything at all:
+ *
+ *   type 2  runtime 0x13AB  YOUR TORCH IS BLOWN OUT!   zeroes the light counter, but ONLY
+ *                           if it is already non-zero; in the dark the arm prints nothing
+ *                           and changes nothing, so a gremlin in a pitch-black corridor
+ *                           is silent and that silence is the original's.
+ *   type 5  runtime 0x13DA  A GREMLIN STOLE SOME FOOD!  one BCD unit off the food triple.
+ *   type 7  runtime 0x1410  YOU FEEL A STRONG MAGIC!    paral_sleep := rand & 7.
+ *   else                    nothing.
+ *
+ * So the dungeon's danger is your light, your food and your consciousness, not your hit
+ * points. Melee damage in a dungeon comes from your own ATTACK exchanges, exactly as the
+ * overworld has no attack-on-contact (see ai.h). Every effect prints, which is what keeps
+ * this project's "no silent mutation" rule satisfied by construction here.
+ *
+ * NOT modelled, and deliberately: the roll >= 0x40 branch does not go to the next slot, it
+ * falls into runtime 0x153E, a second event block that re-checks the floor, calls
+ * asm/60AC, rolls, masks to 0..7 and compares against [DS:62] — which state.h names
+ * worn_armour. That is an armour-gated creature spell and it is a separate decode with
+ * three unnamed helpers behind it (asm/60AC, asm/60F2, asm/4D26). Treating a failed roll
+ * as "nothing happened" is a known understatement, named here rather than hidden.
+ *
+ * asm/5C95, called after each of the three prints, is a seven-byte gate on [DS:54D] and is
+ * not an effect; the engine's print seam already owns message display. */
+static void dg_contact(u2_ctx *ctx, u2_dg_ai_report *rep, int di)
+{
+    u2_state *st = &ctx->state;
+
+    /* runtime 0x1509. */
+    if (seam_rand_byte(ctx) >= 0x40) { rep->contacts++; return; }
+
+    /* runtime 0x1518: the creature has to be on the floor the player is standing on. */
+    if ((int8_t)st->mon_kind[di] != (int8_t)st->site_floor) return;
+
+    switch (st->mon_type[di]) {
+    case 2:
+        /* runtime 0x13AB. The zero test comes FIRST: already dark means no message. */
+        if (st->moved_flag == 0) break;
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_TORCH_BLOWN_OUT);
+        st->moved_flag = 0;
+        rep->effects++;
+        break;
+    case 5:
+        /* runtime 0x13DA: `stc; cmc` clears CF, then `sbb $0x1 / das / cmc` is the usual
+         * BCD subtract-by-one, on the low digit of the food triple. */
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_GREMLIN_STOLE);
+        (void)u2_overworld_spend_food(ctx, 0x01u);
+        rep->effects++;
+        break;
+    case 7:
+        /* runtime 0x1410: DS:26D is paral_sleep, the sleep-turns counter state.h already
+         * carries for the spell that writes it. */
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_STRONG_MAGIC);
+        st->paral_sleep = (uint8_t)(seam_rand_byte(ctx) & 0x07u);
+        rep->effects++;
+        break;
+    default:
+        break;
+    }
+    rep->contacts++;
+}
+
 u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow)
 {
     u2_state *st = &ctx->state;
@@ -603,7 +674,7 @@ u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow)
              * cell, not a literal 0 — this tree writes immediates with `$`. Reaching
              * the player is asm/12DB's problem and is not decoded, so the creature
              * does not move. Same outcome the overworld sweep reaches on contact. */
-            if (nx == px && ny == py) { rep.contacts++; done = 1; break; }
+            if (nx == px && ny == py) { dg_contact(ctx, &rep, di); done = 1; break; }
 
             const int r = dg_probe_cell(ctx, ow, di, nx, ny);
             if (r == 0) {

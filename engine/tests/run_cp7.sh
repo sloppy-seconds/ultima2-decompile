@@ -115,8 +115,15 @@ else
     # A frame is the only evidence that the renderer drew geometry at all: asm/6000
     # draws nothing in the dark, so the dark frame and the lit frame must differ and
     # the lit one must have ink in the map window and not only in the text band.
-    if [ -f "$WORK/walk/frame.ppm" ] && [ -f "$WORK/enter/frame.ppm" ]; then
-        python3 - "$WORK/walk/frame.ppm" "$WORK/enter/frame.ppm" <<'PY' && ok "CP7 render: the lit frame draws wireframe geometry" || bad "CP7 render: the lit frame drew no geometry"
+    #
+    # The lit frame comes from the `light` case and not the `walk` case, and that is a
+    # real correction rather than a tidy-up. Once asm/12DB's contact arms were wired, a
+    # type-2 creature could blow the torch out mid-walk, so the walk frame was no longer
+    # guaranteed to be lit — the assertion had become a coin flip on the spawner. Dark vs
+    # lit at the SAME cell, with no movement turns between them, is the comparison the
+    # section actually wants: it isolates asm/6000's light branch and nothing else.
+    if [ -f "$WORK/light/frame.ppm" ] && [ -f "$WORK/enter/frame.ppm" ]; then
+        python3 - "$WORK/light/frame.ppm" "$WORK/enter/frame.ppm" <<'PY' && ok "CP7 render: the lit frame draws wireframe geometry" || bad "CP7 render: the lit frame drew no geometry"
 import sys
 
 def load(p):
