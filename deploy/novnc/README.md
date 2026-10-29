@@ -10,25 +10,46 @@ the same shape pointed at our own binary.
 
 ```sh
 cd /var/home/paul/Projects/decompile-u2-v2
-make -C engine sdl                                  # the binary is built on the host
-cp engine/u2-sdl deploy/novnc/u2-sdl
-podman build -t u2-novnc:latest deploy/novnc/
+./deploy/novnc/up.sh
+#   --cleanroom   deliberately ship the substitute art
+#   --port N      host port (default 6082; 6081 is taken by an unrelated container)
+#   --status      print what the running container is actually drawing
+#   --down        stop and remove it
+```
 
+**Use `up.sh` rather than the manual chain.** Until 2026-10-29 this README documented a
+hand-run sequence of `make` / `cp` / `podman build` / `podman run`, and that sequence is
+how a player got art they had not asked for. The build ran behind a swallowed redirect, so
+a build that quietly did not rebuild produced no signal, and whatever `engine/u2-sdl`
+happened to be got copied into the image. Nothing between `make` and the running container
+looked at the artifact.
+
+`up.sh` checks the artifact at four points: the build runs with output visible, the binary
+must be newer than every source it is built from (or it forces a clean rebuild), the
+binary is **run** and must announce the art mode it was asked for, and after the container
+starts its own log must say the same. The third check is the load-bearing one: it catches a
+stale binary, a wrong default, a dropped flag, or a build system that did nothing, and it
+does not care which. It has a control -- a planted wrapper that prints the substitute-art
+line makes `up.sh` exit 1 and refuses to stage the binary.
+
+If you want to seed a character or change the save dir, the manual steps below are still
+the right reference for that; they are just no longer the way to deploy.
+
+<details>
+<summary>Manual steps, for seeding a character or picking a different port</summary>
+
+```sh
 mkdir -p /var/tmp/u2/novnc-saves
-cp /var/tmp/u2/saves/tiles.u2tl /var/tmp/u2/novnc-saves/
 cp original/player /var/tmp/u2/novnc-saves/PLAYER
 tools/u2_edit.py set /var/tmp/u2/novnc-saves/PLAYER sector 20
 tools/u2_edit.py setpos /var/tmp/u2/novnc-saves/PLAYER 20 20
-
-podman run -d --name u2-novnc \
-  -p 6081:6081 \
-  -v "$PWD/original:/content:ro,z" \
-  -v /var/tmp/u2/novnc-saves:/saves:z \
-  u2-novnc:latest
-
-# then, from anything on the LAN:
-#   http://ai.lan:6081/vnc.html
 ```
+
+Do not copy a `tiles.u2tl` into the save dir to "help" it. It is a cache the engine writes
+for itself, and the cleanroom path never overwrites it, so a stale one sits there looking
+like evidence about a run that is not happening -- it cost one investigation its correct
+conclusion. `up.sh` deletes it on every deploy.
+</details>
 
 Keyboard from the browser reaches the game, so this is play, not watching: arrow keys
 walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
