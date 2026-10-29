@@ -2053,3 +2053,33 @@ of `attack_check` asserted the tree's claim and went red on seeds 21, 22 and 23.
 lesson worth keeping — **a cited comment is a hypothesis, and the citation being in our own tree
 does not promote it.** The owner's 32 matches the floor exactly; 70 is not reachable at all, since
 bit 5 is clear in it.
+
+### ...and then a live run settled the range the same day (G49a closed)
+
+`captures/spice86/cannon-range-live`. The boarding that G49 assumed was the blocker turned out not
+to be one: `asm/35C9` reads `[DS:13]` and nothing else, so the frigate state is one poke, and the
+target is four more. The only real obstacle was that a planted creature wanders, which `DS:26A`
+fixes — the freeze counter NEGATE TIME was proven to set a few hours earlier, doing unpaid work as
+a test rig.
+
+Fired East with the same keypress at three distances: **1 hit twice** (`mon_hp` `0x99→0x5B`, then
+`0x99→0x76`), **2 missed**, **3 missed**. The repeatability at range 1 is what makes the misses a
+finding rather than a bad roll. Every address in the chain is in the capture's
+`ExecutedInstructions`, so the reading is `observed`.
+
+**The cannon reaches one cell. The three-space memory is refuted by the game itself.** Two extras
+came free, both of which were static readings an hour before:
+
+* **A hit prints nothing.** The frame shows `FIRE DIRECT-EAST` with no `--MISS` and no damage line.
+  The cited silence in `asm/35F0..asm/3611` was right.
+* **HP is decremented in binary on a BCD-looking field.** `0x99 - 0x3E = 0x5B`, and `asm/2C19` has
+  no `das`. The engine already did this; the note exists so nobody "corrects" it toward decimal.
+
+One harness lesson, because it cost a wasted round: at the default `--keys` spacing the aim gate
+(`asm/2362`, which polls a bounded number of times and then prints `PASS`) gave up before the
+arrow arrived, and the frame read `CMD: FIRE DIRECT-PASS` with the arrow landing later as a stray
+command. `--delay 0.05` fixes it. A `--PASS` on an aim prompt in a capture is usually this, and it
+is the harness, not the game.
+
+Still open from G49: a cannon **kill** has never been seen, so the no-reward reading stays static,
+and no cannon has ever been fired after a real `BOARD`.

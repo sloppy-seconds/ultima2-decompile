@@ -368,16 +368,22 @@ int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
  * established") — the slot is the one-cell creature probe and the magnitude is a forced-low
  * random byte. It also means asm/3611 is not the town-NPC damage path it was once promoted to.
  *
- * What it does NOT close is the RANGE, and the owner's recollection and the bytes disagree here.
- * The recollection is a 3-space cannon, which is what makes shelling a shore from 2-3 tiles out
- * safe. The bytes say one cell: asm/23E6 seeds its cursor at player + delta and compares every
+ * What it does NOT close is the RANGE, and the owner's recollection and the bytes disagreed here
+ * until a live run settled it. The recollection was a 3-space cannon, which is what makes shelling
+ * a shore from 2-3 tiles out safe. The live game says ONE CELL: targets planted at 1, 2 and 3
+ * cells east and fired at with the same keypress hit twice at distance 1 and missed at 2 and 3
+ * (captures/spice86/cannon-range-live, 2026-10-29 — the frigate state built by poking [DS:13],
+ * the target by planting mon_type/x/y with [DS:26A] frozen so it could not wander). The static
+ * reason agreed all along: asm/23E6 seeds its cursor at player + delta and compares every
  * creature against that single cell, and its own header carries a standing warning that it is
- * "not a ray with a reach". cmd_T builds a two-cell ray by stepping the cursor twice in its own
- * body; cmd_F has no such stepping, and the only call between the aim gate and the probe is a
- * tone wrapper that pushes four registers and does not touch DS:19/1A. So the engine implements
- * one cell, and the disagreement is open as G49 in docs/needs-gameplay.md rather than being
- * resolved by whoever typed the code. The low end of the damage agrees exactly (32), which is
- * the strongest sign that this IS the mechanic being remembered and only the reach is in doubt.
+ * "not a ray with a reach"; cmd_T builds a two-cell ray by stepping the cursor twice in its own
+ * body and cmd_F has no such stepping. Now both witnesses agree, and the frame is the one that
+ * cannot be argued with.
+ *
+ * The same capture confirmed two things this file had only inferred. A successful cannon prints
+ * NOTHING — the frame shows `FIRE DIRECT-EAST` with no `--MISS` and no damage line — and the HP
+ * subtract is plain binary on a BCD-looking field (0x99 - 0x3E = 0x5B, and asm/2C19 has no das),
+ * which is what `apply_damage_to_slot` already does.
  *
  * The tone is deliberately not emitted. seam_tone wants a PIT divisor and a duration, and
  * asm/5DA9's header says its frequency arithmetic "is inferred and has not been confirmed
