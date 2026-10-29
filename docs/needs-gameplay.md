@@ -728,9 +728,14 @@ enough to test a great many mechanics against the original. That is where the ef
 **What remains, and why it is not cheap after all:**
 
 - **D** — needs a dungeon; parked per AGENTS.md § 3.
-- **N** — `NEGATE TIME` falls through into `asm/3BDD` (`mov 0xe3,%al`), not `cmd_done`. Now
-  worth a targeted run: Y's behaviour suggests the fall-through leaves the loop in a text-
-  collecting state, and that is testable headless.
+- **N** — ~~`NEGATE TIME` falls through into `asm/3BDD` (`mov 0xe3,%al`), not `cmd_done`.~~
+  **CLOSED 2026-10-29** by `captures/spice86/cmd-nr-live`, which was the letter's first execution
+  in 187 harvests. The fall-through is into `asm/3C04` (the coin rub) and it is not a text-collecting
+  state: `DS:E3` is `items_held[13]`, which the name table at file 0x501D calls STRANGE COIN, so
+  NEGATE TIME spends a strange coin and stores `0x14` into `DS:26A`, the creature-move freeze
+  counter. Both branches are on a frame, with the byte read either side, and the engine implements
+  it (`engine/src/game/commerce.c`'s sibling in `commands.c`, gated by `make test-cp6`). The same
+  capture closed `cmd_R`.
 - **V, W** — need a character seeded to *own* items and armour. `tools/u2_edit.py` can set
   position, stats and gold but not the item bytes yet; extending it is the prerequisite.
 
@@ -755,8 +760,8 @@ above — one seeded character, one sector, a run down the letters):
   part is what they do *not* do: `cmd_J`'s message promises a jump the body never performs, and
   the manual says that is on purpose (see finding 2 above).
 - **Y** — no longer in this group. `asm/4542` falls into a freeform echo loop at `asm/4551..4567`
-  terminated by Enter, implemented and gated. `cmd_N` is the letter still falling through into a
-  fragment whose end is not established.
+  terminated by Enter, implemented and gated. `cmd_N` was the letter still falling through into a
+  fragment whose end is not established, and it is closed too — see the list above.
 - **C, S, O, T** — print a prompt ending in a dash and consume a direction, like `U` already does.
   The direction is the whole question: which cell is aimed at, and what the effect is when the
   aim lands. `S`'s effect is already modelled in `combat.c` for CP5 ticket C6 and merely unwired.

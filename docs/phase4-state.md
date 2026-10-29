@@ -1840,7 +1840,9 @@ live — at `DS:25 = 1` a held `mon_kind = 1` creature in the facing cell was hi
 one was refused. Odd rule, and it is the game's.
 
 `cmd_D` ran for the first time in this capture, which halves the never-executed-handler gap: `cmd_N`
-(NEGATE TIME) is now the only letter with no execution evidence.
+(NEGATE TIME) is now the only letter with no execution evidence. **Superseded the same day** —
+`captures/spice86/cmd-nr-live` ran `cmd_N` twice, so all 26 letters have now executed somewhere in
+the corpus. See the READY WEAPON / NEGATE TIME section at the end of this file.
 
 ## CAST's KILL and BLINK arms, observed (2026-10-29)
 
@@ -1920,3 +1922,47 @@ listed as not-evidenced were not waiting on gameplay — they were waiting on th
 * **A purchase now redraws the status band.** The engine's `creature_turn()` does not, so gold
   bought things while the band kept showing the old number. The redraw sits in the TRANSACT arm
   where the mutation happened, with the reason in the comment.
+
+## cmd_R and cmd_N land, and the string emitter had been lying for weeks (2026-10-29)
+
+`captures/spice86/cmd-nr-live` — one headless run, maxed Fighter in sector 32, two command letters.
+`cmd_R` (READY WEAPON) had executed in a few harvests but had never been read branch by branch, and
+`cmd_N` (NEGATE TIME) had never executed at all in 186 harvests. Both are now implemented in
+`engine/src/game/commands.c` and gated by `make test-cp6` (nine new cases).
+
+* **`cmd_R` is `cmd_W`'s shape with a different stat.** Menu of nine, digit, pool name echoed, then
+  ownership on `[DS:76 + digit]` and a gate on **agility** (`DS:4C`) against `digit * 8`, and on
+  success `DS:61 = digit`. Copying the armour handler is the trap: that one gates on strength. The
+  packed-byte rule applies identically — agility `0x40` is 64 stored, so digit 8 passes and digit 9
+  (72) does not, for a maxed character. The weapon pool index equals the menu digit, which the pool
+  itself confirms independently: `HANDS DAGGER MACE AXE BOW SWORD GREAT-SWORD LIGHT-SWORD PHASER
+  QUICK-SWORD` abbreviates to exactly `1-DA … 9-QU`.
+* **`DS:E3` is not a counter and was never one.** `items_held` is 16 slots from `DS:D6`, so `DS:E3`
+  is `items_held[13]`, and the name table calls slot 13 STRANGE COIN. NEGATE TIME **spends a strange
+  coin**: none left prints ` HOW?` / `YOU'RE NOT EINSTEIN`, one or more falls into `asm/3C04`, which
+  decrements the count in packed decimal, prints `YOU RUB A COIN...` and stores `0x14` into `DS:26A`.
+  The `0x01` that looked like a mystery charge on the seeded character was maxout handing out one of
+  every item. This is the "look it up before you investigate it" rule biting again: `state.h` already
+  documented that `items_held` runs to `0xE5` inclusive, and the near-miss was adding a `counter_E3`
+  field inside an array that was already named.
+* **`DS:26A` had no ticker in the engine.** `ai.c` honours it as the creature-move freeze, but
+  `status_tick()` only decremented the three paralysis bytes, because `asm/0C33` starts at `DS:26B`.
+  `asm/0C54`/`asm/0C5B` tick `DS:26A` the same way, and nothing could set it until now — so the
+  handler that sets it came with the fix, or every creature on the map would have frozen forever.
+
+**And the run exposed an emitter bug that had been corrupting shipped game text.**
+`engine/tools/extract/extractor.py` escaped non-printable bytes as C hex escapes (`\xNN`), but a C
+hex escape consumes every following hex digit, so `"...:\x0d1-DA"` is one escape (`0x0d1`, truncated
+by the compiler to `0xD1`) and not CR-then-`1`. `char_print` masks the high bit, so the byte arrived
+as `0x51` — `Q`. Five literals were affected, all of them menus whose newline glyph sits in front of
+a digit: the WEAR ARMOUR menu, the armour and weapons shoppe menus, the transport "FOR YOU ONLY"
+line, and the new READY WEAPON menu. Each had been rendering its line-initial digits raised by 0x20
+(`1-DA` as `Q-DA`, `4-PLATE` as `T-PLATE`). Fixed by emitting octal escapes, which C bounds at three
+ digits. Two things to keep: the CP5/CP6 gates stayed green through all of it because they grepped for
+substrings that happened to survive, and the frame that finally made it visible was a *new* command's
+frame — the defect was only found because `cmd_R`'s menu was long enough to show the pattern four
+times in one screen.
+
+**Also corrected by a frame, not a listing:** the weapons shoppe's offer prefix. The binary holds
+`AH! YES! ` and `AH! YES! A `; the code had the second, and `w5-axe.png` shows `AH! YES! AXE`. See
+`docs/commerce.md` § 5e.

@@ -190,6 +190,20 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — An emitter that escapes bytes into a source literal has to know that language's
+  escape grammar, not just its escape character, and the failure it produces is a plausible wrong
+  string rather than a compile error.** The string extractor emitted every non-printable byte as a
+  C hex escape (`\xNN`). A C hex escape consumes as many following hex digits as exist, so a
+  literal whose control byte is followed by a digit — a newline glyph in front of a menu number —
+  is one escape, not two characters, and the byte is truncated to something else entirely. The
+  build stayed green, the header diff looked fine, and the game printed `Q-DA` where it should have
+  printed a line break and `1-DA`. Two rules fall out. Prefer an escape form the language bounds
+  (octal is capped at three digits) whenever the following character is not under your control, and
+  when a rendering looks merely odd rather than obviously broken, check whether the corruption is
+  always at the same structural position — here every damaged character was the first of a line,
+  which is what pointed at the emitter instead of at the data. The harness lesson is general: any
+  gate that asserts on rendered text should assert on the pre-render stream too, because a frame
+  shows the tail of a scrolled buffer and will happily agree with a mangled head.
 * **2026-10-29 — A call graph built from rendered mnemonics silently drops every edge the
   reconstruction stores as raw bytes, and a caller list derived from it will then state a
   negative.** A command's call to the shared direction gate was stored as a forced-keep byte

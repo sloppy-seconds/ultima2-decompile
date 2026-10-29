@@ -653,6 +653,21 @@ NPC type standing behind it — the owner confirmed that plenty of characters be
 tiles do not sell. The remaining suspect is **facing**, which a teleported save does not
 set. See `docs/place-names.md` § 4.
 
+### 5e. The offer prefix, corrected by a frame — 2026-10-29
+
+`engine/src/game/commerce.c` rendered the weapons shoppe as `AH! YES! A AXE`. The binary holds
+two offer prefixes, `AH! YES! ` at file `0x1FB3` and `AH! YES! A ` at `0x20D9`, and a listing-only
+reading put the second one on the weapons branch because it was the one that had not been assigned
+yet. `captures/spice86/g23-weapons/w5-axe.png` says `AH! YES! AXE`, so the weapons shoppe uses the
+first prefix, the same one armour uses, and the second is unassigned. It sits in the same string
+neighbourhood as the magic shoppe's menu, and since no capture has run the wizard shoppe it stays
+unassigned rather than being parked somewhere plausible.
+
+The general shape is worth keeping: **two literals that differ by one letter, one of which is the
+one nobody has seen printed, is exactly the situation where a listing picks the wrong one with
+complete confidence.** The frame cost nothing and the wrong prefix had already been written into
+code.
+
 ## 6. Why G21 was never answered — a boundary defect (this is G22)
 
 `asm/19D7_magic_shop_menu.asm` declares `# func 19D7..2027`, **0x651 bytes**, and
@@ -675,6 +690,7 @@ go-ahead and a per-function `check_func.py` run for each new range.
 | ~~Find the branch that selects between the two spell catalogues~~ **closed same day** — there is no town branch; the two lists are the cleric shrine and the wizard shop, each class-gated | resolved above |
 | ~~Find the real price source~~ **closed 2026-10-23 for the mechanism** — `DS:27/28` is the price operand, printed by `asm/51A5` and charged by `asm/2052`; see § 3b | resolved above |
 | ~~**G23** — read `DS:27/28/29/2A` and `DI` live at runtime `17B7` and `2052` during a vendor purchase, to settle whether the food price is a constant or is derived from `int + cha`~~ **closed 2026-10-29** — it is derived, the printed pair and the charged pair are the same two bytes, and the printed number was `0020` and not `0200`. `captures/spice86/g23-food-live`, `captures/spice86/g23-weapons`; § 3b's correction and § 5d | resolved above |
+| ~~Assign `AH! YES! A ` (file `0x20D9`) to a shop~~ **not assigned** — the weapons shoppe uses `AH! YES! ` like armour does, on frame evidence; see § 5e. Its real owner is probably the wizard shoppe, which has never run | open, needs a capture |
 | Walk each shop routine's arithmetic to confirm every price is computed | closes the § 1 limit |
 | Split `asm/19D7` into its real routines | boundary change, needs approval + `check_func.py` per range |
 | ~~Confirm `[DS:46]` is gender and find the class byte the `NOT A CLERIC/WIZARD` guards test~~ **the class byte is `DS:47`** — `asm/1841` tests `[DS:47] == 1` before the shrine and `asm/19AF`'s successor fragment tests `[DS:47] == 2` before the magic shoppe. `[DS:46]` is untouched by this finding | resolved in part |
