@@ -389,6 +389,68 @@ u2_shop u2_commerce_shop_for(int x, int y, int site_kind)
     return town ? U2_SHOP_PUB     : U2_SHOP_WIZARD;
 }
 
+/* ---- the tribute: TRANSACT aimed at a type-0x6C creature ------------------- */
+
+/* See the header comment in commerce.h. The rungs are written as comparisons in the same
+ * order the original evaluates them, because the order IS the behaviour: 0x50 before 0x75
+ * before 0x99, and a rung that preloads its value before testing means a fall-through is
+ * what selects the next one. */
+uint8_t u2_tribute_raise_for(uint8_t hp_high)
+{
+    if (hp_high < 0x50u) return 3u;
+    if (hp_high < 0x75u) return 2u;
+    if (hp_high < 0x99u) return 1u;
+    return 0u;
+}
+
+/* asm/4249..42E2, reached by asm/40CB matching creature type 0x6c and asm/40D4 jumping here.
+ *
+ * The whole span had never been seen executing until 2026-10-29; it now has 54 observations
+ * and every rung fired, so the sequence below is not inferred. Three ordering facts in it
+ * are easy to get wrong and each one is load-bearing:
+ *
+ *   1. The 50 GP is spent BEFORE the ladder is evaluated, so the tribute is charged even on
+ *      the rung that raises nothing. Observed: gold 7349 -> 7299 at HP 9901.
+ *   2. asm/2052 prints its own refusal and does not return to the caller's success path, so
+ *      a failed spend must stop here rather than fall through to the raise.
+ *   3. Only [DS:51], the high byte of HP, is read and written. The low two digits never move
+ *      — the trailing 01 of the seeded HP survived the entire climb from 0001 to 9901.
+ */
+static void tribute(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+    const uint8_t price[2] = { 0x00u, 0x50u };   /* [DS:27] high, [DS:28] low = 50 GP */
+
+    seam_str_out(ctx, U2_S_TRIBUTE_WELCOME);
+    seam_char_print(ctx, '\r');
+    seam_str_out(ctx, U2_S_TRIBUTE_CHARGE);
+    seam_char_print(ctx, '\r');
+
+    if (!u2_spend_price(ctx, price))
+        return;
+
+    const uint8_t rung = u2_tribute_raise_for(st->hp);
+
+    seam_str_out(ctx, U2_S_TRIBUTE_RAISE);
+    /* asm/42D1 zeroes DI and calls asm/51A5, which renders AL as two packed-decimal digits
+     * and then DI as two more. So the amount is always four digits with the value in the top
+     * pair: rung 3 prints "0300", rung 0 prints "0000". A leading zero in this font is easy
+     * to misread as '@' when a frame is transcribed by eye. Built a digit at a time rather than
+     * with a format string, both because asm/55B5 is literally a nibble-to-ASCII pair and
+     * because snprintf's truncation analysis cannot know the rung is under 10. */
+    char num[5];
+    num[0] = (char)('0' + (rung / 10u));
+    num[1] = (char)('0' + (rung % 10u));
+    num[2] = '0';
+    num[3] = '0';
+    num[4] = '\0';
+    seam_str_out(ctx, num);
+
+    /* asm/42E2: `clc ; mov 0x51,%al ; adc 0x1f,%al ; daa ; mov 0x51,%al`. */
+    int cf = 0;
+    st->hp = daa_add(st->hp, rung, 0, &cf);
+}
+
 u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, int dy)
 {
     u2_state *st = &ctx->state;
@@ -417,12 +479,21 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
     }
 
     if (slot != 0) {
+        /* asm/40CB: the typed arm of the split. A role byte below 0x80 means the slot has no
+         * scripted tlkx line, and the creature TYPE then decides. Type 0x6c is the tribute and
+         * it is fully implemented — it needed no tlkx loader, which is why it was reachable the
+         * whole time while the talking arm below was not. */
+        if (st->mon_role[slot] < 0x80u && st->mon_type[slot] == 0x6Cu) {
+            tribute(ctx);
+            return U2_TRANSACT_TREATED;
+        }
+
         /* GAP — the talking branch, deliberately not implemented.
          *
          * asm/40C0 splits on the slot's role byte: bit 7 set means "this NPC has a
          * scripted line" and asm/4209 prints record (role - 0x80) out of the sector's
-         * tlkx buffer at [DS:476] via asm/154E; bit 7 clear walks the creature-type chain
-         * (0x60 guard, 0x64 jester, 0x68 merchant, 0xF0 fighter, 0xF4 cleric, 0xF8 wizard,
+         * tlkx buffer at [DS:476] via asm/154E; bit 7 clear walks the rest of the creature-type
+         * chain (0x60 guard, 0x64 jester, 0x68 merchant, 0xF0 fighter, 0xF4 cleric, 0xF8 wizard,
          * 0xFC thief), each printing one fixed line. The selector was observed executing
          * on 2026-10-29 with AL=0x02 for a role-0x82 Jester (captures/spice86/g23-food-live),
          * so the mechanism is no longer the open question docs/handoff-commerce-transact.md

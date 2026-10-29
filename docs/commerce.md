@@ -723,3 +723,51 @@ go-ahead and a per-function `check_func.py` run for each new range.
 | Walk each shop routine's arithmetic to confirm every price is computed | closes the § 1 limit |
 | Split `asm/19D7` into its real routines | boundary change, needs approval + `check_func.py` per range |
 | ~~Confirm `[DS:46]` is gender and find the class byte the `NOT A CLERIC/WIZARD` guards test~~ **the class byte is `DS:47`** — `asm/1841` tests `[DS:47] == 1` before the shrine and `asm/19AF`'s successor fragment tests `[DS:47] == 2` before the magic shoppe. `[DS:46]` is untouched by this finding | resolved in part |
+
+## 8. The tribute: TRANSACT is not only a shop command
+
+`cmd_T` was described throughout this document as the buying command, and the cursor split at
+`asm/40C0` was written up as "shoppe or talking NPC". There is a third arm, and it is the one
+that pays out.
+
+`asm/40C0` tests the role byte. Below `0x80` the slot has no scripted line, and `asm/40CB` then
+switches on the creature **type**. Type `0x6c` jumps through `asm/40D4` into `asm/4249..42E2`,
+which takes 50 GP and raises hit points:
+
+```
+WELCOME MY CHILD
+FIRST MY 50 G.P. TRIBUTE!
+AND FOR IT I RAISE THEE 0300
+```
+
+The raise is a four-rung ladder on `[DS:51]`, the **high packed-decimal byte** of HP, so it
+steps in hundreds and the low two digits never move:
+
+| HP high byte | rung | raise |
+| --- | --- | --- |
+| `< 0x50` | 3 | +300 |
+| `< 0x75` | 2 | +200 |
+| `< 0x99` | 1 | +100 |
+| `>= 0x99` | 0 | nothing |
+
+Three properties that are only visible once you watch it run repeatedly, and all three are
+gated in CP6 rather than asserted in prose:
+
+**The spend precedes the ladder.** The 50 GP is taken even on the rung that raises nothing.
+Observed: gold 7349 → 7299 at HP 9901. Same shape as `cmd_O`, which spends before its role
+dispatch.
+
+**The `+0` rung is an overflow guard.** At high byte `0x99` a further +100 would carry past a
+packed-decimal byte. So the rung that reads as a rip-off is the thing that stops HP ever
+exceeding 9999. Do not "fix" it into a smaller raise.
+
+**`asm/2052` owns its own refusal.** When the player cannot pay it prints
+`YOU DONT HAVE THAT MUCH!` and does not return to the caller's success path, so the tribute
+must stop there rather than fall through and print a raise it did not give.
+
+The engine half is `u2_tribute_raise_for()` (pure, all 256 inputs enumerated in
+`commerce_check`) and `tribute()` in `game/commerce.c`, reached from the same cursor scan the
+shops use. It needed no `tlkx` loader — the tribute lives on the *typed* side of the split,
+which is why it was reachable all along while the talking arm above it still is not.
+
+Full evidence, including the 54-offer run from HP 1 to HP 9901 and the frames: `captures/spice86/lord-british-tribute/`.

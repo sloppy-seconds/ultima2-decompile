@@ -232,6 +232,33 @@ int main(void)
           u2_steal_loot_for(0x3F, 0x20, 1) == U2_STEAL_NO_LUCK,
           "the village north/south edge falls between 0x1F and 0x20");
 
+    /* The tribute ladder, enumerated over every possible input rather than sampled. The
+     * rungs are packed-decimal compares on the HIGH byte of HP, so the boundaries are 0x50,
+     * 0x75 and 0x99 — and 0x99 is not a round number in binary, which is exactly the kind of
+     * edge a sample misses. All 256 values are cheap and there is no reason to guess. */
+    for (int v = 0; v <= 0xFF; v++) {
+        uint8_t want;
+        if (v < 0x50)      want = 3;
+        else if (v < 0x75) want = 2;
+        else if (v < 0x99) want = 1;
+        else               want = 0;
+        CHECK(u2_tribute_raise_for((uint8_t)v) == want,
+              "tribute rung for HP high byte 0x%02X", v);
+    }
+
+    /* The three boundaries named explicitly, because the loop above would pass even if the
+     * expected values were derived from the same wrong reading of the bytes. These are the
+     * numbers the live capture produced: 0001 took +300, 5000 took +200, 7501 took +100,
+     * and 9901 took nothing (captures/spice86/lord-british-tribute). */
+    CHECK(u2_tribute_raise_for(0x00) == 3 && u2_tribute_raise_for(0x4F) == 3,
+          "0x00 and 0x4F are both on the +300 rung");
+    CHECK(u2_tribute_raise_for(0x50) == 2,
+          "0x50 is the first value off the +300 rung, so the compare is jb not jbe");
+    CHECK(u2_tribute_raise_for(0x74) == 2 && u2_tribute_raise_for(0x75) == 1,
+          "the +200 rung ends at 0x74 and +100 starts at 0x75");
+    CHECK(u2_tribute_raise_for(0x98) == 1 && u2_tribute_raise_for(0x99) == 0,
+          "0x99 is the overflow guard: above it a +100 would carry past a packed-decimal byte");
+
     printf("commerce_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

@@ -49,7 +49,11 @@ typedef enum u2_transact_result {
                                    cursor held a creature and the talking half is not
                                    implemented here (see commerce.c's GAP note) */
     U2_TRANSACT_OPEN,           /* a shop was reached and its menu printed */
-    U2_TRANSACT_REFUSED         /* a shop was reached and declined the transaction */
+    U2_TRANSACT_REFUSED,        /* a shop was reached and declined the transaction */
+    U2_TRANSACT_TREATED         /* the cursor held a type-0x6C creature and the tribute ran:
+                                   gold taken and HP raised. Distinct from OPEN because a
+                                   test must be able to tell "the tribute fired" from "a
+                                   shop menu printed" without grepping for text. */
 } u2_transact_result;
 
 /*
@@ -68,6 +72,26 @@ typedef enum u2_transact_result {
  * COOK all land on their own catalogue, in six different sectors of both kinds.
  */
 u2_shop u2_commerce_shop_for(int x, int y, int site_kind);
+
+/*
+ * The gold-for-HP tribute ladder, as a pure function so the gate can enumerate all 256
+ * inputs rather than sample them.
+ *
+ * asm/42AA..42CB is four cmp/jb rungs on [DS:51] — the HIGH packed-decimal byte of HP — each
+ * preloading BL with its own value. The result is a raise in hundreds, and it is INVERSE to
+ * need: the more wounded the player, the larger the gift.
+ *
+ *   hp_high <  0x50 -> 3   (+300)
+ *   hp_high <  0x75 -> 2   (+200)
+ *   hp_high <  0x99 -> 1   (+100)
+ *   else            -> 0
+ *
+ * The last rung is an overflow guard, not a surcharge. At 0x99 a further +100 would carry
+ * past a packed-decimal byte, so returning 0 is the thing that stops HP ever exceeding
+ * 9999. Observed rung by rung on 2026-10-29 in captures/spice86/lord-british-tribute, 54
+ * offers from HP 1 to HP 9901.
+ */
+uint8_t u2_tribute_raise_for(uint8_t hp_high);
 
 /*
  * asm/20AB_bcd_price_from_stats, mirrored instruction for instruction.

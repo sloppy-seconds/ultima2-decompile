@@ -248,6 +248,14 @@ MANIFEST = [
     ("U2_S_IGNITE_NONE_OWNED", "37AE_ignite_torch_burn.asm", ("run", 0x39B9, 11, "NONE OWNED!")),
     ("U2_S_KLIMB",             "37F2_klimb_msg.asm",        ("run", 0x39F4, 5, "KLIMB")),
     ("U2_S_TO_LEVEL",          "3823_site_floor_down.asm",  ("run", 0x3A2E, 9, "TO LEVEL ")),
+    # The gold-for-HP tribute: TRANSACT aimed at a creature of type 0x6C. Observed live
+    # 2026-10-29 (captures/spice86/lord-british-tribute), all four rungs of the ladder.
+    # The charge line carries a leading AND a trailing 0x8d line marker; the offsets below
+    # start after the leading one and the caller prints the CRs, which is the asm/3BE4
+    # convention and keeps the exe path and the asm fallback byte-identical.
+    ("U2_S_TRIBUTE_WELCOME",   "4249_tribute_welcome.asm",  ("run", 0x444D, 17, "WELCOME MY CHILD ")),
+    ("U2_S_TRIBUTE_CHARGE",    "4262_tribute_charge.asm",   ("run", 0x4466, 25, "FIRST MY 50 G.P. TRIBUTE!")),
+    ("U2_S_TRIBUTE_RAISE",     "428E_tribute_raise.asm",    ("run", 0x4491, 24, "AND FOR IT I RAISE THEE ")),
     ("U2_S_SITE_TOWN",         "343F_sub_343f.asm",       ("run", 0x364A, 5, "-TOWN")),
     ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6, "-TOWER")),
     ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7, "-CASTLE")),

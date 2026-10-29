@@ -17,6 +17,7 @@ Usage: cp6_commerce_seed.py DIR CASE
   CASE = armour | weapons | transport | grocery | pub | nomark
          | torch_lit | torch_none | torch_outside | tower_climb | tower_noladder
          | tower_descend | town_descend | town_climb | tower_both
+         | tribute_low | tribute_mid | tribute_max | tribute_broke
 """
 import os
 import sys
@@ -63,20 +64,44 @@ CASES = {
 # drive the floor with keystrokes (K then K, K then D) instead of seeding it, and that turns
 # out to be the better test anyway, because it exercises the pair as a round trip.
 SITE_CASES = {
-    "torch_lit":      ((2, 4), (5, 5), 0x08, 0x03),
-    "torch_none":     ((2, 4), (5, 5), 0x08, 0x00),
-    "torch_outside":  ((3, 2), (5, 5), 0x08, 0x03),
-    "tower_climb":    ((2, 4), (5, 5), 0x10, 0x00),
+    # (sector digits, player cell, tile under player, torches, hp, gold)
+    "torch_lit":      ((2, 4), (5, 5), 0x08, 0x03, None, None),
+    "torch_none":     ((2, 4), (5, 5), 0x08, 0x00, None, None),
+    "torch_outside":  ((3, 2), (5, 5), 0x08, 0x03, None, None),
+    "tower_climb":    ((2, 4), (5, 5), 0x10, 0x00, None, None),
     # Both ladder features on one cell. A real tower keeps its up and down cells apart, so
     # this is engine-authored filler rather than a map the game ships -- it exists so the
     # climb/descend round trip can be driven from one standing position. On a 0x10-only cell
     # DESCEND refuses, which is correct and is what the first version of this case proved.
-    "tower_both":     ((2, 4), (5, 5), 0x30, 0x00),
-    "tower_noladder": ((2, 4), (5, 5), 0x08, 0x00),
-    "tower_descend":  ((2, 4), (5, 5), 0x20, 0x00),
-    "town_descend":   ((3, 2), (5, 5), 0x20, 0x00),
-    "town_climb":     ((3, 2), (5, 5), 0x10, 0x00),
+    "tower_both":     ((2, 4), (5, 5), 0x30, 0x00, None, None),
+    "tower_noladder": ((2, 4), (5, 5), 0x08, 0x00, None, None),
+    "tower_descend":  ((2, 4), (5, 5), 0x20, 0x00, None, None),
+    "town_descend":   ((3, 2), (5, 5), 0x20, 0x00, None, None),
+    "town_climb":     ((3, 2), (5, 5), 0x10, 0x00, None, None),
+    # The tribute. Sector 33 is a castle kind, and the cleric is placed one cell NORTH of
+    # the player so `T` then `Up` lands the cursor on it -- the same geometry as the live
+    # capture, where the throne at (31,13) sat directly above the player at (31,14).
+    "tribute_low":    ((3, 3), (31, 14), 0x70, 0x00, 0x0001, 0x9999),
+    "tribute_mid":    ((3, 3), (31, 14), 0x70, 0x00, 0x5000, 0x9999),
+    "tribute_max":    ((3, 3), (31, 14), 0x70, 0x00, 0x9901, 0x9999),
+    "tribute_broke":  ((3, 3), (31, 14), 0x70, 0x00, 0x0001, 0x0020),
 }
+
+# Slots in the synthetic monx: the engine's loader reads x at 0..31, y at 32..63, hp at
+# 64..95, type at 96..127, kind at 128..159 and role at 160..191.
+CLERIC_SLOT = 8
+CLERIC_TYPE = 0x6C
+
+
+def cleric_monx(px, py):
+    """A monx holding exactly one type-0x6C creature one cell north of the player."""
+    m = bytearray(256)
+    m[CLERIC_SLOT] = px
+    m[32 + CLERIC_SLOT] = py - 1
+    m[64 + CLERIC_SLOT] = 0xFF          # hp, as shipped in monx33 slot 8
+    m[96 + CLERIC_SLOT] = CLERIC_TYPE
+    m[160 + CLERIC_SLOT] = 0x00         # role: below 0x80, so the TYPED arm, not the talking arm
+    return bytes(m)
 
 
 def main(out_dir: str, case: str) -> int:
@@ -137,22 +162,22 @@ def main(out_dir: str, case: str) -> int:
 
 def main_site(out_dir: str, case: str) -> int:
     """Seed for the IGNITE TORCH / DESCEND / KLIMB gate: one sector, one player, one tile."""
-    (hi, lo), (px, py), tile, torches = SITE_CASES[case]
+    (hi, lo), (px, py), tile, torches, hp, gold = SITE_CASES[case]
 
     content = os.path.join(out_dir, "content")
     save = os.path.join(out_dir, "save")
     os.makedirs(content, exist_ok=True)
     os.makedirs(save, exist_ok=True)
 
-    def write_sector(digits):
+    def write_sector(digits, cleric=False):
         grid = bytearray([FLOOR]) * 4096
         grid[py * 64 + px] = tile
         with open(os.path.join(content, f"mapx{digits}"), "wb") as f:
             f.write(bytes(grid))
         with open(os.path.join(content, f"monx{digits}"), "wb") as f:
-            f.write(bytes(256))
+            f.write(cleric_monx(px, py) if cleric else bytes(256))
 
-    write_sector(f"{hi}{lo}")
+    write_sector(f"{hi}{lo}", cleric=case.startswith("tribute"))
     # Leaving a site zeroes the ones digit, so the descend-exit case lands in sector `hi0`
     # and the loader has to find something there or the run dies on a missing file rather
     # than on the behaviour under test.
@@ -165,6 +190,12 @@ def main_site(out_dir: str, case: str) -> int:
     p[0x5A - 0x36] = px                      # entry cell, where a site exit drops you
     p[0x5B - 0x36] = py
     p[0x64 - 0x36] = torches                 # DS:64 torches, packed decimal
+    if hp is not None:                       # DS:51 high byte, DS:52 low byte
+        p[0x51 - 0x36] = hp >> 8
+        p[0x52 - 0x36] = hp & 0xFF
+    if gold is not None:                     # DS:58 high byte, DS:59 low (see state.h's wart)
+        p[0x58 - 0x36] = gold >> 8
+        p[0x59 - 0x36] = gold & 0xFF
     # No [DS:25]: it is below the saved record, so the floor always starts at whatever the
     # loader leaves there. See the SITE_CASES comment.
     with open(os.path.join(save, "PLAYER"), "wb") as f:

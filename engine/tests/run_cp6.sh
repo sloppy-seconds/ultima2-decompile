@@ -451,6 +451,61 @@ else
             && ok "CP6 D: in a town DESCEND refuses" \
             || bad "CP6 D: expected '-WHAT?' in a town"
     fi
+
+    # --- the tribute: TRANSACT aimed at a type-0x6C creature ------------------
+    # Every rung observed live in captures/spice86/lord-british-tribute, so these assertions
+    # are the engine matching the game rather than matching itself. The amounts print as four
+    # digits because asm/51A5 renders the rung and then a zeroed DI.
+    if run_case tribute_low tribute 'T\n0xf0\n' "$WORK/tribute.out"; then
+        said "$WORK/tribute.out" "WELCOME MY CHILD" \
+            && ok "CP6 tribute: the greeting prints" \
+            || bad "CP6 tribute: expected 'WELCOME MY CHILD'"
+        said "$WORK/tribute.out" "FIRST MY 50 G.P. TRIBUTE!" \
+            && ok "CP6 tribute: the charge is announced" \
+            || bad "CP6 tribute: expected the 50 GP line"
+        said "$WORK/tribute.out" "AND FOR IT I RAISE THEE 0300" \
+            && ok "CP6 tribute: rung 3 renders as 0300, four digits, value in the top pair" \
+            || { bad "CP6 tribute: expected 'RAISE THEE 0300'"; tail -3 "$WORK/tribute.out.txt"; }
+        h=$(field_of "$WORK/tribute.out" hp)
+        [ "$h" = "03 01" ] && ok "CP6 tribute: HP 0001 -> 0301, so the raise lands on the HIGH byte only" \
+                           || bad "CP6 tribute: hp is '$h', expected '03 01'"
+        g=$(field_of "$WORK/tribute.out" gold)
+        [ "$g" = "99 49" ] && ok "CP6 tribute: gold 9999 -> 9949, exactly 50 GP" \
+                           || bad "CP6 tribute: gold is '$g', expected '99 49'"
+    fi
+    if run_case tribute_mid tributem 'T\n0xf0\n' "$WORK/tributem.out"; then
+        said "$WORK/tributem.out" "RAISE THEE 0200" \
+            && ok "CP6 tribute: at HP 5000 the rung drops to 2" \
+            || bad "CP6 tribute: expected 'RAISE THEE 0200' at HP 5000"
+        h=$(field_of "$WORK/tributem.out" hp)
+        [ "$h" = "52 00" ] && ok "CP6 tribute: HP 5000 -> 5200" \
+                           || bad "CP6 tribute: hp is '$h', expected '52 00'"
+    fi
+    # The rung that looks like a rip-off and is really an overflow guard.
+    if run_case tribute_max tributax 'T\n0xf0\n' "$WORK/tributax.out"; then
+        said "$WORK/tributax.out" "RAISE THEE 0000" \
+            && ok "CP6 tribute: at HP 9901 the rung is 0, which is what stops HP exceeding 9999" \
+            || bad "CP6 tribute: expected 'RAISE THEE 0000' at HP 9901"
+        h=$(field_of "$WORK/tributax.out" hp)
+        [ "$h" = "99 01" ] && ok "CP6 tribute: HP unchanged at the top rung" \
+                           || bad "CP6 tribute: hp moved on the +0 rung: '$h'"
+        g=$(field_of "$WORK/tributax.out" gold)
+        [ "$g" = "99 49" ] && ok "CP6 tribute: the 50 GP is still taken on the +0 rung (spend precedes ladder)" \
+                           || bad "CP6 tribute: gold is '$g', expected '99 49' — the tribute should still be charged"
+    fi
+    # asm/2052 prints its own refusal and does not return to the success path, so a failed
+    # spend must print the raise lines not at all and must not touch HP.
+    if run_case tribute_broke tributeb 'T\n0xf0\n' "$WORK/tributeb.out"; then
+        said "$WORK/tributeb.out" "YOU DONT HAVE THAT MUCH!" \
+            && ok "CP6 tribute: with 20 GP the spend refuses" \
+            || bad "CP6 tribute: expected the insufficient-gold refusal"
+        said "$WORK/tributeb.out" "RAISE THEE" \
+            && bad "CP6 tribute: printed a raise after a failed spend" \
+            || ok "CP6 tribute: a failed spend stops before the ladder"
+        h=$(field_of "$WORK/tributeb.out" hp)
+        [ "$h" = "00 01" ] && ok "CP6 tribute: HP untouched when the tribute could not be paid" \
+                           || bad "CP6 tribute: hp is '$h', expected '00 01'"
+    fi
 fi
 
 printf '\n'
