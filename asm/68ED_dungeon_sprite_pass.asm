@@ -5,15 +5,30 @@
 #           captures/spice86/dungeon-35-live reads as 0x2900 — the DS:2900 stroke table T9.
 #           Renamed 2026-10-29 with CP7.
 #
-# What it does NOT settle: the stroke table itself. T9 is 64 records x 34 B of coordinate
-# pairs and has no consumer decoded beyond this file's `mov %cs:0x697e(%di),%al` index, so
-# the outlines are still unknown and the engine draws a marker at the convergent point of
-# the depth instead of inventing one. That gap is named at the site in game/dungeon.c.
+# CORRECTION 2026-10-29, same day, and T9 is no longer a gap. The table IS
+# `original/monsters`, loaded verbatim at DS:2900 by asm/07F3, and the record framing is
+# TWO BYTES, not three. The instruction that hides it is that this routine reads the
+# second byte twice from the same pointer and only then advances:
+#     b0 -> [DS:04]                    x, and x == 0 ends the list
+#     b1 -> [DS:05]    = b1 & 0x1F     y
+#     b1 -> [DS:47F]   = b1 >> 5       pattern index   <-- same byte, no advance between
+# asm/68A3 scales both by four and asm/4BE0 paints cs:[bp+0x48D4] as a 1..4 pixel run.
+# Plotting the file that way yields seven distinct creature silhouettes and an empty
+# block 0, which is the confirmation that the framing was right.
+#
+# The block layout falls out of asm/07F3's CX = 0x800: 2048 bytes is eight blocks of 256,
+# and the near arm's `add ax,[DS:474]` over the stamp byte scales by exactly 256, so
+# block index == dungeon type. What is NOT settled is the far arm: it overwrites ax with
+# [DS:474] AFTER ah held the stamp, so the type term is dropped and the ladder table
+# cs:697E = 00 00 80 C0 E0 F0 F8 FC lands every further depth inside empty block 0.
+# Read literally, the original draws a sprite only for a creature in the cell directly
+# ahead. The engine reproduces the bytes rather than the theory, and a capture is what
+# would promote or refute the literal reading.
 # func 68ED..6998  len 00AC B  evidence: call+reko
 # calls: L_006aa3, L_006b3a
 # provenance: static, read in full 2026-10-29 for CP7. [DS:474] = 0x2900 is read out of
-#           captures/spice86/dungeon-35-live's live DS, which is what names the stroke table
-#           this routine indexes; the table's own contents are undecoded (T9).
+#           captures/spice86/dungeon-35-live's live DS, and the bytes at that address are
+#           byte-identical to original/monsters, which is what identifies the table.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_68ed:

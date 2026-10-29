@@ -31,6 +31,7 @@ correct behaviour and a terrible test fixture.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 
 ROCK  = 0x80
@@ -151,6 +152,17 @@ def main(out_dir: str) -> int:
                        ("monx20", bytes(256)), ("monx25", monx())):
         with open(os.path.join(content, name), "wb") as f:
             f.write(blob)
+
+    # The stroke table is ART and is never committed, so the gate borrows the player's
+    # own copy the same way the tile tests do. Absent is a legitimate state — the engine
+    # draws no sprites and says so — and run_cp7.sh asserts BOTH halves, so a sprite
+    # pass that silently stopped drawing cannot pass by matching the no-art case.
+    here = os.path.dirname(os.path.abspath(__file__))
+    for cand in (os.path.join(here, "..", "..", "original", "monsters"),):
+        if os.path.exists(cand):
+            shutil.copyfile(cand, os.path.join(content, "monsters"))
+            break
+
     with open(os.path.join(save, "PLAYER"), "wb") as f:
         f.write(player())
     return 0

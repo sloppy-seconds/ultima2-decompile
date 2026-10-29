@@ -82,6 +82,24 @@ typedef struct u2_sector_id {
  * x or y >= 0x40 reloads the sector (asm/242D, asm/2434 -> asm/243E), so there
  * is no second buffer and no seam between adjacent files to get wrong.
  */
+/* The dungeon creature stroke table, `original/monsters`.
+ *
+ * asm/07F3 is a DOS AH=27h random-block read with CX = 0x800 and DS:474 as the
+ * transfer address, and the live DS at 0x2900 is byte-identical to the shipped
+ * file's first 2048 bytes — so this is runtime data the game loads, in exactly the
+ * same category as mapxNN, and it is read from the player's own content directory
+ * and never committed. It is ART: 8 blocks of 256 bytes of 2-byte stroke records,
+ * and the cleanroom rule applies to it just as it applies to the tile atlas.
+ *
+ * 2048 and not the file's full 2176: the read is one block of CX bytes, and the
+ * trailing 128 are never transferred. Eight blocks of 256, one per dungeon type
+ * 1..7 with block 0 empty, which is what asm/68ED's `add ax,[DS:474]` over the
+ * stamp byte scales.
+ */
+#define U2_STROKE_BYTES 2048
+#define U2_STROKE_BLOCKS 8
+#define U2_STROKE_BLOCK  256
+
 typedef struct u2_world {
     uint8_t      map[U2_SECTOR_TILES];
     /*
@@ -119,6 +137,11 @@ typedef struct u2_world {
     u2_sector_id tlkx_id;
     int          tlkx_loaded;
     const char  *tlkx_prefix;   /* spelling the dialogue file was found under */
+    /* The dungeon sprite strokes, loaded once per run rather than per sector: the
+     * filename has no sector digits, so there is no id to track and nothing to
+     * write back. Read-only, like tlkx. */
+    uint8_t      strokes[U2_STROKE_BYTES];
+    int          strokes_loaded;
     size_t       bytes_read;  /* diagnostics and tests */
 } u2_world;
 
@@ -256,6 +279,13 @@ int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz);
 u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map);
 
 /* Human-readable reason for the last failure, for the INSERT-style message. */
+/* Read the dungeon stroke table. `dir/monsters`, no sector digits and no extension
+ * spelling variants: unlike mapx/monx/tlkx the name is not templated. Returns
+ * U2_WORLD_MISSING when the file is absent, which is normal for a content directory
+ * that only carries the fan-pack maps, and the caller draws no sprites in that case
+ * rather than failing the run. */
+u2_world_result u2_world_load_strokes(u2_ctx *ctx, u2_world *w);
+
 const char *u2_world_result_text(u2_world_result r);
 
 #endif /* U2_WORLD_H */

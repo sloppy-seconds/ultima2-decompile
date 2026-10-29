@@ -333,6 +333,82 @@ static void dg_scan_build(const u2_ctx *ctx, const u2_overworld *ow, dg_scan *s)
     }
 }
 
+/* asm/68ED, asm/68A3 and asm/4BE0, transcribed.
+ *
+ * The record framing is the part that was not obvious, and it is one instruction:
+ * asm/68ED reads the SECOND byte of each record twice from the same pointer and only
+ * then advances, so a record is two bytes, not three —
+ *     b0 = x, and x == 0 ends the list
+ *     b1 = y in the low five bits, pattern index in the top three
+ * asm/68A3 then scales both by four and passes the pattern index as bp, and asm/4BE0
+ * looks the pattern up in cs:0x48D4 = ff 11 88 cc 33 00 00 00, which selects which of
+ * the four pixels inside one video byte get lit. So one record paints a run of one to
+ * four pixels, and a creature is a list of those runs.
+ *
+ * The base pointer is where the honesty goes. asm/68ED has two arms:
+ *   di == 1 (nearest):  base = [DS:474] + (stamp << 8)   -> the stamp's own 256-byte block
+ *   di >= 2 (further):  base = [DS:474] + cs:[0x697E+di] -> NO stamp term
+ * The ladder table is 00 00 80 C0 E0 F0 F8 FC, and every one of those offsets lands
+ * inside block 0, which is empty — so read literally, the original draws a sprite only
+ * for a creature in the cell directly ahead, and every creature further off is
+ * invisible. That is what the bytes do, so that is what this does, and the alternative
+ * readings (the ladder indexes inside the type's block; or [DS:474] is re-pointed per
+ * creature before the call) are recorded rather than assumed. A capture settles it.
+ */
+static const uint8_t DG_PATTERN[8] = { 0xff, 0x11, 0x88, 0xcc, 0x33, 0x00, 0x00, 0x00 };
+static const uint8_t DG_DEPTH_LADDER[8] = {
+    0x00, 0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc
+};
+
+static void dg_sprite_page(u2_overworld *ow, const uint8_t *strokes,
+                           int base, int colour)
+{
+    int p = 0;
+
+    for (;;) {
+        const int x = strokes[base + p];
+        if (x == 0)
+            return;
+        const int b1 = strokes[base + p + 1];
+        const int y = b1 & 0x1f;
+        const int pat = DG_PATTERN[(b1 >> 5) & 7];
+        p += 2;
+
+        /* asm/68A3: ax = x*4, bx = y*4. asm/4BE0: di = (ax + origin) >> 2 and the
+         * mask picks sub-pixels, so the screen x is origin + x*4 with the mask's
+         * high bit being the leftmost pixel. */
+        const int sx = DG_ORIGIN_X + x * 4;
+        const int sy = DG_ORIGIN_Y + y * 4;
+        for (int k = 0; k < 4; k++) {
+            if (pat & (0xc0 >> (2 * k)))
+                u2_frame_pixel(&ow->frame, sx + k, sy, (uint8_t)colour);
+        }
+    }
+}
+
+static void u2_dungeon_sprites(u2_ctx *ctx, u2_overworld *ow, const dg_scan *s)
+{
+    (void)ctx;
+    if (!ow->world.strokes_loaded)
+        return;                 /* no `monsters` in the content dir: draw no sprites */
+
+    /* asm/68ED starts by incrementing [DS:482], which asm/6144 left at the depth it
+     * stopped on, and then walks di from 1 while di < that value. */
+    const int lim = U2_DG_DRAW_DEPTH;
+    for (int di = 1; di < lim; di++) {
+        const int stamp = s->obj[di];
+        if (stamp == 0)
+            continue;
+        if (di == 1) {
+            const int blk = (stamp & (U2_STROKE_BLOCKS - 1)) * U2_STROKE_BLOCK;
+            dg_sprite_page(ow, ow->world.strokes, blk, U2_CGA_WHITE);
+        } else {
+            dg_sprite_page(ow, ow->world.strokes,
+                           DG_DEPTH_LADDER[di & 7], U2_CGA_WHITE);
+        }
+    }
+}
+
 /* asm/6144. One depth per iteration, [DS:482] is the loop variable and the same
  * value the shape routines index their tables with. */
 static void dg_draw(dg_view *v, const dg_scan *s)
@@ -395,19 +471,10 @@ void u2_dungeon_render(u2_ctx *ctx, u2_overworld *ow, int lit)
     v.d = 0;
     dg_draw(&v, &s);
 
-    /* asm/68ed walks the per-depth stamp array and draws a creature outline from
-     * the stroke table at [DS:474] = DS:2900. That table is T9 and is undecoded,
-     * so the engine marks the convergent point of that depth with a short
-     * vertical instead: it says "something is down there" without inventing an
-     * outline nobody has read. This is a rendering gap with a name (T9), not a
-     * finished sprite pass. */
-    for (int d = 0; d < U2_DG_SAMPLE_DEPTH; d++) {
-        if (s.obj[d] == 0) continue;
-        const int cx = DG_ORIGIN_X + (DG_XL[d] + DG_XR[d]) / 2;
-        const int top = DG_ORIGIN_Y + (int)DG_YT[d];
-        const int bot = DG_ORIGIN_Y + (int)DG_YB[d];
-        u2_frame_line(&ow->frame, cx, top, cx, bot, U2_CGA_WHITE);
-    }
+    /* asm/68ED: the creature sprites. Transcribed rather than invented — see
+     * u2_dungeon_sprites for the record framing and for the one reading a capture
+     * still owes us. */
+    u2_dungeon_sprites(ctx, ow, &s);
 }
 
 int u2_dungeon_key(u2_ctx *ctx, u2_overworld *ow, uint8_t ch)
@@ -445,6 +512,16 @@ void u2_dungeon_enter(u2_ctx *ctx, u2_overworld *ow)
     ctx->state.face_dx = 0;
     ctx->state.face_dy = (uint8_t)(int8_t)-1;      /* north */
     u2_dungeon_probe(ctx, ow);
+    /* Stamp everything the loader authored BEFORE the spawner runs, because
+     * asm/68ED reads the grid stamps and not the creature arrays: an authored
+     * creature that is never stamped is invisible even though it will happily hit
+     * you. asm/147F then fills the remaining empty slots and stamps its own. */
+    for (int i = 0; i < 32; i++) {
+        if (ctx->state.mon_type[i] == 0) continue;
+        u2_world_dungeon_put(&ow->world, (int8_t)ctx->state.site_floor,
+                             ctx->state.mon_x[i], ctx->state.mon_y[i],
+                             ctx->state.mon_type[i]);
+    }
     u2_dungeon_spawn(ctx, ow);
     /* The entry frame is dark, and asm/1151 says so on the turn that follows the
      * load: captures/spice86/dungeon-35-live and tower-34 both record IT'S DARK!

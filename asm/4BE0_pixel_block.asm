@@ -1,4 +1,18 @@
-# sub_4be0 — mechanical clean (bulk wave); behavior not yet reviewed
+# pixel_block — paint one pattern byte into a 2x2 block of video bytes
+# name-evidence: called only from asm/68A3 sprite_stroke. ax = x, bx = y, bp = pattern:
+#           `di = (ax + [DS:4BF]) >> 2` is the video byte column (four pixels per byte at
+#           2bpp), `cl = cs:[bp+0x48D4]` is the sub-pixel mask, and the four stores write
+#           cl at [di] and [di+0x50] in each of the two segments cs:[bx*2+0x48DC] and
+#           cs:[bx*2+0x48DE]. Those two table entries are the even and odd field of the
+#           same row pair, and +0x50 is 80 bytes = two rows of 40, so one call paints a
+#           short horizontal run two scanline-pairs tall. Renamed 2026-10-29 with the
+#           sprite decode; body untouched.
+#           The mask table cs:48D4 = ff 11 88 cc 33 00 00 00, so pattern 0 lights all four
+#           sub-pixels and patterns 5..7 light nothing at all — which is why the record
+#           terminator is a zero X byte and not a zero pattern.
+# provenance: static, read in full 2026-10-29 alongside asm/68A3 and asm/68ED; the two
+#           tables it indexes were read out of original/ultimaii.exe at file 0x4AD4 and
+#           0x4ADC.
 # func 4BE0..4C1D  len 003E B  evidence: call+reko
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)

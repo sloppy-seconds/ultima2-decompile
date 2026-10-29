@@ -157,6 +157,47 @@ PY
         fi
     fi
 
+    # ---- 5b. sprites --------------------------------------------------------
+    # asm/68ED draws a creature out of the `monsters` stroke table, and the table is
+    # art the repo never commits. So the control is the same run with and without the
+    # file: if the sprite pass ever stopped drawing, the two frames would agree and
+    # the assertion would go red instead of quietly matching the no-art case.
+    if run_case spr0 'E\nI\n' "$WORK/spr0.out" && [ -f "$WORK/spr0/content/monsters" ]; then
+        mv "$WORK/spr0/content/monsters" "$WORK/spr0/monsters.bak"
+        ./u2 --headless --play-map --cleanroom --data-dir "$WORK/spr0/content" \
+             --save-dir "$WORK/spr0/save" --script "$WORK/spr0.keys" \
+             --dump-frame "$WORK/spr0/noart.ppm" > /dev/null 2>&1
+        mv "$WORK/spr0/monsters.bak" "$WORK/spr0/content/monsters"
+        ./u2 --headless --play-map --cleanroom --data-dir "$WORK/spr0/content" \
+             --save-dir "$WORK/spr0/save" --script "$WORK/spr0.keys" \
+             --dump-frame "$WORK/spr0/art.ppm" > /dev/null 2>&1
+            python3 - "$WORK/spr0/art.ppm" "$WORK/spr0/noart.ppm" <<'PY' && ok "CP7 sprites: the stroke table draws a creature the no-art run cannot" || bad "CP7 sprites: no sprite ink appeared (the pass is dead or the framing is wrong)"
+import sys
+
+def load(p):
+    d = open(p, "rb").read()
+    return d[d.index(b"255\n") + 4:]
+
+art, noart = load(sys.argv[1]), load(sys.argv[2])
+W = 320
+
+def px(b, x, y):
+    return b[(y * W + x) * 3] > 60
+
+# The centre band is where asm/68A3 puts a body: x*4 and y*4 with x in ~24..41 and
+# y in ~11..30 land at screen x 112..180 and y 60..136 once the (16,16) origin is
+# added. Anything outside that band is wireframe, which both runs draw.
+def band(b):
+    return sum(1 for y in range(56, 140) for x in range(100, 200) if px(b, x, y))
+
+a, n = band(art), band(noart)
+print(f"        centre-band ink: with strokes {a}, without {n}")
+sys.exit(0 if a > n + 40 else 1)
+PY
+    else
+        skip "CP7 sprites: no original/monsters to borrow (art is never committed)"
+    fi
+
     # ---- 6. monsters --------------------------------------------------------
     # asm/147F fills empty slots with a computed HP, and asm/2B9B's site gate lets the
     # swing through with the facing as the direction. The seed authors one creature

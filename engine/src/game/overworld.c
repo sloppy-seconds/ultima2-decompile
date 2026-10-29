@@ -279,6 +279,17 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
      * the creature encoding inside a site is a different one (type 1..7, HP
      * computed). So the overworld spawn above is cleared and replaced. */
     if (u2_site_is_dungeon(ctx)) {
+        /* asm/07F3 reads the stroke table with a DOS AH=27h block read into [DS:474],
+         * and the live DS at 0x2900 is byte-identical to the shipped `monsters` file,
+         * so this is runtime content and not baked art: it comes from the player's own
+         * directory. Absent is normal, not an error — a content dir with only maps has
+         * no sprites to give, and the renderer draws an empty corridor for it. */
+        if (!ow->world.strokes_loaded) {
+            const u2_world_result sr = u2_world_load_strokes(ctx, &ow->world);
+            if (sr != U2_WORLD_OK)
+                fprintf(stderr, "site: no `monsters` stroke table (%s) — sprites off\n",
+                        u2_world_result_text(sr));
+        }
         /* asm/147F scans for an EMPTY slot and fills that. It does not clear the
          * sector first, so whatever the loader authored survives and the spawner
          * tops the room up rather than replacing it. In the shipped caves monxNN

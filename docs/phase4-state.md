@@ -2282,3 +2282,43 @@ do not yet move — the overworld sweep indexes the 64-wide grid and would corru
 **24 of 26.** `cmd_G` came off the NULL list with a real site arm and an honest overworld gap.
 What is left is `cmd_C`'s effects (owner decision D14) and `cmd_O` (town NPCs and an attitude
 model).
+
+### CP7 addendum: the sprites, same day (2026-10-29)
+
+The dungeon section above listed "no sprites, T9 undecoded" as a gap. It was not one.
+Three hours later the creatures draw, and the reason it looked blocked is worth keeping:
+
+* The table was never missing. `original/monsters` is loaded **verbatim** into `DS:2900`
+  by `asm/07F3`, which is a DOS `AH=27h` random-block read with `CX = 0x800` and the
+  transfer address in `[DS:474]`. The live DS at `0x2900` in `dungeon-35-live` is
+  byte-identical to the file. So the art had been in the repo since day one and the item
+  describing it said "needs a screenshot to derive", which was wrong twice: no screenshot
+  was needed, and no owner was needed.
+* The framing is **two bytes, not three**, and one instruction hides it: `asm/68ED` reads
+  the second byte twice from the same pointer and only then advances. So `b0` is x (zero
+  ends the list) and `b1` packs `y = b1 & 0x1F` with `pattern = b1 >> 5` in the top three
+  bits. `asm/68A3` scales both by four; `asm/4BE0` paints `cs:[bp+0x48D4]` — the mask set
+  `ff 11 88 cc 33 00 00 00` — as a one-to-four pixel run two scanline-pairs tall. A
+  three-byte reading produces plausible garbage that still looks vaguely like a shape,
+  which is the dangerous kind of wrong.
+* The confirmation was a plot, not a proof: eight 256-byte blocks, seven distinct creature
+  silhouettes, block 0 empty. `asm/07F3`'s `CX = 0x800` = 8 × 256 is what says the block
+  index is the dungeon type, and the near arm's `add ax,[DS:474]` over the stamp byte
+  scales by exactly 256, which agrees.
+* **One thing is genuinely unresolved and the engine reproduces the bytes rather than a
+  theory about them.** The far arm of `asm/68ED` overwrites `ax` with `[DS:474]` *after*
+  `ah` held the stamp, so the type term is dropped, and the depth ladder
+  `cs:697E = 00 00 80 C0 E0 F0 F8 FC` then lands every further depth inside empty block 0.
+  Read literally, the original draws a sprite only for a creature in the cell directly
+  ahead and every creature further off is invisible. That is what `u2_dungeon_sprites()`
+  does. A capture would promote or refute the literal reading, and it is agent-drivable
+  now — but it is a confirmation, not a prerequisite, which is the whole difference between
+  this and how the item was filed.
+* The gate asserts sprites with a **control**, not a threshold: the same run with and
+  without `monsters` in the content directory, and the centre band must differ (591 vs 490
+  pixels). Disabling the sprite pass was shown to make it red. A bare "ink > N" assertion
+  would have passed with the pass dead, because the wireframe alone clears any small N.
+* The strokes are art and are never committed. The engine reads them from the player's own
+  directory through `u2_world_load_strokes()`, exactly like the tile atlas, and the test
+  seed borrows `original/monsters` at run time. A content directory without it draws an
+  empty corridor and says so on stderr.

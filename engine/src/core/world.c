@@ -39,6 +39,10 @@
 static const char *const k_map_prefixes[] = { "mapx", "MAPX", "mapg", "MAPG" };
 static const char *const k_mon_prefixes[] = { "monx", "MONX", "mong", "MONG" };
 
+/* Defined below alongside u2_world_path; forward-declared because the stroke loader
+ * sits above it and both resolve the content directory the same way. */
+static const char *world_dir(const u2_ctx *ctx);
+
 static const char *const *prefix_list(int is_map, size_t *count)
 {
     if (is_map) {
@@ -47,6 +51,29 @@ static const char *const *prefix_list(int is_map, size_t *count)
     }
     *count = sizeof k_mon_prefixes / sizeof k_mon_prefixes[0];
     return k_mon_prefixes;
+}
+
+u2_world_result u2_world_load_strokes(u2_ctx *ctx, u2_world *w)
+{
+    char path[512];
+    FILE *f;
+
+    /* The name is not templated: no sector digits, no case variants, no extension spelling
+     * list. asm/07F3 opens it by name and reads one 0x800 block, which is why the read
+     * length is U2_STROKE_BYTES and not the file's 2176 — the last 128 bytes are never
+     * transferred by the original and the engine does not pretend otherwise. */
+    snprintf(path, sizeof path, "%s/monsters", world_dir(ctx));
+    f = fopen(path, "rb");
+    if (!f)
+        return U2_WORLD_MISSING;
+
+    const size_t got = fread(w->strokes, 1, U2_STROKE_BYTES, f);
+    fclose(f);
+    if (got != U2_STROKE_BYTES)
+        return U2_WORLD_SHORT;
+
+    w->strokes_loaded = 1;
+    return U2_WORLD_OK;
 }
 
 const char *u2_world_result_text(u2_world_result r)
