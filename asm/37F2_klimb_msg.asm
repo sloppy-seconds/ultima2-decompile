@@ -1,8 +1,15 @@
-# sub_37f2 — mechanical clean (bulk wave); behavior not yet reviewed
-# func 37F2..380A  len 0019 B  evidence: reko
+# klimb_msg — cmd_K's message, its site-kind gate, and the first half of its refusal
+# name-evidence: the continuation of asm/37F1 cmd_K, cut by the Phase 2 map after the call
+#           opcode. Owns `KLIMB`, then the kind test (4 or 5 or refuse), then the `-WH` half of
+#           `-WHAT?` — the string straddles into asm/380B, which owns `AT?`. asm/3812 jumps back
+#           to L_003a05 to reuse this refusal when the cell has no up-ladder feature, so the
+#           message is reached by jump as well as by fall-through.
+# func 37F2..380A  len 0019 B  evidence: reko; role read from the bytes 2026-10-29
+# provenance: static — bytes read from asm/37F1's call target and the kind compares here,
+#           decoded 2026-10-29 alongside cmd_K. Not yet observed executing in a harvest.
 # strings: "KLIMB", "-WH"
 # calls: L_0051df (str_out)
-# confidence: low (bytes proven by check_func.py)
+# confidence: high (handler role and gate read directly off the bytes, 2026-10-29)
 # body corrected: 2026-10-28e -- evidence: cmd_K is two inline-string sites and a two-way test,
 #           and the map cut both calls after their opcodes (asm/37F1, and the `e8` at 3805 kept
 #           here). The five mnemonics after the first call were `KLIMB` read as code, and the

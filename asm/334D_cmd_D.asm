@@ -12,9 +12,17 @@
 #         0x20 cell at (5,5) with DS:4A = 4, pressing D printed `CMD: DESCEND` and put the player
 #         back on the world map at the gate cell (24,40) with DS:25 = 0xFF. That makes cmd_D one
 #         of the two handlers that had never run in any harvest; the frame is `c-cmdD-descend.png`.
-#         It is still NOT implemented in the engine (a NULL slot), which is an honest gap rather
-#         than a stub: the marker rule asks for a marker only when a handler is implemented but
-#         unproven, and this is the other way round.
+#         THE 0xFF IS THE PROOF, not a detail. It is what `decb` from 0 leaves behind, and the
+#         `js` in asm/3823 is what turns it into an exit. So the one live observation of this
+#         handler also pins the shape of the floor block, and it is what makes cmd_D and cmd_K
+#         readable only as a pair: same kind gate, same cell gate with the feature bit swapped
+#         (0x20 down, 0x10 up), same two floor arms with the direction swapped. A tower climbs up
+#         and descends out; a dungeon descends deeper and climbs out.
+#         IMPLEMENTED 2026-10-29, so the older note here ("still NOT implemented, an honest gap")
+#         is retired. Engine: game/commands.c cmd_D and cmd_K over one shared site_shift().
+#         Gate: CP6, twelve cases including the underflow exit. Not modelled: the [DS:6D] branch
+#         of the exit block, which writes the player record on leaving a dungeon, and the floor
+#         term of asm/1451's grid index, so a tower above its first floor still draws page 0.
 # func 334D..3380  len 052 B  evidence: seed+reko (jump table cs:0730 entry D)
 # provenance: live:d12-ladder-ds25; static
 #           entry executed in 1 of 189 harvests; confirmed by the capture of 2026-10-29, which is
