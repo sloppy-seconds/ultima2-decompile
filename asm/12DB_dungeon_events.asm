@@ -1,5 +1,32 @@
 # dungeon_events — random dungeon events (gremlins, blown torches)
 # name-evidence: strings 'YOUR TORCH IS BLOWN OUT!' / 'A GREMLIN STOLE SOME FOOD!'
+#           THE CONTACT ARMS, read 2026-10-29. Runtime 0x1508 is reached from
+#           asm/1151_dungeon_turn when a creature's candidate step is the player's cell,
+#           i.e. it is one tile away and facing inward (a diagonal neighbour resolves to
+#           orthogonal on the following tick, so "adjacent" is the right mental model).
+#           It rolls once and acts only under 0x40 — one attempt in four — then switches on
+#           the dungeon type, and only three of the seven types do anything:
+#             type 2 -> 0x13AB  YOUR TORCH IS BLOWN OUT!, but ONLY if [DS:26] is already
+#                               non-zero. In the dark it prints nothing and changes
+#                               nothing; that silence is the original's, not a gap.
+#             type 5 -> 0x13DA  A GREMLIN STOLE SOME FOOD!, then `stc;cmc` to clear CF and
+#                               `sbb $0x1 / das / cmc` = one BCD unit off the food triple
+#                               at [DS:53]. A borrow leaves for asm/0C62.
+#             type 7 -> 0x1410  YOU FEEL A STRONG MAGIC!, then [DS:26D] := rand & 7, and
+#                               state.h names DS:26D paral_sleep. So it is sleep turns.
+#             else          nothing at all.
+#           So the dungeon's danger is light, food and consciousness, not hit points, and
+#           there is no contact melee here. That agrees with the overworld, which has no
+#           attack-on-contact either (docs/contract-creature-tick.md, ai.h).
+#           NOT READ: the roll >= 0x40 branch falls into runtime 0x153E, which re-checks
+#           the floor, calls asm/60AC, rolls, masks to 0..7 and compares against [DS:62]
+#           (worn_armour). An armour-gated creature spell with three unnamed helpers behind
+#           it (asm/60AC, asm/60F2, asm/4D26). Separate decode, and the engine currently
+#           treats a failed roll as nothing happened, which understates it.
+#           asm/5C95, called after each of the three prints, is a seven-byte gate on
+#           [DS:54D] and is not an effect.
+#           Engine twin: dg_contact() in engine/src/game/dungeon.c, gated by CP7 section
+#           6d against a gremlin authored one cell west of the arrival point.
 # func 12DB..143B  len 0161 B  evidence: call+reko
 # strings: "YOUR TORCH IS BLOWN OUT!"; "A GREMLIN STOLE SOME FOOD!"; "YOU FEEL A STRONG MAGIC!"
 # calls: L_000e62, L_001378, L_0015ab, L_0015da, L_001610, L_004d26, L_0051df (str_out), L_005417 (+3 more)

@@ -154,6 +154,23 @@ def monx() -> bytes:
     m[64 + 2] = 0x40                 # hp, well above the flee threshold at 0x0f
     m[96 + 2] = 0x02                 # dungeon type 2
     m[128 + 2] = 0x00                # floor 0, the page the player arrives on
+
+    # CP7_GREMLIN=1 authors a third creature orthogonally adjacent to the arrival cell,
+    # for the asm/12DB contact gate. It is opt-in through the environment rather than
+    # always-on because a contact roll consumes the RNG, and every other case in this file
+    # shares the seed: an always-on neighbour would shift the stream under the movement,
+    # chest and floor assertions and make them depend on a 1-in-4 roll.
+    #
+    # Type 5 is the gremlin, not type 2, on purpose: the torch arm would blow the light out
+    # mid-run and darken frames that other assertions read, and type 7 writes the sleep
+    # counter. Stealing one food from a character carrying 9999 is the one contact effect
+    # that cannot perturb anything else.
+    if os.environ.get("CP7_GREMLIN"):
+        m[3] = 4                     # one cell west of the arrival cell (5,5)
+        m[32 + 3] = 5
+        m[64 + 3] = 0x40             # above the flee threshold, so it pursues
+        m[96 + 3] = 0x05             # dungeon type 5 == the gremlin arm
+        m[128 + 3] = 0x00            # floor 0, the player's floor
     return bytes(m)
 
 

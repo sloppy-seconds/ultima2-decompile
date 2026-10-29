@@ -284,6 +284,27 @@ PY
         fi
     fi
 
+    # ---- 6d. the asm/12DB contact arms --------------------------------------
+    # A type-5 gremlin authored one cell west of the arrival cell. asm/1151's sweep gives it
+    # a step vector that points straight at the player, so every tick it attempts to enter
+    # the player's cell, reaches runtime 0x1508, and rolls. The arm fires only under 0x40,
+    # one attempt in four, so the script takes enough ticks for the roll to land and the
+    # assertion is on the message the arm prints.
+    #
+    # The message is the whole assertion, and that is deliberate: asm/12DB's gremlin arm
+    # prints and THEN subtracts one BCD unit from food, and food starts at 9999, so a
+    # message is the only observable that distinguishes "the arm ran" from "the arm ran and
+    # nothing else happened". If dg_contact() is deleted the message never appears and this
+    # goes red; that is the control.
+    export CP7_GREMLIN=1
+    if run_case gremlin 'E\nI\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n' "$WORK/gremlin.out"; then
+        unset CP7_GREMLIN
+        said "$WORK/gremlin.out" "A GREMLIN STOLE SOME FOOD!" \
+            && ok "CP7 contact: the asm/12DB gremlin arm fires from an adjacent creature" \
+            || { bad "CP7 contact: no GREMLIN message across 6 ticks (dg_contact not reached?)"; \
+                 tail -2 "$WORK/gremlin.out.txt"; }
+    fi
+
     # ---- 7. floors ----------------------------------------------------------
     # cmd_D on a 0x20 cell in a dungeon increments [DS:25], and the grid the engine
     # reads is now the page that byte names — which is the floor term asm/1451 has
