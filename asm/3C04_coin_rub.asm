@@ -6,9 +6,11 @@
 #           `LDA #$14 ; STA $D9` at $7DD9 — print, then store 20 into the creature-move freeze
 #           counter, which is the same counter asm/2199_creature_step_gate refuses on and the
 #           same constant this file stores to DS:26A. That is the second witness the behaviour
-#           is intended and not a decode error, and it is worth saying what it is NOT: nobody
-#           has seen a player trigger this path in 60 harvests, and a second implementation
-#           agreeing does not make the DOS entry executed. CORROBORATED, not observed.
+#           is intended and not a decode error. It used also to say that nobody had seen this
+#           path run, and that is now withdrawn: cmd_N fell into it twice on 2026-10-29 in
+#           captures/spice86/cmd-nr-live, with the coin spent, the string on a frame and DS:26A
+#           read back at 0x14. The Apple II twin is corroboration, and the DOS entry is now
+#           observed on its own terms.
 #           Note this pair did NOT come from tools/apple2_anchor_map.py: the Apple text is
 #           'You rub a coin....' (sentence case, four dots) against DOS 'YOU RUB A COIN...'
 #           (upper, three dots), and the crosswalk matches verbatim only. Found by a targeted
