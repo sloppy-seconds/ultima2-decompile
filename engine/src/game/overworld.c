@@ -341,7 +341,7 @@ int u2_site_edge_crossed(int sector_second, int raw_x, int raw_y)
            raw_y < 0 || raw_y >= U2_SECTOR_EDGE;
 }
 
-static void site_leave(u2_ctx *ctx, u2_overworld *ow)
+void u2_overworld_site_leave(u2_ctx *ctx, u2_overworld *ow)
 {
     ow->x = ctx->state.entry_x;
     ow->y = ctx->state.entry_y;
@@ -1664,7 +1664,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * every one of them leaves, so the out-of-range test is both directions,
          * not the high edge alone. See site_leave(). */
         if (u2_site_edge_crossed(ow->sector_lo, raw_x, raw_y)) {
-            site_leave(ctx, ow);
+            u2_overworld_site_leave(ctx, ow);
             continue;
         }
 

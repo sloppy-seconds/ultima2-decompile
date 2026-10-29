@@ -11,6 +11,7 @@
  */
 #include "game/commands.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 #include "core/seam.h"
@@ -1068,6 +1069,191 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_DONE;
 }
 
+/* ---- the three site handlers: I (IGNITE TORCH), D (DESCEND), K (KLIMB) ------ */
+
+/* asm/53B5 renders one packed-decimal byte as two ASCII digits, high nibble first, and
+ * asm/3823 hands it `add $0x0,%al ; daa` rather than a stored BCD byte -- so a binary floor
+ * is pushed through DAA on the way to the screen. DAA with AF and CF clear adds 6 when the
+ * low nibble is over 9 and 0x60 when the result is over 0x99, which is why a floor past 99
+ * prints a wrapped pair instead of a third digit. Emulated rather than formatted with
+ * %02u so that quirk survives instead of being quietly smoothed over. */
+static void daa_bcd2(uint8_t v, char *out)
+{
+    unsigned a = v;
+    if ((a & 0x0Fu) > 9u) a += 6u;
+    if (a > 0x99u) a += 0x60u;
+    a &= 0xFFu;
+    out[0] = (char)('0' + (a >> 4));
+    out[1] = (char)('0' + (a & 0x0Fu));
+    out[2] = '\0';
+}
+
+/* asm/3794 cmd_I: IGNITE TORCH.
+ *
+ * The handler is cut in half by the Phase 2 map -- asm/3794 is a single `e8` and the operand
+ * and the text are in asm/3795 -- which is why nobody had read it as a unit. Read together it
+ * is four instructions and a store:
+ *
+ *   print "IGNITE TORCH"
+ *   if [DS:4A] < 4            -> cmd_done, no effect at all
+ *   if [DS:64] == 0           -> print CR "NONE OWNED!", cmd_done
+ *   else packed-decimal [DS:64] -= 1 ; [DS:26] = 0x96 ; cmd_done
+ *
+ * The `cmp $0x4` / `jae` pair is the same site-kind gate as DESCEND and KLIMB: a torch is
+ * only worth lighting in a tower or a dungeon, and out here the command prints its own name
+ * and does nothing. That emptiness is the real behaviour, not a stub -- three instructions
+ * and one store between the gate and the return.
+ *
+ * [DS:26] is the byte state.h carries as moved_flag, and it is ALIASED: outside a site the
+ * walk loop uses it as a moved-since-command flag, inside one asm/1151 uses it as the light
+ * counter, printing IT'S DARK! at zero and TORCH BURNED OUT! when a step takes it there.
+ * The LIGHT spell writes the same 0x96 into the same byte, so a torch and that spell are one
+ * running count and casting LIGHT in a lit corridor spends a spell to refill a burning
+ * torch. Confirmed live in captures/spice86/cmd-c-cast-tower.
+ *
+ * WHAT THE ENGINE DOES NOT YET CONSUME: nothing reads [DS:26] or [DS:64] as light today --
+ * asm/1151_dungeon_darkness is inside the parked dungeon span (AGENTS.md section 3) and the
+ * engine has no darkness state. So the spend and the refill are correct mutations of the
+ * saved record with no visible effect yet. That is a rendering gap with a named owner, not a
+ * claim that the torch does something. */
+static u2_cmd_result cmd_I(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)ow; (void)letter;
+    seam_str_out(ctx, U2_S_IGNITE_TORCH);
+
+    if (ctx->state.sector_second < 4) {
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    if (ctx->state.torches == 0) {
+        seam_char_print(ctx, '\r');      /* the 0x8d line marker on asm/37AE's db line */
+        seam_str_out(ctx, U2_S_IGNITE_NONE_OWNED);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    /* asm/37C8: `stc ; cmc ; sbb $0x1,%al ; das ; cmc` -- one packed-decimal step, the same
+     * idiom asm/3C04 spends a STRANGE COIN with. Torches are BCD, so 0x10 goes to 0x09. */
+    ctx->state.torches = bcd_dec1(ctx->state.torches);
+    ctx->state.moved_flag = 0x96;
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* The two floor blocks DESCEND and KLIMB share, selected by direction rather than duplicated.
+ *
+ * asm/3381 is `incb [DS:25]` then a jump straight to the print. asm/3823 is `decb [DS:25]`,
+ * a `js` to the exit block, then the same print at asm/3A2A. So the decrement is the only
+ * arm that can leave the site, and the increment has no bound check at all -- climbing above
+ * a tower's top increments past it and prints the result.
+ *
+ * Which command takes which arm is the interesting part, and it is what makes the pair
+ * consistent rather than contradictory: in a TOWER KLIMB increments and DESCEND decrements,
+ * in a DUNGEON KLIMB decrements and DESCEND increments. [DS:25] is therefore not "height";
+ * it is a floor index that counts up out of a tower and up into a dungeon, and the two
+ * commands are mirrors. That is corroborated by the UP LADDER and DOWN LADDER spells in
+ * asm/3139, which took the same byte 0 -> 1 -> 0 in the sector-24 tower, and by the live
+ * DESCEND in captures/spice86/d12-ladder-ds25 leaving it at 0xFF -- a decrement below zero
+ * with no guard, which is the `js` firing. */
+static u2_cmd_result site_shift(u2_ctx *ctx, u2_overworld *ow, bool down)
+{
+    if (!down) {
+        ctx->state.site_floor = (uint8_t)(ctx->state.site_floor + 1u);
+    } else {
+        ctx->state.site_floor = (uint8_t)(ctx->state.site_floor - 1u);
+        /* `js`, not `jle`: the sign flag, so it is the high BIT that fires, and any value at
+         * or above 0x80 would take the exit arm. Floors stay under 0x80 in practice. */
+        if ((int8_t)ctx->state.site_floor < 0) {
+            /* asm/3A44: back to the world. The original restores the entry cell, zeroes the
+             * site kind and re-reads the sector, which is exactly what site_leave() does, and
+             * then branches on [DS:6D] -- either staging a cell from [DS:6A]/[DS:6B] or
+             * writing the 256-byte player record with an int-21h handle write. That last
+             * branch means leaving a dungeon saves the game, and it is NOT modelled here:
+             * it belongs to the same parked dungeon span as the grid indexing. */
+            u2_overworld_site_leave(ctx, ow);
+            cmd_done(ctx);
+            return U2_CMD_DONE;
+        }
+    }
+
+    char d[3];
+    daa_bcd2(ctx->state.site_floor, d);
+    seam_char_print(ctx, '\r');          /* the 0x8d on asm/3823's db line */
+    seam_str_out(ctx, U2_S_TO_LEVEL);
+    seam_str_out(ctx, d);
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
+/* True when the cell under the player carries the ladder feature the command wants.
+ *
+ * The gate is [DS:14], which state.h carries as mode_a and asm/5B71 fills from DS:2DF, and
+ * which inside a site holds the cell the player is standing on -- the sector-24 tower's grid
+ * uses 0x20 for its down-ladder cell and 0x10 for the up one. The engine keeps no DS:14
+ * mirror (nothing writes state.mode_a), so this reads the live world buffer the same way
+ * cmd_X reads it, which is also the only version a test can seed.
+ *
+ * The known gap: the engine loads a tower or dungeon mapxNN as one flat grid and does not
+ * index it by [DS:25], so on any floor above the first this reads page 0's cell. asm/1451
+ * computes word[DS:472] + floor*256 + y*16 + x, and that floor term is the missing piece. */
+static bool site_cell_has(u2_overworld *ow, uint8_t bit)
+{
+    return (u2_world_tile_at(&ow->world, ow->x, ow->y) & bit) != 0;
+}
+
+/* asm/37F1 cmd_K: KLIMB. Refuses outside a tower or dungeon, refuses unless the cell under
+ * the player has the up-ladder feature, then moves one floor up. See site_shift. */
+static u2_cmd_result cmd_K(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_KLIMB);
+
+    const uint8_t kind = ctx->state.sector_second;
+    if (kind != 4 && kind != 5) {
+        /* asm/37F2 owns `-WH` and asm/380B owns `AT?`: one string across a fragment
+         * boundary. Its bytes are identical to DESCEND's refusal, so the engine prints the
+         * one the extractor can express as a single run; see the note in the manifest. */
+        seam_str_out(ctx, U2_S_DESCEND_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+    if (!site_cell_has(ow, 0x10)) {
+        seam_str_out(ctx, U2_S_DESCEND_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+    /* Tower climbs up (increment); dungeon climbs toward the surface (decrement). */
+    return site_shift(ctx, ow, kind == 5);
+}
+
+/* asm/334D cmd_D: DESCEND. The mirror of KLIMB, and the one handler of the three that has
+ * been seen running -- captures/spice86/d12-ladder-ds25, the first time cmd_D appeared in
+ * ExecutedInstructions in 189 harvests. Its header's original "key byte" reading of [DS:4A]
+ * is retired: that byte is the site kind, and the compares are 4 and 5. */
+static u2_cmd_result cmd_D(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_DESCEND);
+
+    const uint8_t kind = ctx->state.sector_second;
+    if (kind != 4 && kind != 5) {
+        seam_str_out(ctx, U2_S_DESCEND_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+    if (!site_cell_has(ow, 0x20)) {
+        seam_str_out(ctx, U2_S_DESCEND_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+    /* Tower descends (decrement, and out of the world at the bottom); dungeon goes deeper
+     * (increment). */
+    return site_shift(ctx, ow, kind == 4);
+}
+
+
+
 /* ---- the table ----------------------------------------------------------- */
 
 /*
@@ -1091,8 +1277,13 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      there is easy to get wrong: the count is decremented BEFORE the location gate, so a cast
  *      that fails with -FAILED! outside a tower or dungeon still spends the spell. Check the
  *      stock, spend, then fail — not check, fail, spend.
- *   D  asm/334D prints DESCEND and falls into a key-code test whose meaning is recorded as
- *      unresolved in its own header, and dungeons are parked (AGENTS.md section 3).
+ *   D  implemented 2026-10-29, and this entry used to say its key-code test was unresolved -- it
+ *      is not. [DS:4A] is the site kind, not a key, and DESCEND and KLIMB are exact mirrors: the
+ *      same 4-or-5 gate, the same cell-feature gate (0x20 down, 0x10 up), and the same two floor
+ *      blocks with the direction swapped. asm/334D and asm/37F1. What is NOT modelled is the
+ *      below-zero exit's [DS:6D] branch, which writes the player record on leaving a dungeon, and
+ *      the floor term of asm/1451's grid index, so a tower above its first floor still draws
+ *      page 0. Both belong to the dungeon span AGENTS.md section 3 parks.
  *   F  FIRE is the FRIGATE'S CANNONS, not a melee attack: asm/35C9 gates on [DS:13] == 0x24,
  *      the ship stamp from asm/2FAD's BOARD dispatch, and off the ship the whole command is
  *      `FIRE WHAT?`. On the ship it prints " DIRECT-" and uses the aim gate. Recorded in
@@ -1143,14 +1334,14 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_A, /* A  attack aim: asm/2B8F, prints ATTACK-- and awaits a direction */
     cmd_B, /* B  board vehicle: asm/2F6F -> asm/2FAD, gated on the item the refusal names */
     NULL,  /* C  see the note above */
-    NULL,  /* D  see the note above */
+    cmd_D, /* D  descend: asm/334D, the mirror of K, gated on site kind and the cell feature */
     cmd_E, /* E  enter site: asm/3389, body in u2_overworld_enter() */
     cmd_F, /* F  fire: asm/35C1, the frigate's cannon, gated on the ship stamp */
     NULL,  /* G  not implemented: GET needs ground items */
     cmd_H,
-    NULL,  /* I  not implemented */
+    cmd_I, /* I  ignite torch: asm/3794, spends a torch and refills the light counter */
     cmd_J,
-    NULL,  /* K  not implemented */
+    cmd_K, /* K  climb: asm/37F1, the mirror of D */
     cmd_L, /* L  launch plane/rocket: asm/38B0, its own flight loops, gated on the item named */
     cmd_M, /* M  ready a spell by number: asm/3B92, echoes the spell NAME */
     cmd_N, /* N  negate time: asm/3BCE, spends a STRANGE COIN and freezes creature movement */

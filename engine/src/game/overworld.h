@@ -269,6 +269,15 @@ void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow);
 void u2_overworld_enter(u2_ctx *ctx, u2_overworld *ow);
 
 /*
+ * Leave the site we are inside and go back to the sector we entered from: restore the
+ * entry cell, zero the site kind, and re-read the sector. asm/242D/2434/243E reach this
+ * from the sector-edge test, and asm/3823 reaches it from the far end of KLIMB when the
+ * floor counter underflows past zero. Exported for cmd_D and cmd_K, which are the other
+ * two routes out of a site and which the original routes through the same block.
+ */
+void u2_overworld_site_leave(u2_ctx *ctx, u2_overworld *ow);
+
+/*
  * The death tail: asm/0C62..0C99 as one span. Zeroes DS:51..DS:59, repaints the
  * status band, scrolls the log and prints `<NAME> IS DEAD!` with no `CMD: `
  * prompt after it. Every kill site in the binary jumps here — the food

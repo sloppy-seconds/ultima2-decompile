@@ -230,6 +230,24 @@ MANIFEST = [
     ("U2_S_ONLY_ON_FOOT",      "33AE_move_only_on_foot.asm", ("run", 0x35B1, 14, "-ONLY ON FOOT!")),
     ("U2_S_DESCEND",           "334D_cmd_D.asm",          ("run", 0x3550, 7, "DESCEND")),
     ("U2_S_DESCEND_WHAT",      "334D_cmd_D.asm",          ("run", 0x3566, 6, "-WHAT?")),
+    # cmd_I (IGNITE TORCH) and cmd_K (KLIMB), decoded 2026-10-29. Both handlers are cut by the
+    # Phase 2 map: each is a one-byte `e8` in its own cmd_* file with the operand and the text in
+    # the fragment after it, so these live in the fragment files, not in cmd_I/cmd_K. Those
+    # fragments were renamed to match the role this decode established.
+    #
+    # The two refusals deliberately do NOT get their own entries. cmd_K's is `-WH` at asm/37F2
+    # plus `AT?` at asm/380B -- one string straddling a fragment boundary -- so it cannot be
+    # written as a single `run` with a working asm fallback, and a 3-tuple would emit an empty
+    # literal in CI where the exe is absent. Its bytes are identical to U2_S_DESCEND_WHAT, so the
+    # engine prints that; the distinct call site is recorded in asm/37F2's header instead.
+    #
+    # "NONE OWNED!" and "TO LEVEL " both carry a leading 0x8d line-marker byte in the binary.
+    # The offsets below start AFTER it, so the exe path and the asm fallback agree byte for byte;
+    # the callers print the CR explicitly, which is the same convention asm/3BE4 established.
+    ("U2_S_IGNITE_TORCH",      "3795_ignite_torch_gate.asm", ("run", 0x3997, 12, "IGNITE TORCH")),
+    ("U2_S_IGNITE_NONE_OWNED", "37AE_ignite_torch_burn.asm", ("run", 0x39B9, 11, "NONE OWNED!")),
+    ("U2_S_KLIMB",             "37F2_klimb_msg.asm",        ("run", 0x39F4, 5, "KLIMB")),
+    ("U2_S_TO_LEVEL",          "3823_site_floor_down.asm",  ("run", 0x3A2E, 9, "TO LEVEL ")),
     ("U2_S_SITE_TOWN",         "343F_sub_343f.asm",       ("run", 0x364A, 5, "-TOWN")),
     ("U2_S_SITE_TOWER",        "343F_sub_343f.asm",       ("run", 0x367F, 6, "-TOWER")),
     ("U2_S_SITE_CASTLE",       "34B5_sub_34b5.asm",       ("run", 0x36B8, 7, "-CASTLE")),

@@ -115,7 +115,14 @@ typedef struct u2_state {
                                          * compares this byte against mon_kind, and mon_kind is
                                          * demonstrably not a floor.
                                          * It is also the byte the BLINK branch hands to asm/1451
-                                         * before it overwrites the position. */
+                                         * before it overwrites the position.
+                                         * NOT PERSISTED, and this is easy to miss: the saved record
+                                         * is DS:36..DS:135, and DS:25 is BELOW it, so the floor is
+                                         * scratch and the game does not remember which floor you
+                                         * were on. Found the hard way 2026-10-29 when a CP6 seed
+                                         * tried to set it through the player file and the byte came
+                                         * back zero; the gate now drives the floor with keystrokes
+                                         * instead, which is the better test anyway. */
     /* 0x26 */ uint8_t moved_flag;    /* the accept tail of the walk loop xors it
                                          * with 0xFF (runtime 0x09E9) and it is
                                          * zeroed at 0x09F7; a rejected step never

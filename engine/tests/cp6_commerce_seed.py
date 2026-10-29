@@ -15,6 +15,8 @@ nothing else about the cells changes.
 
 Usage: cp6_commerce_seed.py DIR CASE
   CASE = armour | weapons | transport | grocery | pub | nomark
+         | torch_lit | torch_none | torch_outside | tower_climb | tower_noladder
+         | tower_descend | town_descend | town_climb | tower_both
 """
 import os
 import sys
@@ -47,8 +49,39 @@ CASES = {
     "nomarker":  ((3, 2), (38, 5), (38, 4), (38, 3), SIGN, FLOOR),
 }
 
+# Site cases for cmd_I, cmd_D and cmd_K: (sector digits, player cell, tile under the player,
+# torches).
+#
+# These do not need a tower interior. The ones digit of the sector IS the site kind, so
+# sector 24 opens the gates that IGNITE TORCH, DESCEND and KLIMB all test, and the tile under
+# the player carries the ladder feature the two vertical commands require -- 0x10 for the up
+# cell, 0x20 for the down one, both measured in the sector-24 tower.
+#
+# There is deliberately no floor in this table. [DS:25] sits BELOW the saved record, which is
+# DS:36..DS:135, so site_floor is scratch and no seed file can set it -- which is itself the
+# finding: the game does not remember which floor you were on. The two-level cases therefore
+# drive the floor with keystrokes (K then K, K then D) instead of seeding it, and that turns
+# out to be the better test anyway, because it exercises the pair as a round trip.
+SITE_CASES = {
+    "torch_lit":      ((2, 4), (5, 5), 0x08, 0x03),
+    "torch_none":     ((2, 4), (5, 5), 0x08, 0x00),
+    "torch_outside":  ((3, 2), (5, 5), 0x08, 0x03),
+    "tower_climb":    ((2, 4), (5, 5), 0x10, 0x00),
+    # Both ladder features on one cell. A real tower keeps its up and down cells apart, so
+    # this is engine-authored filler rather than a map the game ships -- it exists so the
+    # climb/descend round trip can be driven from one standing position. On a 0x10-only cell
+    # DESCEND refuses, which is correct and is what the first version of this case proved.
+    "tower_both":     ((2, 4), (5, 5), 0x30, 0x00),
+    "tower_noladder": ((2, 4), (5, 5), 0x08, 0x00),
+    "tower_descend":  ((2, 4), (5, 5), 0x20, 0x00),
+    "town_descend":   ((3, 2), (5, 5), 0x20, 0x00),
+    "town_climb":     ((3, 2), (5, 5), 0x10, 0x00),
+}
+
 
 def main(out_dir: str, case: str) -> int:
+    if case in SITE_CASES:
+        return main_site(out_dir, case)
     (hi, lo), (px, py), (nx, ny), (fx, fy), ntile, ftile = CASES[case]
 
     content = os.path.join(out_dir, "content")
@@ -97,6 +130,43 @@ def main(out_dir: str, case: str) -> int:
     p[0xE3 - 0x36] = 1                       # items_held[13] = STRANGE COIN, which is what
     #                                       # NEGATE TIME spends. DS:E3 is inside items_held;
     #                                       # it is not a separate counter (see commands.c).
+    with open(os.path.join(save, "PLAYER"), "wb") as f:
+        f.write(bytes(p))
+    return 0
+
+
+def main_site(out_dir: str, case: str) -> int:
+    """Seed for the IGNITE TORCH / DESCEND / KLIMB gate: one sector, one player, one tile."""
+    (hi, lo), (px, py), tile, torches = SITE_CASES[case]
+
+    content = os.path.join(out_dir, "content")
+    save = os.path.join(out_dir, "save")
+    os.makedirs(content, exist_ok=True)
+    os.makedirs(save, exist_ok=True)
+
+    def write_sector(digits):
+        grid = bytearray([FLOOR]) * 4096
+        grid[py * 64 + px] = tile
+        with open(os.path.join(content, f"mapx{digits}"), "wb") as f:
+            f.write(bytes(grid))
+        with open(os.path.join(content, f"monx{digits}"), "wb") as f:
+            f.write(bytes(256))
+
+    write_sector(f"{hi}{lo}")
+    # Leaving a site zeroes the ones digit, so the descend-exit case lands in sector `hi0`
+    # and the loader has to find something there or the run dies on a missing file rather
+    # than on the behaviour under test.
+    write_sector(f"{hi}0")
+
+    p = bytearray(384)
+    p[0:7] = b"SITETST"
+    p[0x49 - 0x36] = hi
+    p[0x4A - 0x36] = lo                      # the ones digit, which IS the site kind
+    p[0x5A - 0x36] = px                      # entry cell, where a site exit drops you
+    p[0x5B - 0x36] = py
+    p[0x64 - 0x36] = torches                 # DS:64 torches, packed decimal
+    # No [DS:25]: it is below the saved record, so the floor always starts at whatever the
+    # loader leaves there. See the SITE_CASES comment.
     with open(os.path.join(save, "PLAYER"), "wb") as f:
         f.write(bytes(p))
     return 0

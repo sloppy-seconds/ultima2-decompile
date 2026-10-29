@@ -333,6 +333,124 @@ else
             && bad "CP6 F: aimed a cannon while off the frigate" \
             || ok "CP6 F: no bearing prompt off the ship"
     fi
+    # --- cmd_I (IGNITE TORCH), cmd_D (DESCEND), cmd_K (KLIMB) ----------------
+    # The site trio, decoded 2026-10-29 from the fragments the Phase 2 map had cut in half.
+    # All three gate on the site kind, and the ones digit of the seeded sector IS that kind,
+    # so sector 24 opens the gates without the engine needing a tower interior.
+    if run_case torch_lit cmdi 'I\n' "$WORK/cmdi.out"; then
+        said "$WORK/cmdi.out" "IGNITE TORCH" \
+            && ok "CP6 I: IGNITE TORCH prints its name" \
+            || bad "CP6 I: expected 'IGNITE TORCH'"
+        said "$WORK/cmdi.out" "NONE OWNED!" \
+            && bad "CP6 I: refused a torch the player has" \
+            || ok "CP6 I: with torches held it does not refuse"
+        light=$(field_of "$WORK/cmdi.out" light)
+        case "$light" in
+            "02 96") ok "CP6 I: torch 0x03 -> 0x02 (packed decimal) and the light counter refilled to 0x96" ;;
+        *)  bad "CP6 I: light pair is '$light', expected '02 96'" ;;
+        esac
+    fi
+    if run_case torch_none cmdi2 'I\n' "$WORK/cmdi2.out"; then
+        said "$WORK/cmdi2.out" "NONE OWNED!" \
+            && ok "CP6 I: with no torches it prints NONE OWNED!" \
+            || bad "CP6 I: expected 'NONE OWNED!' with zero torches"
+        light=$(field_of "$WORK/cmdi2.out" light)
+        case "$light" in
+            "00 "*) ok "CP6 I: the refusal spends nothing" ;;
+        *)  bad "CP6 I: refusal changed the light pair: '$light'" ;;
+        esac
+    fi
+    # The kind gate: outside a tower or dungeon the command prints and does nothing at all.
+    # That emptiness is the handler, not a gap in it -- three instructions and one store.
+    if run_case torch_outside cmdi3 'I\n' "$WORK/cmdi3.out"; then
+        said "$WORK/cmdi3.out" "IGNITE TORCH" \
+            && ok "CP6 I: in a town it still prints IGNITE TORCH" \
+            || bad "CP6 I: expected 'IGNITE TORCH' in a town"
+        said "$WORK/cmdi3.out" "NONE OWNED!" \
+            && bad "CP6 I: reached the torch test below the kind gate" \
+            || ok "CP6 I: the kind gate short-circuits before the torch test"
+        light=$(field_of "$WORK/cmdi3.out" light)
+        case "$light" in
+            "03 00") ok "CP6 I: outside a site a torch is not spent and the counter is not touched" ;;
+        *)  bad "CP6 I: kind gate mutated light pair: '$light'" ;;
+        esac
+    fi
+    if run_case tower_climb cmdk 'K\n' "$WORK/cmdk.out"; then
+        said "$WORK/cmdk.out" "KLIMB" \
+            && ok "CP6 K: KLIMB prints its name" \
+            || bad "CP6 K: expected 'KLIMB'"
+        said "$WORK/cmdk.out" "TO LEVEL 01" \
+            && ok "CP6 K: in a tower KLIMB increments the floor and prints it as two BCD digits" \
+            || { bad "CP6 K: expected 'TO LEVEL 01'"; tail -3 "$WORK/cmdk.out.txt"; }
+        f=$(field_of "$WORK/cmdk.out" floor)
+        [ "$f" = "01" ] && ok "CP6 K: DS:25 went 0 -> 1" || bad "CP6 K: floor is '$f', expected 01"
+    fi
+    # asm/53B5 always emits two digits, high nibble first, and asm/3823 feeds it `daa` rather
+    # than a stored BCD byte. A one-digit level would mean the printer was reimplemented wrong.
+    # Two climbs, because [DS:25] is below the saved record and cannot be seeded to 1.
+    if run_case tower_climb cmdk2 'K\nK\n' "$WORK/cmdk2.out"; then
+        said "$WORK/cmdk2.out" "TO LEVEL 02" \
+            && ok "CP6 K: a second climb goes to 02, so the printer is not a bare %d" \
+            || { bad "CP6 K: expected 'TO LEVEL 02' after two climbs"; tail -3 "$WORK/cmdk2.out.txt"; }
+        f=$(field_of "$WORK/cmdk2.out" floor)
+        [ "$f" = "02" ] && ok "CP6 K: two climbs took DS:25 to 2" || bad "CP6 K: floor is '$f', expected 02"
+    fi
+    if run_case tower_noladder cmdk3 'K\n' "$WORK/cmdk3.out"; then
+        said "$WORK/cmdk3.out" "-WHAT?" \
+            && ok "CP6 K: on a cell without the 0x10 feature it refuses" \
+            || bad "CP6 K: expected '-WHAT?' on a plain cell"
+        f=$(field_of "$WORK/cmdk3.out" floor)
+        [ "$f" = "00" ] && ok "CP6 K: the refusal leaves the floor alone" \
+                        || bad "CP6 K: refusal moved the floor to '$f'"
+    fi
+    if run_case town_climb cmdk4 'K\n' "$WORK/cmdk4.out"; then
+        said "$WORK/cmdk4.out" "-WHAT?" \
+            && ok "CP6 K: outside a tower or dungeon KLIMB refuses even on a ladder cell" \
+            || bad "CP6 K: expected '-WHAT?' in a town"
+    fi
+    # DESCEND is KLIMB's mirror, and the tower arm is the one with a live witness: decrementing
+    # floor 0 gives 0xFF, the `js` fires, and the site is left. That is d12-ladder-ds25.
+    # Climb first to get onto floor 1, since the floor cannot be seeded.
+    if run_case tower_both cmdd 'K\nD\n' "$WORK/cmdd.out"; then
+        said "$WORK/cmdd.out" "DESCEND" \
+            && ok "CP6 D: DESCEND prints its name" \
+            || bad "CP6 D: expected 'DESCEND'"
+        said "$WORK/cmdd.out" "TO LEVEL 00" \
+            && ok "CP6 D: in a tower DESCEND decrements, so the pair are mirrors not synonyms" \
+            || { bad "CP6 D: expected 'TO LEVEL 00' after a climb"; tail -3 "$WORK/cmdd.out.txt"; }
+        f=$(field_of "$WORK/cmdd.out" floor)
+        [ "$f" = "00" ] && ok "CP6 D: K then D round-trips DS:25 back to 0" \
+                        || bad "CP6 D: floor is '$f', expected 00"
+    fi
+    if run_case tower_descend cmdd2 'D\n' "$WORK/cmdd2.out"; then
+        # --dump-state prints the sector twice, once as raw bytes and once as the two decimal
+        # digits; field_of takes the last, which is the "24"/"20" form.
+        sec=$(field_of "$WORK/cmdd2.out" sector)
+        case "$sec" in
+            "20") ok "CP6 D: at floor 0 the decrement underflows, js fires, and the site is left (sector 24 -> 20)" ;;
+        *)  bad "CP6 D: expected the site to be left; sector is '$sec', expected 20" ;;
+        esac
+        f=$(field_of "$WORK/cmdd2.out" floor)
+        [ "$f" = "ff" ] && ok "CP6 D: DS:25 is left at 0xFF, the unguarded underflow the live capture recorded" \
+                        || bad "CP6 D: floor is '$f', expected ff"
+        said "$WORK/cmdd2.out" "TO LEVEL" \
+            && bad "CP6 D: printed a level line on the arm that exits instead" \
+            || ok "CP6 D: the exit arm prints no level"
+    fi
+    # And the two ladder cells really are distinct: on a cell with only the up feature,
+    # DESCEND refuses even in a tower. This assertion is here because an earlier version of
+    # the round-trip case used a 0x10 cell and failed for exactly this reason, which is the
+    # gate proving the feature bits are not interchangeable.
+    if run_case tower_climb cmdd4 'D\n' "$WORK/cmdd4.out"; then
+        said "$WORK/cmdd4.out" "-WHAT?" \
+            && ok "CP6 D: on an up-ladder cell only, DESCEND refuses (0x10 and 0x20 are distinct)" \
+            || bad "CP6 D: expected '-WHAT?' on a 0x10-only cell"
+    fi
+    if run_case town_descend cmdd3 'D\n' "$WORK/cmdd3.out"; then
+        said "$WORK/cmdd3.out" "-WHAT?" \
+            && ok "CP6 D: in a town DESCEND refuses" \
+            || bad "CP6 D: expected '-WHAT?' in a town"
+    fi
 fi
 
 printf '\n'

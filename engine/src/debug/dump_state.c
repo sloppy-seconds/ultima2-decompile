@@ -115,6 +115,9 @@ static int emit_raw(const u2_state *s, char *out, int outsz)
     uint8_t exp[2]    = { s->exp_lo, s->exp_hi };
     uint8_t gold[2]   = { s->gold_lo, s->gold_hi };
     uint8_t para[4]   = { s->counter_26A, s->paral_legs, s->paral_arms, s->paral_sleep };
+    /* DS:64 torches and DS:26 the light counter, side by side because cmd_I writes both and
+     * the LIGHT spell writes the same constant into the second. */
+    uint8_t light[2]  = { s->torches, s->moved_flag };
 
     struct { const char *name; const uint8_t *p; int n; } f[] = {
         { "pos", pos, 2 }, { "sector", sector, 2 }, { "hp", hp, 2 },
@@ -124,6 +127,12 @@ static int emit_raw(const u2_state *s, char *out, int outsz)
          * cell (DS:13). A turn log that cannot say whether the player was aboard anything
          * cannot explain a step that cost 38 food or a step the rocket refused. */
         { "stamp", &s->player_stamp, 1 },
+        /* `light` is torches then the light counter; `floor` is the byte DESCEND and KLIMB
+         * move, and the one that underflows to 0xFF on the way out of the bottom of a tower
+         * (captures/spice86/d12-ladder-ds25). A turn log that cannot name these cannot tell
+         * an IGNITE TORCH that spent a torch from one that only printed its own name. */
+        { "light", light, 2 },
+        { "floor", &s->site_floor, 1 },
         { "mon_x", s->mon_x, 32 },     { "mon_y", s->mon_y, 32 },
         { "mon_hp", s->mon_hp, 32 },   { "mon_type", s->mon_type, 32 },
         { "mon_kind", s->mon_kind, 32 }, { "mon_role", s->mon_role, 32 },
