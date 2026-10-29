@@ -2015,3 +2015,41 @@ could not pass, and it caught this the first time the probe key produced output.
 about probe keys, not about the assertion — an inert probe is a gate that is quietly checking
 nothing, and "inert" is a property of the world that can expire without warning when someone
 implements the letter you were leaning on.
+
+## cmd_F: the frigate's cannon, and a range the owner and the bytes disagree about (2026-10-29)
+
+`cmd_F` is implemented (20 of 26 letters). The owner supplied the mechanic from memory — frigate
+cannons, 3-space reach, 32..70 damage, which is what makes shelling a shoreline safe — and the
+bytes agree on the ship and disagree on both numbers.
+
+* **The gate is the ship.** `asm/35C9` reads `[DS:13]` and continues only on `0x24`, the ship
+  stamp `asm/2FAD`'s BOARD dispatch assigns. Off the frigate the entire command is
+  `CMD: FIRE WHAT?`, which is now gated in CP6.
+* **The chain is `asm/35ED` tone → `asm/35F0` creature probe → `asm/35F3` slot → `asm/3603` roll
+  → `asm/3606` damage → `asm/3611` → `asm/2C19` subtract.** It closes the standing question in
+  `asm/2C19_monster_hp_subtract`'s header ("what selects the slot and why that magnitude is not
+  established"), and it means `asm/3611` is not the town-NPC damage path it was once promoted to.
+* **On a hit the original prints nothing.** No `str_out` exists between the probe and the damage
+  apply, and the death branch (`asm/2C19`'s `jae` to `asm/2CA4`) stamps the emptied cell instead
+  of announcing it. So `--MISS` is the only text, and the silence is cited rather than assumed.
+  The tone that would have been the audible feedback is `asm/5EAC`, deliberately not emitted:
+  `asm/5DA9`'s frequency arithmetic is unconfirmed against a heard tone, and a guessed tone is
+  worse than none.
+* **A cannon kill awards nothing.** The melee reward rolls live on `asm/2E3D`'s path; the cannon
+  reaches `asm/2CA4`. `apply_damage_to_slot` takes an `award` flag so the two cannot be silently
+  merged by whoever edits it next, and `attack_check` asserts the no-reward property.
+
+**Two disagreements, both left open as G49 rather than resolved by typing.**
+
+The **range** is one cell in the bytes: `asm/23E6` probes a single cell and its own header warns
+it is "not a ray with a reach", while `cmd_T` builds its two-cell ray by stepping twice in its own
+body and `cmd_F` does not. The recollection is three. Neither has been seen on a frame.
+
+The **damage** is where this project was wrong, not just the memory. `asm/3606` is `or $0x20,%al`,
+which *forces a bit* rather than masking, so the reachable set is every byte with bit 5 set —
+32..63, 96..127, 160..191, 224..255. Floor 32, ceiling 255. `asm/2C19`'s header had recorded
+"32..63" and this project repeated it into a test, which is how the error survived: the first draft
+of `attack_check` asserted the tree's claim and went red on seeds 21, 22 and 23. That is the
+lesson worth keeping — **a cited comment is a hypothesis, and the citation being in our own tree
+does not promote it.** The owner's 32 matches the floor exactly; 70 is not reachable at all, since
+bit 5 is clear in it.
