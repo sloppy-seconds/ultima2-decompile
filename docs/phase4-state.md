@@ -2083,3 +2083,31 @@ is the harness, not the game.
 
 Still open from G49: a cannon **kill** has never been seen, so the no-reward reading stays static,
 and no cannon has ever been fired after a real `BOARD`.
+
+### ...then the owner drove it himself, and the manual turns out to be the thing that was wrong
+
+He opened the noVNC session, walked onto the frigate tile at sector 31 (14,25), pressed `B`, and
+fired. `[DS:13]` went to `0x24` for real — no poked stamp — and his verdict matched the capture:
+**one tile**. Recorded as G49b, and it retires G49a's only caveat.
+
+Two things came out of the session that were not the question.
+
+**Boarding does not spend the BLUE TASSLE.** It read 5 before `B` and 5 after. That is a second
+independent sample alongside `captures/spice86/shipcap3`, which had one, and it strengthens G42's
+answer.
+
+**The printed manual says the cannon has range, and the manual is wrong.** That is the interesting
+part, because it explains the recollection rather than contradicting it: "three spaces, enough to
+shell a shoreline safely" is not a bad memory, it is a documentation-sourced belief, and the owner
+went and checked it against the game rather than arguing from it. The source order on this
+mechanic ended up being manual (wrong) → recollection (wrong, probably sourced from the manual) →
+bytes (right) → play (right). Worth stating plainly because a manual carries far more authority
+than a walkthrough, and this project has a habit of correctly grading third-party walkthroughs
+while letting period documentation slide.
+
+One incidental, and it is a save-format finding rather than a cannon one: the owner's items were
+being **stolen mid-play** by three thieves parked on the quay at (15,25)-(17,25), which is the
+first time `asm/0FCD_combat_thief_steal` has emptied a player slot in front of us rather than in a
+listing. HP fell from 9999 to 9085 in about a minute of standing there. It also means my first
+explanation for the missing items — that the noVNC load had dropped them — was wrong, and I said it
+out loud before checking, which is the pattern the thieves were the answer to.

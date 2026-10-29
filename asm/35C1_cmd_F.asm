@@ -31,6 +31,16 @@
 #           this path is the miss, exactly as asm/35F0..asm/3611's absence of any str_out said.
 # HP IS BINARY, NOT BCD: the two hits subtracted 0x3E and 0x23 from a byte holding 0x99, and
 #           asm/2C19 has no das. A BCD-looking field decremented in binary. Do not "fix" this.
+#           Confirmed again by the owner's own playtest the same day, on a real boarding rather
+#           than a poked stamp: `B` aboard the frigate at sector 31 (14,25) set [DS:13] = 0x24
+#           and left [DS:E2] BLUE TASSLE unchanged at 5, so boarding does not spend the gating
+#           item — a second independent sample alongside captures/spice86/shipcap3 (G42).
+# OWNER PLAYTEST, 2026-10-29: the owner drove this himself over noVNC and reached the same
+#           verdict — one tile. Worth recording which sources disagreed, because there were three
+#           and only one of them was the game: the printed MANUAL says the cannon has range, the
+#           owner's own recollection said three spaces, and both are wrong. `asm/23E6` probes one
+#           cell, the poke test hit at 1 and missed at 2 and 3, and play agrees. A manual is a
+#           third-party claim like any other, and this binary gets the veto.
 cmd_F:
         call L_0051df          # str_out — prints the inline string below
         db "FIRE",0        # string
