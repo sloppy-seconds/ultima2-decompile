@@ -527,7 +527,8 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
             return U2_TRANSACT_TREATED;
         }
 
-        /* GAP — the talking branch, deliberately not implemented.
+        /* The talking branch: asm/40C0 splits scripted from typed on bit 7 of the slot's
+         * role byte. Set means the slot has a scripted line.
          *
          * asm/40C0 splits on the slot's role byte: bit 7 set means "this NPC has a
          * scripted line" and asm/4209 prints record (role - 0x80) out of the sector's
@@ -536,9 +537,8 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
          * 0xFC thief), each printing one fixed line. The selector was observed executing
          * on 2026-10-29 with AL=0x02 for a role-0x82 Jester (captures/spice86/g23-food-live),
          * so the mechanism is no longer the open question docs/handoff-commerce-transact.md
-         * recorded. What is still missing is the engine half: there is no tlkx loader
-         * (core/world.c reads mapx and monx only) and the street lines have no extractor
-         * entries. Both are CP6 work, and printing a plausible line from neither is exactly
+         * recorded. The engine half is now in place too: core/world.c loads tlkxNN and
+         * u2_world_tlkx_record walks it exactly as asm/154E does.
          * the guess the handoff told this branch to avoid.
          *
          * Silence was not an acceptable placeholder, and this is the case AGENTS.md describes:
@@ -548,7 +548,38 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
          * had frozen. The creature scan runs BEFORE the tile test (asm/23E6 precedes
          * asm/407C), so an NPC standing in a shop's sign cell swallows the ray and this
          * branch used to return nothing at all. Say what is missing rather than looking hung. */
-        engine_gap(ctx, "TALK not implemented -> tlkx loader");
+        if (st->mon_role[slot] >= 0x80u) {
+            /* asm/4209: `stc ; cmc ; sbb $0x80,%al ; cmc` is just AL = role - 0x80, then
+             * `call asm/154E` prints that record out of the sector's dialogue buffer. The
+             * role byte IS the record index -- the rule § 4.5 of the commerce handoff called
+             * "completely unknown", and it was closed on 2026-10-29 by stopping on asm/154E
+             * with AL=0x02 over a role-0x82 slot and reading the line that came out.
+             *
+             * No line is a real outcome, not an error: a role byte can point past the 256-byte
+             * read, and sectors ship without a tlkx file at all. Saying so beats silence, and
+             * silence is what this branch used to produce. */
+            char line[160];
+            const int n = u2_world_tlkx_record(&ow->world,
+                                               (int)st->mon_role[slot] - 0x80,
+                                               line, sizeof line);
+            if (n > 0) {
+                seam_str_out(ctx, line);
+                /* asm/4209 then holds the line on screen for a beat (di = 4 around a call to
+                 * L_000911). The duration is NOT proven -- asm/4209's own header grades that
+                 * call as low confidence -- so no number is invented here. The line stays in
+                 * the CMD window until the next message displaces it, which is readable. */
+                return U2_TRANSACT_TREATED;
+            }
+            engine_gap(ctx, "no dialogue for that role");
+            return U2_TRANSACT_NO_DEALER;
+        }
+
+        /* role < 0x80: asm/40CB walks the creature-type chain. Type 0x6C is the tribute and
+         * is handled above; the remaining arms (0x60 guard, 0x64 jester, 0x68 merchant,
+         * 0xF0 fighter, 0xF4 cleric, 0xF8 wizard, 0xFC thief) are the street_* handlers and
+         * are still open -- each prints one fixed line held in the executable, so they need
+         * extractor entries rather than a loader. */
+        engine_gap(ctx, "typed NPC line not implemented");
         return U2_TRANSACT_NO_DEALER;
     }
 

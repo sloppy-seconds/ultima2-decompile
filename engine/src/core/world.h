@@ -43,6 +43,12 @@
 #define U2_SECTOR_EDGE  64                       /* asm/50B3: shl $6 */
 #define U2_SECTOR_TILES (U2_SECTOR_EDGE * U2_SECTOR_EDGE) /* 4096 = CX at asm/2290 */
 #define U2_MON_TILES    256                      /* CX at asm/22D5 */
+/* The dialogue read is ALSO 0x100 bytes, and that limit is load-bearing rather than
+ * incidental. tlkxNN files ship at 384 bytes; the last ~128 are the sector's code and
+ * graphics tail, and record 6 of tlkx22 decoded from that tail comes out as
+ * `ARM   P\x01T2\r\tK\x01PRBYTE...`. asm/22D5 reads CX=0x100, so the original never sees it.
+ * Reading the whole file would put garbage on screen and look like a decode bug. */
+#define U2_TLKX_BYTES   256
 #define U2_MAP_PREFIXES 4                        /* mapx / MAPX / mapg / MAPG */
 
 /* Site kinds, i.e. the second digit. Proven for 0, 2 and 4 by the strings at
@@ -105,6 +111,14 @@ typedef struct u2_world {
      * monx/MONX/mong/MONG. u2_world_store refuses a prefix that is not one of them. */
     const char  *map_prefix;  /* spelling the map sector was found under */
     const char  *mon_prefix;  /* spelling the creature table was found under */
+    /* The sector's scripted dialogue, asm/22D5's second read into [DS:476]. Read-only and
+     * never stored: the game writes mapx back (asm/2305) but nothing ever writes dialogue
+     * home, so there is no dirty flag here and adding one would invite a write-back that the
+     * original does not perform. */
+    uint8_t      tlkx[U2_TLKX_BYTES];
+    u2_sector_id tlkx_id;
+    int          tlkx_loaded;
+    const char  *tlkx_prefix;   /* spelling the dialogue file was found under */
     size_t       bytes_read;  /* diagnostics and tests */
 } u2_world;
 
@@ -167,6 +181,27 @@ u2_world_result u2_world_open(const u2_ctx *ctx);
 /* Read a sector. Tries the mapx/MAPX/mapg/MAPG spellings in order, because DOS
  * names are case-insensitive and the Galaxy patch renames mapx -> mapg. */
 u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id id);
+
+/* Load the sector's tlkxNN dialogue buffer, 256 bytes, into w->tlkx.
+ * Separate from u2_world_load rather than a third value of its is_map flag: is_map is a
+ * boolean that tests and the save path already reason about, and dialogue is never stored,
+ * so sharing the parameter would buy nothing and risk the exact kind-confusion that made
+ * map_prefix and mon_prefix separate fields in the first place. */
+u2_world_result u2_world_load_tlkx(u2_ctx *ctx, u2_world *w, u2_sector_id id);
+
+/* asm/154E_tlkx_record_printer, as a copy into a NUL-terminated buffer.
+ *
+ * The walk is the original's, byte for byte in effect: the buffer begins with a NUL, so
+ * skipping `index` NUL boundaries lands on the byte after the index-th one, and the record
+ * runs to the next NUL. `index` is what asm/4209 hands over as [slot role] - 0x80, so
+ * index 1 is the first real record. Observed live: index 2 in sector 22 is
+ * `JOHN MAYER ORDERS:\rTAKE OUT THE TRASH!!!`.
+ *
+ * High-bit-set ASCII is masked to 0x7F here, matching tools/tlkx_decode.py, so callers and
+ * tests see the readable form instead of raw Apple II bytes. Returns the length written, or
+ * -1 if the index runs off the end of the buffer (which is what a role byte pointing past
+ * the 256-byte read does). */
+int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz);
 
 /* Write a sector back, atomically (temp file + rename in the same directory).
  * Callers must only store sectors that are dirty. */

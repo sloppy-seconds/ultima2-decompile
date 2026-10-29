@@ -617,6 +617,38 @@ printf '\n'
         skip "CP6 silence: needs the player's mapx31/monx31 (no synthetic NPC blocks the ray)"
     fi
 
+    # The scripted talk branch, against the real dialogue files.
+    #
+    # Owner report that started this: two NPCs south of the TRANSPORT shoppe in town Linda
+    # share a name and one of them should say something about trash, and neither answered.
+    # They are JOHN MAYER and GERRY MAYER, tlkx22 records 2 and 3, standing at (53,55) and
+    # (54,55) with role bytes 0x82 and 0x83 -- and the role byte IS the record index, which is
+    # the rule asm/4209 implements as `sbb $0x80,%al` before calling asm/154E.
+    #
+    # Needs the player's tlkx22: the synthetic seed ships no dialogue file, and a talk test
+    # against an absent tlkx would assert only that the fallback message prints.
+    if [ -r ../original/tlkx22 ] && [ -r ../original/monx22 ]; then
+        rm -rf "$WORK/talk"; mkdir -p "$WORK/talk/save"
+        python3 ../tools/u2_edit.py set ../original/player sector 22 -o "$WORK/talk/save/PLAYER" >/dev/null 2>&1
+        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER" 53 56 >/dev/null 2>&1
+        printf 'T\n' > "$WORK/talk/k.keys"
+        printf '\360\n' >> "$WORK/talk/k.keys"        # 0xF0 = up, toward John Mayer at (53,55)
+        talk=$(./u2 --headless --play-map --data-dir ../original \
+                    --save-dir "$WORK/talk/save" --script "$WORK/talk/k.keys" \
+                    --dump-state 2>&1)
+        echo "$talk" | grep -qa "JOHN MAYER" \
+            && ok "CP6 talk: a role-0x82 slot speaks tlkx22 record 2 (asm/4209 -> asm/154E)" \
+            || bad "CP6 talk: John Mayer said nothing -- the scripted branch is not printing the record"
+        echo "$talk" | grep -qa "TAKE OUT THE TRASH" \
+            && ok "CP6 talk: the record's second line renders, so the embedded CR is handled" \
+            || bad "CP6 talk: the line after the embedded CR is missing from the screen"
+        # The other arm of asm/40C0 must still be an honest gap, not a silent one.
+        echo "$talk" | grep -qa "FUNNY, NO RESPONSE" \
+            && bad "CP6 talk: the ray refused instead of reaching the NPC -- geometry moved" || true
+    else
+        skip "CP6 talk: needs the player's tlkx22/monx22 (synthetic seed ships no dialogue)"
+    fi
+
 if [ "$fail" -eq 0 ]; then
     printf 'CP6 SPEC: PASS\n'
 else

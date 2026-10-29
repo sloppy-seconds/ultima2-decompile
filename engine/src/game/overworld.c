@@ -251,6 +251,13 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     if (mr == U2_WORLD_OK)
         u2_monsters_clear_spawn_cells(ctx, &ow->world);
 
+    /* asm/22D5 reads the sector's dialogue into the same scratch the creature table used.
+     * A sector with no tlkx file is normal, not a failure -- but the buffer must not keep the
+     * PREVIOUS sector's lines, or a role byte in a dialogue-less town would speak someone
+     * else's line. Clear first, load second. */
+    ow->world.tlkx_loaded = 0;
+    (void)u2_world_load_tlkx(ctx, &ow->world, id);
+
     /* Restamp, or every creature in the sector is invisible until it moves. See the same call
      * in site_reload() for the full reasoning; the two sites are the two ways a sector becomes
      * resident, and both were missing it. */
@@ -1164,6 +1171,10 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
     const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
     if (mr == U2_WORLD_OK)
         u2_monsters_clear_spawn_cells(ctx, &ow->world);
+
+    /* Dialogue for this sector; see the clear-then-load pair at the other residency site. */
+    ow->world.tlkx_loaded = 0;
+    (void)u2_world_load_tlkx(ctx, &ow->world, id);
 
     /* Restamp, or every creature in the sector is invisible until it moves.
      *

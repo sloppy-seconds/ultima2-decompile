@@ -162,6 +162,87 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     return U2_WORLD_OK;
 }
 
+/* asm/22D5's dialogue read. Prefixes mirror the map/monster lists because the shipped pack
+ * carries both spellings, and a missing tlkx is normal rather than an error: several sectors
+ * ship no dialogue file at all, and the caller must then fall back rather than print noise. */
+static const char *const k_tlk_prefixes[] = { "tlkx", "TLKX", "tlkg", "TLKG" };
+
+u2_world_result u2_world_load_tlkx(u2_ctx *ctx, u2_world *w, u2_sector_id id)
+{
+    char path[512];
+    size_t got = 0;
+    const char *used = NULL;
+
+    for (size_t i = 0; i < sizeof k_tlk_prefixes / sizeof k_tlk_prefixes[0]; i++) {
+        FILE *f;
+        u2_world_path(path, sizeof path, ctx, k_tlk_prefixes[i], id);
+        f = fopen(path, "rb");
+        if (!f)
+            continue;
+        got = fread(w->tlkx, 1, U2_TLKX_BYTES, f);
+        fclose(f);
+        used = k_tlk_prefixes[i];
+        break;
+    }
+
+    if (!used)
+        return U2_WORLD_MISSING;
+    if (got != U2_TLKX_BYTES)
+        return U2_WORLD_SHORT;
+
+    w->tlkx_prefix = used;
+    w->tlkx_id = id;
+    w->tlkx_loaded = 1;
+    return U2_WORLD_OK;
+}
+
+/* asm/154E, in address order:
+ *
+ *   si = AL ; di = [DS:476]
+ *   1564  al = es:[di] ; cmp 0 ; je 156E          scan forward to the next NUL
+ *   156B  inc di ; jmp 1564
+ *   156E  dec si ; je 1573 ; else jmp 156B        count boundaries until si reaches 0
+ *   1573  inc di ; al = es:[di] ; cmp 0 ; je 1580 step onto the record; emit to its NUL
+ *   157B  call emit_char ; jmp 1573
+ *
+ * Because byte 0 of the buffer is itself a NUL, the first `scan to NUL` succeeds without
+ * moving, so index 1 selects the first real record. That is the whole reason the role byte
+ * maps as role - 0x80 and no further offset is needed.
+ *
+ * The scan is bounded by the buffer on purpose. The original walks a 256-byte buffer with no
+ * bound check and stops at whatever NUL it finds; a role byte pointing past the end would run
+ * off into adjacent memory. Here it returns -1, which the caller renders as no line rather
+ * than as garbage. */
+int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz)
+{
+    if (!w || !out || outsz == 0)
+        return -1;
+    out[0] = '\0';
+    if (!w->tlkx_loaded || index < 1)
+        return -1;
+
+    size_t i = 0;
+    for (int n = 0; n < index; n++) {
+        while (i < U2_TLKX_BYTES && w->tlkx[i] != 0)
+            i++;
+        if (i >= U2_TLKX_BYTES)
+            return -1;
+        i++;                       /* step past the boundary NUL */
+    }
+    if (i >= U2_TLKX_BYTES)
+        return -1;
+
+    size_t len = 0;
+    while (i < U2_TLKX_BYTES && w->tlkx[i] != 0) {
+        if (len + 1 >= outsz)
+            break;                 /* truncate rather than overrun the caller's buffer */
+        out[len++] = (char)(w->tlkx[i] & 0x7Fu);
+        i++;
+    }
+    out[len] = '\0';
+    return (int)len;
+}
+
 /*
  * Atomic write: temp file in the same directory, then rename. Same directory
  * matters — rename(2) is atomic only within one filesystem, and a cross-device
