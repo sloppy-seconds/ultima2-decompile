@@ -42,8 +42,10 @@ exact byte-for-byte fidelity.
 > would agree with); § 1 is open owner decisions D11 and D14 (the cheat-code flag, and whether
 > `cmd_C` ships gates without effects — D12's `DS:25` and D13's charisma-vs-wisdom dispute both
 > closed 2026-10-29, the latter by `captures/spice86/d13-cha-vs-wis`); 1222 `asm/` files,
-> whole-binary md5 green, `check_all` green, 18 of 26 handlers implemented and **all 26 letters have
-> now been seen executing** — `cmd_R` and `cmd_N` closed 2026-10-29 by
+> whole-binary md5 green, `check_all` green, 23 of 26 handlers implemented and **all 26 letters have
+> now been seen executing** — `cmd_I`, `cmd_D` and `cmd_K` closed 2026-10-29 without a capture at
+> all, because all three were readable the whole time and had been cut in half by the Phase 2 map
+> (each is a one-byte `e8` whose operand and text live in the next fragment); `cmd_R` and `cmd_N` closed 2026-10-29 by
 > `captures/spice86/cmd-nr-live`, which is also where `DS:E3` turned out to be `items_held[13]`, a
 > STRANGE COIN, and where the string emitter's greedy `\xNN` escape was found to have been corrupting
 > five shipped menus; § 3 is the ranked queue, § 4 is facts worth knowing cold (the

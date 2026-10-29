@@ -190,6 +190,29 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — A function-map boundary that cuts a call instruction in half makes the whole
+  routine invisible to a per-file read, and the header will look honest while it happens.**
+  Several handlers were one byte each: the opcode of a call, with the operand and the string in the
+  following fragment. Their headers accurately described the range ("prints an inline string; call
+  operand and text live in the following map fragment") and were therefore useless about the
+  command — and because the range was *declared*, every later pass trusted it and moved on. The fix
+  is not better prose in the fragment headers; it is a pass that joins a stub to its continuation
+  before anything is described, and a rule that a one-instruction routine is a red flag about the
+  segmentation rather than a finding about the program. Two commands turned out to be mirrors of
+  each other and neither was readable alone, which is the shape of thing a boundary can hide.
+  Corollary, and it is the cheaper one: when a recorded observation from earlier the same day does
+  not fit a model, re-read it before scheduling a capture. One byte of recorded state was the proof
+  for a whole branch, sitting in the tree for two hours, while the queue said "needs gameplay".
+
+* **2026-10-29 — A state byte outside the persisted record cannot be seeded from a save file, and a
+  test harness that silently accepts the attempt will assert on a starting state that never
+  existed.** The fix was to drive the value with input instead of seeding it, which produced a
+  better test by accident: it exercises the transition rather than asserting a state, and it caught
+  a second bug in the same case. Related, and worth a standing rule for the harness: a gate that
+  only enforces under a flag will report success when run bare, so the flag must be on by default
+  or the harness must be the only supported entry point. Three files lost a required metadata line
+  during a rename and the tool said `ok` until the wrapper's `--strict` was traced.
+
 * **2026-10-29 — A regression gate whose probe input is inert is a gate that is quietly checking
   nothing, and inertness expires.** A screen-diff test compared "open the overlay, dismiss it,
   press K" against "press K", where K was a command letter the engine had never implemented. It

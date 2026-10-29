@@ -2111,3 +2111,66 @@ first time `asm/0FCD_combat_thief_steal` has emptied a player slot in front of u
 listing. HP fell from 9999 to 9085 in about a minute of standing there. It also means my first
 explanation for the missing items — that the noVNC load had dropped them — was wrong, and I said it
 out loud before checking, which is the pattern the thieves were the answer to.
+
+## The site trio: IGNITE TORCH, DESCEND, KLIMB — decoded without a capture (2026-10-29)
+
+Three handlers came off the NULL list with no emulator running and no owner session, which is
+worth saying because the queue had them filed under "parked with dungeons" and they were not.
+
+The reason they had never been read is a mechanical one. `cmd_I` is one byte and `cmd_K` is one
+byte: each is a bare `e8` whose operand and whose text live in the *next* map fragment, so every
+prior pass described them as "prints an inline string; call operand and text live in the following
+map fragment" and moved on. The headers were accurate about the range and useless about the
+command. Read across the boundary they turn out to be `IGNITE TORCH` and `KLIMB`, and `cmd_D`,
+which had been observed running, is the same shape.
+
+**KLIMB and DESCEND are exact mirrors, and neither is decodable alone.** Same site-kind gate (4
+tower, 5 dungeon), same cell gate with the feature bit swapped (`0x10` up, `0x20` down), same two
+floor arms with the direction swapped. A tower climbs up and descends out; a dungeon descends
+deeper and climbs out. So `DS:25` is not height — it is a floor index that counts up out of a
+tower and up into a dungeon, which is a strange thing to be until you notice it is the same number
+read from opposite ends.
+
+The confirming witness had been sitting in the tree since the morning. `d12-ladder-ds25` recorded
+`DS:25 = 0xFF` after a DESCEND in the sector-24 tower, and nobody joined that to `asm/3823`'s
+`decb` / `js` pair. 0xFF is what decrementing from zero leaves behind, and the `js` is what turns
+it into an exit. One recorded byte, in the file for two hours, doing the work of a capture.
+
+**IGNITE TORCH shares its light counter with the LIGHT spell.** Both write `0x96` into `DS:26`, so
+a torch and that spell are one running count rather than two light sources — casting LIGHT in a
+lit corridor spends a spell to refill a torch that is already burning. That was already in
+`state.h` from the CAST work; what the cmd_I decode adds is that the *torch* side is real and
+reachable, and that the whole command is three instructions and a store.
+
+### Three things the tests caught that the reading did not
+
+**`DS:25` is below the saved record.** The record is `DS:36..DS:135` and the floor lives at `DS:25`,
+so it is scratch and the game does not remember which floor you were on. The first seed tried to
+set it through the player file and got zeros back. The cases now drive it with keystrokes, which is
+the better test anyway because it exercises the round trip instead of asserting a starting state.
+
+**The two ladder cells really are distinct.** A round-trip case that climbed and then descended from
+a `0x10`-only cell failed with DESCEND refusing — which is correct. The cell under the player has
+the up feature and not the down one. That failure is now a permanent assertion, because it is the
+cleanest proof in the suite that the feature bits are not interchangeable.
+
+**`asm/53B5` prints two digits always**, fed by `daa` rather than by a stored BCD byte, so a floor
+past 99 prints a wrapped pair instead of a third digit. Emulated rather than formatted with
+`%02u`, so the quirk survives instead of being quietly smoothed over.
+
+### What is still not modelled, and says so in the source
+
+The engine has no floor term in its grid index — `asm/1451` computes
+`word[DS:472] + floor*256 + y*16 + x` and the engine omits the floor multiplication, so a tower
+above its first floor still draws page 0. And the exit block's `[DS:6D]` branch writes the player
+record on leaving a dungeon, which means **leaving a dungeon saves the game**, observed never. Both
+belong to the dungeon span AGENTS.md § 3 parks, and both are named at the mutation site rather than
+left as a silence.
+
+`site_leave()` became `u2_overworld_site_leave()` on the way, because cmd_D needs the same block the
+sector-edge test uses and duplicating an exit path is how two exit paths start disagreeing.
+
+**23 of 26.** What is left is `cmd_C` (gates decoded and capture-confirmed, every effect dungeon-side,
+blocked on owner decision D14), `cmd_G` (needs ground items, a dungeon question), and `cmd_O` (needs
+town NPCs and an attitude model). None of the three is a one-afternoon static decode the way these
+were.
