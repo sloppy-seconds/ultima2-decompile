@@ -158,7 +158,7 @@ call   L_0053a5
 
 So the `0200` the owner read means `[DS:27]=0x02` and `[DS:28]=0x00` at the moment of
 printing. The same three-instruction load appears in `asm/1869_cleric_shrine`, four times
-in `asm/19D7_magic_shop_menu` and in `asm/42D1_sub_42d1` — every shop quotes its price
+in `asm/19D7_magic_shop_menu` and in `asm/42D1_raise_amount_store` — every shop quotes its price
 through this one operand pair.
 
 **3. The charge uses the same pair.** `asm/2052_sub_2052.asm` (runtime `2052`, file
