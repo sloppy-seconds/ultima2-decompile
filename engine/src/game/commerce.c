@@ -579,8 +579,32 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
          * 0xF0 fighter, 0xF4 cleric, 0xF8 wizard, 0xFC thief) are the street_* handlers and
          * are still open -- each prints one fixed line held in the executable, so they need
          * extractor entries rather than a loader. */
-        engine_gap(ctx, "typed NPC line not implemented");
-        return U2_TRANSACT_NO_DEALER;
+        /* asm/40CB..asm/41D9: the typed chain. Each arm is a compare on the creature TYPE at
+         * [slot+0x197], and on a match a `call str_out` over one fixed literal followed by a
+         * tail jump to cmd_done. The order below is the order the bytes test in, and the order
+         * is the behaviour: 0x6C was already taken by the tribute above, so this chain starts
+         * at the guard.
+         *
+         * None of these seven handlers has ever been seen executing in the 60-harvest corpus,
+         * so the strings are the evidence and they are now extracted rather than typed by hand.
+         * asm/4108's own `# name-evidence:` line claims 'A JESTER SAYS:' while the db line it
+         * cites says "A JESTER SINGS:"; the bytes win and the header is the hypothesis. */
+        switch (st->mon_type[slot]) {
+        case 0x60u: seam_str_out(ctx, U2_S_STREET_GUARD);      return U2_TRANSACT_TREATED;
+        case 0x64u: seam_str_out(ctx, U2_S_STREET_JESTER);     return U2_TRANSACT_TREATED;
+        case 0x68u: seam_str_out(ctx, U2_S_STREET_MERCHANT);   return U2_TRANSACT_TREATED;
+        case 0xF0u: seam_str_out(ctx, U2_S_STREET_FIGHTER);    return U2_TRANSACT_TREATED;
+        case 0xF4u: seam_str_out(ctx, U2_S_STREET_CLERIC);     return U2_TRANSACT_TREATED;
+        case 0xF8u: seam_str_out(ctx, U2_S_STREET_WIZARD);     return U2_TRANSACT_TREATED;
+        case 0xFCu: seam_str_out(ctx, U2_S_STREET_THIEF);      return U2_TRANSACT_TREATED;
+        default:
+            /* asm/41D5's last compare falls through to asm/4206, whose forced-kept `jmp`
+             * lands on asm/40A6 -- the same "FUNNY, NO RESPONSE!" the tile refusals print.
+             * So an ordinary monster aimed at with TRANSACT does answer, in its way, and this
+             * is a cited byte rather than an engine affordance. */
+            seam_str_out(ctx, U2_S_NO_RESPONSE);
+            return U2_TRANSACT_NO_DEALER;
+        }
     }
 
     /* asm/407C: the near cell. asm/407F's `js` skips the counter test when the tile has

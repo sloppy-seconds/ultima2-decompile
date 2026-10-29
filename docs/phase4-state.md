@@ -1912,9 +1912,18 @@ listed as not-evidenced were not waiting on gameplay — they were waiting on th
   `asm/405D` stores it as a forced-keep byte, so no `# calls:` line carried the edge.
 * **The tlkx selection rule is the role byte**: `[slot+0x1D7] - 0x80` indexes the NUL-separated
   records in the sector's loaded `tlkxNN` buffer at `[DS:476]`, printed by `asm/154E`. Observed
-  live with `AL=0x02` for a role-`0x82` Jester. The talking branch is still **not implemented** —
-  the engine has no tlkx loader and the `street_*` literals have no extractor entries — and it is a
-  commented gap at its own branch rather than a guess.
+  live with `AL=0x02` for a role-`0x82` Jester. **Implemented 2026-10-29**, both arms:
+  `u2_world_load_tlkx` reads the sector's dialogue (256 bytes, `CX` at `asm/22D5` — the limit
+  matters, since `tlkxNN` ships at 384 and record 6 decoded from past byte 256 is the sector's
+  code tail), and `u2_world_tlkx_record` walks it exactly as `asm/154E` does. The typed arm
+  (`asm/40CB`'s `street_*` chain) is wired too, with its seven literals extracted as `run`
+  locators because each is a split `db` around an embedded `0x0d`. An unmatched type falls
+  through `asm/41D5` -> `asm/4206` -> `asm/40A6` and prints `FUNNY, NO RESPONSE!`, so the
+  default arm is a cited byte rather than an engine affordance. Gate: `CP6 talk` in
+  `run_cp6.sh`, against the real `tlkx22`/`monx22`; it skips with a reason without a copy.
+  Still open in this area: the duration of `asm/4209`'s on-screen pause, and where the line
+  actually renders — `asm/4209`'s header records that the captures show no dialogue line
+  between the command and the next prompt.
 * **Dispatched and deliberately not implemented**: the cleric shrine, the magic shoppe, the pub and
   the clue seller. Each gap is commented where the branch is, with the reason (the spell-slot
   question for the two spell shops, the chatter table for the pub, the clue pool for the seller).

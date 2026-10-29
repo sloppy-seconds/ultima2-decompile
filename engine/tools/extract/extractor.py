@@ -385,6 +385,32 @@ MANIFEST = [
     # confirmed to be the bytes named, at that address.
     ("U2_S_TRANSACT",              "4050_cmd_T.asm",  0),
     ("U2_S_NO_RESPONSE",           "40A6_yell_no_response.asm", 0),
+    # The street_* typed responses (asm/40CB's creature-type chain, reached from cmd_T when a
+    # slot's role byte is below 0x80). Each literal is split in the listing around an embedded
+    # 0x0d -- `db "A GUARD SAYS:",0x0d,"PAY YOUR TAXES!",0x00` -- so neither locator form can
+    # carry it in both modes: the db-index locator reports "has 0 strings" (no single trailing
+    # literal) and a 4-tuple run locator's asm fallback searches for its text as ONE quoted
+    # literal and cannot find it. These are therefore exe-only 3-tuples, the same shape as
+    # U2_S_VIEW_HELM_A/B, which exist for the identical reason. Without a copy of the game the
+    # street lines are empty; with one they are the original's bytes.
+    #
+    # Addresses are FILE offsets (runtime + 0x200); each is the byte after the 3-byte
+    # `call str_out` at the handler's entry, and each length excludes the terminator.
+    #
+    # None of these seven has ever been observed executing -- every header reads "entry never
+    # appears in ExecutedInstructions of any of the 60 harvests" -- so the strings and the
+    # chain order are the evidence, and the order is read from the bytes: 0x6C tribute, 0x60
+    # guard, 0x64 jester, 0x68 merchant, 0xF0 fighter, 0xF4 cleric, 0xF8 wizard, 0xFC thief.
+    #
+    # Note asm/4108's own `# name-evidence:` line says 'A JESTER SAYS:' while the db line it
+    # cites says "A JESTER SINGS:". The bytes win; the header is a hypothesis.
+    ("U2_S_STREET_GUARD",          "40E0_street_guard.asm",    ("run", 0x42E3, 29)),
+    ("U2_S_STREET_JESTER",         "4108_street_jester.asm",   ("run", 0x430B, 25)),
+    ("U2_S_STREET_MERCHANT",       "412C_street_merchant.asm", ("run", 0x432F, 40)),
+    ("U2_S_STREET_FIGHTER",        "415F_street_fighter.asm",  ("run", 0x4362, 30)),
+    ("U2_S_STREET_CLERIC",         "4188_street_cleric.asm",   ("run", 0x438B, 23)),
+    ("U2_S_STREET_WIZARD",         "41AA_street_wizard.asm",   ("run", 0x43AD, 36)),
+    ("U2_S_STREET_THIEF",          "41D9_street_thief.asm",    ("run", 0x43DC, 38)),
     ("U2_S_DONT_HAVE_THAT_MUCH",   "2052_gold_spend_price.asm", 0),
     # The four shop bodies live in asm/19D7 (the G22 boundary defect: one file, several
     # routines). Armour first, then weapons, then transport.

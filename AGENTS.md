@@ -24,8 +24,12 @@ exact byte-for-byte fidelity.
 > in `engine/src/game/commerce.c` and gated by `make test-cp6`, and the headline is that three of its
 > four "not evidenced" items closed statically: the grocery quote was `0020` and not `0200`, the axe
 > was 20 and not 25, `asm/1590` is a quadrant-and-site-kind switch rather than the menu-versus-line
-> fork, and the tlkx record index is the creature role byte minus `0x80`. The talking branch is
-> still unimplemented, now by reason rather than by blindness: the engine has no tlkx loader), and
+> fork, and the tlkx record index is the creature role byte minus `0x80`. **The talking branch is
+> now implemented, both arms** (2026-10-29): `u2_world_load_tlkx` and `u2_world_tlkx_record` in
+> `engine/src/core/world.c` carry the scripted arm, and `asm/40CB`'s `street_*` typed chain is
+> wired with its seven literals extracted as `run` locators, because each is a split `db` around
+> an embedded `0x0d` the db-index locator cannot see. `CP6 talk` in `run_cp6.sh` guards both
+> against the real `tlkx22`/`monx22`), and
 > `docs/moongates.md` (time doors:
 > observed mechanic, decoded table, engine implementation, and three recorded self-corrections worth
 > reading for method as much as content).** To start a fresh

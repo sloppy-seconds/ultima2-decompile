@@ -642,6 +642,20 @@ printf '\n'
         echo "$talk" | grep -qa "TAKE OUT THE TRASH" \
             && ok "CP6 talk: the record's second line renders, so the embedded CR is handled" \
             || bad "CP6 talk: the line after the embedded CR is missing from the screen"
+        # The typed arm: asm/41D5's fall-through goes to asm/4206 -> asm/40A6, so an
+        # unmatched creature answers with FUNNY, NO RESPONSE!, and a matched type answers
+        # with its own fixed line. The merchant at (51,51) is type 0x68 with role 0x02, so
+        # it takes asm/412C rather than the tlkx path.
+        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER" 51 52 >/dev/null 2>&1
+        talk2=$(./u2 --headless --play-map --data-dir ../original \
+                     --save-dir "$WORK/talk/save" --script "$WORK/talk/k.keys" \
+                     --dump-state 2>&1)
+        echo "$talk2" | grep -qa "A MERCHANT" \
+            && ok "CP6 talk: a type-0x68 slot with role below 0x80 takes the typed chain (asm/412C)" \
+            || bad "CP6 talk: the merchant said nothing -- the typed chain is not wired"
+        echo "$talk2" | grep -qa "WILL YOU BUY MY APPLES" \
+            && ok "CP6 talk: the merchant's second line renders from the split db literal" \
+            || bad "CP6 talk: the merchant's line after the CR is missing"
         # The other arm of asm/40C0 must still be an honest gap, not a silent one.
         echo "$talk" | grep -qa "FUNNY, NO RESPONSE" \
             && bad "CP6 talk: the ray refused instead of reaching the NPC -- geometry moved" || true
