@@ -251,6 +251,17 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     if (mr == U2_WORLD_OK)
         u2_monsters_clear_spawn_cells(ctx, &ow->world);
 
+    /* Restamp, or every creature in the sector is invisible until it moves. See the same call
+     * in site_reload() for the full reasoning; the two sites are the two ways a sector becomes
+     * resident, and both were missing it. */
+    if (mr == U2_WORLD_OK)
+        u2_monsters_restamp(ctx, &ow->world);
+    /* Latched AFTER the load path has finished, so it measures what a player would actually
+     * see on the first frame of the new sector: with the restamp in place it is 0, and with
+     * it removed it is the whole creature count, because nothing else stamps until a
+     * creature happens to move. */
+    ctx->diag_unstamped_at_load = u2_monsters_unstamped_cells(ctx, &ow->world);
+
     /* asm/343F tail, reached by every arm: `mov $0x4,%al; mov %al,0x12`. */
     ctx->state.view_mode = 4;
     ow->view_mode = 4;
@@ -1049,6 +1060,37 @@ void u2_overworld_enter(u2_ctx *ctx, u2_overworld *ow)
     }
     if (label) seam_str_out(ctx, label);
     seam_char_print(ctx, '\r');
+
+    /* LOCKED: the engine has no first-person renderer, so towers and dungeons are refused.
+     *
+     * This is the engine's own affordance and NOT game behaviour — asm/343F lets the player
+     * walk into both, and the original does it without complaint. The notice is prefixed
+     * `[engine]` for the same reason --cleanroom announces its substitute art: a refusal the
+     * original never made must never be mistaken for one it did. Same convention as
+     * title.c's stub notices, which also name the thing that replaces them.
+     *
+     * Why lock rather than enter-anyway: site kinds 4 and 5 are ONE ruleset family, not two.
+     * docs/sector-rulesets.md § 1b established the split as {4,5} versus {0,1,2,3} — arrows
+     * are TURN LEFT/TURN RIGHT, entry prints IT'S DARK!, the map is a 16x16 grid per floor
+     * read through asm/1451's floor term, and the view is a wireframe. The engine has none of
+     * that, so entering drew a flat 64x64 picture of a first-person map and every direction
+     * failed. An unwalkable map you are trapped in is worse than a refusal, and the owner
+     * ruled it locked on 2026-10-29 until the renderer exists. G10 tracks the renderer.
+     *
+     * cmd_D, cmd_K and cmd_I still gate on kinds 4 and 5 and remain correct: the CP6 tower
+     * cases reach those states by seeding the sector digit directly, which is a test rig and
+     * not a route a player can take. Do not delete them as dead code.
+     */
+    if (digit == 4 || digit == 5) {
+        char why[48];
+        snprintf(why, sizeof why, "[engine] %s not implemented -> G10",
+                 digit == 4 ? "tower" : "dungeon");
+        seam_str_out(ctx, why);
+        seam_char_print(ctx, '\r');
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        return;
+    }
+
     site_enter(ctx, ow, digit, ax, ay);
     seam_str_out(ctx, U2_S_CMD_PROMPT);
 }
@@ -1122,6 +1164,27 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
     const int creatures = (mr == U2_WORLD_OK) ? u2_monsters_spawn(ctx, &ow->world) : 0;
     if (mr == U2_WORLD_OK)
         u2_monsters_clear_spawn_cells(ctx, &ow->world);
+
+    /* Restamp, or every creature in the sector is invisible until it moves.
+     *
+     * u2_monsters_spawn loads the creature table into state and clear_spawn_cells blanks the
+     * baked art the map file carries at those cells, but neither writes the sprites back into
+     * the grid. The only other caller of restamp is the creature turn, gated on rep.moved, so
+     * on entry the grid held paving where a monster stood: walkable, unhittable, and silent
+     * until that monster's first step, which is when it suddenly appeared. The owner walked
+     * into this as "when I first go into a town, the NPCs don't exist... after the first move
+     * they get rendered in that spot".
+     *
+     * This is also why the ghost counter never caught it: ghosts count stamps with no
+     * creature, and this is creatures with no stamp. u2_monsters_unstamped_cells() exists now.
+     */
+    if (mr == U2_WORLD_OK)
+        u2_monsters_restamp(ctx, &ow->world);
+    /* Latched AFTER the load path has finished, so it measures what a player would actually
+     * see on the first frame of the new sector: with the restamp in place it is 0, and with
+     * it removed it is the whole creature count, because nothing else stamps until a
+     * creature happens to move. */
+    ctx->diag_unstamped_at_load = u2_monsters_unstamped_cells(ctx, &ow->world);
 
     /* The status band and the command prompt, printed once on entering the
      * world (CP4b task 1). The four value lines go through the proven status

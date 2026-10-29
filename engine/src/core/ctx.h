@@ -66,6 +66,15 @@ typedef struct u2_ctx {
      * but hold no creature, refreshed each composed frame where the world is at hand.
      * "He left a copy of him behind", made checkable. See u2_monsters_ghost_cells(). */
     int diag_ghosts;
+    /* The mirror diagnostic: creature slots that are NOT stamped into the grid, i.e. invisible
+     * monsters. diag_ghosts == 0 says nothing about this direction, which is how a town entry
+     * could report a clean frame while every NPC in it was unrenderable. */
+    int diag_unstamped;
+    /* Latched high-water mark of diag_unstamped measured at the moment a sector becomes
+     * resident, BEFORE any restamp and before the post-command creature sweep can repair
+     * it. Without the latch a gate cannot distinguish "stamped on load" from "stamped by the
+     * first sweep", which is exactly how a town-entry defect survived a passing test. */
+    int diag_unstamped_at_load;
     int dump_each;          /* --dump-each: print the grid after every present */
     const char *dump_screen;/* --dump-screen F: SDL build saves the first
                              * presented frame to F as PPM, then the run ends.

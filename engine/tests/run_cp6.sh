@@ -506,6 +506,73 @@ else
         [ "$h" = "00 01" ] && ok "CP6 tribute: HP untouched when the tribute could not be paid" \
                            || bad "CP6 tribute: hp is '$h', expected '00 01'"
     fi
+
+    # --- first-person sites are locked until the renderer exists ----------------
+    # The original lets you walk into a tower and a dungeon; the engine cannot draw either,
+    # so entry is refused behind an [engine]-prefixed notice. The town case is the control:
+    # without it this whole gate would still pass if the lock were widened to every site.
+    # sector_second is emitted as a bare JSON number ("sector_second":0), not the quoted hex
+    # pairs field_of reads, so it needs its own extractor.
+    secsec() { sed -n 's/.*"sector_second":\([0-9]\{1,\}\).*/\1/p' "$1" | tail -1; }
+    if run_case enter_tower locktower 'E\n' "$WORK/locktower.out"; then
+        said "$WORK/locktower.out" "[engine] tower not implemented -> G10" \
+            && ok "CP6 lock: a tower mouth is refused with an [engine]-prefixed notice" \
+            || { bad "CP6 lock: expected the engine tower notice"; tail -3 "$WORK/locktower.out.txt"; }
+        s=$(secsec "$WORK/locktower.out")
+        [ "$s" = "0" ] && ok "CP6 lock: the refusal did not enter -- sector digit still 0" \
+                       || bad "CP6 lock: entered the tower anyway, digit is '$s'"
+    fi
+    if run_case enter_dungeon lockdgn 'E\n' "$WORK/lockdgn.out"; then
+        said "$WORK/lockdgn.out" "[engine] dungeon not implemented -> G10" \
+            && ok "CP6 lock: a dungeon mouth is refused too -- kinds 4 and 5 are one family" \
+            || { bad "CP6 lock: expected the engine dungeon notice"; tail -3 "$WORK/lockdgn.out.txt"; }
+    fi
+    if run_case enter_town locktown 'E\n' "$WORK/locktown.out"; then
+        said "$WORK/locktown.out" "[engine]" \
+            && bad "CP6 lock: the town was locked too -- the gate is too wide" \
+            || ok "CP6 lock: a town mouth still opens, so the lock is specific to kinds 4 and 5"
+        s=$(secsec "$WORK/locktown.out")
+        [ "$s" = "2" ] && ok "CP6 lock: entering a town sets the site digit to 2 as before" \
+                       || bad "CP6 lock: town entry set digit '$s', expected 2"
+        # The stamp check. The town seeded above holds exactly one guard, so a run that
+        # loaded zero creatures would pass every assertion below -- check the count first.
+        n=$(sed -n 's/.*"mon_type":"\([^"]*\).*/\1/p' "$WORK/locktown.out" | tail -1 | wc -w)
+        tcount=$(sed -n 's/.*"mon_type":"\([^"]*\).*/\1/p' "$WORK/locktown.out" | tail -1 | tr ' ' '\n' | grep -cv '^00$')
+        [ "$tcount" -gt 0 ] && ok "CP6 stamp: the town really has $tcount creature(s), so the checks below are not vacuous" \
+                           || bad "CP6 stamp: the seeded town loaded no creatures at all"
+        unst=$(sed -n 's/.*"unstamped":\([0-9]\{1,\}\).*/\1/p' "$WORK/locktown.out" | tail -1)
+        [ "$unst" = "0" ] && ok "CP6 stamp: every creature is stamped on the very first frame -- no invisible monsters on entry" \
+                          || bad "CP6 stamp: $unst creature(s) are in the table but not on the grid after entry"
+        gh=$(sed -n 's/.*"ghosts":\([0-9]\{1,\}\).*/\1/p' "$WORK/locktown.out" | tail -1)
+        [ "$gh" = "0" ] && ok "CP6 stamp: no ghost cells either -- nothing baked into the map survived as terrain" \
+                        || bad "CP6 stamp: $gh ghost cell(s) after entry"
+    fi
+
+    # The load-moment latch, against the real map files.
+    #
+    # This one needs original/mapx20 and original/mapx22, and it is the only assertion that
+    # can see the defect at all: the synthetic town gives the guard somewhere to walk, so the
+    # post-command creature sweep restamps it and every end-of-run measurement reads clean
+    # whether or not the load path stamped. That is how a real bug sat behind a passing gate
+    # for a whole session. Measured here: 0 with the load restamp, 32 without it.
+    #
+    # It SKIPs without the player's copy rather than passing vacuously on synthetic data.
+    if [ -r ../original/mapx20 ] && [ -r ../original/mapx22 ]; then
+        rm -rf "$WORK/realtown"; mkdir -p "$WORK/realtown/save"
+        python3 ../tools/u2_edit.py set ../original/player sector 20 -o "$WORK/realtown/save/PLAYER" >/dev/null 2>&1
+        python3 ../tools/u2_edit.py setpos "$WORK/realtown/save/PLAYER" 36 29 >/dev/null 2>&1
+        printf 'E\n' > "$WORK/realtown/k.keys"
+        real=$(./u2 --headless --play-map --data-dir ../original \
+                    --save-dir "$WORK/realtown/save" --script "$WORK/realtown/k.keys" \
+                    --dump-state 2>&1 | sed -n 's/.*"unstamped_at_load":\([0-9]\{1,\}\).*/\1/p' | tail -1)
+        case "${real:-}" in
+            0)  ok "CP6 stamp: real sector-22 entry leaves 0 of 32 creatures unstamped on the first frame" ;;
+            '') bad "CP6 stamp: real town entry produced no unstamped_at_load reading" ;;
+            *)  bad "CP6 stamp: $real creatures are invisible on entry to the real sector 22 -- the load path did not stamp" ;;
+        esac
+    else
+        skip "CP6 stamp: load-moment latch needs the player's mapx20/mapx22 (synthetic data cannot show this defect)"
+    fi
 fi
 
 printf '\n'

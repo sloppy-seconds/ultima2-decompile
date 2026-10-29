@@ -274,6 +274,39 @@ int u2_monsters_ghost_cells(const u2_ctx *ctx, const u2_world *w)
     return ghosts;
 }
 
+/* The mirror image of u2_monsters_ghost_cells(), and it exists because the ghost counter
+ * cannot see this defect at all.
+ *
+ * Ghosts count cells that are stamped with no creature standing there — "he left a copy of
+ * him behind". The opposite failure is a creature in the state table whose cell in the grid
+ * still holds terrain, which renders as an invisible monster: walkable, unhittable, and
+ * completely silent until it moves and the restamp finally notices it. That is exactly what
+ * happened on entering a town before site_reload learned to restamp, and the owner walked
+ * into it as "the NPCs don't exist".
+ *
+ * Counted as slots rather than cells because a slot is the unit the renderer and the attack
+ * scan both work from, and two slots on one cell is a collision worth seeing as two. */
+int u2_monsters_unstamped_cells(const u2_ctx *ctx, const u2_world *w)
+{
+    if (ctx == NULL || w == NULL || !w->map_loaded)
+        return 0;
+
+    int missing = 0;
+    for (int i = 0; i < U2_MON_SLOTS; i++) {
+        if (ctx->state.mon_type[i] == 0)
+            continue;
+        if (!(ctx->state.mon_x[i] || ctx->state.mon_y[i]))
+            continue;
+        const int cell = (int)ctx->state.mon_y[i] * U2_SECTOR_EDGE
+                       + (int)ctx->state.mon_x[i];
+        if (cell < 0 || cell >= U2_SECTOR_TILES)
+            continue;
+        if (w->map[cell] != ctx->state.mon_type[i])
+            missing++;
+    }
+    return missing;
+}
+
 int u2_monsters_nearest(const u2_ctx *ctx, int x, int y)
 {
     if (ctx == NULL)

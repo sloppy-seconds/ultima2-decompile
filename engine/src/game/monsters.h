@@ -129,6 +129,17 @@ void u2_monsters_clear_spawn_cells(u2_ctx *ctx, u2_world *w);
 
 int u2_monsters_ghost_cells(const u2_ctx *ctx, const u2_world *w);
 
+/*
+ * How many creature slots are in the state table but NOT stamped into the grid — the mirror
+ * image of u2_monsters_ghost_cells(), and the counter that catches an invisible monster.
+ *
+ * A ghost is a stamp with no creature. This is a creature with no stamp: walkable ground that
+ * is secretly occupied, which is what entering a site used to produce, because site_reload
+ * loaded the creatures and cleared their baked art but nothing restamped until the first
+ * creature move. Zero means every creature in the table is visible on the grid.
+ */
+int u2_monsters_unstamped_cells(const u2_ctx *ctx, const u2_world *w);
+
 /* The nearest occupied slot to (x,y) in manhattan distance, or -1 if the sector
  * holds nothing. Used by the attack command's "nothing there" path and by tests. */
 int u2_monsters_nearest(const u2_ctx *ctx, int x, int y);

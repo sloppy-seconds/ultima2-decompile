@@ -18,6 +18,7 @@ Usage: cp6_commerce_seed.py DIR CASE
          | torch_lit | torch_none | torch_outside | tower_climb | tower_noladder
          | tower_descend | town_descend | town_climb | tower_both
          | tribute_low | tribute_mid | tribute_max | tribute_broke
+         | enter_tower | enter_dungeon | enter_town
 """
 import os
 import sys
@@ -85,6 +86,13 @@ SITE_CASES = {
     "tribute_mid":    ((3, 3), (31, 14), 0x70, 0x00, 0x5000, 0x9999),
     "tribute_max":    ((3, 3), (31, 14), 0x70, 0x00, 0x9901, 0x9999),
     "tribute_broke":  ((3, 3), (31, 14), 0x70, 0x00, 0x0001, 0x0020),
+    # Entry locks. cmd_E refuses unless the sector's ones digit is 0, so these sit on sector
+    # 20 and the tile UNDER the player is the entrance: site_for_tile switches on tile>>2, so
+    # 0x1C is a tower mouth (digit 4) and 0x24 a dungeon mouth (digit 5). enter_town is the
+    # control -- without it the lock could quietly become "refuse every site" and stay green.
+    "enter_tower":    ((2, 0), (5, 5), 0x1C, 0x00, None, None),
+    "enter_dungeon":  ((2, 0), (5, 5), 0x24, 0x00, None, None),
+    "enter_town":     ((2, 0), (5, 5), 0x18, 0x00, None, None),
 }
 
 # Slots in the synthetic monx: the engine's loader reads x at 0..31, y at 32..63, hp at
@@ -101,6 +109,21 @@ def cleric_monx(px, py):
     m[64 + CLERIC_SLOT] = 0xFF          # hp, as shipped in monx33 slot 8
     m[96 + CLERIC_SLOT] = CLERIC_TYPE
     m[160 + CLERIC_SLOT] = 0x00         # role: below 0x80, so the TYPED arm, not the talking arm
+    return bytes(m)
+
+
+def guard_monx(x, y):
+    """A monx holding one guard at (x,y) -- the town-entry stamp check.
+
+    Type 0x60 is what every shipped monx uses for a placed guard, and the map byte the
+    engine has to overwrite at that cell is the baked 0x60 the real mapx files carry
+    (measured: mapx byte == mon_type at 32/32 authored cells in sectors 31, 32 and 33).
+    """
+    m = bytearray(256)
+    m[3] = x
+    m[32 + 3] = y
+    m[64 + 3] = 0xFF
+    m[96 + 3] = 0x60
     return bytes(m)
 
 
@@ -169,19 +192,35 @@ def main_site(out_dir: str, case: str) -> int:
     os.makedirs(content, exist_ok=True)
     os.makedirs(save, exist_ok=True)
 
-    def write_sector(digits, cleric=False):
+    def write_sector(digits, monx=None):
         grid = bytearray([FLOOR]) * 4096
         grid[py * 64 + px] = tile
         with open(os.path.join(content, f"mapx{digits}"), "wb") as f:
             f.write(bytes(grid))
         with open(os.path.join(content, f"monx{digits}"), "wb") as f:
-            f.write(cleric_monx(px, py) if cleric else bytes(256))
+            f.write(monx if monx is not None else bytes(256))
 
-    write_sector(f"{hi}{lo}", cleric=case.startswith("tribute"))
+    write_sector(f"{hi}{lo}", cleric_monx(px, py) if case.startswith("tribute") else None)
     # Leaving a site zeroes the ones digit, so the descend-exit case lands in sector `hi0`
     # and the loader has to find something there or the run dies on a missing file rather
     # than on the behaviour under test.
     write_sector(f"{hi}0")
+    # The town mouth leads to sector `<hi>2` (site digit 2). Give it a guard, or the entry
+    # test proves nothing: an empty sector has no creature to fail to stamp.
+    if case == "enter_town":
+        write_sector(f"{hi}2", guard_monx(0x1f, 0x3e))
+        # Wall the guard in. The creature sweep runs after every command and restamps when
+        # anything MOVED, so a guard that wanders on the first turn hides the entry defect
+        # entirely: the gate passes with or without the fix, which is the shape of gate this
+        # project has been bitten by twice. Sealed on all four sides with 0x00 (water to a
+        # foot stamp) it cannot move, so the only thing that can stamp it is the load path.
+        gp = os.path.join(content, f"mapx{hi}2")
+        grid = bytearray(open(gp, "rb").read())
+        gx, gy = 0x1f, 0x3e
+        for dx, dy in ((1, 0), (-1, 0), (0, -1)):
+            grid[(gy + dy) * 64 + (gx + dx)] = 0x00
+        with open(gp, "wb") as f:
+            f.write(bytes(grid))
 
     p = bytearray(384)
     p[0:7] = b"SITETST"
