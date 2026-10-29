@@ -131,16 +131,16 @@ MANIFEST = [
     # 0x8d line-marker byte (the same high-bit convention as the tlkx files),
     # so the string starts one byte after the call: 0x3FCA, 0x3FE8, 0x4005,
     # 0x4022, 0x4037.
-    ("U2_S_Q_PROMPT",          "3DC7_cmd_Q.asm", ("run", 0x3FCA, 18)),
-    ("U2_S_Q_OUTDOORS",        "3DE4_offer_only_outdoors.asm", ("run", 0x3FE8, 14)),
-    ("U2_S_Q_EARTH",           "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4005, 14)),
-    ("U2_S_Q_FOOT",            "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4022, 13)),
-    ("U2_S_Q_MOMENT",          "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4037, 18)),
+    ("U2_S_Q_PROMPT",          "3DC7_cmd_Q.asm", ("run", 0x3FCA, 18, "QUIT OR SAVE GAME.")),
+    ("U2_S_Q_OUTDOORS",        "3DE4_offer_only_outdoors.asm", ("run", 0x3FE8, 14, "ONLY OUTDOORS!")),
+    ("U2_S_Q_EARTH",           "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4005, 14, "ONLY ON EARTH!")),
+    ("U2_S_Q_FOOT",            "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4022, 13, "ONLY ON FOOT!")),
+    ("U2_S_Q_MOMENT",          "3DFA_offer_only_outdoors_earth.asm", ("run", 0x4037, 18, "ONE MOMENT PLEASE!")),
     # The PASS echo. The walk loop prints it from an inline string in the code
     # stream (call at file 0x0B45, bytes "PASS\0" at 0x0B48), which is the same
     # shape as the direction words; the split attributes it to no db line, so
     # it uses a run locator verified against the raw bytes.
-    ("U2_S_PASS",              "0940_sub_0940.asm", ("run", 0x0B48, 4)),
+    ("U2_S_PASS",              "0940_sub_0940.asm", ("run", 0x0B48, 4, "PASS")),
     # Rejected move. asm/0A02 is a whole routine whose only content is the
     # str_out call plus its inline string, so the db-index locator is exact and
     # needs no hand-checked file offset.

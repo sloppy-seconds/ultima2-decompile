@@ -55,7 +55,8 @@ printf 'engine CP5 spec\n'
 EMPTY_STRINGS=""
 for sym in U2_S_IS_DEAD U2_S_KILLED U2_S_EXP_PLUS U2_S_HIT U2_S_MISS \
            U2_S_LEGS_PARALYZED U2_S_ARMS_PARALYZED U2_S_SLEEP_SPELL \
-           U2_S_MAGIC_MISSILE U2_S_THIEF_STOLE U2_S_SITE_TOWN U2_S_ENTER; do
+           U2_S_MAGIC_MISSILE U2_S_THIEF_STOLE U2_S_SITE_TOWN U2_S_ENTER \
+           U2_S_PASS; do
     if grep -q "^#define ${sym} \"\"" build/gen_content.h 2>/dev/null; then
         EMPTY_STRINGS="${EMPTY_STRINGS} ${sym}"
     fi
@@ -1016,7 +1017,16 @@ patch_player "$PLAYER" $((0x61)) 1
 patch_player "$PLAYER" $((0x15)) 0x08
 printf 'W\n1\n' > "$WORK/wv-weak.keys"
 run_wv "" "$WORK/wv-weak.keys" "$WORK/wv-weak.out"
-if grep -q "STRONG ENOUGH TO WEAR!" "$WORK/wv-weak.out"; then
+# This one SKIPs without the player's copy, and the reason is worth the comment because it
+# is not laziness: asm/43F3 assembles the refusal from TWO db literals with a 0x0d between
+# them (`" <-THOU ART NOT",0x0d,"STRONG ENOUGH TO WEAR!"`), so it cannot be written as one
+# `run` locator with a working asm fallback and resolves to "" when there is no exe. The
+# engine therefore prints nothing at all in CI, and no grep on the screen can recover a
+# string that was never emitted. Saying "uncheckable here" is the honest verdict; a red that
+# actually means "CI has no disk" is the one this file's own guard exists to prevent.
+if grep -q '^#define U2_S_NOT_STRONG_ENOUGH ""' build/gen_content.h 2>/dev/null; then
+    skip "CP5 W/V: strength-gate refusal text needs the player's copy (asm/43F3 splits it across two db literals)"
+elif grep -q "STRONG ENOUGH TO WEAR!" "$WORK/wv-weak.out"; then
     ok "CP5 W/V: the strength gate refuses against the packed strength byte, not the decimal"
 else
     bad "CP5 W/V: expected 'STRONG ENOUGH TO WEAR!' with DS:4B = 0x08"
