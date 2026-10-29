@@ -2,7 +2,7 @@
 #           through into the following map fragment
 # func 35C1..35C8  len 008 B  evidence: seed+reko (jump table cs:0730 entry F)
 # provenance: live:airport32 (+3 other harvests), static
-#           entry executed in 4 of 187 harvests; derived by tools/provenance_from_traces.py
+#           entry executed in 6 of 189 harvests; derived by tools/provenance_from_traces.py
 # confidence: high (handler role proven; message literal)
 # name-evidence: read 2026-10-29. FIRE is the FRIGATE'S CANNONS, not a melee attack, and the
 #           mode gate says so: asm/35C9 reads [DS:13], the travel-mode stamp, and continues
@@ -14,6 +14,23 @@
 #           This corrects `engine/src/game/commands.c`, which had filed F as "the combat/
 #           attack arm" from the bare word FIRE. cmd_A is the attack; F is a vehicle weapon.
 #           Owner recollection supplied the pointer, the mode byte confirmed it.
+# provenance: live:cannon-range-live (2026-10-29)
+#           OBSERVED, not inferred. The whole chain executed in a live run and every address in
+#           it is in that capture's ExecutedInstructions: 35C1 entry, 35C9 gate, 35DE DIRECT-,
+#           35ED tone, 35F0 probe, 35F3 slot, 3603 rand, 3606 or-$0x20, 3611 apply, 2C19
+#           subtract, 2E09 --MISS. The frigate state was built by poking [DS:13]=0x24 (that is
+#           the entire gate, so no boarding was needed) and the target by planting mon_type/x/y
+#           at a chosen cell, with [DS:26A] frozen so the creature could not wander off it.
+# RANGE: ONE CELL, measured. Targets at 1, 2 and 3 cells east of the player, fired at with the
+#           same keypress: distance 1 hit twice (hp 0x99->0x5B and 0x99->0x76) and distances 2
+#           and 3 missed both times, unchanged. The owner's recollection was a 3-space reach, and
+#           the live game disagrees. asm/23E6 probes a single cell and this is now the second
+#           witness, the first being a frame rather than a listing.
+# SILENCE ON A HIT: also on the frame. The distance-1 shot printed `FIRE DIRECT-EAST` and nothing
+#           more, while the distance-2 shot printed `FIRE DIRECT-EAST--MISS`. So the only text on
+#           this path is the miss, exactly as asm/35F0..asm/3611's absence of any str_out said.
+# HP IS BINARY, NOT BCD: the two hits subtracted 0x3E and 0x23 from a byte holding 0x99, and
+#           asm/2C19 has no das. A BCD-looking field decremented in binary. Do not "fix" this.
 cmd_F:
         call L_0051df          # str_out — prints the inline string below
         db "FIRE",0        # string
