@@ -16,6 +16,7 @@ cd "$(dirname "$0")/.."
 OUT=${1:-/var/tmp/u2-clean-rebuild.bin}
 python3 - "$OUT" << 'PY'
 import glob, hashlib, os, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 
 BIAS = 0x200
 # Known md5 of original/ultimaii.exe (the Internet Archive pack described in
@@ -48,23 +49,46 @@ if os.path.exists(prol):
 # 2) every function, in map order, from its cleaned file
 rows = [l.split("\t") for l in
         open("disasm/function-map.tsv").read().splitlines()[1:]]
-n_clean = n_slice = 0
-for s, e, ln, ev, hint in rows:
+# Each row is assembled by a separate `check_func.py` subprocess: a Python startup, an
+# `as`, an `objcopy`, and an `nm`, per function, for ~1222 functions. Run sequentially that
+# loop was the whole cost of this script (62s of a 2-minute check_all) on a box with 32
+# cores idle. It parallelises cleanly and the isolation is not something this change had to
+# introduce: check_func.py already writes only into tmp/check/<SEG>/, a per-segment
+# directory, so concurrent runs cannot see each other's files. The one fixed-path work in
+# this script is the prologue above, which happens once before the loop.
+#
+# Order still matters for the splice, so pool.map is used deliberately rather than
+# as_completed: it yields results in input order, which keeps the rebuilt bytes identical
+# to the sequential build. Verified by md5, not assumed.
+def build_row(row):
+    s, e, ln, ev, hint = row
     seg = s.upper()
     cmd = [sys.executable, "tools/check_func.py", seg]
     if not have_orig:
         cmd.append("--no-compare")
     c = subprocess.run(cmd, capture_output=True, text=True)
     if c.returncode != 0:
-        sys.exit(f"check_func FAILED for {seg}:\n{c.stdout}{c.stderr}")
+        return ("fail", seg, c.stdout, c.stderr)
     src = c.stdout.split("src=")[1].strip()
-    if src.startswith("asm/"):
-        n_clean += 1
-    else:
-        n_slice += 1
     fs, fe = int(s, 16) + BIAS, min(int(e, 16) + BIAS + 1, EXPECTED_SIZE)
-    blob = open(f"tmp/check/{seg}/check.bin", "rb").read()
-    out[fs:fe] = blob[fs:fe]
+    with open(f"tmp/check/{seg}/check.bin", "rb") as f:
+        blob = f.read()
+    return ("ok", src.startswith("asm/"), fs, fe, blob)
+
+
+n_clean = n_slice = 0
+workers = max(1, min(32, (os.cpu_count() or 4) * 2))
+print(f"assembling {len(rows)} functions across {workers} workers")
+with ThreadPoolExecutor(max_workers=workers) as pool:
+    for res in pool.map(build_row, rows):
+        if res[0] == "fail":
+            sys.exit(f"check_func FAILED for {res[1]}:\n{res[2]}{res[3]}")
+        _, is_clean, fs, fe, blob = res
+        if is_clean:
+            n_clean += 1
+        else:
+            n_slice += 1
+        out[fs:fe] = blob[fs:fe]
 
 md5 = hashlib.md5(bytes(out)).hexdigest()
 open(sys.argv[1], "wb").write(bytes(out))
