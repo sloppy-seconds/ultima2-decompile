@@ -1057,6 +1057,13 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 
     for (;;) {
         u2_key k;
+        /* Show YELL WHAT? before waiting for the yell. Without this the prompt is written to
+         * the vram and never presented, because the loop that presents sits above this
+         * handler, so the player stares at an unchanged screen while the game waits for a
+         * word. Same reason as commerce.c's show_and_wait; see the comment there for why it
+         * is at the site and not in the shared seam. */
+        if (ctx->present_now)
+            ctx->present_now(ctx);
         if (seam_key_wait(ctx, &k) == 0)
             break;                        /* input exhausted: no original counterpart */
         if (k.ch == '\r') {

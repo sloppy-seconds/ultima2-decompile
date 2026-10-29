@@ -96,6 +96,11 @@ run "cmd_marker_gate selftest" tools/cmd_marker_gate.py -- python3 tools/cmd_mar
 run "cmd_marker_gate" engine/src docs/phase4-state.md -- python3 tools/cmd_marker_gate.py
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
 run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
+# Only meaningful when the binaries exist, so they are the required paths and a tree that
+# never built simply skips rather than passing vacuously. This is the tripwire for the
+# stale-SDL-object class of bug: two deploys today shipped binaries that did not match
+# source, and neither `make` nor any gate said so.
+run "engine build fresh" engine/u2 -- make -C engine fresh
 if [ "$CI_MODE" = 1 ] && [ -z "${ASM_GUARD_BASE:-}" ]; then
     # The guard compares a tree to a ref; with no base it can only pass vacuously, and it
     # now refuses rather than doing that. asm-checksum.yml is its real home because that

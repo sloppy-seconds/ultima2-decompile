@@ -75,6 +75,12 @@ typedef struct u2_ctx {
      * it. Without the latch a gate cannot distinguish "stamped on load" from "stamped by the
      * first sweep", which is exactly how a town-entry defect survived a passing test. */
     int diag_unstamped_at_load;
+
+    /* Set by the overworld loop to a function that composites and presents a whole frame.
+     * seam_key_wait calls it before blocking so a handler that printed something just before
+     * waiting has it on screen WITH the map, not over a blanked one. Null outside the
+     * overworld, where the text-layer flush alone is the whole screen. See seam.c. */
+    void (*present_now)(struct u2_ctx *ctx);
     int dump_each;          /* --dump-each: print the grid after every present */
     const char *dump_screen;/* --dump-screen F: SDL build saves the first
                              * presented frame to F as PPM, then the run ends.

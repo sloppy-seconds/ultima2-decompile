@@ -24,8 +24,10 @@ SRCS     := src/main.c \
             $(wildcard src/debug/*.c)
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
+SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
+SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 clean content content-check sdl sdl-run play help
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 clean content content-check sdl sdl-run play help fresh
 
 all: $(BIN)
 
@@ -107,7 +109,7 @@ SDL_BIN    := u2-sdl
 
 sdl: $(SDL_BIN)
 
-$(SDL_BIN): $(patsubst %.c,$(SDLOBJ)/%.o,$(SRCS))
+$(SDL_BIN): $(SDLOBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(SDL_LIBS)
 
 $(SDLOBJ)/%.o: %.c $(GEN)
@@ -138,7 +140,32 @@ play: $(SDL_BIN)
 clean:
 	rm -rf $(BUILD) $(SDLOBJ) $(BIN) $(SDL_BIN)
 
-help:
-	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 sdl sdl-run play clean content content-check help"
+# Fail loudly if a built binary is older than any source or header it is made from.
+#
+# This exists because the SDL object tree was, until 2026-10-29, compiled with -MMD -MP but
+# its .d files were never included. A header edit therefore did not rebuild the SDL objects,
+# and the link mixed objects compiled against DIFFERENT versions of a struct. Adding a field
+# to ctx.h produced a u2-sdl whose members were read at the wrong offsets, which surfaced as
+# a hang with no error anywhere and cost four turns to find. Two stale-binary incidents in one
+# day, both invisible, both from trusting that make knew what it depended on.
+#
+# The -include below is the cure. This target is the tripwire: cheap enough to run before any
+# deploy, and it names the offenders instead of silently relinking.
+fresh:
+	@bad=0; \
+	for bin in $(BIN) $(SDL_BIN); do \
+		[ -e "$$bin" ] || continue; \
+		newer=$$(find src ../asm $(GEN) -newer "$$bin" -type f 2>/dev/null | head -5); \
+		if [ -n "$$newer" ]; then \
+			echo "STALE: $$bin is older than:"; printf '  %s\n' $$newer; bad=1; \
+		fi; \
+	done; \
+	if [ "$$bad" -ne 0 ]; then \
+		echo "fresh: run 'make clean' before rebuilding."; exit 1; \
+	fi; \
+	echo "fresh: every binary is newer than its sources"
 
--include $(DEPS)
+help:
+	@echo "targets: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 sdl sdl-run play clean content content-check fresh help"
+
+-include $(DEPS) $(SDL_DEPS)

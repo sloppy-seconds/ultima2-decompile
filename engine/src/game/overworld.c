@@ -1471,9 +1471,32 @@ static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, 
     }
 }
 
+/* Composites and presents a whole game frame on demand.
+ *
+ * Registered on the ctx so seam_key_wait can put a handler's freshly printed text on screen
+ * before it blocks. It has to be the COMPOSED frame rather than a bare text-layer flush:
+ * u2_vram_flush drives renderer->cell and renderer->flush, which in SDL presents the text
+ * surface alone, and the map vanishes behind the text. That is the regression this closes —
+ * the shop question became readable and the world went black.
+ *
+ * A file-static rather than a ctx field because there is exactly one overworld per process
+ * and u2_overworld is a game-layer type the core must not name. Set at loop entry, so it
+ * cannot be read unset while the loop that reads it is running. */
+static u2_overworld *s_present_ow;
+
+static void overworld_present_now(u2_ctx *ctx)
+{
+    if (!s_present_ow)
+        return;
+    u2_overworld_draw(ctx, s_present_ow);
+    seam_present_frame(ctx);
+}
+
 int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 {
     ctx->frame = &ow->frame;
+    s_present_ow = ow;
+    ctx->present_now = overworld_present_now;
 
     int idle_polls = 0;     /* polls since the last key, for the auto-PASS */
 

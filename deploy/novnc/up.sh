@@ -124,15 +124,14 @@ BIN=engine/u2-sdl
 
 # ---------------------------------------------------------------- 2. freshness
 # If make decided nothing had changed while a source file is newer than the binary, the
-# binary is not the current source. Cheaper than a clean rebuild and it names the culprit.
-stale=$(find engine/src engine/Makefile -newer "$BIN" -type f 2>/dev/null | head -5 || true)
-if [ -n "$stale" ]; then
-    say "binary is older than these sources -- forcing a clean rebuild:"
-    printf 'up.sh:   %s\n' $stale
+# binary is not the current source. The engine Makefile owns this check as `make fresh`,
+# so there is one definition rather than two that can drift.
+if ! make -C engine fresh >/dev/null 2>&1; then
+    say "binary is stale -- forcing a clean rebuild:"
+    make -C engine fresh 2>&1 | sed -n '2,7p' | sed 's/^/up.sh:   /'
     make -C engine clean
     make -C engine sdl
-    stale=$(find engine/src engine/Makefile -newer "$BIN" -type f 2>/dev/null | head -5 || true)
-    [ -z "$stale" ] || die "still stale after a clean rebuild: $stale"
+    make -C engine fresh >/dev/null 2>&1 || die "still stale after a clean rebuild"
 fi
 say "binary is newer than every source it is built from"
 

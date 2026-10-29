@@ -188,6 +188,30 @@ static void engine_gap(u2_ctx *ctx, const char *what)
     seam_str_out(ctx, buf);
 }
 
+/* Put what was just printed on the screen before blocking for the key that answers it.
+ *
+ * The overworld composes and presents once per loop iteration, at the top of the loop, and a
+ * handler that blocks here never returns there. Owner report 2026-10-29: the TRANSPORT shoppe
+ * question was invisible while the engine waited for Y or N, which read as the game freezing,
+ * and answering late dropped the Y into the command loop as a YELL. The text was always being
+ * written correctly; nothing was showing it.
+ *
+ * Deliberately called at the sites that print-then-block rather than inside seam_key_wait.
+ * The universal version was tried and broke CP4: presenting from the shared wait path also
+ * runs at the title screen, where --dump-screen sets its done-flag during the flush and the
+ * title flow loops on a no-key result forever. The original needs no such call anywhere -- it
+ * writes to 0xB8000 and the CRT is always displaying it -- so this is port plumbing at the
+ * three places that need it, not a property of every wait.
+ *
+ * It composes a whole frame rather than flushing the text layer, because a bare text flush
+ * presents the text surface alone and the map goes black behind the question. */
+static int show_and_wait(u2_ctx *ctx, u2_key *k)
+{
+    if (ctx->present_now)
+        ctx->present_now(ctx);
+    return seam_key_wait(ctx, k);
+}
+
 /* asm/2028_read_decimal_digit: block until one decimal digit arrives, echo it, return it.
  * Non-digits are rejected by reading again. Returns -1 only when the engine's input is
  * exhausted, which has no counterpart in the original (it blocks forever) and is the
@@ -196,7 +220,7 @@ static int read_digit(u2_ctx *ctx)
 {
     for (;;) {
         u2_key k;
-        if (seam_key_wait(ctx, &k) == 0)
+        if (show_and_wait(ctx, &k) == 0)
             return -1;
         if (k.ch >= '0' && k.ch <= '9') {
             seam_char_print(ctx, k.ch);
@@ -218,7 +242,7 @@ static int read_digit(u2_ctx *ctx)
 static int read_yes(u2_ctx *ctx)
 {
     u2_key k;
-    if (seam_key_wait(ctx, &k) == 0)
+    if (show_and_wait(ctx, &k) == 0)
         return 0;
     seam_char_print(ctx, k.ch);
     return k.ch == 'Y';
