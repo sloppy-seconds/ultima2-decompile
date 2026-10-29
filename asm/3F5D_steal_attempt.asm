@@ -7,6 +7,48 @@
 #           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
+#
+# THE OUTCOME TABLE, read 2026-10-29. This is the player stealing from a shoppe, and it is
+# NOT the same mechanic as asm/0FCD_combat_thief_steal, where a THIEF creature empties one of
+# the player's slots in combat. The two were conflated in engine/src/game/commands.c for four
+# days, which is why cmd_S was filed as "already modelled in combat.c, just unwired". It is
+# neither modelled nor related; only the English word is shared.
+#
+#   far cell != 0x68                       ->  "NO LUCK!"
+#   [DS:47] != 3 (not a THIEF)             ->  one roll, js -> "NO LUCK!"
+#   then, for everyone:                     ->  one roll, js -> "NO LUCK!"
+#   [DS:1D7] == 1                           ->  "NO LUCK!"        (see the caveat below)
+#   [DS:4A] == 1 (village) and y < 0x20 and x >= 0x20  ->  "STEAL FOOD!"    [DS:53] += 1, BCD
+#   [DS:4A] == 2 (town)   and y < 0x20 and x >= 0x20  ->  "STEAL ARMOUR!"  [DS:96 + (roll&3)+1] += 1
+#   [DS:4A] == 2 (town)   and y < 0x20 and x <  0x20  ->  "STEAL WEAPONS!" [DS:76 + (roll&7)+1] += 1
+#   anything else, including [DS:4A] not in {1,2}     ->  "NO LUCK!"
+#
+# The quadrant rule is the same table as the TRANSACT selector in asm/1590, and it agrees
+# entry for entry: a village's north-east is the grocery and the loot is food; a town's north-
+# east is the armour shoppe and the loot is armour; a town's north-west is the weapons shoppe
+# and the loot is weapons. The south halves are not implemented by the game at all, so a
+# correctly-aimed steal at a transport shoppe, a pub, a shrine or a magic shoppe is simply
+# "NO LUCK!". The item stolen is RANDOM within the category (roll & 3 for armour, & 7 for
+# weapons, then +1 so slot 0 is never stolen), which is a different shape from buying, where
+# the menu digit picks it.
+#
+# What a THIEF actually buys is one skipped roll, not eligibility: the class test at
+# `cmp $0x3,[DS:47]` jumps PAST the first roll rather than gating the command, and the second
+# roll is unconditional. So any class can steal and a thief just fails less often. Grade
+# `measured` from the listing; the class byte identity is the proven one (asm/1841 tests 1 for
+# cleric, asm/19AF tests 2 for wizard).
+#
+#           CAVEAT on the [DS:1D7] == 1 test, and it is the one thing here not to build on. DS:1D7 is the
+# base of the creature role array, and this is a bare un-indexed read of slot 0, on a path that
+# has no creature scan at all. Either the grid reader asm/52b3 leaves something there, or the
+# fragment boundary is wrong, or it is a genuine read of slot 0's role. It refuses on 1, and
+# the roles seen in the corpus are 0x60..0xFC, so 1 is not a role value in the sense the tlkx
+# index uses. Unresolved, and the engine refuses on it identically rather than guessing which
+# way the guess goes.
+#
+# Also unread: the "NO LUCK!" path rolls once more and calls asm/133a only when the roll's
+# low three bits are zero — `and $0x7,%al ; jne` skips it — so failing a steal has some
+# consequence about one time in eight. What it is, is not decoded.
 steal_attempt:
 L_00415d:
         nop
