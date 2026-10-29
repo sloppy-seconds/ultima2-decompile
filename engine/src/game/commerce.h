@@ -101,4 +101,52 @@ int u2_spend_price(u2_ctx *ctx, const uint8_t price[2]);
  */
 u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, int dy);
 
+/*
+ * asm/3F37 + asm/3F5D — cmd_S, STEAL.
+ *
+ * The same two-cell ray as TRANSACT, aimed at the same merchant marker, through the same
+ * asm/2362 gate: cmd_S's call to it sits at asm/3F36 as a bare forced-keep `e8`, which is how
+ * it stayed invisible for as long as cmd_T's did. What differs is what happens on a hit. There
+ * is no creature scan, no menu and no price: the game rolls, and then the quadrant the PLAYER
+ * is standing in decides what category of goods falls off the shelf into the inventory, at
+ * random within that category.
+ *
+ *   village (kind 1), north-east -> food, one unit, packed decimal
+ *   town    (kind 2), north-east -> armour, random of 4 (CLOTH..PLATE)
+ *   town    (kind 2), north-west -> weapons, random of 8 (DAGGER..PHASER)
+ *   anything else                -> NO LUCK!
+ *
+ * So the south halves of a town cannot be robbed, and neither can a clue seller, a shrine, a
+ * pub or a magic shoppe: the game does not have those arms. The high-end goods are out of
+ * reach too — REFLECT and POWER armour and the QUICK SWORD are never selected by the mask.
+ *
+ * Prints its own line either way. Returns the outcome so a test can assert on the branch
+ * rather than on the text.
+ */
+typedef enum u2_steal_result {
+    U2_STEAL_NO_LUCK = 0,
+    U2_STEAL_FOOD,
+    U2_STEAL_ARMOUR,
+    U2_STEAL_WEAPONS
+} u2_steal_result;
+
+u2_steal_result u2_commerce_steal(u2_ctx *ctx, u2_overworld *ow, int dx, int dy);
+
+/*
+ * The loot half of asm/3F5D on its own, so it can be enumerated the way u2_commerce_shop_for
+ * is. Two of the three outcomes are chosen by a roll *within* the category, which is not a
+ * pure question; which category at all is a pure question, and it is this one:
+ *
+ *   kind 1 (village), north-east -> food
+ *   kind 2 (town),    north-east -> armour
+ *   kind 2 (town),    north-west -> weapons
+ *   everything else              -> nothing stealable
+ *
+ * Note it is NOT the same partition as the shop selector: the selector has eight cells and
+ * this has three filled ones. A village's north-west is the clue seller and a town's south
+ * half is the transport shoppe, and asm/3F5D has no arm for either, so they come back NONE
+ * rather than defaulting to something plausible.
+ */
+u2_steal_result u2_steal_loot_for(int x, int y, int site_kind);
+
 #endif /* U2_COMMERCE_H */

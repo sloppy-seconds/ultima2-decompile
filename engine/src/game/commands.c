@@ -211,6 +211,21 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
      */
     const u2_vram saved = ctx->vram;
     const uint64_t writes = ctx->vram.writes;
+    /* The vram snapshot does NOT carry the text cursor, and that is the cursor the seams use:
+     * seam_char_print walks ctx->state.cursor_row / cursor_col (DS:2E/2F), while u2_vram keeps
+     * its own drawing position. u2_status_draw_full leaves the state cursor wherever the item
+     * lists finished, so restoring only the vram put the next command's output a row or two too
+     * high. cmd_S is what showed it — an unimplemented letter printed nothing, so for as long as
+     * S was a gap the page looked traceless. The CP5 property "Z leaves no trace" is the rule
+     * being enforced here; this is the half of it the snapshot was missing.
+     *
+     * right_margin goes in the same snapshot for the same reason. status.c restores it itself
+     * today (0x26 in, back out at the tail), but a teardown that claims no trace should not
+     * depend on the drawer having tidied up after itself. */
+    const uint8_t cur_row = ctx->state.cursor_row;
+    const uint8_t cur_col = ctx->state.cursor_col;
+    const uint8_t margin_r = ctx->state.right_margin;
+    const uint8_t margin_l = ctx->state.left_margin;
     u2_status_draw_full(ctx);
 
     /* Present the page as a WHOLE-GRID frame, not through the overworld compositor.
@@ -250,6 +265,10 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     if (got_key) {
         ctx->vram = saved;
         ctx->vram.writes = writes;
+        ctx->state.cursor_row = cur_row;
+        ctx->state.cursor_col = cur_col;
+        ctx->state.right_margin = margin_r;
+        ctx->state.left_margin = margin_l;
     }
     u2_overworld_draw(ctx, ow);
     return U2_CMD_DONE;
@@ -296,6 +315,34 @@ static u2_cmd_result cmd_T(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     (void)letter;
     seam_str_out(ctx, U2_S_TRANSACT);
     ow->pending_cmd = 'T';
+    return U2_CMD_AWAIT;
+}
+
+/* asm/3F25 cmd_S: STEAL. Same AWAIT shape as cmd_T for the same reason — the direction is
+ * consumed inside the handler chain, by asm/2362, whose call sits at asm/3F36 as a bare
+ * forced-keep `e8` byte and so never appeared in any `# calls:` list.
+ *
+ * The word is the trap here. This is not pickpocketing and it is not combat: there is no
+ * creature scan anywhere in the chain. The ray lands on the merchant marker two cells away —
+ * the same marker TRANSACT deals with — two rolls decide luck, and then the quadrant the
+ * PLAYER is standing in decides which category of goods is added to the inventory. A village
+ * north-east gives food, a town north-east gives armour, a town north-west gives weapons,
+ * and everything else is NO LUCK!. The shop's stock is not touched because there is no stock;
+ * the owned-count arrays simply go up.
+ *
+ * It is also not asm/0FCD_combat_thief_steal, which is a THIEF monster emptying one of the
+ * player's slots in a fight. This file used to say the effect was "modelled in combat.c for
+ * CP5 ticket C6 and merely unwired", which conflated the two on the strength of the shared
+ * English word; the decode and the CP6 gate now keep them apart.
+ *
+ * A THIEF (class 3) is not required, it skips one of the two rolls. Owner recollection said
+ * "probably needs a thief" and "can steal from shops" — the second is exactly right, the
+ * first is half right. */
+static u2_cmd_result cmd_S(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_STEAL_DIRECT);
+    ow->pending_cmd = 'S';
     return U2_CMD_AWAIT;
 }
 
@@ -1014,8 +1061,13 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      stock, spend, then fail — not check, fail, spend.
  *   D  asm/334D prints DESCEND and falls into a key-code test whose meaning is recorded as
  *      unresolved in its own header, and dungeons are parked (AGENTS.md section 3).
- *   F  FIRE is the combat/attack arm.
- *   G  GET needs ground items.
+ *   F  FIRE is the FRIGATE'S CANNONS, not a melee attack: asm/35C9 gates on [DS:13] == 0x24,
+ *      the ship stamp from asm/2FAD's BOARD dispatch, and off the ship the whole command is
+ *      `FIRE WHAT?`. On the ship it prints " DIRECT-" and uses the aim gate. Recorded in
+ *      asm/35C1_cmd_F.asm. This entry used to say "the combat/attack arm", which was a guess
+ *      from the word; cmd_A is the attack.
+ *   G  GET needs ground items, and where they come from is a dungeon question. PARKED with
+ *      dungeons by the owner 2026-10-29, alongside cmd_D and G47.
  *   N  asm/3BCE prints NEGATE TIME and falls through into asm/3BDD (`mov 0xe3,%al`), which
  *      is not cmd_done. Where that fragment ends is not established; guessing a time effect
  *      from the word "NEGATE" is the invention this project's rules exist to stop.
@@ -1024,11 +1076,13 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
  *      yet tested: several NPCs accept an offer, Lord British is the easiest target, and his
  *      castle is on the same small island as the Port Boniface entrance.
  *   R  ready weapon.
- *   S  asm/3F25 prints STEAL DIRECT- and falls into the aim gate: asm/3F37 calls asm/2362 and
- *      then computes the target as ([DS:00]+[DS:19], [DS:01]+[DS:1A]) into DS:23/DS:24 -- read
- *      directly, so the aiming is settled. The effect is asm/3F5D_steal_attempt, modelled in
- *      combat.c for CP5 ticket C6 but not wired to a world-map direction. What a thief playtest
- *      still has to say is the TARGET SET, not the aim.
+ *   S  implemented 2026-10-29. asm/3F25 prints STEAL DIRECT- and falls into the aim gate at
+ *      asm/3F36 (a forced-keep `e8`, so the call edge was never listed), then asm/3F37 and
+ *      asm/3F5D run the same two-cell ray as TRANSACT against the merchant marker. The effect
+ *      is asm/3F5D_steal_attempt and it is NOT asm/0FCD, which is a monster stealing from the
+ *      player in combat; the earlier note here claimed combat.c already modelled it, and that
+ *      was the two conflated. What remains unproven is the [DS:1D7] == 1 refusal, whose
+ *      un-indexed read is recorded in asm/3F5D_steal_attempt.asm.
  *   T  implemented 2026-10-29. asm/4050 DOES call the asm/2362 aim gate (at asm/405D, hidden
  *      behind a forced-keep byte so the call edge was never listed), and then it seeds a
  *      cursor with asm/23E6 and scans slots -- so it uses the aim family AND its own cursor
@@ -1072,7 +1126,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_P, /* P  PASS: asm/3DBC. The space bar is a different site, in overworld.c */
     cmd_Q, /* Q  save: asm/3DE4 refuses indoors, asm/3DFA saves outdoors */
     cmd_R, /* R  ready weapon: asm/3E50, menu then NAME then ownership and the AGILITY gate */
-    NULL,  /* S  see the note above */
+    cmd_S, /* S  steal: asm/3F25, the TRANSACT ray at a shoppe, quadrant loot, no creature scan */
     cmd_T, /* T  transact: asm/4050, the ray and the shops in game/commerce.c */
     cmd_U, /* U  unlock aim: asm/42F1, prints UNLOCK DIRECTION- and awaits a direction */
     cmd_V, /* V  view: asm/437E, needs a HELM held and sector digit < 4; the map overlay is NOT modelled */

@@ -397,6 +397,14 @@ MANIFEST = [
     ("U2_S_NEGATE_NO_CHARGES",     "3BE4_sub_3be4.asm",          ("run", 0x3DED, 19, "YOU'RE NOT EINSTEIN")),
     ("U2_S_NEGATE_HOW",            "3BE4_sub_3be4.asm",          ("run", 0x3DE7,  5, " HOW?")),
     ("U2_S_COIN_RUB",              "3C04_coin_rub.asm",          ("run", 0x3E14, 17, "YOU RUB A COIN...")),
+    # cmd_S (STEAL). The five literals are the whole of what the command can say: one refusal and
+    # three loot lines, and the fourth branch of the table prints nothing at all because it is
+    # refused earlier. See asm/3F5D_steal_attempt.asm for the table.
+    ("U2_S_STEAL_DIRECT",          "3F25_cmd_S.asm",             0),
+    ("U2_S_STEAL_NO_LUCK",         "3F5D_steal_attempt.asm",     0),
+    ("U2_S_STEAL_FOOD",            "3F5D_steal_attempt.asm",     1),
+    ("U2_S_STEAL_ARMOUR",          "3F5D_steal_attempt.asm",     2),
+    ("U2_S_STEAL_WEAPONS",         "3F5D_steal_attempt.asm",     3),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

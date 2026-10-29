@@ -194,6 +194,44 @@ int main(void)
           "0004 - 0005 refuses without leaving 9999 behind (got %02X%02X)",
           ctx.state.gold_lo, ctx.state.gold_hi);
 
+    /* --- asm/3F5D: which category is stealable, and which is not ---------------------
+     * The quadrant partition is NOT the shop selector's. The selector fills all eight cells;
+     * STEAL fills three. A gate that only checked the three winners could not tell a real
+     * table from a default, so the losers are asserted one by one. */
+    CHECK(u2_steal_loot_for(0x20, 0x1F, 1) == U2_STEAL_FOOD,
+          "village north-east -> food (expected %d)", U2_STEAL_FOOD);
+    CHECK(u2_steal_loot_for(0x20, 0x1F, 2) == U2_STEAL_ARMOUR,
+          "town north-east -> armour (expected %d)", U2_STEAL_ARMOUR);
+    CHECK(u2_steal_loot_for(0x1F, 0x1F, 2) == U2_STEAL_WEAPONS,
+          "town north-west -> weapons (expected %d)", U2_STEAL_WEAPONS);
+
+    /* The boundary cells, because >= 0x20 and < 0x20 are the actual comparisons. */
+    CHECK(u2_steal_loot_for(0x1F, 0x1F, 1) == U2_STEAL_NO_LUCK,
+          "village north-west is the clue seller and has no steal arm");
+    CHECK(u2_steal_loot_for(0x20, 0x20, 2) == U2_STEAL_NO_LUCK,
+          "town south-east is the transport shoppe and has no steal arm");
+    CHECK(u2_steal_loot_for(0x1F, 0x20, 2) == U2_STEAL_NO_LUCK,
+          "town south-west is the pub and has no steal arm");
+    CHECK(u2_steal_loot_for(0x20, 0x20, 1) == U2_STEAL_NO_LUCK,
+          "village south-east is the cleric shrine and has no steal arm");
+    CHECK(u2_steal_loot_for(0x1F, 0x20, 1) == U2_STEAL_NO_LUCK,
+          "village south-west is the wizard shoppe and has no steal arm");
+    CHECK(u2_steal_loot_for(0x20, 0x1F, 0) == U2_STEAL_NO_LUCK,
+          "a site kind of 0 is neither town nor village and steals nothing");
+    CHECK(u2_steal_loot_for(0x20, 0x1F, 3) == U2_STEAL_NO_LUCK,
+          "a dungeon site kind (3) steals nothing either — and dungeons are parked anyway");
+
+    /* The half-plane edges, in both axes, for the two kinds that do have arms. */
+    CHECK(u2_steal_loot_for(0x00, 0x00, 2) == U2_STEAL_WEAPONS,
+          "(0,0) is the far north-west corner of a town");
+    CHECK(u2_steal_loot_for(0x3F, 0x00, 2) == U2_STEAL_ARMOUR,
+          "(0x3F,0) is the far north-east corner of a town");
+    CHECK(u2_steal_loot_for(0x3F, 0x3F, 2) == U2_STEAL_NO_LUCK,
+          "(0x3F,0x3F) is the south-east corner of a town and steals nothing");
+    CHECK(u2_steal_loot_for(0x3F, 0x1F, 1) == U2_STEAL_FOOD &&
+          u2_steal_loot_for(0x3F, 0x20, 1) == U2_STEAL_NO_LUCK,
+          "the village north/south edge falls between 0x1F and 0x20");
+
     printf("commerce_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

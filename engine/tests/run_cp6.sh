@@ -62,13 +62,15 @@ if [ -n "$EMPTY" ]; then
 elif [ ! -x ./u2 ]; then
     bad "CP6 commerce behaviour: ./u2 is not built — run make before make test"
 else
-    run_case() {   # run_case SEEDCASE LABEL KEYS OUTFILE
-        local seed="$1" label="$2" keys="$3" out="$4"
+    run_case() {   # run_case SEEDCASE LABEL KEYS OUTFILE [RNGSTATE]
+        local seed="$1" label="$2" keys="$3" out="$4" rng="${5:-}"
         rm -rf "$WORK/$label"
         python3 tests/cp6_commerce_seed.py "$WORK/$label" "$seed" >/dev/null 2>&1 || return 1
         printf "$keys" > "$WORK/$label.keys"
+        local extra=()
+        [ -n "$rng" ] && extra=(--rng-state "$rng")
         ./u2 --headless --play-map --cleanroom --data-dir "$WORK/$label/content" \
-             --save-dir "$WORK/$label/save" --script "$WORK/$label.keys" \
+             --save-dir "$WORK/$label/save" --script "$WORK/$label.keys" "${extra[@]}" \
              --trace="$out.trace" --dump-each --dump-state > "$out" 2>&1
         # Flatten the transcript: the engine prints a menu in several str_out calls (the literal,
         # then the pool name, then the price), so a phrase like "AH! YES! CLOTH" spans three of
@@ -242,6 +244,81 @@ else
         said "$WORK/cmdn2.out" "EINSTEIN" \
             && ok "CP6 N: with no coin left it refuses and changes nothing" \
             || { bad "CP6 N: expected the second N to refuse"; sed -n '21,24p' "$WORK/cmdn2.out"; }
+    fi
+    # --- cmd_S (STEAL) --------------------------------------------------------
+    # The branch table is gated purely above (u2_steal_loot_for, 14 checks). What the
+    # end-to-end half can add is not the branch — asm/3FA0 puts two coin-flip rolls in front of
+    # it, so which branch a scripted run reaches is a function of the RNG and not of the code,
+    # and a gate that asserted on one fixed outcome would be asserting on the seed. What it CAN
+    # assert is the invariant the original actually guarantees: the line printed and the bytes
+    # changed agree. A run that printed STEAL FOOD! and left food alone, or printed NO LUCK!
+    # and took food, is broken either way, and both are caught.
+    if run_case grocery steal-food 'S\n0xf0\n' "$WORK/steal-food.out"; then
+        food=$(field_of "$WORK/steal-food.out" food)
+        refused=$(said "$WORK/steal-food.out" "NO LUCK!" && echo yes || echo no)
+        paid=$(said "$WORK/steal-food.out" "STEAL FOOD!" && echo yes || echo no)
+        case "$refused/$paid/$food" in
+            "no/yes/51 00 00") ok "CP6 S: printed STEAL FOOD! and food went 5000 -> 5100" ;;
+            "yes/no/50 00 00") ok "CP6 S: printed NO LUCK! and food did not move" ;;
+        *)  bad "CP6 S: text and state disagree (refused=$refused paid=$paid food=$food)" ;;
+        esac
+    fi
+
+    # And the same case with the shift register pinned to all zeros, which makes rand_byte
+    # return 0 twice and forces the success arm. Without this the run above can sit on the
+    # refusal forever — it happened to do exactly that for forty seeds — and a gate that only
+    # ever sees NO LUCK! would pass a broken FOOD branch.
+    if run_case grocery steal-win 'S\n0xf0\n' "$WORK/steal-win.out" "000000000000"; then
+        said "$WORK/steal-win.out" "STEAL FOOD!" \
+            && ok "CP6 S: with the rolls forced, the village north-east arm runs" \
+            || bad "CP6 S: expected STEAL FOOD! on a forced roll"
+        [ "$(field_of "$WORK/steal-win.out" food)" = "51 00 00" ] \
+            && ok "CP6 S: food 5000 -> 5100, one unit in packed decimal (asm/3FDD)" \
+            || bad "CP6 S: food is $(field_of "$WORK/steal-win.out" food), expected 51 00 00"
+    fi
+
+    # The two town arms, also with the rolls forced. The dump does not expose the owned-count
+    # arrays, so these assert on the line and on nothing else — which is still worth having, be-
+    # cause the index arithmetic ([DS:96 + (roll&3)+1] and [DS:76 + (roll&7)+1], both +1 so slot
+    # 0 is never stolen) is exactly the kind of off-by-one that prints the right words while
+    # writing the wrong byte, and a later dump field can close that half.
+    if run_case armour steal-armour 'S\n0xf0\n' "$WORK/steal-armour.out" "000000000000"; then
+        said "$WORK/steal-armour.out" "STEAL ARMOUR!" \
+            && ok "CP6 S: a town's north-east steals armour" \
+            || { bad "CP6 S: expected STEAL ARMOUR! from (38,5) north"; \
+                 sed -n 's/.*text=//p' "$WORK/steal-armour.out.trace" | tr -d '\n'; echo; }
+    fi
+    if run_case weapons steal-weapons 'S\n0xf0\n' "$WORK/steal-weapons.out" "000000000000"; then
+        said "$WORK/steal-weapons.out" "STEAL WEAPONS!" \
+            && ok "CP6 S: a town's north-west steals weapons" \
+            || { bad "CP6 S: expected STEAL WEAPONS! from the north-west cell"; \
+                 sed -n 's/.*text=//p' "$WORK/steal-weapons.out.trace" | tr -d '\n'; echo; }
+    fi
+
+    # The ray is the same two cells as TRANSACT, so the two ways it fails must refuse here too,
+    # and refuse without touching anything. These are roll-independent: asm/3F59 rejects before
+    # the first roll is spent.
+    for c in nosign nomarker; do
+        if run_case "$c" "steal-$c" 'S\n0xf0\n' "$WORK/steal-$c.out"; then
+            said "$WORK/steal-$c.out" "NO LUCK!" \
+                && ok "CP6 S: ${c} ray refuses with NO LUCK!" \
+                || { bad "CP6 S: ${c} should refuse"; sed -n '21,24p' "$WORK/steal-$c.out"; }
+            if said "$WORK/steal-$c.out" "STEAL FOOD\|STEAL ARMOUR\|STEAL WEAPONS"; then
+                bad "CP6 S: ${c} refused and stole anyway"
+            else
+                ok "CP6 S: ${c} takes nothing"
+            fi
+        fi
+    done
+
+    # A south-half aim is the one the game has no arm for, and it must never pay. The grocery
+    # seed's marker cells are to the north, so aim south by standing the same way and pressing
+    # South: the near cell is plain floor, which is the same refusal as nomarker and is asserted
+    # for its own reason above.
+    if run_case armour steal-south 'S\n0xf1\n' "$WORK/steal-south.out"; then
+        said "$WORK/steal-south.out" "NO LUCK!" \
+            && ok "CP6 S: an aim at nothing refuses" \
+            || bad "CP6 S: expected NO LUCK! on a south aim from the armour cell"
     fi
 fi
 

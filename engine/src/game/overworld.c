@@ -1574,6 +1574,23 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             continue;
         }
 
+        /* A direction arriving while STEAL DIRECT- is on the line is the ray, not a step.
+         * Same shape as TRANSACT above, and for the same byte-level reason: asm/3F36 calls the
+         * asm/2362 gate inside the handler chain, so the letter alone is not a completed turn
+         * and the word lands on the STEAL DIRECT- line. No status redraw here, unlike the
+         * TRANSACT arm: a successful steal moves food or an owned count, and asm/3F5D's exits
+         * all tail-jump to asm/0C33 without touching the status block, so the original lets the
+         * number go stale too. */
+        if (ow->pending_cmd == 'S' && word != NULL) {
+            ow->pending_cmd = 0;
+            seam_str_out(ctx, word);              /* no CR: same line as STEAL DIRECT- */
+            u2_commerce_steal(ctx, ow, dx, dy);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            creature_turn(ctx, ow);
+            continue;
+        }
+
         /* A direction arriving while ATTACK-- is on the line is the attack's
          * direction, not a step: the original consumed it inside the cmd_A chain
          * and never moved the player. Live: `ATTACK--EAST--HIT!!!` with the

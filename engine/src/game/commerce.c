@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "core/rng.h"
 #include "core/seam.h"
 #include "core/state.h"
 #include "core/world.h"
@@ -484,4 +485,121 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
     }
     seam_str_out(ctx, U2_S_NO_RESPONSE);
     return U2_TRANSACT_NO_DEALER;
+}
+
+/* asm/3FAB..asm/3FDD's branch structure, with the rolls taken out. The quadrant tests in the
+ * original read DS:00/DS:01 (the player) and DS:4A (the site kind) directly, and they are
+ * written as a chain of jae/jb/jne exits to the same NO LUCK label rather than as a table, so
+ * the table here is the reading, not a restatement of the shape. */
+u2_steal_result u2_steal_loot_for(int x, int y, int site_kind)
+{
+    const int east  = x >= 0x20;
+    const int north = y <  0x20;
+
+    if (site_kind == 1 && north && east) return U2_STEAL_FOOD;
+    if (site_kind == 2 && north)         return east ? U2_STEAL_ARMOUR : U2_STEAL_WEAPONS;
+    return U2_STEAL_NO_LUCK;
+}
+
+/* asm/3F37 + asm/3F5D — cmd_S, STEAL. See commerce.h for the table and
+ * asm/3F5D_steal_attempt.asm for the byte-level reading it comes from.
+ *
+ * The shape is worth stating plainly because it is the opposite of what the word suggests. A
+ * player who types S is not pickpocketing anyone: there is no creature scan in the chain at
+ * all. The ray lands on the merchant marker, two rolls decide luck, and then the quadrant the
+ * PLAYER occupies picks which category of goods is added to the inventory — the same quadrant
+ * table asm/1590 uses to decide which shop is standing there, which is the sense in which the
+ * shop is being robbed. Nothing is taken from the vendor's stock, because there is no stock:
+ * the owned-count arrays simply go up.
+ *
+ * And it is NOT asm/0FCD_combat_thief_steal, which is a THIEF monster emptying one of the
+ * player's slots during a fight. commands.c had those two conflated for four days on the
+ * strength of the shared English word, and the CP6 gate exists partly so that conflation
+ * cannot come back quietly. */
+
+/* asm/3F7E, the one refusal exit. It also rolls a third time and reaches asm/133a when the
+ * low three bits come out zero — a consequence for getting caught that this project has not
+ * decoded, so it is named here and not invented. */
+static u2_steal_result steal_no_luck(u2_ctx *ctx)
+{
+    seam_str_out(ctx, U2_S_STEAL_NO_LUCK);
+    return U2_STEAL_NO_LUCK;
+}
+
+u2_steal_result u2_commerce_steal(u2_ctx *ctx, u2_overworld *ow, int dx, int dy)
+{
+    u2_state *st = &ctx->state;
+
+    /* asm/3F37: one step, and asm/3F59's test on the cell there. Identical to TRANSACT's
+     * near-cell rule — a sign tile (high bit set) or the counter tile 0x7C — because it is the
+     * same ray, not a similar one. */
+    const int cx = (ow->x + dx) & (U2_SECTOR_EDGE - 1);
+    const int cy = (ow->y + dy) & (U2_SECTOR_EDGE - 1);
+    const uint8_t near1 = u2_world_tile_at(&ow->world, cx, cy);
+    if (!(near1 == TILE_SHOP_COUNTER || (near1 & 0x80u)))
+        return steal_no_luck(ctx);
+
+    /* asm/3F5D steps again and requires the merchant marker. */
+    const int fx = (cx + dx) & (U2_SECTOR_EDGE - 1);
+    const int fy = (cy + dy) & (U2_SECTOR_EDGE - 1);
+    if (u2_world_tile_at(&ow->world, fx, fy) != TILE_MERCHANT_MARK)
+        return steal_no_luck(ctx);
+
+    /* asm/3FA0: a non-thief faces a roll that a thief (class 3) skips, and then everyone faces
+     * a second one. The test is `js` after asm/5217, whose last flag-setting instruction is
+     * `adc 0x244,%al`, so the sign is bit 7 of the byte it returns — half the time, and
+     * measured rather than assumed: rand_byte's body is five bytes of stc/adc chain into AL.
+     *
+     * So the owner's recollection that stealing "probably needs a thief" is half right: a
+     * thief is not required, it just fails half as often. */
+    if (st->pclass != 3 && (u2_rand_byte(ctx) & 0x80u))
+        return steal_no_luck(ctx);
+    if (u2_rand_byte(ctx) & 0x80u)
+        return steal_no_luck(ctx);
+
+    /* asm/3FAB. Refuses on [DS:1D7] == 1, and DS:1D7 is mon_role[0] — the base of the role
+     * array, read un-indexed, on a path with no creature scan to have indexed it. The engine
+     * reproduces the byte rather than guessing which way the guess goes; see the caveat in
+     * asm/3F5D_steal_attempt.asm. */
+    if (st->mon_role[0] == 1)
+        return steal_no_luck(ctx);
+
+    /* The quadrant, on the player's own position and the site kind. It is ow->x/ow->y and NOT
+     * st->player_x: that field is named as though it were the player, but state.h puts it at
+     * DS:0x23, which is the staged candidate cell the step gate and the ray cursor use, and
+     * dump_state.c carries a warning about exactly that confusion. asm/3F5D reads DS:00/DS:01,
+     * which is the player, which is ow->x/ow->y — the same pair u2_commerce_shop_for is called
+     * with. */
+    switch (u2_steal_loot_for(ow->x, ow->y, st->sector_second)) {
+    case U2_STEAL_FOOD: {
+        /* asm/3FDD: the village grocery. One unit of food, packed decimal, on DS:53 — the
+         * same byte asm/181A moves when you BUY it, so a stolen meal and a bought one are
+         * indistinguishable in the save. */
+        seam_str_out(ctx, U2_S_STEAL_FOOD);
+        st->food = bcd_inc1(st->food);
+        return U2_STEAL_FOOD;
+    }
+    case U2_STEAL_ARMOUR:
+        /* asm/3FF9: `roll & 3`, +1, then `adc $1 / das` on [DS:96 + that]. armour_owned
+         * starts at DS:97, so the struct index is the mask itself: CLOTH..PLATE, and
+         * REFLECT and POWER are unreachable. */
+        seam_str_out(ctx, U2_S_STEAL_ARMOUR);
+        { const int i = u2_rand_byte(ctx) & 3u;
+          st->armour_owned[i] = bcd_inc1(st->armour_owned[i]); }
+        return U2_STEAL_ARMOUR;
+    case U2_STEAL_WEAPONS:
+        /* asm/4024: `roll & 7`, +1, on [DS:76 + that]. weapons_owned[0] is HANDS and the +1
+         * is what keeps it unstolen; the same +1 puts the ceiling at index 8, so the QUICK
+         * SWORD cannot be stolen either. */
+        seam_str_out(ctx, U2_S_STEAL_WEAPONS);
+        { const int i = (u2_rand_byte(ctx) & 7u) + 1;
+          st->weapons_owned[i] = bcd_inc1(st->weapons_owned[i]); }
+        return U2_STEAL_WEAPONS;
+    case U2_STEAL_NO_LUCK:
+        /* The south halves, and every site kind that is neither a town nor a village. The game
+         * has no arm here for a transport shoppe, a shrine, a pub, a magic shoppe or a clue
+         * seller, so "NO LUCK!" is the complete answer and not a stub. */
+        return steal_no_luck(ctx);
+    }
+    return steal_no_luck(ctx);
 }
