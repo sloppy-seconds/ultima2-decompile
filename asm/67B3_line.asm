@@ -1,6 +1,16 @@
-# sub_67b3 — mechanical clean (bulk wave); behavior not yet reviewed
+# line — Bresenham between the four coordinate registers [DS:479..47C]
+# name-evidence: called by all twelve dungeon shape routines and by nothing else, and its
+#           body is the two-branch integer line algorithm: `stc;cmc;sbb` for each delta, the
+#           absolute value kept in [DS:483]/[DS:484] and the step SIGN in [DS:47D]/[DS:47E],
+#           then `cmp |dx|,|dy| ; jae` to pick the major axis and a plot call per step.
+#           Renamed 2026-10-29 with CP7.
+#           The plot it calls is asm/4B76; the registers are the same four asm/6078 and the
+#           shape routines load, which is why a shape routine's first line can inherit a
+#           coordinate from the routine before it.
 # func 67B3..68A2  len 00F0 B  evidence: call+reko
 # calls: L_004d76, L_0069ec, L_006a11, L_006a60
+# provenance: static, read in full 2026-10-29 for CP7; the twelve callers are all in this
+#           tree and the plot target asm/4B76 was read with it.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_67b3:

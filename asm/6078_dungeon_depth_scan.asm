@@ -1,6 +1,24 @@
-# sub_6078 — mechanical clean (bulk wave); behavior not yet reviewed
+# dungeon_depth_scan — three columns of cells walked out from the player, eight deep
+# name-evidence: the only caller is asm/6000 dungeon_render, and the four arrays it fills
+#           ([DS:48F] left, [DS:497] centre, [DS:4AF] centre's stamp, [DS:49F] right) are the
+#           four asm/6144 reads its shape dispatch branches on. Renamed 2026-10-29 with CP7.
+#
+# Per depth d, with (dx,dy) = the signed facing at [DS:02]/[DS:03] copied to [DS:483]/[DS:484]:
+#   left   = cell( px + dy + d*dx, py - dx + d*dy )   masked & 0xF0
+#   centre = cell( px      + d*dx, py      + d*dy )   masked & 0xF0, and the SAME cell & 0x07
+#   right  = cell( px - dy + d*dx, py + dx + d*dy )   masked & 0xF0
+# The centre cell being read twice, once for the terrain nibble and once for the stamp
+# nibble, is the two-layers-in-one-byte fact of the dungeon grid made visible in the
+# renderer itself: the high nibble is rock/chest/ladders and the low nibble is whatever the
+# loader stamped there.
+#
+# Coordinates are masked with $0x3f before each step and asm/68C0 truncates the row offset
+# to one byte, so the grid is a torus within its page. The loop runs d = 0..7; asm/6144
+# stops drawing at 7.
 # func 6078..6143  len 00CC B  evidence: call+reko
 # calls: L_0062b4, L_006ac0
+# provenance: static, read in full 2026-10-29 for CP7; corroborated against the live depth
+#           arrays [DS:48F]/[DS:497]/[DS:4AF]/[DS:49F] in captures/spice86/dungeon-35-live.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_6078:

@@ -1,4 +1,35 @@
-# sub_6144 — mechanical clean (bulk wave); behavior not yet reviewed
+# dungeon_shape_dispatch — one iteration per depth; the cell bits pick which shapes to draw
+# name-evidence: called only from asm/6000 dungeon_render, and [DS:482] is both its loop
+#           counter and the depth index every shape routine uses to address its tables.
+#           Renamed 2026-10-29 with CP7.
+#
+# THE SHAPE TABLE, and the reason the twelve shape files carry these names. Each entry is
+# the CALL CONDITION in this file, not a guess about the picture:
+#   L_006625 asm/6425  depth frame; called once per depth, and again on the rock-ahead path
+#   L_00668D asm/648D  the far face, on the rock-ahead path that continues
+#   L_006491 asm/6291  left column cell bit 7 CLEAR  (wall face where the left is open)
+#   L_006577 asm/6377  left column cell bit 7 SET    (left is rock)
+#   L_0066E2 asm/64E2  left is rock AND (cell & 0x40) AND NOT (cell & 0x20)
+#   L_006504 asm/6304  right column cell bit 7 CLEAR
+#   L_0065CE asm/63CE  right column cell bit 7 SET
+#   L_00673F asm/653F  right is rock AND (cell & 0x40) AND NOT (cell & 0x20)
+#   L_006794 asm/6594  centre cell & 0x20            (the DOWN ladder)
+#   L_00680C asm/660C  centre cell & 0x10            (the UP ladder; skips the 0x40 test)
+#   L_0068CB asm/66CB  centre cell & 0x40            (the CHEST)
+#   L_006884 asm/6684  the centre vertical, tail-called by both ladder shapes
+#
+# The rock-ahead path is the one with the stopping rule, and it is what makes the corridor
+# terminate: bit 7 set means the cell is solid, and then `and $0x40 ; je stop` and
+# `and $0x20 ; jne stop` decide whether the walk continues past it. So 0x80 alone is a dead
+# end, 0xC0 continues, and 0xE0 stops. Below the loop, `cmp $0x7 ; jae` bounds the draw at
+# seven depths even though asm/6078 sampled eight.
+#
+# The tables the shapes index live in CS at runtime 0x620D..0x628F and are eight bytes each:
+# XL/XR are the left and right screen x per depth (0x00..0x7F and its mirror 0xFF..0x80),
+# YT/YB the top and bottom y (0x00..0x3F and 0x7F..0x40, and YT[d]+YB[d] = 0x7F for every d
+# but the last). They are a perspective projection of a square tunnel, and the shifted
+# variants (0x620E, 0x6218, 0x6222, 0x622A) are depth d+1 of the same curve. The engine
+# transcribes them verbatim via tools/gen_dungeon_draw.py.
 # func 6144..6290  len 014D B  evidence: call+reko
 # body corrected: 2026-10-28e -- evidence: every line of this span was rendered as a `db` byte
 #           with the marker `split: branch target inside data`, because the clean wave bailed on
@@ -8,6 +39,9 @@
 #           address and compared -- where gas produced different bytes the line stayed a
 #           `.byte` forced-keep, which is 5 of 160 lines. Found by the raw-byte span scan in
 #           disasm/defects.md.
+# provenance: static, read in full 2026-10-29 for CP7. The CS depth tables it indexes were
+#           read verbatim out of original/ultimaii.exe at file 0x640D..0x6490 and are
+#           reproduced by tools/gen_dungeon_draw.py rather than hand-transcribed.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_6144:

@@ -1,5 +1,10 @@
-# sub_4baa — mechanical clean (bulk wave); behavior not yet reviewed
+# pixel_erase — clear one pixel to colour 0; asm/4B76 with the plane mask inverted
+# name-evidence: same address arithmetic as asm/4B76 and `xor $0xff,%al ; and` instead of
+#           `or`. Renamed 2026-10-29 with CP7. See asm/4B76_pixel_plot.asm for the row table
+#           and the origin pair; the two routines are a pen and an eraser and nothing else.
 # func 4BAA..4BDF  len 0036 B  evidence: call+reko
+# provenance: static, read in full 2026-10-29 for CP7 alongside asm/4B76, whose address
+#           arithmetic it duplicates with the mask inverted.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_4baa:

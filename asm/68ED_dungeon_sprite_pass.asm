@@ -1,6 +1,19 @@
-# sub_68ed — mechanical clean (bulk wave); behavior not yet reviewed
+# dungeon_sprite_pass — walk the per-depth stamp array and draw whatever is standing there
+# name-evidence: called only from asm/6000 dungeon_render, after asm/6078 filled [DS:4AF] and
+#           asm/6144 drew the geometry. It iterates di = 1..[DS:482], skips a zero stamp, and
+#           reads stroke coordinates through word[DS:474], which the live capture of
+#           captures/spice86/dungeon-35-live reads as 0x2900 — the DS:2900 stroke table T9.
+#           Renamed 2026-10-29 with CP7.
+#
+# What it does NOT settle: the stroke table itself. T9 is 64 records x 34 B of coordinate
+# pairs and has no consumer decoded beyond this file's `mov %cs:0x697e(%di),%al` index, so
+# the outlines are still unknown and the engine draws a marker at the convergent point of
+# the depth instead of inventing one. That gap is named at the site in game/dungeon.c.
 # func 68ED..6998  len 00AC B  evidence: call+reko
 # calls: L_006aa3, L_006b3a
+# provenance: static, read in full 2026-10-29 for CP7. [DS:474] = 0x2900 is read out of
+#           captures/spice86/dungeon-35-live's live DS, which is what names the stroke table
+#           this routine indexes; the table's own contents are undecoded (T9).
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_68ed:

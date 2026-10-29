@@ -1,6 +1,31 @@
-# sub_277b — mechanical clean (bulk wave); behavior not yet reviewed
-# notes: 599 B region dominated by mis-decoded data (all forced-kept bytes);
-#        contains 'CMD: ' and 'Z' strings but structure not proven — NOT named.
+# dungeon_move_commands — the four first-person movement commands, and the trap
+# name-evidence: the five db strings inside it are 'ADVANCE', '-BLOCKED!', 'TURN LEFT',
+#           'TURN RIGHT' and 'RETREAT', and each is preceded by a `call L_0051df` and
+#           followed by the facing arithmetic below it. Renamed 2026-10-29 when CP7 read
+#           the region as code rather than as the mis-decoded data the bulk wave saw.
+#
+# THE SHAPE, per command (runtime addresses are this file's own, +0x200 for file offsets):
+#   ADVANCE  0x286F  al=[DS:15]; if (al & 0x0f) -> '-BLOCKED!'; if (al == 0x80) ->
+#                    '-BLOCKED!'; [DS:00] = ([DS:00]+[DS:02]) & 0x3f; same for [DS:01]/
+#                    [DS:03]; then one rand against [DS:25] and on `jb` the TRAP.
+#   TRAP     0x28B1  [DS:26] = 0 (the torch goes out FIRST), 'ARGH! A TRAP!', then
+#                    [DS:66] == 0 -> jmp L_000e62 (the damage tail, amount undecoded, G47)
+#                    else 'ESCAPED! BY USE OF TOOLS!' and one packed-decimal tool spent.
+#   TURN LEFT  0x2B13  if ([DS:03]) { [DS:02]=[DS:03]; [DS:03]=0 } else { [DS:03]=-[DS:02];
+#                    [DS:02]=0 }  — a quarter turn counter-clockwise on a SIGNED pair.
+#   TURN RIGHT 0x2B45  the mirror: if ([DS:02]) { [DS:03]=[DS:02]; [DS:02]=0 } else
+#                    { [DS:02]=-[DS:03]; [DS:03]=0 }.
+#   RETREAT  0x2B78  al=[DS:16]; if (al & 0x8f) -> '-BLOCKED!'; then step backwards.
+#
+# Two things this settles that prose could not. First, the facing is [DS:02]/[DS:03] and
+# it is signed: the turns negate it, so an unsigned reader sees every westward facing as
+# 0xFF. Second, ADVANCE and RETREAT gate on DIFFERENT masks — ADVANCE refuses a stamp or
+# exactly 0x80, so a chest cell (0x40) is walkable and you GET it after stepping onto it,
+# while RETREAT refuses anything with bit 7 or the low nibble set.
+#
+# The trap roll compares against the FLOOR byte, so floor 0 has no traps at all and the
+# deeper the dungeon the more often one fires. That is the rule the bytes give; the rate
+# has never been observed, and the no-tools damage amount is still G47.
 #        One fact inside it is nonetheless worth carrying, because it is the only place the
 #           game spends TOOLS: at runtime 0x28DC it prints 'ARGH! A TRAP!', reads DS:66, prints
 #           'ESCAPED! BY USE OF TOOLS!' at 0x28E9, and at 0x2904..0x290C does
@@ -14,6 +39,10 @@
 # func 277B..29D1  len 0257 B  evidence: seed+reko
 # strings: "CMD: "; "CMD: "; "PASS"; "ADVANCE" (+7 more)
 # calls: L_000911, L_000bfb, L_000c30, L_000c33, L_000e62, L_002a61, L_002b12, L_002b44 (+8 more)
+# provenance: static, read in full 2026-10-29 for CP7 from the raw bytes of this span; the
+#           ADVANCE/TURN behaviour is corroborated live by captures/spice86/tower-34 (arrows
+#           print TURN LEFT / TURN RIGHT) and captures/spice86/dungeon-35-live (A prints
+#           ADVANCE). The trap has never been observed firing — see G47.
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_277b:
