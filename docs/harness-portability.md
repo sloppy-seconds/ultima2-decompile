@@ -190,6 +190,43 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-10-29 — "No pixel-plot path anywhere in the tree" is a statement about the names, not
+  about the code, and it can sit on an item for weeks and make it look owner-blocked.** A whole
+  first-person renderer was undiscovered because the search was for a routine that writes to a
+  known framebuffer address, and the routine does not: it takes a row SEGMENT from a table
+  indexed by y, takes a bit mask from a second table indexed by the low two bits of x, and ORs
+  the mask at the pair. Nothing in it mentions a constant that a grep would find. Two general
+  rules fall out. First, find a primitive by its **memory-access shape** (table-of-segments plus
+  mask-OR is a 2bpp planar plot on any x86 target of the era), not by its destination address or
+  a guessed name. Second, treat "the capability does not exist" as unproven until someone has
+  looked at every unnamed fragment in the address neighbourhood of the code that would need it —
+  here, a run of twelve small routines that all called the same one, which is a drawing library
+  by any description even though every one of them was filed as `sub_xxxx`.
+
+* **2026-10-29 — A bulk wave that gives up on a span and renders it as data can bury an entire
+  command set in the same way a function-map boundary buries a call, and the tell is the same: a
+  header that is accurate about its range and useless about its content.** One region of a few
+  hundred bytes was recorded as "dominated by mis-decoded data (all forced-kept bytes) — NOT
+  named", and it held four movement commands, a trap, and the two turn routines that pinned down
+  what the facing bytes meant. The bytes were all present the whole time. The general fix is a
+  detector that asks, for any span rendered as data, whether the span's branch targets partition
+  it into runs that each assemble back to their own bytes — which is cheap, mechanical, and
+  exactly the test that had already been written once for a different file and never run across
+  the tree. A second, cheaper tell: a data span that contains several printable strings each
+  preceded by a call to the text emitter is code with a drawing problem, not data.
+
+* **2026-10-29 — When a drawing routine's registers are live across a call, transcribe it with a
+  generator and not by hand, and make the generator read the byte-proven tree rather than the
+  binary.** Twelve routines each loaded four coordinate registers from small tables and issued one
+  to nine line calls, and the registers were NOT reset between calls, so a routine's first line
+  can inherit a coordinate from whichever routine ran before it. A hand copy gets the first
+  routine right, the second nearly right, and produces a picture that looks like a corridor and is
+  wrong — the worst possible failure, because it will pass a "did it render" check. The generator
+  is about eighty lines of regex over the asm files and it also removed the transcription risk
+  from the twenty-eight constant tables, which it emits verbatim. Rule for a harness: anything
+  that is a mechanical copy of N>10 items from a proven source should be a committed generator
+  plus committed output, with the generator named in the output's header.
+
 * **2026-10-29 — A function-map boundary that cuts a call instruction in half makes the whole
   routine invisible to a per-file read, and the header will look honest while it happens.**
   Several handlers were one byte each: the opcode of a call, with the operand and the string in the

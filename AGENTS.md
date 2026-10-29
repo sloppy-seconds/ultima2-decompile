@@ -435,15 +435,18 @@ Verification, in two independent layers:
   harvest must come from `monitor dumpAll`, never from a signal. When a capture seems
   to need walking somewhere, seed state instead — `--player` with `tools/u2_edit.py
   setpos` is the only way to change sector, and `--seed-map` installs a synthetic one.
-* **Dungeons are parked, and the 3D view is not evidence about the 2D world.** A
-  dungeon is a first-person wireframe with its own byte semantics — `0x80` means
-  something there that it does not mean on a sector map — and its renderer is
-  undecoded. Nothing observed in a dungeon may settle how the overworld or a town
-  draws, stamps, moves or kills anything, and nothing measured overworld/town may be
-  carried into a dungeon without re-measuring. Owner's call 2026-10-28: finish
-  overworld and town first. `docs/art-index.md` already records that dungeons do not
-  stamp the grid the same way, and the art-index and creature-stamp rules were both
-  measured in sector 00 and sector 31, which is why they hold.
+* **Dungeons are open now (CP7, 2026-10-29), and the 3D view is still not evidence about
+  the 2D world.** The park was the owner's call on 2026-10-28 and it was lifted on
+  2026-10-29 to build `engine/src/game/dungeon.c`; the engine enters, lights, walks,
+  fights, loots and descends, and `make test-cp7` gates it. What the park was protecting
+  still holds and is the reason the two rule-sets stay separate: a dungeon is a
+  first-person wireframe over a grid of 16 pages of 16x16 with its own byte semantics —
+  `0x80` is rock there and something else on a sector map, `0x40` is a chest and not a
+  tile — and nothing observed in a dungeon may settle how the overworld or a town draws,
+  stamps, moves or kills anything, or the other way round. `docs/art-index.md` already
+  records that dungeons do not stamp the grid the same way, and the art-index and
+  creature-stamp rules were both measured in sector 00 and sector 31, which is why they
+  hold. See `docs/phase4-state.md` § CP7 for what is decoded and what is still open.
 
 * **The screen is a screenshot, never a decode.** The game draws text as **glyphs in
   graphics mode**, so there is no character cell to read: `0xB8000` as a text page is

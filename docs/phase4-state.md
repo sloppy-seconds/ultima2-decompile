@@ -2183,3 +2183,102 @@ sector-edge test uses and duplicating an exit path is how two exit paths start d
 blocked on owner decision D14), `cmd_G` (needs ground items, a dungeon question), and `cmd_O` (needs
 town NPCs and an attitude model). None of the three is a one-afternoon static decode the way these
 were.
+
+## CP7: the dungeon engine — entered, lit, walked, fought, looted, descended (2026-10-29)
+
+`engine/src/game/dungeon.c`. The owner lifted the dungeon park and asked for the whole
+thing: get in, light a torch, see the wireframe, walk, fight, pick up a box, go down a
+level. All six work, and `make test-cp7` drives each one against a synthetic dungeon and
+is wired into `make test`.
+
+**The decode was the whole job, and almost none of it needed an emulator.** Every number
+below came out of `asm/` plus one existing capture. What made that possible is that the
+renderer's geometry lives in CS as plain tables, so once you know which bytes are tables
+they can be read as bytes rather than argued about.
+
+What closed, in order of how much it was blocking:
+
+* **The grid is 16 pages of 16x16, not a 64x64 sector.** `asm/68C0` forms the cell address
+  as `word[DS:472] + [DS:25]*256 + y*16 + x` with the row offset truncated to one byte, and
+  `[DS:25]` is the floor. Confirmed three ways: `asm/1451`'s identical page arithmetic, the
+  live page 0 of `captures/spice86/dungeon-35-live` being byte-identical to
+  `original/mapx35`'s first 256 bytes, and a tower `mapxNN` being exactly 16 pages of 256.
+  The engine had been reading a dungeon as a flat 64-wide grid, which is why `cmd_D`'s
+  header carried a note about "a tower above its first floor still draws page 0". That note
+  is now closed: `u2_world_dungeon_at()` carries the floor term.
+* **A cell is two layers in one byte, and the renderer reads them separately.** `asm/6078`
+  reads the centre column twice, once masked `& 0xF0` and once `& 0x07`. High nibble is
+  terrain, low nibble is a stamp. The four terrain bits are now named by the code that tests
+  them: `0x80` rock (`asm/6144`'s corridor-end test), `0x40` chest (`asm/363B`'s GET
+  compares the cell under the player to `'@'`), `0x20` down ladder (`cmd_D`), `0x10` up
+  ladder (`cmd_K`). The shipped `mapx35` uses seven values, all multiples of `0x10`, and
+  only seven of the sixteen a free nibble would allow — which is why it never looked like an
+  art index and never will.
+* **The facing is a signed byte pair at `[DS:02]/[DS:03]`, not an enum.** `asm/277B`'s two
+  turn commands negate it, so an unsigned reader sees every westward facing as `0xFF`.
+  `state.h` now names both bytes with the proof in the comment.
+* **The four direction commands are ADVANCE, RETREAT, TURN LEFT, TURN RIGHT**, all in
+  `asm/277B`, transcribed instruction by instruction into `engine/src/game/dungeon.c`.
+  ADVANCE refuses a cell whose low nibble is set or that is exactly `0x80`, which is what
+  makes the chest mechanic work: you walk onto the chest and then GET it. RETREAT tests
+  `& 0x8F` instead, a wider net, and that asymmetry is in the bytes and not a guess.
+* **The trap fires off the FLOOR.** After a successful ADVANCE, one `rand_byte` is compared
+  to `[DS:25]` and `jb` means deeper floors trap more often and floor 0 never traps at all.
+  The trap zeroes `[DS:26]` — it puts out your light before it says anything — then
+  `ARGH! A TRAP!`, then tools absorb it or the damage tail runs. The zero-tools damage is
+  still G47 and the engine says so at the site rather than inventing a number.
+* **The darkness is a byte.** `asm/6000` opens with `cmpb $0x0,0x26 ; je` and the jump skips
+  the depth scan, the shape dispatch and the sprite pass entirely. So "IT'S DARK!" is not a
+  palette trick or an overlay: nothing is drawn. The engine reproduces exactly that and the
+  CP7 render check asserts the dark frame has zero ink in the map window.
+* **The wireframe is a perspective projection out of eight-byte tables.** `asm/6078` samples
+  three columns of cells out to eight depths — centre from the player's own cell, left and
+  right one cell to either hand, all three advancing by the facing — and `asm/6144` picks a
+  shape per depth from the cell bits and calls twelve short line routines. Each of those
+  loads the line drawer's four coordinate registers from a CS table and calls `asm/67B3`
+  one to nine times. The registers are **not** reset between calls, so a hand transcription
+  silently drifts; `tools/gen_dungeon_draw.py` reads the twelve routines out of `asm/` and
+  emits `engine/src/game/dungeon_draw.inc`, which carries the register state across calls the
+  way the CPU does. Twenty-eight tables came out verbatim, including the eight base ones:
+  `XL = 00 40 60 70 78 7C 7E 7F`, `XR = 0xFF - XL`, and `YT[d] + YB[d] = 0x7F` for every
+  depth but the last.
+* **The plot origin is (16,16) and the view maps 1:1 onto the frame.** `asm/4B76` adds
+  `[DS:4BF]` and `[DS:4C1]` to the coordinates and nothing in the tree writes either byte,
+  so the live capture is the only witness: both read 16. XL spans 0..0xFF and YT/YB span
+  0..0x7F, so the view is a 256x128 rectangle inset 16 pixels inside a 320x200 screen. No
+  scaling, which is the reading that makes the tables' own ranges land inside the frame.
+  `asm/4B76` also ORs both plane bits, so it can only ever write colour 3 — the wireframe is
+  white lines because white is the only pen `asm/4B76` owns and `asm/4BAA` is its eraser.
+
+**One correction, and it was load-bearing.** `asm/6000`'s header said the three probes read
+absolute cells `(0,1)`, `(dx,1+dy)`, `(-dx,1-dy)`. They do not. With the player at `(5,5)`
+facing `(1,0)` the live bytes read `[DS:14]=0x10 [DS:15]=0x00 [DS:16]=0x80`, and the only
+triple in live grid page 0 that matches is `(5,5)`, `(6,5)`, `(4,5)`: under, ahead, behind.
+The old reading was inferred from operand bytes that are relative deltas, with the base added
+upstream. The header now carries the correction and the capture that proves it.
+
+**Two things the captures disagree about, recorded rather than resolved.**
+
+* `docs/spice86-live-findings.md` § 13 tabulates `A` as ADVANCE in a dungeon; § 1b records
+  `A` printing `ATTACK--MISS` in a tower. `asm/2B9B`, the site-kind gate at the head of the
+  ATTACK chain, is `mov [DS:4A],al ; cmp $4,al ; jb L_002da5` and **both** destinations reach
+  `asm/2BA5`, the arms gate — the `jb` targets it and the fall-through reaches it three bytes
+  later. So the gate refuses nothing and there is no arm off the A jump-table entry that could
+  print ADVANCE. The engine follows the bytes and the tower frame: `A` attacks the cell the
+  facing names, and Up-arrow is ADVANCE. The movement § 13's row was describing is reachable
+  either way; the row itself is now an open question, not a settled fact.
+* `asm/3381` increments the floor with no bound check while `asm/1451` bounds the same byte
+  with `cmp $0xf`. Still unreconciled, and still G50(c).
+
+**What CP7 does NOT have, and each one is named where it would live.** The sprite pass reads a
+stroke table at `DS:2900` (T9) that has no decoded consumer, so the engine marks the
+convergent point of a stamped depth instead of inventing an outline. The trap's zero-tools
+damage is G47. `GET`'s overworld arm (`'*'` armour, `','` weapon off `asm/361C`'s table) is
+undecoded, so the command prints its word and does nothing outside a site. Dungeon creatures
+do not yet move — the overworld sweep indexes the 64-wide grid and would corrupt a page, so
+`asm/147F` spawns them and nothing walks them. And the leaving-a-dungeon save branch on
+`[DS:6D]` in `asm/3823` is still unobserved.
+
+**24 of 26.** `cmd_G` came off the NULL list with a real site arm and an honest overworld gap.
+What is left is `cmd_C`'s effects (owner decision D14) and `cmd_O` (town NPCs and an attitude
+model).
