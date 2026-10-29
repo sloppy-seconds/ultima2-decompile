@@ -46,7 +46,21 @@ typedef struct u2_state {
                                         Unreconciled: asm/5AB1 computes (x-10, y-6) -- see
                                         that file's header, this is an open question. */
     /* 0x01 */ uint8_t sector_y;      /* asm/5AE1, asm/2434 */
-    /* 0x02 */ uint8_t reserved_02[0x10];
+    /* 0x02 */ uint8_t face_dx;       /* THE FACING VECTOR, as a signed byte pair.
+                                        * Proven 2026-10-29 from the dungeon turn commands
+                                        * (asm/277B, runtime 0x28C3..0x2974): TURN LEFT is
+                                        * `if ([0x03]) { [0x02]=[0x03]; [0x03]=0 }
+                                        *  else { [0x03]=-[0x02]; [0x02]=0 }` and TURN RIGHT
+                                        * is its mirror, which is a quarter-turn on (dx,dy).
+                                        * The dungeon ADVANCE/RETREAT probes add this pair to
+                                        * DS:00/01 to name the cell ahead and behind, and
+                                        * asm/6000 copies it to DS:483/484 to walk the depth
+                                        * columns. Values are -1, 0 or 1; north is (0,-1).
+                                        * Signed: the turns negate, so a reader that takes the
+                                        * byte as unsigned reads every westward facing as
+                                        * 0xFF. */
+    /* 0x03 */ uint8_t face_dy;
+    /* 0x04 */ uint8_t reserved_04[0x0E];
     /* --- movement and passability cluster. Filled 2026-10-21 from the full
      * re-decode of asm/2423_passability.asm and the raw writer scan; narrative
      * in docs/passability-findings.md. Before this these bytes sat inside
@@ -473,6 +487,8 @@ typedef struct u2_state {
 #define U2_OFF(f) ((int)offsetof(u2_state, f))
 
 /* Compile-time proof that the struct still matches the asm offsets. */
+_Static_assert(U2_OFF(face_dx)   == 0x002, "face_dx moved");
+_Static_assert(U2_OFF(face_dy)   == 0x003, "face_dy moved");
 _Static_assert(U2_OFF(player_x)   == 0x023, "player_x moved");
 _Static_assert(U2_OFF(player_y)   == 0x024, "player_y moved");
 _Static_assert(U2_OFF(view_mode)      == 0x012, "view_mode moved");
@@ -567,6 +583,12 @@ _Static_assert(U2_OFF(left_margin)== 0x54F, "left_margin moved");
  * (0x99 0x97 == 9997), per captures/README.md and the display sites.
  * There is no encoder on purpose — see the note in core/state.c. */
 int  u2_bcd16(uint8_t lo, uint8_t hi);
+
+/* asm/45B8: `stc ; cmc ; sbb $0x1,%al ; das ; cmc` — subtract one from a packed
+ * decimal byte so the nibble borrows in decimal: 0x10 becomes 0x09, not 0x0F.
+ * Shared because torches, keys, tools, gold and every item count are BCD and
+ * three modules now spend them. */
+uint8_t u2_bcd_dec1(uint8_t v);
 
 void u2_state_init(u2_state *s);
 

@@ -526,25 +526,32 @@ else
                            || bad "CP6 tribute: hp is '$h', expected '00 01'"
     fi
 
-    # --- first-person sites are locked until the renderer exists ----------------
-    # The original lets you walk into a tower and a dungeon; the engine cannot draw either,
-    # so entry is refused behind an [engine]-prefixed notice. The town case is the control:
-    # without it this whole gate would still pass if the lock were widened to every site.
+    # --- first-person sites are OPEN (CP7) --------------------------------------
+    # These two cases used to assert the opposite. The engine used to refuse kinds 4 and 5
+    # behind an [engine]-prefixed notice because it could not draw a first-person view, and
+    # the gate pinned that refusal so the lock could not silently widen or narrow. CP7 built
+    # the renderer (game/dungeon.c), so the assertion is now that the notice is GONE and the
+    # mouth behaves like every other site: the sector digit moves. The town case below is
+    # still the control, and it is still the reason these two cannot quietly regress into
+    # "nothing enters".
     # sector_second is emitted as a bare JSON number ("sector_second":0), not the quoted hex
     # pairs field_of reads, so it needs its own extractor.
     secsec() { sed -n 's/.*"sector_second":\([0-9]\{1,\}\).*/\1/p' "$1" | tail -1; }
     if run_case enter_tower locktower 'E\n' "$WORK/locktower.out"; then
-        said "$WORK/locktower.out" "[engine] tower not implemented -> G10" \
-            && ok "CP6 lock: a tower mouth is refused with an [engine]-prefixed notice" \
-            || { bad "CP6 lock: expected the engine tower notice"; tail -3 "$WORK/locktower.out.txt"; }
+        said "$WORK/locktower.out" "[engine]" \
+            && { bad "CP6 lock: the tower is locked again"; tail -3 "$WORK/locktower.out.txt"; } \
+            || ok "CP6 lock: the tower mouth is no longer refused -- CP7 opened it"
         s=$(secsec "$WORK/locktower.out")
-        [ "$s" = "0" ] && ok "CP6 lock: the refusal did not enter -- sector digit still 0" \
-                       || bad "CP6 lock: entered the tower anyway, digit is '$s'"
+        [ "$s" = "4" ] && ok "CP6 lock: entering a tower sets the site digit to 4" \
+                       || bad "CP6 lock: tower entry set digit '$s', expected 4"
     fi
     if run_case enter_dungeon lockdgn 'E\n' "$WORK/lockdgn.out"; then
-        said "$WORK/lockdgn.out" "[engine] dungeon not implemented -> G10" \
-            && ok "CP6 lock: a dungeon mouth is refused too -- kinds 4 and 5 are one family" \
-            || { bad "CP6 lock: expected the engine dungeon notice"; tail -3 "$WORK/lockdgn.out.txt"; }
+        said "$WORK/lockdgn.out" "[engine]" \
+            && { bad "CP6 lock: the dungeon is locked again"; tail -3 "$WORK/lockdgn.out.txt"; } \
+            || ok "CP6 lock: the dungeon mouth is open too -- kinds 4 and 5 are one family"
+        s=$(secsec "$WORK/lockdgn.out")
+        [ "$s" = "5" ] && ok "CP6 lock: entering a dungeon sets the site digit to 5" \
+                       || bad "CP6 lock: dungeon entry set digit '$s', expected 5"
     fi
     if run_case enter_town locktown 'E\n' "$WORK/locktown.out"; then
         said "$WORK/locktown.out" "[engine]" \

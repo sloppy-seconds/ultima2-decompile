@@ -169,6 +169,54 @@ static inline void u2_world_terrain_put(u2_world *w, int x, int y, uint8_t v)
     w->map_dirty = 1;
 }
 
+/* ---- the same buffer read as a dungeon --------------------------------------
+ *
+ * asm/68C0_dungeon_grid_byte computes the cell address as
+ * word[DS:472] + [DS:25]*256 + [DS:24]*16 + [DS:23], where word[DS:472] is the
+ * map buffer (0x1800 in every live capture) and [DS:25] is the floor. So a
+ * tower or dungeon mapxNN is not a 64x64 sector at all: it is 16 pages of
+ * 16x16 cells, and the floor index picks the page. Measured against
+ * captures/spice86/dungeon-35-live, whose live page 0 is byte-identical to
+ * original/mapx35's first 256 bytes.
+ *
+ * The `(y*16 + x) & 0xFF` is not tidiness: the original forms the offset in one
+ * 8-bit register, so a coordinate outside 0..15 wraps inside the page rather
+ * than walking into the next one. ADVANCE masks the running position with
+ * $0x3f before it gets here, so the wrap is only ever seen by the depth probe.
+ */
+#define U2_DG_PAGE_BYTES 256
+#define U2_DG_PAGE_EDGE   16
+
+static inline int u2_world_dungeon_index(int floor, int x, int y)
+{
+    const int off = ((y & 0xFF) * U2_DG_PAGE_EDGE + (x & 0xFF)) & 0xFF;
+    return (((floor & 0xFF) * U2_DG_PAGE_BYTES) + off) & (U2_SECTOR_TILES - 1);
+}
+
+static inline uint8_t u2_world_dungeon_at(const u2_world *w, int floor, int x, int y)
+{
+    return w->map[u2_world_dungeon_index(floor, x, y)];
+}
+
+/* Dirty for the same reason u2_world_tile_put is: the original rewrites its own
+ * sector file, and a chest you emptied has to stay empty. */
+static inline void u2_world_dungeon_put(u2_world *w, int floor, int x, int y, uint8_t v)
+{
+    w->map[u2_world_dungeon_index(floor, x, y)] = v;
+    w->map_dirty = 1;
+}
+
+/* The paged twin of u2_world_terrain_put: a permanent edit of the dungeon, not a
+ * stamp. asm/363B runtime 0x36F1 clears an emptied chest through the cell pointer
+ * and it stays cleared, so the write has to outlive whatever restamps later. */
+static inline void u2_world_dungeon_terrain_put(u2_world *w, int floor, int x, int y, uint8_t v)
+{
+    const int i = u2_world_dungeon_index(floor, x, y);
+    w->map[i] = v;
+    w->map_base[i] = v;
+    w->map_dirty = 1;
+}
+
 /* "<dir>/<prefix><hi><lo>" — the caller supplies the prefix spelling. */
 void u2_world_path(char *buf, size_t bufsz, const u2_ctx *ctx,
                    const char *prefix, u2_sector_id id);

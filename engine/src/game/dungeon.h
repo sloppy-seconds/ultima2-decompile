@@ -1,0 +1,137 @@
+/*
+ * dungeon.h — CP7: the interior sector. A first-person crawl over a paged grid.
+ *
+ * What a "dungeon" is, and how much of that is evidence
+ * ----------------------------------------------------
+ * A dungeon is not a separate mode of the game. It is an ordinary sector whose
+ * filename ends in 4 or 5 — 24/34/44 are towers, 15/25/35/45/85 are caves — and
+ * entering one loads mapxNN into the same 4096-byte grid buffer the overworld
+ * uses and sets [DS:12] to 4. docs/sector-rulesets.md § 1 and § 1b established
+ * that, and established that the split is {4,5} versus {0,1,2,3}.
+ *
+ * What is different inside one is everything this module owns:
+ *
+ *   The grid is 16 pages of 16x16 cells, not 64x64. asm/68C0 forms the cell
+ *   address as map_base + floor*256 + y*16 + x with the offset truncated to one
+ *   byte, and [DS:25] is the floor. Verified against captures/spice86/dungeon-35-live,
+ *   whose live page 0 is byte-identical to original/mapx35's first 256 bytes.
+ *
+ *   A cell is two layers in one byte. The high nibble is terrain, the low nibble
+ *   is whatever the loader stamped there. The four terrain bits read off the
+ *   renderer's own tests and the two ladder commands:
+ *       0x80 rock        — asm/6144 treats bit 7 as "the corridor ends here"
+ *       0x40 chest       — GET's site arm compares the cell under the player to
+ *                          '@' (0x40) and prints " CHEST!" (asm/363B, runtime 0x36C4)
+ *       0x20 down ladder — cmd_D's gate is [DS:14] & 0x20
+ *       0x10 up ladder   — cmd_K's gate is [DS:14] & 0x10
+ *   The shipped mapx35 uses exactly seven values, all multiples of 0x10, and only
+ *   seven of the sixteen combinations a free nibble would allow. That is a small
+ *   enum, not an art index, and it is why the tile renderer has never covered this.
+ *
+ *   The view is a wireframe. asm/6000 renders, and it renders nothing at all when
+ *   the light counter [DS:26] is zero — that branch is the darkness, and it is a
+ *   byte, not an inference. When there is light it samples three columns of cells
+ *   out to seven depths (asm/6078), picks a shape per depth from the cell bits
+ *   (asm/6144), and draws each shape as one to nine straight lines out of eight
+ *   depth tables in CS (asm/6291 .. asm/66CB, asm/67B3).
+ *
+ *   Movement is not a grid step in four directions. It is ADVANCE, RETREAT,
+ *   TURN LEFT and TURN RIGHT, and the facing is a signed byte pair at [DS:02]/
+ *   [DS:03], not an enum. asm/277B holds all four and they are transcribed here
+ *   instruction for instruction, including the position wrap at $0x3f and the
+ *   trap roll that follows a successful ADVANCE.
+ *
+ * What is NOT proven, and is marked at the site
+ * --------------------------------------------
+ *   * Which low-nibble stamp is which creature. The dungeon creature encoding is
+ *     [DI+0x1B7] = slot >> 1 and a type of 1..7 (asm/147F, validated 54/54 slots
+ *     by tools/dungeon_spawn_check.py), but the stamp values 0x01..0x07 written
+ *     into the grid have never been joined to those types by a capture.
+ *   * The sprite pass. asm/68ed walks the per-depth object array and draws from a
+ *     stroke table at [DS:474] = DS:2900 — that is T9, still undecoded, and this
+ *     module draws a placeholder box and says so rather than inventing outlines.
+ *   * Whether `A` attacks or advances inside a site. The two captures disagree
+ *     and disagree with the overworld: dungeon-35-live shows A = ADVANCE,
+ *     tower-34 shows A = ATTACK--MISS, and asm/2B9B's gate compares [DS:4A] to 4
+ *     in a direction that explains neither on its own. The rule implemented
+ *     below is the one that reproduces both observations, and it names itself as
+ *     inferred where it is used.
+ */
+#ifndef U2_GAME_DUNGEON_H
+#define U2_GAME_DUNGEON_H
+
+#include <stdint.h>
+#include "core/ctx.h"
+#include "game/commands.h"
+
+typedef struct u2_overworld u2_overworld;
+
+/* Terrain bits of a dungeon cell's high nibble. */
+#define U2_DG_ROCK   0x80u
+#define U2_DG_CHEST  0x40u
+#define U2_DG_DOWN   0x20u
+#define U2_DG_UP     0x10u
+#define U2_DG_TERRAIN 0xf0u
+#define U2_DG_STAMP   0x0fu
+
+/* asm/6078 samples eight depths; asm/6144 stops drawing at seven. */
+#define U2_DG_SAMPLE_DEPTH 8
+#define U2_DG_DRAW_DEPTH   7
+
+/* The light counter's refill value, written by both a torch and the LIGHT spell. */
+#define U2_DG_LIGHT_FULL 0x96u
+
+/* True when the resident sector is dungeon-shaped: site kind 4 (tower) or 5. */
+int u2_site_is_dungeon(const u2_ctx *ctx);
+
+/* The facing vector at [DS:02]/[DS:03], as the signed pair the original keeps it. */
+void u2_dungeon_facing(const u2_ctx *ctx, int *dx, int *dy);
+
+/* asm/6000's three probes, written back to [DS:14]/[DS:15]/[DS:16] exactly where
+ * the original writes them: the cell under, the cell ahead, the cell behind. */
+void u2_dungeon_probe(u2_ctx *ctx, const u2_overworld *ow);
+
+/* The four movement commands (asm/277B). Each prints its own word, so the caller
+ * does not print anything. TURN LEFT/RIGHT take no turn; ADVANCE/RETREAT do. */
+void          u2_dungeon_turn(u2_ctx *ctx, int left);
+u2_cmd_result u2_dungeon_advance(u2_ctx *ctx, u2_overworld *ow);
+u2_cmd_result u2_dungeon_retreat(u2_ctx *ctx, u2_overworld *ow);
+
+/* asm/2B8F cmd_A falling into asm/2B9B: the site-kind gate does NOT refuse the
+ * swing inside a tower or a dungeon, it drops into the same arms gate and roll the
+ * overworld uses. What is different is that there is no direction to ask for — the
+ * facing vector already names the cell — so the whole command completes on the
+ * letter. See the header note on the contradiction with docs/spice86-live-findings.md
+ * section 13's "A = ADVANCE" row. */
+u2_cmd_result u2_dungeon_attack(u2_ctx *ctx, u2_overworld *ow);
+
+/* GET inside a site (asm/363B's kind>=4 arm): a chest, or " WHAT?". */
+u2_cmd_result u2_dungeon_get(u2_ctx *ctx, u2_overworld *ow);
+
+/* asm/1151's tail: IT'S DARK! at zero, else decrement and TORCH BURNED OUT! when
+ * a step takes the counter to zero. Returns 1 when there is light to draw with. */
+int u2_dungeon_light_step(u2_ctx *ctx);
+
+/* asm/147F: fill empty creature slots with a random dungeon creature whose HP is
+ * computed rather than authored. Called on entering a site and after a kill. */
+int u2_dungeon_spawn(u2_ctx *ctx, u2_overworld *ow);
+
+/* One direction key inside a site. Returns 1 when the key belonged to the
+ * dungeon and has been handled — Up is ADVANCE, Down is RETREAT, Left and Right
+ * are the two turns (asm/277B, and confirmed live: captures/spice86/tower-34
+ * shows the arrow keys printing TURN LEFT / TURN RIGHT). Returns 0 to let the
+ * overworld's own arrow arms run. */
+int u2_dungeon_key(u2_ctx *ctx, u2_overworld *ow, uint8_t ch);
+
+/* One dungeon turn's world cost: asm/1151's tail calls asm/12DB with 0x10, which
+ * subtracts 10 packed-decimal food, and then the light counter steps. */
+void u2_dungeon_tick(u2_ctx *ctx, u2_overworld *ow);
+
+/* Called when a site becomes resident: north-facing, dark until a torch, and
+ * populated by asm/147F rather than by monxNN. */
+void u2_dungeon_enter(u2_ctx *ctx, u2_overworld *ow);
+
+/* The wireframe. Draws nothing when `lit` is 0, which is the darkness. */
+void u2_dungeon_render(u2_ctx *ctx, u2_overworld *ow, int lit);
+
+#endif /* U2_GAME_DUNGEON_H */

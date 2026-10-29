@@ -19,6 +19,7 @@
 #include "core/font.h"
 #include "game/status.h"
 #include "game/overworld.h"
+#include "game/dungeon.h"
 
 /* Generated at build time from the user's copy (engine/tools/extract/extractor.py). */
 #include "gen_content.h"
@@ -60,12 +61,9 @@
  * nibble borrows in decimal and not in hex: 0x10 becomes 0x09, not 0x0F. Item counts are BCD
  * everywhere in this binary; treating them as binary is the same class of mistake as reading the
  * strength byte as its displayed number. */
-static uint8_t bcd_dec1(uint8_t v)
-{
-    if (v == 0) return 0;
-    if ((v & 0x0Fu) == 0) return (uint8_t)(v - 0x07u);
-    return (uint8_t)(v - 1u);
-}
+#define cmd_done u2_cmd_done
+
+#define bcd_dec1 u2_bcd_dec1
 
 /* The letters the original's jump table covers, in table order. cs:0730 holds 26 words and
  * `sbb $0x41,%al` indexes them, so A is entry 0 and Z is entry 25. */
@@ -105,7 +103,7 @@ typedef u2_cmd_result (*cmd_fn)(u2_ctx *ctx, u2_overworld *ow, uint8_t letter);
  * dispatch on the sector's low digit (docs/monster-spawn.md) means "after every command"
  * is an over-claim. Encoding it here would make an unproven claim structural.
  */
-static void cmd_done(u2_ctx *ctx)
+void u2_cmd_done(u2_ctx *ctx)
 {
     seam_char_print(ctx, '\r');
     seam_str_out(ctx, U2_S_CMD_PROMPT);
@@ -297,6 +295,12 @@ static u2_cmd_result cmd_E(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 static u2_cmd_result cmd_A(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
 {
     (void)letter;
+    /* asm/2B9B is the site-kind gate at the head of this chain, and it gates
+     * nothing: both of its destinations reach asm/2BA5. What a site changes is
+     * that the facing vector already names the cell, so there is no direction to
+     * await and the command completes on the letter. */
+    if (u2_site_is_dungeon(ctx))
+        return u2_dungeon_attack(ctx, ow);
     seam_str_out(ctx, U2_S_ATTACK);
     ow->pending_cmd = 'A';
     return U2_CMD_AWAIT;
@@ -1095,6 +1099,30 @@ static void daa_bcd2(uint8_t v, char *out)
     out[2] = '\0';
 }
 
+/* asm/363B cmd_G: GET. The handler is one unit read across its own fragments.
+ *
+ * Inside a site (the `cmp $4 ; jb` gate on [DS:4A]) the whole command is: the cell
+ * UNDER the player must be 0x40, which is the same bit the renderer draws as a
+ * chest; print " CHEST!", clear the cell, and roll one random byte against 0x40
+ * for gold or TRI-LITHIUM. That arm is u2_dungeon_get and it is byte-read.
+ *
+ * Outside a site the arm reads [DS:14] against 0x2a '*' for armour, 0x2c ',' for
+ * a weapon and 0x40 '@' for a chest, and picks WHICH item with asm/361C plus a
+ * roll. asm/361C is unnamed and its table has not been read, so the overworld arm
+ * is NOT modelled: the command prints its word and completes without touching
+ * anything. That is an honest gap rather than a stub that looks finished, and it
+ * is recorded as G52 in docs/needs-gameplay.md. */
+static u2_cmd_result cmd_G(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    if (u2_site_is_dungeon(ctx))
+        return u2_dungeon_get(ctx, ow);
+
+    seam_str_out(ctx, U2_S_GET);
+    cmd_done(ctx);
+    return U2_CMD_DONE;
+}
+
 /* asm/3794 cmd_I: IGNITE TORCH.
  *
  * The handler is cut in half by the Phase 2 map -- asm/3794 is a single `e8` and the operand
@@ -1204,8 +1232,16 @@ static u2_cmd_result site_shift(u2_ctx *ctx, u2_overworld *ow, bool down)
  * The known gap: the engine loads a tower or dungeon mapxNN as one flat grid and does not
  * index it by [DS:25], so on any floor above the first this reads page 0's cell. asm/1451
  * computes word[DS:472] + floor*256 + y*16 + x, and that floor term is the missing piece. */
-static bool site_cell_has(u2_overworld *ow, uint8_t bit)
+static bool site_cell_has(u2_ctx *ctx, u2_overworld *ow, uint8_t bit)
 {
+    /* asm/334D and asm/3812 both test [DS:14], and inside a site [DS:14] is the cell
+     * under the player as asm/6000 wrote it — paged by [DS:25], which a flat 64-wide
+     * read of the same buffer cannot see. Re-probe first, so the byte is current
+     * rather than whatever the last render happened to leave there. */
+    if (u2_site_is_dungeon(ctx)) {
+        u2_dungeon_probe(ctx, ow);
+        return (ctx->state.mode_a & bit) != 0;
+    }
     return (u2_world_tile_at(&ow->world, ow->x, ow->y) & bit) != 0;
 }
 
@@ -1225,7 +1261,7 @@ static u2_cmd_result cmd_K(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
         cmd_done(ctx);
         return U2_CMD_DONE;
     }
-    if (!site_cell_has(ow, 0x10)) {
+    if (!site_cell_has(ctx, ow, 0x10)) {
         seam_str_out(ctx, U2_S_DESCEND_WHAT);
         cmd_done(ctx);
         return U2_CMD_DONE;
@@ -1249,7 +1285,7 @@ static u2_cmd_result cmd_D(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
         cmd_done(ctx);
         return U2_CMD_DONE;
     }
-    if (!site_cell_has(ow, 0x20)) {
+    if (!site_cell_has(ctx, ow, 0x20)) {
         seam_str_out(ctx, U2_S_DESCEND_WHAT);
         cmd_done(ctx);
         return U2_CMD_DONE;
@@ -1344,7 +1380,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     cmd_D, /* D  descend: asm/334D, the mirror of K, gated on site kind and the cell feature */
     cmd_E, /* E  enter site: asm/3389, body in u2_overworld_enter() */
     cmd_F, /* F  fire: asm/35C1, the frigate's cannon, gated on the ship stamp */
-    NULL,  /* G  not implemented: GET needs ground items */
+    cmd_G,  /* GET: the site arm is asm/363B's chest; the overworld arm is a gap */
     cmd_H,
     cmd_I, /* I  ignite torch: asm/3794, spends a torch and refills the light counter */
     cmd_J,

@@ -17,6 +17,7 @@
 #include "game/monsters.h"    /* u2_monsters_at: who is standing there */
 #include "game/commerce.h"    /* u2_commerce_transact: the TRANSACT ray and its shops */
 #include "game/gates.h"       /* u2_gate_transit, u2_gate_turn: the time doors */
+#include "game/dungeon.h"     /* CP7: the interior sector */
 #include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
 #include "core/font.h"
@@ -272,6 +273,21 @@ static int site_reload(u2_ctx *ctx, u2_overworld *ow)
     /* asm/343F tail, reached by every arm: `mov $0x4,%al; mov %al,0x12`. */
     ctx->state.view_mode = 4;
     ow->view_mode = 4;
+
+    /* CP7: a tower or a dungeon is populated by asm/147F, not by monxNN — the
+     * sector-rulesets measurement is that monxNN "authors nothing" in {4,5}, and
+     * the creature encoding inside a site is a different one (type 1..7, HP
+     * computed). So the overworld spawn above is cleared and replaced. */
+    if (u2_site_is_dungeon(ctx)) {
+        /* asm/147F scans for an EMPTY slot and fills that. It does not clear the
+         * sector first, so whatever the loader authored survives and the spawner
+         * tops the room up rather than replacing it. In the shipped caves monxNN
+         * authors nothing (docs/sector-rulesets.md § 2) and every slot starts
+         * empty, which is why the difference is invisible in a capture and visible
+         * in a seeded test. */
+        u2_dungeon_enter(ctx, ow);
+    }
+
     u2_status_draw(ctx);
     /* Rewritten on success, not only on failure: the caller prints this, and a
      * stale note from the opening load would describe the sector we left. */
@@ -1068,34 +1084,29 @@ void u2_overworld_enter(u2_ctx *ctx, u2_overworld *ow)
     if (label) seam_str_out(ctx, label);
     seam_char_print(ctx, '\r');
 
-    /* LOCKED: the engine has no first-person renderer, so towers and dungeons are refused.
+    /* CP7 opened this. The lock that used to sit here refused kinds 4 and 5 with an
+     * `[engine] ... not implemented -> G10` notice, because the engine had no
+     * first-person renderer and entering drew a flat 64x64 picture of a
+     * first-person map you were trapped in.
      *
-     * This is the engine's own affordance and NOT game behaviour — asm/343F lets the player
-     * walk into both, and the original does it without complaint. The notice is prefixed
-     * `[engine]` for the same reason --cleanroom announces its substitute art: a refusal the
-     * original never made must never be mistaken for one it did. Same convention as
-     * title.c's stub notices, which also name the thing that replaces them.
+     * What closed it, all of it read off the bytes rather than guessed at: the grid
+     * is 16 pages of 16x16 indexed by [DS:25] (asm/68C0, cross-checked against
+     * asm/1451 and against live page 0 of captures/spice86/dungeon-35-live being
+     * byte-identical to original/mapx35); the four direction commands are ADVANCE,
+     * RETREAT, TURN LEFT and TURN RIGHT over a facing pair at [DS:02]/[DS:03]
+     * (asm/277B); the darkness is asm/6000's own `cmpb $0x0,0x26` branch; and the
+     * wireframe is asm/6078's depth scan feeding asm/6144's shape dispatch feeding
+     * twelve line routines whose tables are eight bytes each in CS. The engine side
+     * is game/dungeon.c.
      *
-     * Why lock rather than enter-anyway: site kinds 4 and 5 are ONE ruleset family, not two.
-     * docs/sector-rulesets.md § 1b established the split as {4,5} versus {0,1,2,3} — arrows
-     * are TURN LEFT/TURN RIGHT, entry prints IT'S DARK!, the map is a 16x16 grid per floor
-     * read through asm/1451's floor term, and the view is a wireframe. The engine has none of
-     * that, so entering drew a flat 64x64 picture of a first-person map and every direction
-     * failed. An unwalkable map you are trapped in is worse than a refusal, and the owner
-     * ruled it locked on 2026-10-29 until the renderer exists. G10 tracks the renderer.
-     *
-     * cmd_D, cmd_K and cmd_I still gate on kinds 4 and 5 and remain correct: the CP6 tower
-     * cases reach those states by seeding the sector digit directly, which is a test rig and
-     * not a route a player can take. Do not delete them as dead code.
+     * What is still open inside it is named at its site: the sprite stroke table at
+     * DS:2900 (T9), the trap damage with zero tools (G47), and the GET arm for the
+     * overworld's '*' and ',' tiles.
      */
     if (digit == 4 || digit == 5) {
-        char why[48];
-        snprintf(why, sizeof why, "[engine] %s not implemented -> G10",
-                 digit == 4 ? "tower" : "dungeon");
-        seam_str_out(ctx, why);
-        seam_char_print(ctx, '\r');
-        seam_str_out(ctx, U2_S_CMD_PROMPT);
-        return;
+        /* Nothing to refuse: the site is walkable. The branch stays so the entry
+         * point for the two kinds is one place, and it is where a future tower-only
+         * or dungeon-only difference would hang. */
     }
 
     site_enter(ctx, ow, digit, ax, ay);
@@ -1302,6 +1313,22 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
      */
     ctx->state.sector_x = (uint8_t)ow->x;
     ctx->state.sector_y = (uint8_t)ow->y;
+
+    /* CP7: a dungeon-shaped sector is not drawn with tiles at all. asm/6000 is a
+     * first-person wireframe over the paged grid, and it draws nothing while the
+     * light counter is zero — that branch is the darkness, and it is a byte in
+     * asm/6000 rather than an inference about it. */
+    if (u2_site_is_dungeon(ctx)) {
+        u2_frame_clear(&ow->frame, U2_CGA_BLACK);
+        u2_dungeon_render(ctx, ow, ctx->state.moved_flag != 0);
+        u2_font_draw_vram_rows(&ow->frame, &ctx->vram, U2_MSG_TOP, U2_ROWS - 1);
+        if (ow->turns != ow->logged_turn) {
+            ow->logged_turn = ow->turns;
+            u2_turnlog(ctx, &ow->frame, ow->turns);
+        }
+        return;
+    }
+
     /* The last argument is DS:12 -- a mode byte, not a tile. The fill loop only
      * reaches for it when no sector is resident; see core/view.c. */
     u2_view_fill(&ow->view, &ow->world, ow->x, ow->y,
@@ -1377,7 +1404,7 @@ int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
  *     draws creatures from the arrays rather than stamping them into the map, so
  *     there is no stamp to remove.
  */
-static void attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, int dy)
+void u2_overworld_attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, int dx, int dy)
 {
     seam_str_out(ctx, word);                  /* continues the ATTACK-- line */
 
@@ -1564,6 +1591,15 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 
         int dx = 0, dy = 0;
         const char *word = NULL;
+
+        /* CP7: inside a tower or a dungeon the direction keys are not grid steps.
+         * asm/277B replaces all four with ADVANCE / RETREAT / TURN LEFT / TURN RIGHT
+         * over a facing vector, and captures/spice86/tower-34 filmed the arrows
+         * printing exactly those words. Handled here, before the overworld's own
+         * arrow arms, because in a site none of them mean a compass direction. */
+        if (u2_site_is_dungeon(ctx) && u2_dungeon_key(ctx, ow, k.ch))
+            continue;
+
         switch (k.ch) {
         case U2_KEY_UP:    dy = -1; word = U2_S_DIR_NORTH; break;
         case U2_KEY_DOWN:  dy =  1; word = U2_S_DIR_SOUTH; break;
@@ -1720,7 +1756,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * player standing still. */
         if (ow->pending_cmd == 'A' && word != NULL) {
             ow->pending_cmd = 0;
-            attack_dir(ctx, ow, word, dx, dy);
+            u2_overworld_attack_dir(ctx, ow, word, dx, dy);
             /* The swing is the turn: the original's monsters advance on the
              * expiry of a half-typed `A` too (`ATTACK--PASS`), so an attack that
              * was actually completed cannot sensibly advance nothing.
@@ -1924,6 +1960,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * this is turn-based; see gates.h for why that substitution is stated rather than
          * hidden. */
         u2_gate_turn(ctx, ow);
+    }
+    if (ctx->frame_dump_path) {
+        uint8_t pal[4][3];
+        u2_frame_palette(pal);
+        if (u2_frame_write_ppm(&ow->frame, ctx->frame_dump_path, pal) != 0)
+            fprintf(stderr, "u2: --dump-frame could not write %s\n",
+                    ctx->frame_dump_path);
     }
     ctx->frame = NULL;
     return 0;

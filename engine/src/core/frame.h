@@ -66,6 +66,39 @@ void u2_frame_clear(u2_frame *f, uint8_t colour);
 void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y);
 
 /*
+ * One pixel, and a Bresenham line built from it.
+ *
+ * These exist for the dungeon wireframe, and they mirror two byte-proven
+ * routines rather than inventing a rasteriser:
+ *
+ *   asm/4B76  plot. x += [DS:4BF], y += [DS:4C1], then OR the plane mask into
+ *             video, which sets BOTH plane bits and therefore always writes
+ *             colour 3 (white). asm/4BAA is the same address arithmetic with
+ *             the mask inverted, and it is how the original erases: colour 0.
+ *             The live capture has the origin pair at 16,16, so the view is
+ *             inset by one tile-width on the left and top.
+ *   asm/67B3  line. A two-branch integer Bresenham: the deltas are taken as
+ *             absolute values with the step sign kept separately in [DS:47D]/
+ *             [DS:47E], and the branch is chosen by `cmp |dx|,|dy|` — one loop
+ *             steps x as the major axis, the other y. The loop count is the
+ *             major delta and each iteration plots one pixel.
+ *
+ *             This is a conventional Bresenham, not a transcription. The
+ *             original's accumulator is a single byte that wraps, and a
+ *             byte-wrapped accumulator drifts on shallow slopes (a 4x1 line
+ *             steps y twice). Reproducing the drift would be reproducing a
+ *             rounding bug nobody can distinguish from intent, so the engine
+ *             keeps the structure and uses the standard error term. Grade:
+ *             inferred, and it is a rendering choice, not a behavioural one.
+ *
+ * Out-of-bounds pixels are dropped, not wrapped: the original writes straight
+ * into video and a coordinate off the edge would corrupt the frame buffer of
+ * whatever else is resident, which is a bug worth not reproducing.
+ */
+void u2_frame_pixel(u2_frame *f, int x, int y, uint8_t colour);
+void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour);
+
+/*
  * Composite the map window from a filled viewport. This is the engine's
  * equivalent of asm/4ABB's flush loop: walk the 20x10 staging grid, skip the
  * cells flagged do-not-draw, and blit each tile at (col*16, row*16).

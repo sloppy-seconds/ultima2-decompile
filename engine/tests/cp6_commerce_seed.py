@@ -194,7 +194,15 @@ def main_site(out_dir: str, case: str) -> int:
 
     def write_sector(digits, monx=None):
         grid = bytearray([FLOOR]) * 4096
-        grid[py * 64 + px] = tile
+        if lo in (4, 5):
+            # CP7: a tower or a dungeon is not a 64x64 sector. asm/68C0 indexes the
+            # same 4096 bytes as 16 pages of 16x16 with [DS:25] picking the page, and
+            # the seed cannot set [DS:25] (it is below the saved record), so floor 0
+            # means the cell is py*16 + px. Writing the 64-wide index here would put
+            # the ladder somewhere the engine no longer looks.
+            grid[py * 16 + px] = tile
+        else:
+            grid[py * 64 + px] = tile
         with open(os.path.join(content, f"mapx{digits}"), "wb") as f:
             f.write(bytes(grid))
         with open(os.path.join(content, f"monx{digits}"), "wb") as f:

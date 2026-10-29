@@ -42,6 +42,13 @@ int u2_state_load_ds(u2_state *s, const char *path)
     return 0;
 }
 
+uint8_t u2_bcd_dec1(uint8_t v)
+{
+    if (v == 0) return 0;
+    if ((v & 0x0Fu) == 0) return (uint8_t)(v - 0x07u);
+    return (uint8_t)(v - 1u);
+}
+
 int u2_bcd16(uint8_t lo, uint8_t hi)
 {
     return (((lo >> 4) * 10 + (lo & 0x0F)) * 100) +

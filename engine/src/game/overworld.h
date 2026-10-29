@@ -262,6 +262,15 @@ int u2_overworld_spend_food(u2_ctx *ctx, unsigned bcd_sub);
 void u2_overworld_pass(u2_ctx *ctx, u2_overworld *ow);
 
 /*
+ * The ATTACK once its direction is known: print `word` on the current line, then
+ * the arms gate, the roll, and --HIT/--MISS. Public because inside a site the
+ * direction is the facing vector and arrives with the letter rather than turns
+ * later, so the dungeon's ATTACK has no pending_cmd stage to wait in.
+ */
+void u2_overworld_attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word,
+                             int dx, int dy);
+
+/*
  * asm/3389 cmd_E: enter the site on the cell the player stands on, or refuse with
  * " WHAT?" / ONLY ON FOOT!. Owned here rather than in commands.c because it needs the
  * sector store and the tile table, which are this file's; cmd_P is the same arrangement.

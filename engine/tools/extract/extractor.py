@@ -248,6 +248,37 @@ MANIFEST = [
     ("U2_S_IGNITE_NONE_OWNED", "37AE_ignite_torch_burn.asm", ("run", 0x39B9, 11, "NONE OWNED!")),
     ("U2_S_KLIMB",             "37F2_klimb_msg.asm",        ("run", 0x39F4, 5, "KLIMB")),
     ("U2_S_TO_LEVEL",          "3823_site_floor_down.asm",  ("run", 0x3A2E, 9, "TO LEVEL ")),
+    # CP7: the dungeon-side command set. asm/277B is the fragment that holds ADVANCE,
+    # RETREAT, TURN LEFT, TURN RIGHT and the trap, and it is one of the bulk-wave files
+    # whose strings Phase 3 rendered as db lines rather than instructions, so every one of
+    # these is addressed by offset. Offsets and lengths read off the exe 2026-10-29 and
+    # each is confirmed unique in the file by --check.
+    #
+    # "ADVANCE" and "-BLOCKED!" are two separate str_out calls at two separate sites: the
+    # command word prints first and the refusal appends, so the engine prints them as two
+    # calls too rather than inventing a third literal "ADVANCE-BLOCKED!" that the binary
+    # does not contain.
+    ("U2_S_ADVANCE",           "277B_dungeon_move_commands.asm",       ("run", 0x2A65,  7, "ADVANCE")),
+    ("U2_S_BLOCKED",           "277B_dungeon_move_commands.asm",       ("run", 0x2A77,  9, "-BLOCKED!")),
+    ("U2_S_TURN_LEFT",         "277B_dungeon_move_commands.asm",       ("run", 0x2B16,  9, "TURN LEFT")),
+    ("U2_S_TURN_RIGHT",        "277B_dungeon_move_commands.asm",       ("run", 0x2B48, 10, "TURN RIGHT")),
+    ("U2_S_RETREAT",           "277B_dungeon_move_commands.asm",       ("run", 0x2B7B,  7, "RETREAT")),
+    ("U2_S_TRAP",              "277B_dungeon_move_commands.asm",       ("run", 0x2ABE, 13, "ARGH! A TRAP!")),
+    ("U2_S_TOOLS_ESCAPED",     "277B_dungeon_move_commands.asm",       ("run", 0x2AE9, 25, "ESCAPED! BY USE OF TOOLS!")),
+    # asm/1151's two darkness lines both carry a trailing 0x8d line marker, so the db line
+    # reads `db "IT'S DARK!",0x8d,0x00`; the offsets below stop before the marker and the
+    # caller prints the CR, which is the asm/3BE4 convention used everywhere else.
+    ("U2_S_ITS_DARK",          "1151_dungeon_darkness.asm", ("run", 0x149F, 10, "IT'S DARK!")),
+    ("U2_S_TORCH_BURNED_OUT",  "1151_dungeon_darkness.asm", ("run", 0x14B7, 17, "TORCH BURNED OUT!")),
+    # GET's site arm (asm/363B, runtime 0x36C3). " CHEST!" keeps its leading space because
+    # the binary has it, and "IT CONTAINS " follows the same str_out call separated by the
+    # 0x8d marker, so the caller emits the CR between them.
+    ("U2_S_CHEST",             "363B_cmd_G.asm",          ("run", 0x38DC,  7, " CHEST!")),
+    ("U2_S_IT_CONTAINS",       "363B_cmd_G.asm",          ("run", 0x38E4, 12, "IT CONTAINS ")),
+    ("U2_S_GOLD_EXCL",         "363B_cmd_G.asm",          ("run", 0x391C,  5, "GOLD!")),
+    ("U2_S_TRI_LITHIUM",       "363B_cmd_G.asm",          ("run", 0x395D, 12, "TRI-LITHIUM!")),
+    ("U2_S_GET_A",             "363B_cmd_G.asm",          ("run", 0x3954,  2, "A ")),
+    ("U2_S_GET",               "363B_cmd_G.asm",          ("run", 0x383E,  3, "GET")),
     # The gold-for-HP tribute: TRANSACT aimed at a creature of type 0x6C. Observed live
     # 2026-10-29 (captures/spice86/lord-british-tribute), all four rungs of the ladder.
     # The charge line carries a leading AND a trailing 0x8d line marker; the offsets below

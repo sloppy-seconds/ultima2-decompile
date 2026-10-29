@@ -54,6 +54,44 @@ void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y)
     }
 }
 
+void u2_frame_pixel(u2_frame *f, int x, int y, uint8_t colour)
+{
+    if (!f) return;
+    if (x < 0 || x >= U2_SCREEN_W || y < 0 || y >= U2_SCREEN_H) return;
+    f->px[y][x] = (uint8_t)(colour & 3);
+}
+
+void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour)
+{
+    if (!f) return;
+    int dx = x1 - x0, dy = y1 - y0;
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    const int sx = x1 > x0 ? 1 : -1;
+    const int sy = y1 > y0 ? 1 : -1;
+
+    /* Same branch test as asm/67B3's `cmp 0x484,%al ; jae`: whichever delta is
+     * not the major axis carries the error term. */
+    int err;
+    if (dx >= dy) {
+        err = -dx;
+        for (int x = x0, y = y0;; x += sx) {
+            u2_frame_pixel(f, x, y, colour);
+            if (x == x1) break;
+            err += 2 * dy;
+            if (err >= 0) { y += sy; err -= 2 * dx; }
+        }
+    } else {
+        err = -dy;
+        for (int x = x0, y = y0;; y += sy) {
+            u2_frame_pixel(f, x, y, colour);
+            if (y == y1) break;
+            err += 2 * dx;
+            if (err >= 0) { x += sx; err -= 2 * dy; }
+        }
+    }
+}
+
 void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
                         int overlay_tile, int overlay_col, int overlay_row)
 {

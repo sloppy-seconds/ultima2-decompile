@@ -27,7 +27,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 clean content content-check sdl sdl-run play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run play help fresh
 
 all: $(BIN)
 
@@ -63,7 +63,7 @@ run: $(BIN)
 headless: $(BIN)
 	./$(BIN) --headless --script tests/title.keys --dump-state
 
-test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6
+test: test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7
 
 test-cp0: $(BIN)
 	bash tests/run_cp0.sh
@@ -95,6 +95,13 @@ test-cp5:
 # docs/commerce.md.
 test-cp6:
 	bash tests/run_cp6.sh
+
+# CP7 dungeons: game/dungeon.c is the interior sector — the paged grid, the four movement
+# commands, the torch, the wireframe and the chest. The gate drives ./u2 against a synthetic
+# dungeon written by tests/cp7_dungeon_seed.py and SKIPs only when the content strings cannot
+# be extracted. See tests/run_cp7.sh and docs/phase4-state.md § CP7.
+test-cp7:
+	bash tests/run_cp7.sh
 
 # CP9 placeholder. SDL2 must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.

@@ -52,6 +52,11 @@ typedef struct u2_ctx {
     } trace;
 
     int dump_state;         /* --dump-state */
+    /* --dump-frame FILE: write the last composed framebuffer to FILE as a PPM when the
+     * overworld loop ends. --dump-map renders the OPENING frame and returns; this is the
+     * one that can show what a scripted run ended looking at, which is what CP7's
+     * wireframe gate needs — a dungeon frame only exists after ENTER and IGNITE. */
+    const char *frame_dump_path;
     /* Checkpoint file for --load-ds: whitespace-separated hex bytes of the DS mirror,
      * applied after the save AND after the world/monx load, because both of those overwrite
      * fields a mid-session checkpoint carries. NULL means no checkpoint. */

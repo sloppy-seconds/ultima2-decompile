@@ -56,6 +56,11 @@ typedef enum {
                         thing as a handler that declined to act */
 } u2_cmd_result;
 
+/* The shared command epilogue: CR, then the "CMD: " prompt. asm/0A33_cmd_done,
+ * which every completed handler reaches, including the refusals. Public because
+ * the dungeon commands in game/dungeon.c complete commands too. */
+void u2_cmd_done(u2_ctx *ctx);
+
 /*
  * Dispatch one command letter. `letter` is the raw key byte; the range test is inside,
  * because that is where the original has it. Returns U2_CMD_UNKNOWN for anything outside

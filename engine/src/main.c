@@ -253,6 +253,8 @@ int main(int argc, char **argv)
             ctx.dump_state = 1;
         } else if (strcmp(a, "--dump-map") == 0 && i + 1 < argc) {
             map_dump_path = argv[++i];
+        } else if (strcmp(a, "--dump-frame") == 0 && i + 1 < argc) {
+            ctx.frame_dump_path = argv[++i];
         } else if (strcmp(a, "--dump-each") == 0) {
             ctx.dump_each = 1;
         } else if (strcmp(a, "--dump-screen") == 0 && i + 1 < argc) {
