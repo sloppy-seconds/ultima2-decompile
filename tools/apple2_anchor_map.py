@@ -68,7 +68,7 @@ CLUSTER_GAP = 128          # bytes apart on both sides to still count as one clu
 KNOWN_ANCHORS = [
     ("0F12_combat_magic_missile", 0x001115),
     ("24B5_force_field_event", 0x0026E4),
-    ("277B_sub_277b", 0x002ABE),
+    ("277B_dungeon_move_commands", 0x002ABE),
     ("3048_vehicle_plane", 0x0032DA),
     ("38B0_cmd_L", 0x003B06),
     ("3C2E_cmd_O", 0x003EF7),

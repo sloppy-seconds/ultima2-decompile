@@ -11,7 +11,7 @@ dos_foff	dos_runtime	dos_len	text_id	dos_owner	apple_addr	apple_seg	apple_len	ma
 002158	1F58	5	a59f3e6a0c	19D7_magic_shop_menu	$6371	ULTIMA.II.OBJ	5	matched
 002158	1F58	5	a59f3e6a0c	19D7_magic_shop_menu	$6493	ULTIMA.II.OBJ	5	matched
 0026E4	24E4	25	1f5a97b5d7	24B5_force_field_event	$6A6A	ULTIMA.II.OBJ	25	matched
-002ABE	28BE	13	4213459fd6	277B_sub_277b	$6D7C	ULTIMA.II.OBJ	13	matched
+002ABE	28BE	13	4213459fd6	277B_dungeon_move_commands	$6D7C	ULTIMA.II.OBJ	13	matched
 002DEF	2BEF	8	9034042007	2BEC_combat_hit_msg	$6FC1	ULTIMA.II.OBJ	8	matched
 002E93	2C93	13	0598135a66	2C38_sub_2c38	$7033	ULTIMA.II.OBJ	13	matched
 003091	2E91	4	0e76070442	2E3D_combat_attack_flow	$71D6	ULTIMA.II.OBJ	4	matched
@@ -19,7 +19,7 @@ dos_foff	dos_runtime	dos_len	text_id	dos_owner	apple_addr	apple_seg	apple_len	ma
 0032DA	30DA	22	f4c68a9263	3048_vehicle_plane	$73D2	ULTIMA.II.OBJ	22	matched
 003752	3552	15	4cee54739b	3546_time_index_message	$778C	ULTIMA.II.OBJ	15	matched
 003768	3568	14	bc55a7d402	3566_sub_3566	$77A2	ULTIMA.II.OBJ	14	matched
-00377D	357D	20	2977102749	3577_sub_3577	$77B7	ULTIMA.II.OBJ	20	matched
+00377D	357D	20	2977102749	3577_sub_3577+3582_sub_3582	$77B7	ULTIMA.II.OBJ	20	matched
 003798	3598	15	87fd6acbbc	3596_show_year_1990	$77D2	ULTIMA.II.OBJ	15	matched
 0037AE	35AE	15	36fb0b1f87	3596_show_year_1990	$77E8	ULTIMA.II.OBJ	15	matched
 003B06	3906	25	0a695f62a9	38B0_cmd_L	$7AF6	ULTIMA.II.OBJ	25	matched

@@ -761,7 +761,7 @@ was the overworld sector grid. `[DS:25]` as a floor/page selector is **inferred*
 term, not witnessed). This is a different `[DS:14]` writer from the overworld
 walk path (`asm/5B71`/`asm/5C49` set `[DS:14] = [DS:2DF]`), so the proven
 `[DS:14] = map_byte >> 1` is untouched. Files renamed to
-`asm/68C0_dungeon_grid_byte.asm` and `asm/6000_dungeon_sample.asm`; bodies byte-
+`asm/68C0_dungeon_grid_byte.asm` and `asm/6000_dungeon_render.asm`; bodies byte-
 identical (clean rebuild 37344 B). The full dungeon geometry (how a 16×16 page
 becomes the first-person wireframe) remains the backlog item, out of scope here.
 

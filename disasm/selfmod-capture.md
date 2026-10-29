@@ -79,7 +79,7 @@ The asm does write into its own code segment, but never into instructions:
 | `asm/52CA_timed_wait.asm` | `mov %ah,%cs:0x4f04`, `mov %cx,%cs:0x4f05`, `mov %dx,%cs:0x4f07` | argument staging into a scratch block, read back by `asm/5343_sub_5343.asm` and `asm/535A_sub_535a.asm` |
 | `asm/26CC_sub_26cc.asm`, `asm/2708_sub_2708.asm`, `asm/2744_sub_2744.asm` | `mov %cs:0x2798(%di),%al` | data array in the image segment |
 | `asm/29D2_sub_29d2.asm` | `mov %cs:0x29d0,%al`, `mov %cs:0x29d1,%al` | two scratch bytes |
-| `asm/4B76_sub_4b76.asm`, `asm/4BE0_sub_4be0.asm`, `asm/4C31_sub_4c31.asm` | `mov %cs:0x48d0..0x48dc(...)` | item/shop tables |
+| `asm/4B76_pixel_plot.asm`, `asm/4BE0_sub_4be0.asm`, `asm/4C31_sub_4c31.asm` | `mov %cs:0x48d0..0x48dc(...)` | item/shop tables |
 | `asm/0A1F_cmd_dispatch.asm` | `mov %cs:0x730(%si),%bx` | read-only command jump table |
 
 The program keeps two variable spaces: the separately allocated DS working

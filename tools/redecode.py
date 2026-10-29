@@ -49,7 +49,7 @@ BLOB_FILES = [
     "asm/72A0_sub_72a0.asm",
     "asm/8387_sub_8387.asm",
     "asm/5400_sub_5400.asm",
-    "asm/6144_sub_6144.asm",
+    "asm/6144_dungeon_shape_dispatch.asm",
     "asm/48CA_sub_48ca.asm",
 ]
 
