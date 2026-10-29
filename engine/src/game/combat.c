@@ -241,36 +241,21 @@ static void bcd_adc2(uint8_t *hi, uint8_t *lo, uint8_t amount)
  *   - the map-cell stamp clear on a kill (asm/2E3D file 0x30F4), which needs the
  *     sector writer and is wired at the caller.
  */
-int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
+/* The shared damage tail: asm/2E3D for a melee swing and asm/2C19 for a cannon both reach the
+ * same BCD subtract on mon_hp and the same inverted-sense lethal test. Kept as one function on
+ * purpose — the gold/exp byte-inversion note below is the sort of thing that goes wrong in
+ * exactly one of two copies of it.
+ *
+ * `award` is the difference between the two routes, and it is a parameter rather than an
+ * assumption. The melee kill path (asm/2E3D file 0x3114 / 0x3141) rolls gold and exp. The
+ * cannon's death branch is a different target — asm/2C19's `jae` lands on asm/2CA4, which moves
+ * the creature's x/y into the cursor and calls the grid reader, i.e. it stamps the cell it just
+ * emptied, and there is no reward roll anywhere on that path. So a cannon kill pays nothing, and
+ * that is a byte reading rather than a simplification. */
+static int apply_damage_to_slot(u2_ctx *ctx, int slot, unsigned dmg, u2_attack *out, int award)
 {
     u2_attack r;
     memset(&r, 0, sizeof r);
-
-    if (slot < 0 || slot >= U2_MON_SLOTS) {
-        if (out) *out = r;
-        return 0;
-    }
-
-    /* asm/2E3D file 0x307E / asm/2BDA file 0x2DDA:
-     *   call rand ; clc ; rcr $1,%al ; cmp 0x4c,%al ; jb hit
-     * rcr through a cleared carry is a shift, so a hit needs (rand >> 1) < the
-     * agility BYTE. Chance is agi_byte/128: agi 40 (byte 0x40 = 64) hits 50%,
-     * agi 5 hits 3.9%. Measured both ways — 12 swings at agi 5 landed exactly
-     * one hit (capture cp5-hit), which is what agility predicts and rules out
-     * strength as the operand. */
-    if ((u2_rand_byte(ctx) >> 1) >= ctx->state.stat_agi) {
-        if (out) *out = r;
-        return 0;
-    }
-
-    /* asm/2E3D file 0x309F: al = [DS:61]; add x3; adc [DS:4B],al; rcr; rcr
-     * => (8 * readied_weapon + strength) >> 2, **on the raw packed-decimal
-     * bytes**. Strength 40 is stored 0x40 = 64, so the maxed seed gives
-     * (72 + 64) >> 2 = 34 — exactly what one clean hit removed (Fighter 50->16,
-     * capture cp5-dmg). Plugging in the decimal 40 gives 28 and is the mistake
-     * this comment exists to prevent. */
-    unsigned dmg = (((unsigned)ctx->state.readied_weapon * 8u)
-                    + (unsigned)ctx->state.stat_str) >> 2;
     r.damage = (uint8_t)dmg;
 
     /* asm/2E3D file 0x30BC: stc; cmc (clear CF); sbb [DS:20],al; cmc; jae -> the
@@ -299,7 +284,12 @@ int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
         ctx->state.mon_kind[slot] = 0;
 
         /* asm/2E3D file 0x3114 / 0x3141: gold += (rand & 0x17) | 1, exp += rand & 7.
-         * Reproduces the live `KILLED--GOLD+1--EXP.+02` shape exactly. */
+         * Reproduces the live `KILLED--GOLD+1--EXP.+02` shape exactly. The cannon reaches
+         * asm/2CA4 instead and skips this entirely — see the `award` note above. */
+        if (!award) {
+            if (out) *out = r;
+            return 2;
+        }
         r.gold = (uint8_t)((u2_rand_byte(ctx) & 0x17u) | 1u);
         r.exp  = (uint8_t)(u2_rand_byte(ctx) & 0x07u);
 
@@ -318,4 +308,107 @@ int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
     ctx->state.mon_hp[slot] = (uint8_t)(hp - dmg);
     if (out) *out = r;
     return 1;
+}
+
+int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out)
+{
+    u2_attack r;
+    memset(&r, 0, sizeof r);
+
+    if (slot < 0 || slot >= U2_MON_SLOTS) {
+        if (out) *out = r;
+        return 0;
+    }
+    /* asm/2E3D file 0x307E / asm/2BDA file 0x2DDA:
+     *   call rand ; clc ; rcr $1,%al ; cmp 0x4c,%al ; jb hit
+     * rcr through a cleared carry is a shift, so a hit needs (rand >> 1) < the
+     * agility BYTE. Chance is agi_byte/128: agi 40 (byte 0x40 = 64) hits 50%,
+     * agi 5 hits 3.9%. Measured both ways — 12 swings at agi 5 landed exactly
+     * one hit (capture cp5-hit), which is what agility predicts and rules out
+     * strength as the operand. */
+    if ((u2_rand_byte(ctx) >> 1) >= ctx->state.stat_agi) {
+        if (out) *out = r;
+        return 0;
+    }
+
+    /* asm/2E3D file 0x309F: al = [DS:61]; add x3; adc [DS:4B],al; rcr; rcr
+     * => (8 * readied_weapon + strength) >> 2, **on the raw packed-decimal
+     * bytes**. Strength 40 is stored 0x40 = 64, so the maxed seed gives
+     * (72 + 64) >> 2 = 34 — exactly what one clean hit removed (Fighter 50->16,
+     * capture cp5-dmg). Plugging in the decimal 40 gives 28 and is the mistake
+     * this comment exists to prevent. */
+    unsigned dmg = (((unsigned)ctx->state.readied_weapon * 8u)
+                    + (unsigned)ctx->state.stat_str) >> 2;
+    r.damage = (uint8_t)dmg;
+    return apply_damage_to_slot(ctx, slot, dmg, out, 1);
+}
+
+/* asm/35ED..asm/3611: the FRIGATE'S CANNON.
+ *
+ * cmd_F reaches damage by a completely different route from cmd_A, and the two only converge at
+ * the HP subtract:
+ *
+ *   asm/35C9  gate on [DS:13] == 0x24 (the ship stamp asm/2FAD's BOARD dispatch assigns)
+ *   asm/35D0  off the ship the whole command is "FIRE WHAT?"
+ *   asm/35DE  on the ship it prints " DIRECT-" and asm/35EA calls the aim gate asm/2362
+ *   asm/35ED  call asm/5EAC — a fixed-parameter tone wrapper (~1.5 kHz, the same one the melee
+ *             wound loop uses), i.e. the report of the gun
+ *   asm/35F0  call asm/23E6, the creature probe: cursor = player + delta, ONE cell
+ *   asm/35F3  the found slot goes to [DS:20]; zero jumps to asm/2E09, which prints "--MISS"
+ *   asm/3603  roll rand_byte
+ *   asm/3606  `or $0x20,%al` and store to [DS:1F] — bit 5 forced onto a full-range random byte,
+ *             so the reachable damage is every byte with bit 5 set: 32..63, 96..127, 160..191,
+ *             224..255. Floor 32, ceiling 255. asm/2C19's header used to call this "32..63", and
+ *             that is wrong — `or` sets a bit, it does not mask. Corrected here and there on
+ *             2026-10-29 by attack_check, which sweeps all 256 seeds and shows values over 63.
+ *   asm/3611  fall into asm/2C19, the second HP-decrement site, which subtracts [DS:1F]
+ *
+ * Two things this closes and one it does not. It closes the open question in
+ * asm/2C19_monster_hp_subtract's header ("what selects the slot and why that magnitude is not
+ * established") — the slot is the one-cell creature probe and the magnitude is a forced-low
+ * random byte. It also means asm/3611 is not the town-NPC damage path it was once promoted to.
+ *
+ * What it does NOT close is the RANGE, and the owner's recollection and the bytes disagree here.
+ * The recollection is a 3-space cannon, which is what makes shelling a shore from 2-3 tiles out
+ * safe. The bytes say one cell: asm/23E6 seeds its cursor at player + delta and compares every
+ * creature against that single cell, and its own header carries a standing warning that it is
+ * "not a ray with a reach". cmd_T builds a two-cell ray by stepping the cursor twice in its own
+ * body; cmd_F has no such stepping, and the only call between the aim gate and the probe is a
+ * tone wrapper that pushes four registers and does not touch DS:19/1A. So the engine implements
+ * one cell, and the disagreement is open as G49 in docs/needs-gameplay.md rather than being
+ * resolved by whoever typed the code. The low end of the damage agrees exactly (32), which is
+ * the strongest sign that this IS the mechanic being remembered and only the reach is in doubt.
+ *
+ * The tone is deliberately not emitted. seam_tone wants a PIT divisor and a duration, and
+ * asm/5DA9's header says its frequency arithmetic "is inferred and has not been confirmed
+ * against a tone heard in a capture". A guessed tone is worse than none, and the text this
+ * prints is already a message. */
+int u2_combat_cannon(u2_ctx *ctx, int cx, int cy, u2_attack *out)
+{
+    u2_attack r;
+    memset(&r, 0, sizeof r);
+
+    /* asm/23E6, reached from asm/35F0: the scan runs DI from 31 down and stops at 0, so slot 0
+     * is never examined. Reproduced rather than routed through u2_monsters_at(), which scans 0
+     * upward and is the step-rejection question, not the asm/23E6 question — the two disagree
+     * about slot 0 on purpose and papering that over would lose the difference. */
+    int slot = 0;
+    for (int i = U2_MON_SLOTS - 1; i >= 1; i--) {
+        if (ctx->state.mon_type[i] == 0)
+            continue;
+        if (ctx->state.mon_x[i] == (uint8_t)cx && ctx->state.mon_y[i] == (uint8_t)cy) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot == 0) {
+        if (out) *out = r;
+        return 0;                       /* asm/2E09: "--MISS" */
+    }
+
+    /* asm/3606: `or $0x20,%al` on a random byte. Bit 5 is forced and the other seven bits are
+     * whatever rand_byte produced, so this is a floor of 32 and not a range of 32..63. */
+    const unsigned dmg = (unsigned)(u2_rand_byte(ctx) | 0x20u);
+    r.damage = (uint8_t)dmg;
+    return apply_damage_to_slot(ctx, slot, dmg, out, 0);
 }

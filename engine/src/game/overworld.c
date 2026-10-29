@@ -1591,6 +1591,32 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
             continue;
         }
 
+        /* A direction arriving while FIRE DIRECT- is on the line is the cannon's bearing.
+         * Same AWAIT plumbing as the TRANSACT and STEAL arms above, and the same reason: the
+         * original consumes the direction inside asm/2362. asm/35ED plays the gun report and
+         * asm/35F0 probes ONE cell — see u2_combat_cannon and G49 for why that is one and not
+         * the three the owner remembers.
+         *
+         * On a hit the original prints NOTHING. That is cited silence, not a gap: there is no
+         * str_out between asm/35F0's probe and asm/3611's damage apply, and the death branch
+         * (asm/2C19's `jae` to asm/2CA4) stamps the emptied cell instead of announcing it. The
+         * only text on this path is --MISS. The tone that would have been the audible feedback is
+         * asm/5EAC, deliberately not emitted: asm/5DA9's frequency arithmetic is unconfirmed
+         * against a heard tone, and a guessed tone is worse than none. */
+        if (ow->pending_cmd == 'F' && word != NULL) {
+            ow->pending_cmd = 0;
+            seam_str_out(ctx, word);              /* no CR: same line as FIRE DIRECT- */
+            const int cx = (ow->x + dx) & (U2_SECTOR_EDGE - 1);
+            const int cy = (ow->y + dy) & (U2_SECTOR_EDGE - 1);
+            u2_attack at;
+            if (u2_combat_cannon(ctx, cx, cy, &at) == 0)
+                seam_str_out(ctx, U2_S_MISS);
+            seam_char_print(ctx, '\r');
+            seam_str_out(ctx, U2_S_CMD_PROMPT);
+            creature_turn(ctx, ow);
+            continue;
+        }
+
         /* A direction arriving while ATTACK-- is on the line is the attack's
          * direction, not a step: the original consumed it inside the cmd_A chain
          * and never moved the player. Live: `ATTACK--EAST--HIT!!!` with the

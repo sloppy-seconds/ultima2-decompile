@@ -320,6 +320,19 @@ else
             && ok "CP6 S: an aim at nothing refuses" \
             || bad "CP6 S: expected NO LUCK! on a south aim from the armour cell"
     fi
+    # --- cmd_F (FIRE) -------------------------------------------------------
+    # Only the off-ship arm is gateable end-to-end: the ship stamp DS:13 is not inside the saved
+    # record (the record starts at DS:36), so a seed cannot put the player on a frigate and the
+    # on-ship path is reachable only by boarding. The damage formula, the kill-without-reward
+    # rule and the miss are gated in attack_check instead.
+    if run_case armour fire-foot 'F\n' "$WORK/fire-foot.out"; then
+        said "$WORK/fire-foot.out" "FIRE WHAT?" \
+            && ok "CP6 F: on foot the whole command is FIRE WHAT? (asm/35C9 gates on the ship stamp)" \
+            || { bad "CP6 F: expected 'FIRE WHAT?' on land"; sed -n '21,24p' "$WORK/fire-foot.out"; }
+        said "$WORK/fire-foot.out" " DIRECT-" \
+            && bad "CP6 F: aimed a cannon while off the frigate" \
+            || ok "CP6 F: no bearing prompt off the ship"
+    fi
 fi
 
 printf '\n'

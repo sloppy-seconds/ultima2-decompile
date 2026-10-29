@@ -346,6 +346,38 @@ static u2_cmd_result cmd_S(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     return U2_CMD_AWAIT;
 }
 
+/* asm/35C1 cmd_F: FIRE — the frigate's cannon.
+ *
+ *   print "FIRE"
+ *   [DS:13] != 0x24  ->  " WHAT?" and done. That is the entire off-ship command.
+ *   [DS:13] == 0x24  ->  " DIRECT-", take a direction from the aim gate, and fire.
+ *
+ * The mode byte is what makes this a vehicle weapon and not an attack: 0x24 is the ship stamp
+ * asm/2FAD's BOARD dispatch assigns, so FIRE exists only aboard the frigate. cmd_A is the
+ * attack. This file used to file F as "the combat/attack arm" from the bare word.
+ *
+ * Same AWAIT shape as cmd_T and cmd_S: asm/35EA calls the asm/2362 aim gate, so the direction
+ * is consumed inside the handler chain and the letter alone is not a turn. */
+static u2_cmd_result cmd_F(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
+{
+    (void)letter;
+    seam_str_out(ctx, U2_S_FIRE);
+
+    if (ctx->state.player_stamp != 0x24u) {
+        /* asm/35D0. The literal is " WHAT?" with a leading space, so the line reads
+         * `CMD: FIRE WHAT?` — which is also why it is its own extractor entry rather than
+         * sharing cmd_E's or cmd_B's identical text: same bytes, different site, and the
+         * citation should point here. */
+        seam_str_out(ctx, U2_S_FIRE_WHAT);
+        cmd_done(ctx);
+        return U2_CMD_DONE;
+    }
+
+    seam_str_out(ctx, U2_S_FIRE_DIRECT);
+    ow->pending_cmd = 'F';
+    return U2_CMD_AWAIT;
+}
+
 /* asm/3E50 cmd_R: READY WEAPON — cmd_W's shape again, one array over.
  *
  *   print the menu (nine entries, 1-DA .. 9-QU)
@@ -1113,7 +1145,7 @@ static const cmd_fn cmd_table[CMD_COUNT] = {
     NULL,  /* C  see the note above */
     NULL,  /* D  see the note above */
     cmd_E, /* E  enter site: asm/3389, body in u2_overworld_enter() */
-    NULL,  /* F  not implemented: FIRE is the combat/attack arm */
+    cmd_F, /* F  fire: asm/35C1, the frigate's cannon, gated on the ship stamp */
     NULL,  /* G  not implemented: GET needs ground items */
     cmd_H,
     NULL,  /* I  not implemented */

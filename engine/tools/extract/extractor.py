@@ -405,6 +405,10 @@ MANIFEST = [
     ("U2_S_STEAL_FOOD",            "3F5D_steal_attempt.asm",     1),
     ("U2_S_STEAL_ARMOUR",          "3F5D_steal_attempt.asm",     2),
     ("U2_S_STEAL_WEAPONS",         "3F5D_steal_attempt.asm",     3),
+    # cmd_F (FIRE). Three literals, and the third is the whole off-ship command.
+    ("U2_S_FIRE",                  "35C1_cmd_F.asm",             0),
+    ("U2_S_FIRE_DIRECT",           "35DE_sub_35de.asm",          0),
+    ("U2_S_FIRE_WHAT",             "35D0_sub_35d0.asm",          0),
 ]
 
 # The terminator is matched as `0x00` OR `0` because the asm tree is not uniform:

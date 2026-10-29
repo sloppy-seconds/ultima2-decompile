@@ -54,4 +54,17 @@ typedef struct u2_attack {
 
 int u2_combat_attack(u2_ctx *ctx, int slot, u2_attack *out);
 
+/*
+ * The frigate's cannon. spec: asm/35ED..asm/3611, damage via asm/2C19.
+ *
+ * cx/cy is the cell asm/23E6 would probe — the player's position plus the aim delta, ONE cell,
+ * which is the point the owner's recollection and the bytes disagree on; see the long note at
+ * the definition and G49 in docs/needs-gameplay.md.
+ *
+ * Returns the same three codes as u2_combat_attack: 0 = no creature there (asm/2E09 prints
+ * "--MISS"), 1 = hit and it survived, 2 = killed. out->damage is the rolled byte, rand|0x20,
+ * which is 32..63 and is NOT the melee formula.
+ */
+int u2_combat_cannon(u2_ctx *ctx, int cx, int cy, u2_attack *out);
+
 #endif /* U2_GAME_COMBAT_H */

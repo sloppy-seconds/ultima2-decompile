@@ -201,6 +201,54 @@ int main(void)
     CHECK(distinct > 1,
           "attack outcomes vary across seeds — a fixed-hit implementation fails here");
 
+    /* --- the frigate's cannon (asm/35ED..asm/3611) ---------------------------
+     * The damage byte is `rand | 0x20`: bit 5 forced on a full-range random byte. That is NOT
+     * "32..63", which is what asm/2C19's header has been saying and what the first draft of this
+     * check asserted. `or` sets a bit, it does not mask, so the reachable set is every byte with
+     * bit 5 SET — 32..63, 96..127, 160..191 and 224..255. The floor is 32 and the ceiling is 255.
+     * Swept across all 256 seeds because the bound is the finding and a sample could not
+     * distinguish "32..63" from "32..63 plus a rare outlier".
+     *
+     * The owner's recollection was "typically between 32 and 70". The 32 is exactly the formula's
+     * floor. 70 (0x46) is not reachable at all — bit 5 is clear in it — so the upper end of that
+     * memory does not match the bytes either way, and neither number is being quietly adopted.
+     * What the bytes say is recorded here, and the disagreement is named in G49. */
+    int c_lo = 999, c_hi = 0, c_hits = 0, c_over63 = 0;
+    for (int s = 0; s < 256; s++) {
+        arm(&c, (uint8_t)s, 0x40, 0x40, 3);
+        u2_attack g;
+        int cr = u2_combat_cannon(&c, 10, 12, &g);
+        if (cr == 0) continue;
+        c_hits++;
+        if (g.damage < c_lo) c_lo = g.damage;
+        if (g.damage > c_hi) c_hi = g.damage;
+        if (g.damage > 63) c_over63++;
+        CHECK((g.damage & 0x20u) != 0,
+              "cannon damage %u does not have bit 5 set, seed %d", g.damage, s);
+    }
+    CHECK(c_hits > 0, "cannon reaches a creature standing on the probed cell");
+    CHECK(c_lo == 32, "the cannon's floor is 32 (got %d)", c_lo);
+    CHECK(c_over63 > 0,
+          "values above 63 occur — this is the assertion that refutes asm/2C19's old '32..63'");
+
+    /* No creature at the cell -> asm/2E09's --MISS, and nothing is hurt. */
+    arm(&c, 7, 0x40, 0x40, 3);
+    CHECK(u2_combat_cannon(&c, 11, 12, &a) == 0 && c.state.mon_hp[4] == 200,
+          "cannon at an empty cell misses and hurts nothing");
+
+    /* A cannon kill pays nothing: asm/2C19's death branch lands on asm/2CA4, which stamps the
+     * emptied cell, and the gold/exp rolls live on the melee path (asm/2E3D) instead. This is
+     * the assertion that stops someone "fixing" the cannon to share the melee reward. */
+    arm(&c, 9, 0x40, 0x40, 3);
+    c.state.mon_hp[4] = 0x30;                 /* 30 BCD, below the minimum roll of 32 */
+    const uint8_t gold_was = c.state.gold_lo, exp_was = c.state.exp_lo;
+    int rr = u2_combat_cannon(&c, 10, 12, &a);
+    CHECK(rr == 2, "a cannon blow above the creature's hp kills it (got %d)", rr);
+    CHECK(c.state.mon_type[4] == 0 && c.state.mon_kind[4] == 0,
+          "the kill clears type and kind");
+    CHECK(a.gold == 0 && a.exp == 0 && c.state.gold_lo == gold_was && c.state.exp_lo == exp_was,
+          "a cannon kill awards no gold and no exp — asm/2CA4, not asm/2E3D");
+
     printf("attack_check: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }
