@@ -164,6 +164,21 @@ int seam_key_poll(u2_ctx *ctx, u2_key *out)
 
 int seam_key_wait(u2_ctx *ctx, u2_key *out)
 {
+    /* Present whatever has been printed BEFORE blocking for the key that answers it.
+     *
+     * The overworld loop composes and presents once per iteration (overworld.c's
+     * seam_present_frame at the top of the loop). A command handler that prints text and
+     * then waits for input never returns to that point, so the text sat in the vram while
+     * the engine blocked. To a player that is indistinguishable from a hang, and it is the
+     * real cause of two owner reports: the TRANSPORT shoppe menu invisible while the engine
+     * waited for Y or N, and `YELL WHAT?` invisible while cmd_Y waited for the yell. Both
+     * were printing correctly into a buffer nobody was showing.
+     *
+     * Fixed here rather than at each call site because the hazard is a property of blocking,
+     * not of these two commands: any future handler that prints then waits would walk into
+     * the same defect. The original has no such seam — it writes to 0xB8000 and the CRT is
+     * always showing it — so this is plumbing the port needs, not behaviour it must match. */
+    seam_present(ctx);
     int got = ctx->input->wait(ctx, out);
     u2_trace(ctx, "key_wait", "4F4D", "got=%d", got);
     return got;
