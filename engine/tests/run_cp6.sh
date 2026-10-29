@@ -576,6 +576,28 @@ else
 fi
 
 printf '\n'
+    # A consumed TRANSACT- must produce a reply. Three paths in commerce.c used to return
+    # from the dealer dispatch having printed nothing at all -- the tlkx talking branch and
+    # two shop gaps -- which is what made an owner's "neither of them respond" and "it froze"
+    # out of a perfectly live game. See tests/cp6_silence_check.py for why the obvious grep
+    # for this is inert and what the non-inert assertion had to be.
+    #
+    # Needs the real sector 31: the synthetic seed has no NPC standing in a shop's sign cell,
+    # and that interception is the whole defect. Skips with a reason rather than passing on
+    # data that cannot show it.
+    if [ -r ../original/mapx31 ] && [ -r ../original/monx31 ]; then
+        python3 tests/cp6_silence_check.py "$PWD/u2" ../original "$WORK/silence" \
+            >"$WORK/silence.out" 2>&1
+        sil=$?
+        case "$sil" in
+            0) ok "CP6 silence: $(tail -1 "$WORK/silence.out")" ;;
+            1) bad "CP6 silence: $(tail -1 "$WORK/silence.out")" ;;
+            *) bad "CP6 silence: the check could not run (exit $sil) -- $(tail -1 "$WORK/silence.out")" ;;
+        esac
+    else
+        skip "CP6 silence: needs the player's mapx31/monx31 (no synthetic NPC blocks the ray)"
+    fi
+
 if [ "$fail" -eq 0 ]; then
     printf 'CP6 SPEC: PASS\n'
 else

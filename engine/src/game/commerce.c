@@ -173,6 +173,21 @@ int u2_spend_price(u2_ctx *ctx, const uint8_t price[2])
 
 /* ---- the input the shops need ---------------------------------------------- */
 
+/* One line of engine-authored text, announced as such.
+ *
+ * The `[engine]` prefix is this project's convention for anything the original never printed
+ * -- the same one --cleanroom uses for substitute art and title.c uses for stub screens. A
+ * gap has to be visible, because an unimplemented branch that returns quietly is
+ * indistinguishable from a hung game, and "it froze" is exactly what an owner reported for
+ * one of these. It must never be mistaken for game text, because then a missing feature
+ * reads as the reconstruction faithfully reproducing a refusal that never existed. */
+static void engine_gap(u2_ctx *ctx, const char *what)
+{
+    char buf[64];
+    snprintf(buf, sizeof buf, "[engine] %s", what);
+    seam_str_out(ctx, buf);
+}
+
 /* asm/2028_read_decimal_digit: block until one decimal digit arrives, echo it, return it.
  * Non-digits are rejected by reading again. Returns -1 only when the engine's input is
  * exhausted, which has no counterpart in the original (it blocks forever) and is the
@@ -500,7 +515,16 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
          * recorded. What is still missing is the engine half: there is no tlkx loader
          * (core/world.c reads mapx and monx only) and the street lines have no extractor
          * entries. Both are CP6 work, and printing a plausible line from neither is exactly
-         * the guess the handoff told this branch to avoid. */
+         * the guess the handoff told this branch to avoid.
+         *
+         * Silence was not an acceptable placeholder, and this is the case AGENTS.md describes:
+         * a turn consumed, nothing printed, no cited byte justifying the quiet. Owner report
+         * 2026-10-29 -- two NPCs south of the TRANSPORT shoppe in Port Boniface, "neither of
+         * them respond", and aiming at the vendor through one of them looked like the game
+         * had frozen. The creature scan runs BEFORE the tile test (asm/23E6 precedes
+         * asm/407C), so an NPC standing in a shop's sign cell swallows the ray and this
+         * branch used to return nothing at all. Say what is missing rather than looking hung. */
+        engine_gap(ctx, "TALK not implemented -> tlkx loader");
         return U2_TRANSACT_NO_DEALER;
     }
 
@@ -539,12 +563,16 @@ u2_transact_result u2_commerce_transact(u2_ctx *ctx, u2_overworld *ow, int dx, i
          * 4-M.M., 5-BLINK, 6-KILL while those names sit at pool slots 7/8/9, so the menu
          * number and the ready number may be different axes, and asm/19D7's "FIVE "/"S FOR "
          * framing is unread. Writing spell_counts[digit] would be a guess wearing a
-         * citation. */
+         * citation.
+         * Not silent: see engine_gap. A shop that is decoded but unimplemented still has to
+         * say so, or the player reads a working refusal out of a missing feature. */
+        engine_gap(ctx, "spell shop not implemented -> DS:B6 slot");
         return U2_TRANSACT_NO_DEALER;
     case U2_SHOP_CLUE:
         /* GAP — the clue seller takes digit x 100 by byte placement (the digit goes into
          * the hundreds byte and the low byte is zeroed; there is no multiply), but the clue
          * itself is a pool this project has not mapped to a selection rule. */
+        engine_gap(ctx, "clue seller not implemented -> clue pool");
         return U2_TRANSACT_NO_DEALER;
     case U2_SHOP_PUB:
         /* GAP — the pub's 1-BUY is a constant 5 gold and its 2-TIP drives the barkeep
