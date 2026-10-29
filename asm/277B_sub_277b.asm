@@ -1,6 +1,16 @@
 # sub_277b — mechanical clean (bulk wave); behavior not yet reviewed
 # notes: 599 B region dominated by mis-decoded data (all forced-kept bytes);
 #        contains 'CMD: ' and 'Z' strings but structure not proven — NOT named.
+#        One fact inside it is nonetheless worth carrying, because it is the only place the
+#           game spends TOOLS: at runtime 0x28DC it prints 'ARGH! A TRAP!', reads DS:66, prints
+#           'ESCAPED! BY USE OF TOOLS!' at 0x28E9, and at 0x2904..0x290C does
+#           `stc ; cmc ; sbb $1,%al ; das ; cmc ; mov %al,0x66` — one packed-decimal tool spent
+#           per trap. The counter is DS:66, which is NOT an items_held slot; it sits beside
+#           torches (DS:64) and keys (DS:65), and the item name table at file 0x501D has no TOOLS
+#           entry at all, which is how a scan scoped to the item array concluded the game had no
+#           such thing. Owner recollection supplied the mechanic; the bytes confirm it. Static
+#           grade: dungeons are parked (AGENTS.md § 3) and no capture has filmed this. The
+#           increment side is asm/2CF6_tools_add_one. See docs/save-format.md § 5.
 # func 277B..29D1  len 0257 B  evidence: seed+reko
 # strings: "CMD: "; "CMD: "; "PASS"; "ADVANCE" (+7 more)
 # calls: L_000911, L_000bfb, L_000c30, L_000c33, L_000e62, L_002a61, L_002b12, L_002b44 (+8 more)

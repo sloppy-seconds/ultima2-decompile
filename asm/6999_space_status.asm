@@ -1,5 +1,12 @@
 # space_status — space-travel status readout (fuel, xeno)
 # name-evidence: strings '  FUEL=' / '  XENO='
+#           The FUEL label is not a guess about what the slot means: at runtime 0x6BD0 this
+#           routine reads DS:E5, does `stc ; cmc ; sbb $1,%al ; das ; cmc` and stores it back, so
+#           the byte it prints a fuel label beside is items_held[15], TRI-LITHIUM, and space
+#           travel spends one per event. asm/6DFD_hyperwarp_flow does the same on a warp. The
+#           owner's recollection ('each launch or space warp consumes your Tri-Lithium') is the
+#           third independent witness alongside the label and the subtract. Static grade: no
+#           capture has reached space. docs/save-format.md § 5.
 # func 6999..6B3C  len 01A4 B  evidence: call+reko
 # strings: "  FUEL="; "  XENO="; "  YAKO="; "  ZABO=" (+5 more)
 # calls: L_000911, L_004c3e, L_00514d, L_0051df (str_out), L_0053eb, L_006c77, L_006c79, L_006c86 (+12 more)

@@ -126,7 +126,7 @@ editable.
 | `0x61` | readied weapon | index, 0 = HANDS |
 | `0x62` | worn armour | index, 0 = SKIN |
 | `0x64` / `0x65` / `0x66` | torches / keys / tools | BCD, one byte each |
-| `0x6D` | boots count | non-zero gates the paralysis save at runtime `0x22FD` |
+| `0x6D` | **world byte** — 0 Earth, 1..9 planets, `0x0A` deep space | index. This row used to say `boots count`, which was an artefact of our own editor: `tools/u2_edit.py` defined a `boots` field here and `maxout` wrote 1 into it, and the doc then named the byte after our write. Boots are `items_held[BOOTS]` at `DS:D9`, which is what the paralysis save at runtime `0x22FD` actually reads. See G44 in `docs/needs-gameplay.md` |
 | `0x76 + i` | weapons owned | one count per weapon, 10 entries |
 | `0xD6 + i` | items held | one count per item, 16 slots |
 
@@ -148,6 +148,58 @@ round-trips them through the file, but the in-game inventory display was not
 opened - `I` is not the inventory command, and the correct key is not yet
 recorded. The slot identities rest on the earlier value-match proof, not on
 today's run.
+
+### What the game actually consumes (measured 2026-10-29)
+
+The owner supplied a consumables table from memory. Every row of it that this binary
+can be tested against held, and the one row that initially looked wrong was the row
+this project had misfiled. Three things in the whole game are spent on use, and they
+do not all live in the same place.
+
+| consumable | where it lives | spent by | grade |
+| --- | --- | --- | --- |
+| STRANGE COIN | `items_held[13]` = `DS:E3` | `cmd_N` NEGATE TIME falls into `asm/3C04`, which does `stc ; cmc ; sbb $1,%al ; das ; cmc` and stores back, then writes `0x14` to `DS:26A` (creature-move freeze) | **observed** — `captures/spice86/cmd-nr-live`, coin read back at 0 both sides |
+| TRI-LITHIUM | `items_held[15]` = `DS:E5` | space travel: `asm/6999` (whose own label for the slot is `  FUEL=`) and `asm/6DFD` both subtract and store | static — never observed; space is CP7 |
+| TOOLS | **`DS:66`, not an item slot** | a dungeon trap: `asm/277B` prints `ARGH! A TRAP!`, reads `DS:66`, prints `ESCAPED! BY USE OF TOOLS!`, and stores the decremented byte. Gained via `asm/2CF6_tools_add_one` | static — dungeons are parked (AGENTS.md § 3) |
+
+**Why TOOLS looked absent, and why that was the project's error and not the owner's.**
+The item name table at file `0x501D` has sixteen entries and none of them is TOOLS, so
+a scan scoped to `items_held` concludes the game has no such item. It does have one; it
+is a packed-decimal counter sitting beside torches (`DS:64`) and keys (`DS:65`), and
+`state.h` already names it `tools`. The lesson is that "not in the item table" is a
+statement about one array, not about the game.
+
+Everything else in the item array is a read-only gate. A fixed-displacement scan of the
+whole binary gives the access profile:
+
+| slot | item | fixed-address accesses | role |
+| --- | --- | --- | --- |
+| `D6` | RING | read 1, write 1 | `asm/24B5`: non-zero prints `RING PROTECTS FROM FIELD!`, zero takes `FIELD CAUSES 1000 DAMAGE!` |
+| `D7` | WAND | read 1 | spell focus, `cmd_M` |
+| `D8` | STAFF | none | spell focus, `cmd_M` |
+| `D9` | BOOTS | none | paralysis resist |
+| `DA` | CLOAK | read 1 | resist |
+| `DB` | HELM | read 3, write 2 | `cmd_V` world view |
+| `DC` / `DE` / `E0` | GEM, RED GEM, GREEN GEM | **none at all** | owner: "essentially junk items". No reader found |
+| `DD` | ANKH | read 1 | rocket boarding |
+| `DF` | SKULL KEY | read 1 | airplane boarding |
+| `E1` | BRASS BUTTON | read 1 | airplane launch |
+| `E2` | BLUE TASSLE | read 1 | frigate boarding |
+| `E4` | GREEN IDOL | read 1 | resist |
+
+The four boarding keys being read-only is the byte side of G42, which had one live
+sample and now has a whole-binary scan behind it.
+
+**Two caveats, and both are the reason this section grades itself.**
+
+1. The table counts *fixed-displacement* accesses only. Indexed forms — `mov 0xd6(%di),%al`
+   — are invisible to it, and the game uses them: `asm/2D22` increments a slot by index and
+   `asm/0FCD_combat_thief_steal` deletes by index. So "none" for the gems, STAFF and BOOTS
+   means "no fixed-address site", and is graded `inferred`, not `measured`.
+2. An `asm/`-level grep is not sufficient either. `asm/3C04`'s entire body is stored as
+   forced-keep `.byte` lines, so a scan over mnemonics found no STRANGE COIN write at all
+   and the first draft of this section said so. The raw-binary scan is what caught it. Same
+   class of blindness as `asm/405D` hiding the aim-gate call.
 
 ### Disputed: WIS versus CHA
 
