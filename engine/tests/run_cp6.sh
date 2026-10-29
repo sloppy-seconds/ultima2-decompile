@@ -156,6 +156,25 @@ else
             || bad "CP6 T: DS:13 is $(field_of "$WORK/transport.out" stamp), expected 22"
     fi
 
+    # (d2) the SAME purchase driven with a LOWERCASE y.
+    #
+    # The case that was missing while a human could not buy anything at all. asm/4FD3..asm/4FDB
+    # folds a-z to A-Z inside the key seam and asm/4F4D's header records that BOTH returns fall
+    # into that tail, but the engine folded only on the poll path. The command loop polls, so
+    # every scripted test above passed; the shops WAIT, so a real keyboard was refused.
+    #
+    # No capture could have caught this, which is the actual lesson: tools/spice86_type.py
+    # sends the SHIFTED key, so no automated input has ever produced a lowercase byte. A gate
+    # that only exercises the one input the injector happens to emit is not testing the input.
+    if run_case transport transport-lc 'T\n0xf0\ny\n' "$WORK/transport_lc.out"; then
+        [ "$(gold_of "$WORK/transport_lc.out")" = "9967" ] \
+            && ok "CP6 T: a LOWERCASE y buys the horse -- asm/4FD3 upper-casing is on the wait path too" \
+            || bad "CP6 T: lowercase y did not buy (gold $(gold_of "$WORK/transport_lc.out"), expected 9967) -- the seam fold is missing on the wait path"
+        [ "$(field_of "$WORK/transport_lc.out" stamp)" = "22" ] \
+            && ok "CP6 T: lowercase y mounts the horse, DS:13 = 0x22" \
+            || bad "CP6 T: lowercase y left DS:13 at $(field_of "$WORK/transport_lc.out" stamp)"
+    fi
+
     # (e) grocery: a village's north-east half, the constant index 3, and the food byte
     #     moving by ONE in packed decimal (asm/181A), which is not what "PER 100" suggests.
     if run_case grocery grocery 'T\n0xf0\nY\n' "$WORK/grocery.out"; then

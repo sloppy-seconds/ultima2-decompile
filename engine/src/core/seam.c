@@ -138,16 +138,34 @@ void seam_clear_screen(u2_ctx *ctx)
     u2_trace(ctx, "clear_screen", "4C1C", "whole grid blanked");
 }
 
+/* asm/4F4D is bigger than the function boundary Phase 3 drew: the routine consumes the key
+ * (INT 16h AH=00h), maps a few control bytes to NUL, and at asm/4FD3..asm/4FDB folds a-z to
+ * A-Z with `and $0xdf`. The command dispatch therefore only ever sees uppercase.
+ *
+ * The range guard is load-bearing, not tidiness. asm/4FD3 tests `cmp $0x61,%al ; jb` and
+ * asm/4FD7 tests `cmp $0x7a,%al ; ja`, so bytes outside a-z pass through untouched — which is
+ * what lets the arrow codes survive the fold. The original's arrows are control letters
+ * (0x0E/0x19/0x05/0x17, all below 0x61); the engine's are 0xF0..0xF3, all above 0x7a. Both
+ * land outside the range, and an unguarded `& 0xDF` would have silently corrupted every arrow
+ * press into a letter.
+ *
+ * Shared by poll AND wait because the original has ONE seam and its header records that
+ * "both returns fall into the upper-case tail". Having it on only the poll path was the bug:
+ * the command loop polls, so everything looked correct, while every blocking prompt waits —
+ * read_yes, read_digit and cmd_Y's yell loop — and so the shops saw a raw 0x79, compared it
+ * against the 0x59 asm/2017 tests for, and refused to sell anything to a human. No scripted
+ * capture could ever have shown this, because tools/spice86_type.py sends the SHIFTED key. */
+static void key_uppercase_fold(u2_key *k)
+{
+    if (k->ch >= 'a' && k->ch <= 'z')
+        k->ch = (uint8_t)(k->ch & 0xDF);
+}
+
 int seam_key_poll(u2_ctx *ctx, u2_key *out)
 {
     int got = ctx->input->poll(ctx, out);
     if (got > 0) {
-        /* asm/4F4D is bigger than the function boundary Phase 3 drew: the
-         * routine consumes the key (INT 16h AH=00h), maps a few control bytes
-         * to NUL, and at asm/4FD3.. folds a-z to A-Z with `and $0xdf`. The
-         * command dispatch therefore only ever sees uppercase. */
-        if (out->ch >= 'a' && out->ch <= 'z')
-            out->ch = (uint8_t)(out->ch & 0xDF);
+        key_uppercase_fold(out);
         /* No "last key" state byte: DS:0x4A is the sector's second digit /
          * site kind (see state.h). Storing the polled key here corrupted the
          * saved sector digit in engine-written PLAYER records. */
@@ -165,7 +183,9 @@ int seam_key_poll(u2_ctx *ctx, u2_key *out)
 int seam_key_wait(u2_ctx *ctx, u2_key *out)
 {
     int got = ctx->input->wait(ctx, out);
-    u2_trace(ctx, "key_wait", "4F4D", "got=%d", got);
+    if (got > 0)
+        key_uppercase_fold(out);   /* same tail as the poll path; see key_uppercase_fold */
+    u2_trace(ctx, "key_wait", "4F4D", "got=%d ch=0x%02X", got, got > 0 ? out->ch : 0);
     return got;
 }
 

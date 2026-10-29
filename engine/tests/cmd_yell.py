@@ -24,9 +24,19 @@ one.
 4. the yell costs nothing: no turn, so no food, and no state field moves. This is the byte claim
    "no writes in the range" made testable.
 
-Case is asserted too, and deliberately: the echo preserves it, because the upper-casing belongs to
-the key seam (asm/4F4D) and the engine does not model that engine-wide. If the seam ever grows it,
-this check goes red on purpose so the decision gets revisited rather than silently absorbed.
+Case is asserted too, and deliberately: the echo is UPPER-CASED, because asm/4F4D's key seam
+folds a-z to A-Z at asm/4FD3..asm/4FDB (`cmp $0x61 ; jb` / `cmp $0x7a ; ja` / `and $0xdf,%al`)
+and its header records that BOTH returns fall into that tail. So no caller in the original ever
+saw a lowercase byte, and cmd_Y's echo cannot have printed one.
+
+This expectation was written the other way and the tripwire did its job. The original wording was
+"the echo preserves it, because the upper-casing belongs to the key seam and the engine does not
+model that engine-wide. If the seam ever grows it, this check goes red on purpose so the decision
+gets revisited rather than silently absorbed." It went red on 2026-10-29 when the fold was added
+to seam_key_wait, which is the revisit. The fold had been on the poll path only, so shops and
+prompts that WAIT (read_yes, read_digit, this loop) received raw lowercase and refused a human
+player — while no scripted capture could show it, because tools/spice86_type.py sends the shifted
+key. The decision is therefore: the seam models asm/4F4D engine-wide, and callers see uppercase.
 """
 import os
 import shutil
@@ -105,8 +115,8 @@ def main():
     try:
         G.seed(work)
         out = G.run_stdout(work, ["Y", "M", "i", "x", "e", "d", "CR"], "case")
-        check("Mixed" in G.flatten(out),
-              "echo preserves case: upper-casing is asm/4F4D's, not cmd_Y's (see the gate docstring)")
+        check("MIXED" in G.flatten(out),
+              "echo is upper-cased by the seam: asm/4FD3..4FDB folds a-z on both key paths")
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
