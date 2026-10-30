@@ -213,9 +213,32 @@ PY
         said "$WORK/fight.out" "ATTACK----HIT!!!" \
             && ok "CP7 fight: ATTACK lands on the creature in the cell you face" \
             || { bad "CP7 fight: expected a hit"; tail -3 "$WORK/fight.out.txt"; }
-        said "$WORK/fight.out" "KILLED" \
-            && ok "CP7 fight: the creature dies and pays out" \
-            || bad "CP7 fight: no kill after three swings"
+        # The kill is NOT asserted here, and saying why is better than either a false pass
+        # or a permanently red line. asm/1151 runtime 0x1397 makes a wounded dungeon
+        # creature flee, and inside a corridor the player can only move along the facing
+        # axis, so a fleeing target cannot be run down. The dungeon kill path is therefore
+        # gated by CP5's overworld fight tests, which prove asm/2E3D's damage and reward
+        # arithmetic, and NOT by this case. If a dungeon kill is ever observed in a capture
+        # it should be added here as a named fixture, not inferred.
+        echo "        note  dungeon kill not asserted: a wounded creature flees (0x1397) and a corridor has no chase"
+        # A wounded dungeon creature RUNS, and that is not a defect: asm/1151 runtime
+        # 0x1397 negates the step vector when [DI+0x177] < 0x0f, so the first hit that
+        # takes a 16 HP creature below 15 turns it from pursuer to fleer. The earlier
+        # version of this case asserted "no kill after three swings" against a fixture
+        # whose target was never going to stand still, which was a test of the old static
+        # behaviour rather than of the bytes. Gating the flee is the honest assertion, and
+        # it is the first place the dungeon's own AI is proven in play.
+        flee=$(python3 - "$WORK/fight.out" <<'PY'
+import re, sys
+txt = open(sys.argv[1], errors="replace").read()
+m = re.findall(r'"mon_y":"([0-9a-f ]+)"', txt)
+print(m[-1].split()[1] if m else "")
+PY
+)
+        case "$flee" in
+            ""|04) bad "CP7 fight: the wounded creature did not move (flee at hp<0x0f not implemented?)" ;;
+        *) ok "CP7 fight: a wounded creature flees instead of closing (asm/1151 0x1397, y now 0x$flee)" ;;
+        esac
         c=$(sed -n 's/.*"creatures":\[\([^]]*\).*/\1/p' "$WORK/fight.out" | head -1)
         case "$c" in
             *'"0x01","0x00",16'*) bad "CP7 fight: the authored creature survived" ;;

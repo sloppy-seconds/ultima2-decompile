@@ -1311,7 +1311,30 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     ow->sector_lo = ctx->state.sector_second;
     ow->view_mode = 0xFF;         /* file 0x0A67: mov $0xff,[0x12] */
     if (overworld_open(ctx, ow) != 0) return -1;
-    return overworld_resume(ctx, ow);
+    if (overworld_resume(ctx, ow) != 0) return -1;
+
+    /* A save that is ALREADY inside a dungeon must get the dungeon's own initial state.
+     *
+     * The facing pair at [DS:02]/[DS:03] is not part of the 256-byte saved record — the
+     * record starts at DS:36 — so a loaded character arrives with a facing of (0,0). That
+     * is not merely untidy: asm/277B's turn arms are
+     *   RIGHT: if (dx) { dy = dx; dy = 0 } else { dx = -dy; dy = 0 }
+     *   LEFT : if (dy) { dx = dy; dy = 0 } else { dy = -dx; dx = 0 }
+     * and with both bytes zero every branch assigns zero. A zero facing is therefore a
+     * SINK: no sequence of turns can leave it. Every ADVANCE and RETREAT then adds (0,0),
+     * prints its word, reports nothing blocked, and still charges a turn and ten food.
+     * That is exactly what the owner saw as a frozen dungeon, and it is also why the
+     * wireframe looked invariant: a zero facing collapses asm/6078's three sample columns
+     * onto the player's own cell, so the drawing does not depend on where you are.
+     *
+     * The original cannot reach this state, because it only ever gets into a dungeon by
+     * entering one, and the enter path initialises the facing. u2_dungeon_enter is the
+     * engine's equivalent, and it is the right call here rather than a hand-set facing
+     * because the load also needs the floor reset, the authored creatures stamped and the
+     * spawner run — the same work the enter path does, for the same reason.
+     */
+    if (u2_site_is_dungeon(ctx)) u2_dungeon_enter(ctx, ow);
+    return 0;
 }
 
 void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
