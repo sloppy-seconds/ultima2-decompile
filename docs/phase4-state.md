@@ -2495,3 +2495,45 @@ were wrong, every one of them derived from looking at an image instead of measur
 fix each time was the same — sample pixels, count crossings, compare md5s. The project rule
 says a behavioural claim needs a frame; what this session actually learned is that a frame
 needs a measurement behind it too.
+
+### CP7 addendum: both leads refuted, and the reference frames were the invalid part
+
+The two candidates recorded in the previous addendum were both checked against bytes and
+captures rather than reasoned about, and both are dead.
+
+**Lead 1, "the original's facing has magnitude 3, so the scan steps differ" — refuted.**
+`captures/spice86/dungeon-35-live/live-ds.bin` reads `DS:00..03 = 05 05 01 00` with
+`DS:483..484 = 01 00`. In a dungeon the original was actually *entered* through, the facing
+is a unit vector and the depth-scan copy agrees with it. The engine's unit facing is correct.
+
+**Lead 2, "the engine's TURN RIGHT arm is `dy = dx; dy = 0` and so a second right turn does
+nothing" — refuted.** The code is
+
+    if (dx != 0) { dy = dx; dx = 0; }
+    else         { dx = -dy; dy = 0; }
+
+which is a correct clockwise quarter turn: north (0,-1) -> east (1,0) -> south (0,1) ->
+west (-1,0) -> north. I had quoted it wrong from my own earlier prose instead of reading
+`u2_dungeon_turn`. state.h's cited asm formula agrees.
+
+**So why did the live original read facing (3,0) and move 3 cells on one ADVANCE?** Because
+that state was reached by *loading a save directly into sector 35*, which is not a state a
+normal game reaches. The facing pair is not part of the saved record, so a loaded-into
+character arrives with whatever the bytes held; entering through a gate with `E` initialises
+it, which is exactly what dungeon-35-live shows as (1,0). The engine now initialises it on
+load too, which is the correct behaviour for a state the original reaches only by accident.
+
+**The consequence for the renderer work, and it is the actual finding: the two frames were
+never the same state.** The reference frames were captured from a loaded-in character with a
+garbage facing of 3, so its depth columns sampled cells 3 apart while the engine's sampled 1
+apart. A 517-pixel difference and a 218-pixel difference between those two pictures is not
+evidence about the wireframe at all.
+
+Correct method for the next attempt, and it is cheap: drive the original to a dungeon the way
+a player does — wilderness sector 30, gate cell (25,5), press `E` — confirm the facing reads
+`01 00` from live DS before believing anything drawn, ignite, screenshot, then put the engine
+in the same entered state and diff. Read the facing, do not assume it.
+
+Recorded because the failure here was not a missing tool or a missing frame. It was comparing
+two pictures that looked like the same situation and were not, and the check that would have
+caught it cost one `--peek`.
