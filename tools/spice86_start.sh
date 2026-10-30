@@ -174,8 +174,19 @@ if [ -n "$PLAYER_FILE" ]; then
 fi
 
 : "${HTTP_PORT:=$(s86_pick_port 20180)}"
-: "${MCP_PORT:=$(s86_pick_port 20181)}"
-: "${GDB_PORT:=$(s86_pick_port 20190)}"
+: "${MCP_PORT:=$(s86_pick_port 20181 "$HTTP_PORT")}"
+: "${GDB_PORT:=$(s86_pick_port 20190 "$HTTP_PORT" "$MCP_PORT")}"
+
+# Belt and braces, and it is the check that would have caught the collision instead of
+# letting it surface as a wrong answer three tools later. A free port is not the same as a
+# distinct port, and two APIs on one socket is not a configuration, it is a silent failure.
+if [ "$HTTP_PORT" = "$MCP_PORT" ] || [ "$HTTP_PORT" = "$GDB_PORT" ] || [ "$MCP_PORT" = "$GDB_PORT" ]; then
+    echo "FATAL: API ports are not distinct (http=$HTTP_PORT mcp=$MCP_PORT gdb=$GDB_PORT)."
+    echo "       Two APIs on one socket means one of them does not exist, and tools that"
+    echo "       connect will silently reach some OTHER emulator on that port."
+    echo "       Stale Spice86 processes: $(pgrep -cf Spice86 || echo 0)"
+    exit 1
+fi
 
 s86_export_display
 [ "$MODE" = "watch" ] && {

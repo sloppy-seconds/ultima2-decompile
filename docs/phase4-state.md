@@ -2375,3 +2375,48 @@ nothing. A control that does not build is a control that never ran.
 turn, so an emptied slot refills on the next tick. A dungeon cannot be cleared by fighting.
 That is what the bytes say, it was invisible before because nothing swept, and it is now
 visible in the noVNC build.
+
+### CP7 addendum: the first real side-by-side against the original (2026-10-29)
+
+The owner asked for the thing that should have happened before any of the renderer claims:
+load the original, enter a dungeon, screenshot both, look. That capture now exists and the
+engine loses it clearly.
+
+Reference: original Ultima II in **sector 35, floor 0, position (5,5), torch lit**
+(`[DS:26]` read 0x95 after IGNITE). Frames on disk under `captures/screenshots/`
+(gitignored, so described here): `dungeon-35-floor0-lit.png`,
+`dungeon-35-floor0-dark.png`, `engine-dungeon-35-floor0.png`.
+
+**What the original draws.** An outer rectangle. A trapezoid centred near the top. A
+horizontal band across the middle broken by short verticals. Two rectangular blocks at
+left and right. A centre vertical that runs *below* the frame's bottom edge. It is flat and
+orthogonal. There are no long lines running from the frame corners toward the centre.
+
+**What the engine draws.** A fan of long diagonals from the corners converging near the
+middle, with a small nested structure at the centre. That is the owner's "permanent
+diagonal line", and it is real, not a perception.
+
+Reading of the difference, graded **inferred** until the shape dispatch is re-checked
+against these two frames: the engine is drawing the converging depth corners at every
+sampled depth, which is what a perspective wireframe would do, while the original's frame
+is consistent with drawing the near structure and stopping. The depth tables were
+transcribed correctly (`XL+XR == 0xFF`, `YT+YB == 0x7F`, verified), so the suspect is not
+the tables, it is *which shapes get drawn at which depths* — `asm/6144`'s dispatch and the
+early-stop rule, not `asm/67B3`'s Bresenham.
+
+**A second defect the comparison exposed, and it is not cosmetic.** The engine printed
+`ENTER WHAT?` for `E` in this state, which means loading a save whose sector is already a
+dungeon does not put the engine into dungeon mode — mode switching happens on the enter
+path only. The original was inside and dark on load. The engine rendered a dungeon view
+anyway because `u2_site_is_dungeon()` keys off the sector's ones digit, so the two states
+disagree silently: the renderer thinks dungeon, the command layer thinks not. That is worth
+fixing before the geometry, because a comparison run in a half-entered state can produce
+plausible nonsense about the geometry.
+
+**Method note, because it cost the session and it is avoidable.** The first several
+`--peek` reads in this capture returned a confident, wrong answer: they were attaching to a
+**stale Spice86 from the previous day** that was squatting the default ports, not to the new
+run. The tooling connects to whichever emulator answers. Fixed in `tools/spice86_common.sh`
+and `tools/spice86_start.sh`: port allocation now excludes ports already handed out in the
+same launch, and the launcher refuses to start if the three API ports are not distinct. The
+collision only appears when the defaults are occupied, which is why it survived until now.

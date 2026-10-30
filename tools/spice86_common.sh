@@ -74,9 +74,26 @@ s86_port_free() {
 }
 
 s86_pick_port() {
-    local start=$1 tries=${2:-400} p=$1 i
-    for ((i = 0; i < tries; i++)); do
+    # s86_pick_port START [EXCLUDE ...]
+    #
+    # Returns the first free port at or above START, skipping any port listed in EXCLUDE.
+    # The exclusions are the whole point and they exist because of a real failure: the
+    # three API ports used to be allocated independently, so when a stale emulator was
+    # squatting 20180/20181 the HTTP and MCP pickers BOTH walked up to 20182 and were
+    # handed the same port. Spice86 then bound one API and the other silently did not
+    # exist, and every tool that talked to that endpoint was talking to the stale emulator
+    # instead — it returned a confident, plausible, completely wrong character and sector.
+    # A caller that asks for three ports must get three different ones.
+    local start=$1 p i
+    shift
+    local -a exclude=("$@")
+    for ((i = 0; i < 400; i++)); do
         p=$((start + i))
+        local skip=0 e
+        for e in "${exclude[@]}"; do
+            [ "$p" = "$e" ] && { skip=1; break; }
+        done
+        [ "$skip" = 1 ] && continue
         if s86_port_free "$p"; then printf '%s\n' "$p"; return 0; fi
     done
     echo "no free port at or above $start" >&2

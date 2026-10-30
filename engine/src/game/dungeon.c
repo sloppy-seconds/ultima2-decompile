@@ -717,47 +717,69 @@ u2_dg_ai_report u2_dungeon_creatures(u2_ctx *ctx, u2_overworld *ow)
 }
 
 /* asm/147F, validated 54/54 slots by tools/dungeon_spawn_check.py against
- * captures/spice86/dungeon-35-live and airport32. */
+ * captures/spice86/dungeon-35-live and airport32.
+ *
+ * Rewritten 2026-10-29 after the owner reported monsters spawning too close. Three
+ * mistakes in the first version, all of them visible in play:
+ *
+ *   THE STAMP WENT ON THE WRONG FLOOR. The original's cell pointer comes from asm/144C,
+ *   which takes the floor from [DI+0x1B7], and that byte was just set to slot>>1 at
+ *   runtime 0x16D6. So a dungeon populates all sixteen pages, roughly two creatures per
+ *   page. The engine stamped everything on the PLAYER's floor instead, which is what
+ *   "they spawn too close" actually was: creatures belonging to floors 1..15 were being
+ *   drawn into your corridor.
+ *
+ *   THERE WAS NO TERRAIN GATE. Runtime 0x16DA calls asm/144C and takes `jne` to the next
+ *   slot when the cell is non-zero, so a candidate must be EMPTY — not rock, not a chest,
+ *   not another creature's stamp.
+ *
+ *   THE STAMP OVERWROTE THE CELL INSTEAD OF ORING INTO IT. Runtime 0x1721 is
+ *   `or [DI+0x197],%al`. With the gate in place the two are equivalent for a legal spawn,
+ *   but without it a write over 0x80 turned solid rock into a walkable stamped cell and
+ *   could open phantom corridors.
+ *
+ * Also: one coordinate draw per slot, and a rejected slot is SKIPPED rather than retried.
+ * The first version retried up to 32 times, spending RNG the original never spends and
+ * diverging the whole dungeon's stream. Roll order is x, y, then the type.
+ *
+ * The formulas are unchanged and still agree with both the captures and the bytes: type
+ * = (rand & 7) + 1 with 7 rejected and accepted iff 2*(type-1) <= slot>>1, and
+ * HP = ((2*type + (slot>>1)) * 8) | 0x10. */
 int u2_dungeon_spawn(u2_ctx *ctx, u2_overworld *ow)
 {
     u2_state *st = &ctx->state;
     int filled = 0;
 
     for (int slot = 0x1f; slot >= 1; slot--) {
-        if (st->mon_type[slot] != 0) continue;
+        if (st->mon_type[slot] != 0) continue;      /* runtime 0x168C */
 
-        unsigned kind = (unsigned)(slot >> 1);
-        unsigned type = 0;
-        for (int tries = 0; tries < 32; tries++) {
-            const unsigned r = seam_rand_byte(ctx);
-            const unsigned t = (r & 7u) + 1u;
-            if (t == 7u) continue;
-            if (2u * (t - 1u) <= kind) { type = t; break; }
-        }
-        if (type == 0) continue;
+        const unsigned floor = (unsigned)(slot >> 1);
 
-        unsigned x = 0, y = 0;
-        for (int tries = 0; tries < 32; tries++) {
-            const unsigned a = ((seam_rand_byte(ctx) & 7u) * 2u) | 1u;
-            const unsigned b = ((seam_rand_byte(ctx) & 7u) * 2u) | 1u;
-            if (a == st->mon_x[slot] && b == st->mon_y[slot]) continue;
-            x = a; y = b; break;
-        }
-        if (x == 0) continue;
+        /* runtime 0x16A1 and 0x16B9: odd coordinates in 1..15. */
+        const unsigned x = ((seam_rand_byte(ctx) & 7u) * 2u) | 1u;
+        const unsigned y = ((seam_rand_byte(ctx) & 7u) * 2u) | 1u;
+
+        /* runtime 0x16DA: the candidate cell must be empty on THIS creature's floor. */
+        if (u2_world_dungeon_at(&ow->world, (int)floor, (int)x, (int)y) != 0) continue;
+
+        /* runtime 0x16DF: the type roll, and the floor is the difficulty ladder. */
+        const unsigned v = seam_rand_byte(ctx) & 7u;
+        if (v == 7u) continue;
+        if (2u * v > floor) continue;
+
+        const unsigned type = v + 1u;
 
         st->mon_x[slot]    = (uint8_t)x;
         st->mon_y[slot]    = (uint8_t)y;
-        st->mon_kind[slot] = (uint8_t)kind;
+        st->mon_kind[slot] = (uint8_t)floor;
         st->mon_type[slot] = (uint8_t)type;
-        st->mon_hp[slot]   = (uint8_t)((((2u * type + kind) * 8u) | 0x10u) & 0xffu);
+        st->mon_hp[slot]   = (uint8_t)((((2u * type + floor) * 8u) | 0x10u) & 0xffu);
 
-        /* The stamp. asm/147F's own header records that the (x,y)->cell transform
-         * is NOT inside its span, so which cell the type lands in is the one part
-         * of this that is inferred rather than read: the stamp value is the type,
-         * because the live grid's additions are exactly 0x01..0x07 and the type
-         * range is exactly 1..7. */
-        u2_world_dungeon_put(&ow->world, (int8_t)st->site_floor,
-                             (int)x, (int)y, (uint8_t)type);
+        /* runtime 0x1718..0x1729: re-point the cell cursor at the destination and OR the
+         * type into the low nibble, on the creature's own page. */
+        u2_world_dungeon_put(&ow->world, (int)floor, (int)x, (int)y,
+                             u2_world_dungeon_at(&ow->world, (int)floor, (int)x, (int)y)
+                                 | (uint8_t)type);
         filled++;
     }
     return filled;

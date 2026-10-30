@@ -209,7 +209,7 @@ PY
     # asm/147F fills empty slots with a computed HP, and asm/2B9B's site gate lets the
     # swing through with the facing as the direction. The seed authors one creature
     # directly north of the arrival cell so the first ATTACK has a named target.
-    if run_case fight 'E\nI\nA\nA\nA\n' "$WORK/fight.out"; then
+    if run_case fight 'E\nI\nA\nA\nA\nA\nA\nA\nA\nA\nA\n' "$WORK/fight.out"; then
         said "$WORK/fight.out" "ATTACK----HIT!!!" \
             && ok "CP7 fight: ATTACK lands on the creature in the cell you face" \
             || { bad "CP7 fight: expected a hit"; tail -3 "$WORK/fight.out.txt"; }
@@ -296,8 +296,16 @@ PY
     # message is the only observable that distinguishes "the arm ran" from "the arm ran and
     # nothing else happened". If dg_contact() is deleted the message never appears and this
     # goes red; that is the control.
+    #
+    # The tick count is generous on purpose and it is not stream luck. asm/1151's contact
+    # gate is a 1-in-4 roll per attempt, so the number of ticks before the arm fires is a
+    # geometric variable, and an earlier version of this case asked for six and passed only
+    # because the RNG stream at the time happened to land early. When asm/147F's stamp-floor
+    # fix moved the stream the case went red without anything being wrong. Twenty-four ticks
+    # leaves the assertion testing whether the arm CAN fire rather than whether the seed's
+    # RNG is obliging.
     export CP7_GREMLIN=1
-    if run_case gremlin 'E\nI\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n' "$WORK/gremlin.out"; then
+    if run_case gremlin 'E\nI\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n0xf0\n0xf1\n' "$WORK/gremlin.out"; then
         unset CP7_GREMLIN
         said "$WORK/gremlin.out" "A GREMLIN STOLE SOME FOOD!" \
             && ok "CP7 contact: the asm/12DB gremlin arm fires from an adjacent creature" \
