@@ -414,11 +414,18 @@ static void u2_dungeon_sprites(u2_ctx *ctx, u2_overworld *ow, const dg_scan *s)
  * value the shape routines index their tables with. */
 static void dg_draw(dg_view *v, const dg_scan *s)
 {
+    /* asm/6144 calls asm/6425 (runtime L_006625) in exactly two places: once at
+     * runtime 0x634C before the loop is entered, and once at 0x635F inside the rock
+     * branch. The open branch at 0x6392 never calls it. The first transcription called
+     * it at the top of every iteration as well, which drew a depth frame for every open
+     * cell — that is the nested-box over-draw, measured against the original at (8,5)
+     * facing east as roughly twice the line crossings per row (13 vs 6 at y=30).
+     * Same bounding box, so the tables and the origin were never the problem. */
+    dg_6425(v);
+
     for (;;) {
         const int d = v->d;
         const uint8_t c = s->ctr[d];
-
-        dg_6425(v);
 
         if ((c & U2_DG_ROCK) == 0) {
             /* Open ahead: draw whatever the cell holds, then the side walls. */
@@ -447,8 +454,9 @@ static void dg_draw(dg_view *v, const dg_scan *s)
             continue;
         }
 
-        /* Rock ahead. asm/6144's three tests decide whether the corridor ends
-         * here or whether the far face is drawn and the walk continues. */
+        /* Rock ahead. asm/6144 runtime 0x635F: the depth frame is drawn again here,
+         * then three tests decide whether the corridor ends or the far face is drawn
+         * and the walk continues. */
         dg_6425(v);
         if ((c & U2_DG_CHEST) == 0) return;
         if (c & U2_DG_DOWN) return;

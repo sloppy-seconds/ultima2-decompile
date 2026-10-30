@@ -143,7 +143,17 @@ dark_ink = sum(1 for y in range(0, 160) for x in range(W) if px(dark, x, y) > 60
 # bare non-zero ink test.
 cols = {x for y in range(0, 160) for x in range(W) if px(lit, x, y) > 60}
 print(f"        lit ink {ink}, dark ink {dark_ink}, distinct columns {len(cols)}")
-sys.exit(0 if (ink > 400 and dark_ink == 0 and len(cols) > 120) else 1)
+# Upper bound as well as a lower one. On 2026-10-29 the renderer was drawing a depth frame
+# on every open cell instead of only where asm/6144 calls it, and the frame still looked
+# like a corridor — it just had roughly twice the lines. A lower-bound-only test cannot see
+# over-draw at all, and "it looks like a corridor" was exactly the claim that hid it.
+# The bound is 1800 and it is set BETWEEN two measured values, not guessed: the fixed
+# renderer measures 1688 on this fixture and the over-drawing version measures 1896. An
+# earlier draft of this line used 2200, extrapolated from the 1.8x seen on the real mapx35,
+# and the control walked straight under it — a gate that could not fail where it enforces,
+# which is the failure mode AGENTS.md section 3 already names. Re-measure both sides if this
+# fixture's map ever changes.
+sys.exit(0 if (ink > 400 and ink < 1800 and dark_ink == 0 and len(cols) > 120) else 1)
 PY
     else
         bad "CP7 render: --dump-frame produced no PPM"
