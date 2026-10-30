@@ -2439,22 +2439,21 @@ and `tools/spice86_start.sh`: port allocation now excludes ports already handed 
 same launch, and the launcher refuses to start if the three API ports are not distinct. The
 collision only appears when the defaults are occupied, which is why it survived until now.
 
-**And a third finding that outranks the geometry question.** The engine was then driven to
-the same (8,5) facing east as the second reference frame — three `ADVANCE` commands, none
-of them `-BLOCKED`, so the position really moved — and it produced a **pixel-identical
-frame** to the one it drew at (5,5) facing north. A renderer that returns the same picture
-for two different cells and two different facings is not drawing the wrong geometry, it is
-not drawing the grid.
+**And a third finding, which I also had to correct before it hardened.** The engine was
+driven to (8,5) facing east — turn right twice, three `ADVANCE` — and I reported the frame
+as pixel-identical to the one at (5,5) facing north. It is not. The two PPMs have different
+md5 sums (`3136636947...` and `e0b8437c09...`); I compared two downscaled PNGs by eye and
+asserted identity. That is the third over-claim in this section and the failure mode is
+identical each time: a quick look standing in for a measurement.
 
-That reframes the whole task. Before comparing line tables or the depth scan's stop rule
-against the original, the engine has to prove it is reading the map at all. The first check
-is `u2_dungeon_render`'s cell sampling: `asm/6078`'s three columns are seeded from
-`[DS:479]..[DS:47E]`, which `asm/6078` derives from the player position and the facing, and
-the engine's transcription seeds them from `ow->x`, `ow->y` and `u2_dungeon_facing`. If the
-render path is being handed a stale `u2_overworld`, a zero facing pair, or a floor that no
-longer matches the page being sampled, the output would look exactly like this: structured,
-plausible, and invariant.
+What IS true, and it is the actual bug: **the engine's position never left (5,5).** The
+dump-state record reads `"pos":{"x":5,"y":5}` for both scripts, while the light counter
+moved `0x96 -> 0x91`, so five turns were consumed and the dungeon tick ran. The commands
+printed `CMD: ADVANCE` and the world charged for them, and the player did not move. So the
+defect is in dungeon movement or in the position mirror on the dungeon path, not in the
+wireframe geometry — and the geometry comparison the owner asked for cannot be trusted until
+the engine is actually standing where it thinks it is.
 
-Order of work, therefore: (1) prove the renderer's inputs change when the player moves,
-with a unit-level assertion rather than a frame; (2) only then compare shapes per depth
-against `dungeon-35-floor0-lit.png` and `dungeon-35-floor0-adv.png`; (3) then the stop rule.
+Order of work: (1) make dungeon ADVANCE/RETREAT move the player, verified by the position
+field rather than by a frame; (2) re-render at (8,5) east and compare against
+`dungeon-35-floor0-adv.png`; (3) only then judge the shape dispatch and the depth stop rule.
