@@ -2387,31 +2387,49 @@ Reference: original Ultima II in **sector 35, floor 0, position (5,5), torch lit
 (gitignored, so described here): `dungeon-35-floor0-lit.png`,
 `dungeon-35-floor0-dark.png`, `engine-dungeon-35-floor0.png`.
 
-**What the original draws.** An outer rectangle. A trapezoid centred near the top. A
-horizontal band across the middle broken by short verticals. Two rectangular blocks at
-left and right. A centre vertical that runs *below* the frame's bottom edge. It is flat and
-orthogonal. There are no long lines running from the frame corners toward the centre.
+**What the original draws at (5,5) facing north.** An outer rectangle. A trapezoid centred
+near the top. A horizontal band across the middle broken by short verticals. Two
+rectangular blocks at left and right. A centre vertical that runs *below* the frame's
+bottom edge. No long lines from the frame corners toward the centre.
 
-**What the engine draws.** A fan of long diagonals from the corners converging near the
-middle, with a small nested structure at the centre. That is the owner's "permanent
-diagonal line", and it is real, not a perception.
+**What the engine draws there.** A fan of long diagonals from the corners converging near
+the middle, with a small nested structure at the centre. That is the owner's "permanent
+diagonal line", and it is real.
 
-Reading of the difference, graded **inferred** until the shape dispatch is re-checked
-against these two frames: the engine is drawing the converging depth corners at every
-sampled depth, which is what a perspective wireframe would do, while the original's frame
-is consistent with drawing the near structure and stopping. The depth tables were
-transcribed correctly (`XL+XR == 0xFF`, `YT+YB == 0x7F`, verified), so the suspect is not
-the tables, it is *which shapes get drawn at which depths* — `asm/6144`'s dispatch and the
-early-stop rule, not `asm/67B3`'s Bresenham.
+**CORRECTION, same session, and it is a retraction of a claim made in the commit that
+added this section.** I wrote, three paragraphs below, that the original has no
+corner-to-centre diagonals and that the engine's fan was a systematic over-draw. That was
+wrong, and it was wrong because I generalised from ONE frame at ONE position. A second
+reference frame, taken after TURN RIGHT, TURN RIGHT, ADVANCE to (8,5) facing east
+(`dungeon-35-floor0-adv.png`), shows the original drawing a textbook perspective corridor:
+long diagonals from all four corners converging on a small centre rectangle, with a door
+opening in the right wall. So the converging diagonals are exactly what the original does.
 
-**A second defect the comparison exposed, and it is not cosmetic.** The engine printed
-`ENTER WHAT?` for `E` in this state, which means loading a save whose sector is already a
-dungeon does not put the engine into dungeon mode — mode switching happens on the enter
-path only. The original was inside and dark on load. The engine rendered a dungeon view
-anyway because `u2_site_is_dungeon()` keys off the sector's ones digit, so the two states
-disagree silently: the renderer thinks dungeon, the command layer thinks not. That is worth
-fixing before the geometry, because a comparison run in a half-entered state can produce
-plausible nonsense about the geometry.
+What actually differs is therefore narrower and more interesting: at (5,5) the original's
+geometry is *shallow* — the near structure is large and the far face is close, so the
+diagonals are short or absent — while at (8,5) down an open corridor the same code draws
+the deep converging picture. The engine draws the deep converging picture at BOTH places.
+So the suspect is the depth scan's stop rule in `asm/6078` and which shapes `asm/6144`
+emits per depth, and specifically the hypothesis worth testing first: **the original stops
+at the first blocking cell and draws the geometry of where the corridor actually ends,
+while the engine walks all seven sampled depths regardless of what is in the way.** The
+depth tables verify clean (`XL+XR == 0xFF`, `YT+YB == 0x7F`), so the tables are not the
+fault, and `asm/67B3`'s Bresenham is not either.
+
+Also retracted: the claim that loading a save already inside a dungeon sector left the
+engine's command layer out of dungeon mode. It does not, and the engine was right. Every
+dungeon route in the engine keys off `u2_site_is_dungeon()`, which is the sector's ones
+digit, and the original's own `P` load path ends with `mov $0xff,[0x12]` (file 0x0A67) —
+so `DS:12` is 0xFF even inside a dungeon, and `E` printing ENTER WHAT? in sector 35 is
+what the original does too, because `asm/2B8F`'s first test is the ones digit being
+non-zero. The only real difference at load is that the original prints IT'S DARK! before
+the first command and the engine prints it on the first tick. That is a one-message timing
+difference, not a state bug, and I had promoted it to "fix this first" on no evidence.
+
+The lesson is the one AGENTS.md already states and I broke twice in one session: a
+behavioural claim needs a frame, and **one** frame is not a rule. Both of my confident
+conclusions here — the renderer's geometry and the load-state bug — came from a single
+observation and both were wrong.
 
 **Method note, because it cost the session and it is avoidable.** The first several
 `--peek` reads in this capture returned a confident, wrong answer: they were attaching to a
@@ -2420,3 +2438,23 @@ run. The tooling connects to whichever emulator answers. Fixed in `tools/spice86
 and `tools/spice86_start.sh`: port allocation now excludes ports already handed out in the
 same launch, and the launcher refuses to start if the three API ports are not distinct. The
 collision only appears when the defaults are occupied, which is why it survived until now.
+
+**And a third finding that outranks the geometry question.** The engine was then driven to
+the same (8,5) facing east as the second reference frame — three `ADVANCE` commands, none
+of them `-BLOCKED`, so the position really moved — and it produced a **pixel-identical
+frame** to the one it drew at (5,5) facing north. A renderer that returns the same picture
+for two different cells and two different facings is not drawing the wrong geometry, it is
+not drawing the grid.
+
+That reframes the whole task. Before comparing line tables or the depth scan's stop rule
+against the original, the engine has to prove it is reading the map at all. The first check
+is `u2_dungeon_render`'s cell sampling: `asm/6078`'s three columns are seeded from
+`[DS:479]..[DS:47E]`, which `asm/6078` derives from the player position and the facing, and
+the engine's transcription seeds them from `ow->x`, `ow->y` and `u2_dungeon_facing`. If the
+render path is being handed a stale `u2_overworld`, a zero facing pair, or a floor that no
+longer matches the page being sampled, the output would look exactly like this: structured,
+plausible, and invariant.
+
+Order of work, therefore: (1) prove the renderer's inputs change when the player moves,
+with a unit-level assertion rather than a frame; (2) only then compare shapes per depth
+against `dungeon-35-floor0-lit.png` and `dungeon-35-floor0-adv.png`; (3) then the stop rule.
