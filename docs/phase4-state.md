@@ -2457,3 +2457,41 @@ the engine is actually standing where it thinks it is.
 Order of work: (1) make dungeon ADVANCE/RETREAT move the player, verified by the position
 field rather than by a frame; (2) re-render at (8,5) east and compare against
 `dungeon-35-floor0-adv.png`; (3) only then judge the shape dispatch and the depth stop rule.
+
+### CP7 addendum: the residual diagonal, measured rather than looked at (2026-10-29)
+
+The commit before this one recorded "one long crossing diagonal remains that the original
+does not draw". That is wrong, and it was wrong because it came from looking at a downscaled
+PNG. Measured by sampling both images along the candidate lines:
+
+| line | original | engine |
+| --- | --- | --- |
+| top-left -> bottom-right, (16,16)->(271,143) | 56/60 | 60/60 |
+| top-right -> bottom-left, (271,16)->(16,143) | 56/60 | **30/60** |
+| top edge | 60/60 | 60/60 |
+
+So the original draws BOTH crossing diagonals, symmetrically, and the engine draws one of
+them only halfway. The remaining defect is a MISSING mirror line, not a spurious extra one —
+the opposite sign of the same misreading that produced the "no diagonals" claim earlier.
+
+Where the drawn one comes from is now pinned: `asm/6425`'s second line is
+`(XL[d],YT[d]) -> (XR[d],YB[d])`, i.e. top-left to bottom-right, and it is faithful — read
+instruction by instruction, `x1` is set at runtime 0x6632, `y1` at 0x663A, `y2` at 0x663D,
+`x2` at 0x6645, and the second call at 0x665B changes only `y2` to `YB[d]`, so `y1` carries
+over as `YT[d]`. The generated `dg_6425` matches that exactly, including the carry. The same
+routine's fourth line collapses to `x1==x2 && y1==y2`, and `asm/67B3` returns without
+drawing in precisely that case (its opening guard at 0x69B4), which is a nice confirmation
+that the endpoint model is right.
+
+So the missing top-right -> bottom-left line has to be produced by something the engine is
+not calling, or is calling with the x pair unmirrored. Candidates, in the order worth
+checking: `asm/648D` (far face), the right-side wall shapes' interaction with the carried
+`x1`, and whether `asm/6425` is entered a second time per depth in a path the engine's
+`dg_draw` does not reproduce. This is a smaller bug than the over-draw and it is now
+described by a number rather than an impression.
+
+Process note, and it is the point: four claims about this renderer were made today and four
+were wrong, every one of them derived from looking at an image instead of measuring it. The
+fix each time was the same — sample pixels, count crossings, compare md5s. The project rule
+says a behavioural claim needs a frame; what this session actually learned is that a frame
+needs a measurement behind it too.
