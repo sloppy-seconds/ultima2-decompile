@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+swamp_damage.py — CP5 gate E1: the two HP-costing tiles of asm/2423's effect ladder.
+
+What is under test is the ENTRY asymmetry and the amount, not just the happy path. The
+owner's three-way control (2026-11-02, docs/handoff-tile-effects.md § 3) is the shape of
+this gate on purpose: a naive implementation that charges for STANDING on the swamp, or
+for LEAVING it, passes only the middle case — and the middle case is exactly the one that
+would fool a reviewer. So all three run, plus the controls that make the gate able to fail:
+
+  enter   safe -> swamp: moved, HP 9997 -> 9992. The observed delta: nine live steps
+          went 0370..0330, every one -5 (asm/2495 header).
+  pass    PASS while standing on swamp: no move, HP unchanged. Owner control.
+  exit    swamp -> safe: moved, HP unchanged. Owner control.
+  grass   safe -> grass: moved, HP unchanged. Proves the cost is the tile, not the step.
+  none    no key at all: HP unchanged. If HP drains by itself the gate cannot fail.
+  death   HP 0004 onto a swamp: "IS DEAD!". The borrow out of [DS:51] falls through to
+          `jmp L_000e62` (asm/0C62), so underflow is death, not a wrap.
+
+The force-field rung of the same ladder (asm/24B1 -> asm/24B5) is gated here too, because
+the step-site call is one code path and the sector gate covers both rungs:
+
+  field   safe -> 0x5C: HP 9997 -> 8997 (sbb 0x10 on the HIGH BCD byte = -1000) and the
+          "FIELD CAUSES 1000 DAMAGE!" string reaches the screen.
+  ring    same with items_held[0] = 1: HP unchanged and "RING PROTECTS" prints — the
+          [DS:D6] gate at asm/24B5.
+
+Fresh seed dir per case: the engine rewrites the save in place (u2_gate.py's rule, and
+handoff trap 4). HP is read from the raw dump pair DS:51/DS:52, high byte first, and
+decoded as the four decimal digits it is.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import u2_gate as G
+
+HP_HI_OFF = 0x51 - 0x36   # PLAYER file byte of DS:51, the high BCD byte
+HP_LO_OFF = 0x52 - 0x36
+
+
+def hp(dump):
+    """The DS:51/DS:52 packed-BCD pair as the number the status band prints."""
+    return int("".join("%02d" % ((b >> 4) * 10 + (b & 0xF)) for b in G.raw(dump, "hp")))
+
+
+def seed_case(name, tiles=None, items=None, hp_pair=None):
+    work = G.seed("/var/tmp/u2-swamp-%s" % name, tiles=tiles, items=items)
+    if hp_pair:
+        pp = os.path.join(work, "save", "PLAYER")
+        p = bytearray(open(pp, "rb").read())
+        p[HP_HI_OFF], p[HP_LO_OFF] = hp_pair
+        open(pp, "wb").write(bytes(p))
+    return work
+
+
+def state_case(name, keys, tiles=None, items=None, hp_pair=None):
+    work = seed_case(name, tiles, items, hp_pair)
+    text = G.run_stdout(work, keys, name)
+    return text, G.state_from_text(text)
+
+
+def main():
+    fails = 0
+
+    def check(label, ok, detail):
+        nonlocal fails
+        if not ok:
+            fails += 1
+        print("  %s  %s — %s" % ("PASS" if ok else "FAIL", label, detail))
+
+    # enter: one step east onto the swamp.
+    text, s = state_case("enter", ["RIGHT"], tiles={G.EAST: 0x04})
+    check("enter", s and G.pos(s) == G.EAST and hp(s) == 9992,
+          "pos %s hp %d (want moved, 9992)" % (G.pos(s) if s else None, hp(s) if s else -1))
+
+    # pass: standing ON the swamp and pressing PASS must cost nothing (owner control).
+    text, s = state_case("pass", ["SPACE"], tiles={G.ENTRY: 0x04})
+    check("pass", s and G.pos(s) == G.ENTRY and hp(s) == 9997,
+          "pos %s hp %d (want no move, 9997)" % (G.pos(s) if s else None, hp(s) if s else -1))
+
+    # exit: leaving the swamp must not charge again (owner control).
+    text, s = state_case("exit", ["RIGHT"], tiles={G.ENTRY: 0x04})
+    check("exit", s and G.pos(s) == G.EAST and hp(s) == 9997,
+          "pos %s hp %d (want moved, 9997)" % (G.pos(s) if s else None, hp(s) if s else -1))
+
+    # grass control: an ordinary accepted step is free of HP.
+    text, s = state_case("grass", ["RIGHT"])
+    check("grass", s and G.pos(s) == G.EAST and hp(s) == 9997,
+          "pos %s hp %d (want moved, 9997)" % (G.pos(s) if s else None, hp(s) if s else -1))
+
+    # none control: no input at all. If this arm loses HP the gate measures nothing.
+    text, s = state_case("none", [])
+    check("none", s and hp(s) == 9997, "hp %d (want 9997)" % (hp(s) if s else -1))
+
+    # death: HP 0004 onto a swamp underflows the BCD pair and asm/0C62 owns the tail.
+    text, s = state_case("death", ["RIGHT"], tiles={G.EAST: 0x04}, hp_pair=(0x00, 0x04))
+    check("death", "IS DEAD!" in text, "death tail %s" %
+          ("printed" if "IS DEAD!" in text else "MISSING"))
+
+    # field: the second rung of the same ladder, -1000 via the high byte.
+    text, s = state_case("field", ["RIGHT"], tiles={G.EAST: 0x5C})
+    check("field", s and hp(s) == 8997 and "1000" in G.flatten(text),
+          "hp %d, screen %s (want 8997 and the FIELD line)" %
+          (hp(s) if s else -1, "ok" if "1000" in G.flatten(text) else "missing"))
+
+    # ring: [DS:D6] non-zero protects and prints instead of subtracting.
+    text, s = state_case("ring", ["RIGHT"], tiles={G.EAST: 0x5C}, items={0: 1})
+    check("ring", s and hp(s) == 9997 and "RING" in G.flatten(text),
+          "hp %d, screen %s (want 9997 and the RING line)" %
+          (hp(s) if s else -1, "ok" if "RING" in G.flatten(text) else "missing"))
+
+    if fails:
+        print("  FAIL  %d of 8 tile-effect cases wrong" % fails)
+        return 1
+    print("  PASS  tile effects: swamp -5 on entry (3 owner controls + 2 controls), "
+          "underflow is death, field -1000 and its ring gate")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

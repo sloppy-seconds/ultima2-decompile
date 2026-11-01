@@ -634,6 +634,26 @@ else
     bad "CP5 P1: passability ladder disagrees with the bytes"
 fi
 
+# --- E1: the two HP-costing tiles of asm/2423's effect ladder -------------------------
+#
+# Entering map byte 0x04 (mode 0x02, swamp) costs 5 HP silently (asm/248B -> asm/2495), and
+# entering map byte 0x5C (mode 0x2E, force field) costs 1000 unless [DS:D6] holds a ring
+# (asm/24B1 -> asm/24B5). The whole chain is gated on [DS:4A] == 0, the sector's ones digit.
+#
+# The shape this gate exists to catch is the naive one: a charge for STANDING on the swamp,
+# or for LEAVING it, passes only the safe->swamp case, and the safe->swamp case is the one
+# a reviewer would think sufficient. All three owner controls run (PASS free, enter -5,
+# exit free), plus a grass step and a no-input arm so the gate cannot pass by drifting, a
+# death arm for the BCD underflow, and both rungs of the field. Both controls were run red
+# before this was trusted: a 6-HP charge turns `enter` red, and firing the ladder on the
+# tile you stand on instead of the tile you enter turns five of eight red.
+if U2_BIN=./u2 python3 tests/swamp_damage.py > "$WORK/e1.log" 2>&1; then
+    ok "CP5 E1: tile effects — swamp -5 on entry only (3 owner controls), underflow is death, field -1000 and its ring gate (8 cases)"
+else
+    sed 's/^/        /' "$WORK/e1.log" | tail -10
+    bad "CP5 E1: the tile-effect ladder disagrees with asm/248B/2495/24B1/24B5"
+fi
+
 # --- V1: BOARD, and what one step costs in each travel mode ---------------------------
 #
 # asm/2F6F cmd_B prints "BOARD" and falls into asm/2FAD, which dispatches on [DS:14] (the tile

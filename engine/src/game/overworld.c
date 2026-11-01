@@ -728,6 +728,44 @@ static void u2_force_field(u2_ctx *ctx)
     st->hp = (uint8_t)(st->hp - 0x10u);
 }
 
+/* asm/248B_swamp_damage_gate -> asm/2495_swamp_damage — the cost of entering a swamp.
+ *
+ * The gate is `mov al,[DS:29]; and al,0x7F; cmp al,0x02`: DS:29 is the mode the walk arm
+ * handed to asm/2423, and mode 0x02 is map byte 0x04 and nothing else reachable on foot.
+ * The cost is the house BCD subtract — `sbb $0x5` on [DS:52] with borrow propagated into
+ * [DS:51] by `sbb $0x0`, `das` after each — so exactly 5 HP, and a borrow out of the high
+ * byte falls through to `jmp L_000e62`, the death handler asm/0C62.
+ *
+ * Observed live 2026-11-02: HP at DS:51/52 across nine consecutive steps on map byte 0x04
+ * went 0370 0365 0360 0355 0350 0345 0340 0335 0330 — every delta -5 — and again earlier
+ * as 0400 -> 0385 over three steps. The owner's three-way control the same day: PASS
+ * while standing on swamp costs nothing, safe->swamp costs 5, swamp->safe costs nothing,
+ * so the charge is for ENTERING and not for standing.
+ *
+ * SILENT, AND THAT IS EVIDENCED: the message log during the live walk showed only `PASS`
+ * and the direction words; asm/2495 calls nothing. This is what AGENTS.md § 3 asks of a
+ * silent effect — cite the bytes, say so here, and do not invent text. `food_spend` above
+ * is the in-file precedent for the same shape.
+ *
+ * No status redraw, and that is faithful: the survival path is `jb L_0026b1` into the
+ * force-field rung and thence to asm/2520, and no status call sits on it. The band is
+ * repainted only at the asm/5129 sites, same rule the food charge follows.
+ */
+static void u2_swamp_damage(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+    unsigned lo = 0, hi = 0;
+
+    const int borrow1 = bcd_sbb(st->unk_52, 0x05u, 0, &lo);
+    const int borrow2 = bcd_sbb(st->hp, 0, borrow1, &hi);
+    if (borrow2) {
+        u2_death(ctx);
+        return;                     /* asm/0C62 zeroes the stats; do not store a wrapped byte */
+    }
+    st->unk_52 = (uint8_t)lo;
+    st->hp     = (uint8_t)hi;
+}
+
 /* On-foot passability — asm/2423's ladder, transcribed rather than re-derived.
  *
  * THE GATE VARIABLE IS `map_byte >> 1`, not the art index. asm/2FAD_vehicle_board_dispatch
@@ -771,8 +809,9 @@ static void u2_force_field(u2_ctx *ctx)
  * THIS LADDER RETURNS A VERDICT, NOT A COST — and two tiles charge one. Entering map byte
  * 0x04 (mode 0x02, swamp) costs 5 HP silently (asm/2495), and entering map byte 0x5C (mode
  * 0x2E, force field) costs 1000 HP unless a ring protects (asm/24B5). Both are accepted
- * here and neither cost is implemented. Full table, evidence and the gate that must encode
- * all three owner controls: docs/handoff-tile-effects.md.
+ * here, and both costs are implemented — not in this function, which returns a verdict and
+ * keeps it that way, but in the effect ladder at the step site. Full table and evidence:
+ * docs/handoff-tile-effects.md; the gate is CP5 E1 in tests/run_cp5.sh.
  */
 static int foot_ladder(unsigned mode)
 {
@@ -962,9 +1001,9 @@ uint8_t u2_unlock_spend_key(uint8_t keys)
  *   map byte 0x10 -> mode 0x08  mountain
  *   map byte 0x5C -> mode 0x2E  force field: entering costs 1000 HP unless a ring protects
  *
- * So mode 0x04 is grass and mode 0x02 is swamp, and they are different tiles. The swamp and
- * force-field costs are NOT yet implemented; see docs/handoff-tile-effects.md for the full
- * table, the evidence, and the three owner controls a gate must encode.
+ * So mode 0x04 is grass and mode 0x02 is swamp, and they are different tiles. Both the
+ * swamp and the force-field costs are implemented in the step path; see
+ * docs/handoff-tile-effects.md for the full table and the evidence.
  *
  * The water arm admits the ship alone: you may only drop the ship where you are afloat, which
  * is the tile its own BOARD arm left behind. */
@@ -1993,12 +2032,37 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * for a step that starves, which is what the refused arm above already does. */
         (void)u2_overworld_step_food(ctx);
 
-        /* The force field fires on the tile you have just stepped onto, after the direction word
-         * is on the line and after the food charge — same neighbourhood inside asm/2423. It can
-         * kill, and u2_death owns the tail, so the world turn still runs afterwards exactly as it
-         * does for a step that starves. */
-        if (u2_world_tile_at(&ow->world, ow->x, ow->y) == 0x5C)
-            u2_force_field(ctx);
+        /* The tile-effect ladder — asm/248B/2495 (swamp, -5) then asm/24B1/24B5 (force
+         * field, -1000 unless a ring protects). It fires on the tile you have just stepped
+         * onto, after the direction word is on the line and after the food charge — same
+         * neighbourhood inside asm/2423. Either can kill, and u2_death owns the tail, so
+         * the world turn still runs afterwards exactly as it does for a step that starves.
+         *
+         * The whole chain is gated on [DS:4A] == 0 at the entry of asm/2423
+         * (`mov al,[DS:4A]; cmp al,0x00; je L_00268b`), the sector's ones digit, which is
+         * the site kind (docs/sector-rulesets.md § 1): 0 is the outdoor wilderness map —
+         * sectors 00, 10, 20, 30 and friends — and a village (X1), town (X2/X3), tower (X4)
+         * or dungeon (X5) is never 0. The engine's DS:4A is sector_lo; this is the same
+         * identity the wander sweep gates on. Before this gate was written the engine
+         * charged the field cost inside sites too, and site maps do carry swamp tiles
+         * (mapx21 has 32 of them, mapx32 seven), so the omission was reachable.
+         *
+         * ORDERING NUANCE, recorded rather than guessed: in the bytes the ladder sits at
+         * the ENTRY of asm/2423, ahead of the food charge and ahead of the verdict, so a
+         * REJECTED attempt onto a swamp — a horse, which refuses mode 0x02 at asm/2626 —
+         * would pay the 5 before the refusal. No capture has tested that; the owner's
+         * three controls (PASS free, safe->swamp -5, swamp->safe free) are all satisfied
+         * by this accepted-step placement, which is the narrower claim. Open as
+         * docs/needs-gameplay.md G55; if a capture shows a refused mounted step onto a
+         * swamp costing HP, these two calls move above the verdict branch and nothing
+         * else changes. */
+        if (ow->sector_lo == 0) {
+            const uint8_t dest = u2_world_tile_at(&ow->world, ow->x, ow->y);
+            if (dest == 0x04u)
+                u2_swamp_damage(ctx);
+            else if (dest == 0x5Cu)
+                u2_force_field(ctx);
+        }
 
         /* A time door fires on the step onto its cell — no prompt, no key, unlike a town
          * or tower gate, which is why this sits in the move path and not in cmd_E. Observed
