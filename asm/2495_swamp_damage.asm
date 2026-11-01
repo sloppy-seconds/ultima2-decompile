@@ -1,7 +1,13 @@
 # swamp_damage — subtract 5 HP, packed decimal, when the player enters a swamp tile
 # name-evidence: the subtract itself. `stc; mov al,[DS:52]; cmc; sbb al,0x05; das; cmc;
 #           mov [DS:52],al` then the same idiom with `sbb al,0x00` on [DS:51], then
-#           `jb` to the death tail and `jmp L_000e62` otherwise. DS:51/DS:52 are the HP
+#           `jb L_0026b1` and `jmp L_000e62`. The trailing `cmc` after each `das` re-exposes
+#           the borrow INVERTED, so `jb` (CF set) is the SURVIVAL path — it continues to the
+#           next rung of the effect ladder at asm/24B1 — and the fall-through `jmp L_000e62`
+#           (file 0x0C62, asm/0C62_death) is the death tail. An earlier version of this header
+#           had the two branches the other way round; the net fact (underflow is death) never
+#           changed, but the branch map did, corrected 2026-11-02 by re-reading the idiom
+#           against bcd_sbb's documented contract in the engine. DS:51/DS:52 are the HP
 #           BCD pair, so this is a fixed 5 HP cost with borrow, not a randomised hit —
 #           it is NOT asm/0BDB_apply_hp_damage, whose amount is `(rand & [DS:22]) & 0x77 + 1`.
 #           Reached only from asm/248B, which gates on mode 0x02 == map byte 0x04 (swamp).
