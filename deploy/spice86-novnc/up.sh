@@ -5,8 +5,9 @@
 #   ./up.sh                 # build if needed, start, print the URL
 #   ./up.sh --rebuild       # force an image rebuild
 #   ./up.sh --down          # stop and remove the container
+#   ./up.sh                 # blank player disk: 'C' creates, 'P' has nothing to load
 #   ./up.sh --player FILE   # seed a saved character (then press P in the game)
-#   ./up.sh --no-player     # start at the title with nothing to load
+#   ./up.sh --no-player     # same as the default now; kept so old invocations work
 #   ./up.sh --no-patch      # leave arrow keys unpatched (use the numpad)
 #   ./up.sh --name LABEL    # container name (default u2-spice86)
 #
@@ -117,11 +118,20 @@ elif [ -n "$PLAYER" ]; then
     cp -- "$PLAYER" "$SEED_HOST"
     ENV_ARGS+=(--env "PLAYER_FILE=$SEED_CONTAINER")
     echo "seeding from $PLAYER -> $(python3 "$ROOT/tools/u2_edit.py" show "$PLAYER" 2>/dev/null | head -1)"
-elif [ -f "$SEED_HOST" ]; then
-    ENV_ARGS+=(--env "PLAYER_FILE=$SEED_CONTAINER")
-    echo "seeding default character: $(python3 "$ROOT/tools/u2_edit.py" show "$SEED_HOST" 2>/dev/null | head -1)"
+    echo "note: with a saved record in place the game refuses to CREATE one — 'C' answers"
+    echo "      'not a blank player disk'. Start without --player to create a character."
 else
-    echo "warning: no seed at $SEED_HOST and no --player; 'P' will say 'no character on disk!'" >&2
+    # The default is the pristine 384-byte BLANK that ships in references/ultima2/player:
+    # one non-zero byte, the 0x1a DOS EOF marker at offset 256. The game treats that as a
+    # blank player disk, so 'C' creates a character and 'P' says 'no character on disk!'.
+    #
+    # This reverses an earlier default that seeded a saved character so the container would
+    # not look broken on first boot. That default had the worse failure: --player FILE
+    # overwrote this same seed file, so one explicit seed silently became every later run's
+    # default, and 'C' then refused with no hint why. A fresh game is the honest default and
+    # a specific save is something you ask for by name.
+    echo "blank player disk in place: 'C' creates a new character; 'P' will say 'no character on disk!'"
+    echo "      to play a specific save, restart with --player FILE"
 fi
 
 echo "starting $CONTAINER ..."

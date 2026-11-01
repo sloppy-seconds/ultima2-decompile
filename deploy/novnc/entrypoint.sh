@@ -25,7 +25,7 @@ set -eu
 # an agent verifies what the container is ACTUALLY showing instead of trusting that a
 # rebuild landed. Path is under /saves (host /var/tmp), not the engine's /tmp default:
 # /tmp is tmpfs on this host, so a long session would take every frame out of RAM.
-: "${U2_ARGS:=--sdl --play-map --debug-path /saves/debug}"
+: "${U2_ARGS:=--sdl --debug-path /saves/debug}"
 
 echo "novnc-engine: Xvfb on ${DISPLAY} at ${GEOMETRY}"
 # Xvfb refuses to start on a display whose lock file survives: `Server is already

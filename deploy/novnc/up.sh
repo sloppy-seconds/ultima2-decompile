@@ -2,7 +2,8 @@
 # Build, verify and start the ENGINE over noVNC on ai: our reimplementation, watched
 # from a browser. This is the entry point AGENTS.md claims exists.
 #
-#   ./up.sh                 # rebuild engine, verify the binary, start, print the URL
+#   ./up.sh                 # rebuild engine, verify the binary, start at the splash/title
+#   ./up.sh --load-save     # skip the intro and boot the saved character into the world
 #   ./up.sh --cleanroom     # deliberately ship the substitute art instead
 #   ./up.sh --port N        # host port (default 6082; 6081 is taken by another container)
 #   ./up.sh --down          # stop and remove the container
@@ -43,6 +44,7 @@ SAVES_HOST=/var/tmp/u2/novnc-saves
 STAGED="$HERE/u2-sdl"
 
 CLEANROOM=0
+LOADSAVE=0
 DOWN=0
 STATUS=0
 VERIFY=1
@@ -50,6 +52,7 @@ VERIFY=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --cleanroom) CLEANROOM=1; shift ;;
+        --load-save) LOADSAVE=1; shift ;;
         --down)      DOWN=1; shift ;;
         --status)    STATUS=1; shift ;;
         --no-verify) VERIFY=0; shift ;;
@@ -191,7 +194,13 @@ podman build -t "$IMAGE:latest" "$HERE" >/dev/null
 # The entrypoint's own U2_ARGS default carries no --cleanroom, so asking for substitute
 # art means overriding it here or the flag silently goes nowhere -- which is precisely the
 # class of bug this script was written to catch, relocated one layer down.
-U2_ARGS="--sdl --play-map --debug-path /saves/debug"
+U2_ARGS="--sdl --debug-path /saves/debug"
+# Default is the splash screen and title flow, because that is what a player meets and
+# what the original shows. --play-map is the engine's development entry: it jumps
+# straight into the overworld, skipping the intro, the title and character creation, so
+# it is opt-in now via --load-save. The smoke test below still uses it unconditionally,
+# because verifying the art mode needs a run that reaches the overworld.
+[ "$LOADSAVE" = 1 ] && U2_ARGS="$U2_ARGS --play-map"
 [ "$CLEANROOM" = 1 ] && U2_ARGS="$U2_ARGS --cleanroom"
 
 podman rm -f "$CONTAINER" >/dev/null 2>&1 || true

@@ -310,6 +310,18 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    /* Announce which art this run was asked for, at startup rather than when the
+     * overworld first draws. deploy/novnc/up.sh verifies the artifact by making the
+     * binary say its art mode — a check that exists because substitute art once
+     * reached a player unnoticed — and a run that stops at the title and splash
+     * screens never reaches the overworld line, so the guarantee has to hold before
+     * any screen is drawn. The wording deliberately keeps the two discriminators that
+     * script greps for: "cleanroom" for the substitute set, "tiles extracted" for
+     * the user's own art. */
+    fprintf(stderr, "u2: art source: %s\n",
+            ctx.cleanroom ? "cleanroom (engine's own substitute tiles)"
+                          : "original tiles extracted from the user's copy");
+
     if (trace_arg && u2_trace_open(&ctx, trace_arg) != 0) {
         fprintf(stderr, "u2: cannot open trace file '%s'\n", trace_arg);
         return 2;
