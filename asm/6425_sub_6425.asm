@@ -1,4 +1,16 @@
-# sub_6425 — mechanical clean (bulk wave); behavior not yet reviewed
+# sub_6425 — the depth frame: one CLOSED rectangle at depth [DS:482]
+# name-evidence: four calls to the line drawer, and after the first it loads only the target
+#           register (0x47B/0x47C), so with asm/67B3's pen semantics the four lines are
+#           top (XL,YT)->(XR,YT), right ->(XR,YB), bottom ->(XL,YB), left ->(XL,YT). Named
+#           2026-11-01 from the engine's line log plus pixels: transcribed with a literal
+#           carry instead of a pen carry it drew top, a crossing diagonal, a left edge and a
+#           degenerate no-draw, and the missing bottom edge was the 495 px of residual ink.
+#           With the pen modelled, the frame closes and the corners match the original
+#           capture: 256-px horizontals at y=16 and y=143 and 128-px verticals at x=16 and
+#           x=271 on both sides.
+#           Filename still sub_6425: renaming it to a discovered name means editing the
+#           ROUTINES list in tools/gen_dungeon_draw.py, which hard-codes these ten names, so
+#           it is a person-sized change and not a header edit.
 # func 6425..648C  len 0068 B  evidence: call+reko
 # calls: L_0069b3
 # confidence: low (bytes proven by check_func.py)

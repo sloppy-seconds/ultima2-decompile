@@ -1278,3 +1278,18 @@ generated file under the same name before launch, overwrite the field in questio
 program could never have produced and watch which one survives. One boot answers it, and the answer
 is about the program rather than about that one file. Prefer this whenever the value is per-file and
 the file is replaceable.
+
+**A mechanical call-site transcription must model writes the callee makes to shared state.**
+The usual shape of a hand-written drawing or I/O routine in this era is a small number of
+zero-page variables holding a parameter block, called repeatedly with only some of the fields
+reloaded each time. A generator that reads the caller and emits one assignment per field the
+caller writes looks exactly right and is wrong whenever the callee also writes those fields —
+which subroutines that walk a line, scan a string, or advance a cursor routinely do, because
+incrementing the parameter in place is cheaper than copying it back. The symptom is not a
+crash and not a missing output: it is geometry or text that is present, plausible, and
+displaced, which is the worst class of defect to find by looking at a picture. Two rules follow.
+First, when transcribing a call site, read the callee for stores to the same addresses the
+caller loads, and carry them. Second, when a shape routine reloads only a subset of the fields
+before a call, treat that as evidence the rest are live state and ask what last wrote them —
+a routine that reloads nothing between calls is a state machine, not a list of independent
+draws.

@@ -2537,3 +2537,64 @@ in the same entered state and diff. Read the facing, do not assume it.
 Recorded because the failure here was not a missing tool or a missing frame. It was comparing
 two pictures that looked like the same situation and were not, and the check that would have
 caught it cost one `--peek`.
+
+### CP7 addendum: the residual was a pen, not a missing edge (2026-11-01)
+
+Four sessions of "missing 495 px, localized to the bottom band and the right edge" and the
+ink was never missing. It was drawn somewhere else. The owner put it in one sentence from the
+two screenshots side by side: the original frame is a rectangle and the rebuild has a line
+running bottom-right to top-left. It does, and that line IS the bottom edge, plus the right
+edge, both drawn from the wrong start point.
+
+The cause is one property of `asm/67B3` that the transcription did not model. The four
+coordinate registers are not two points, they are a pen and a target. The drawer's stepper
+does `adc %al,0x479` at runtime 0x6A4B and `adc %al,0x47a` at 0x6A8F, once per pixel of the
+major axis, so when it returns `[DS:479]/[DS:47A]` hold the ENDPOINT of the line it just
+drew. A caller that loads only `0x47B/0x47C` is therefore drawing from wherever the previous
+line finished. `asm/6425` does exactly that three times in a row, and read with the pen
+model its four lines are top, right, bottom, left: a closed rectangle. Read with a literal
+carry of `x1/y1` they are top, a crossing diagonal, a left edge, and a degenerate no-draw.
+That is the whole residual: the bottom edge was not absent, it was the diagonal, and the
+left edge the engine drew was the bottom edge arriving at the wrong place.
+
+`dg_line` now advances the pen, and also honours the drawer's opening guard at 0x69B4 (a
+line with `x1==x2 && y1==y2` is not plotted and does not move the pen). Nothing else changed
+in the geometry path; the generated `dungeon_draw.inc` transcription was already faithful to
+the `mov` instructions and needed no regeneration.
+
+Measured, not looked at. The `U2_DG_LINES` seam in `dungeon.c` dumps every line the renderer
+draws with its routine and depth, and the census on a level-0 entered-east frame went from 20
+slanted lines of 69 to 3, all three of them `asm/66CB`'s chest lid, which is meant to be
+slanted. Then the pixels, longest ink runs inside the window:
+
+| frame | horizontals | verticals |
+| --- | --- | --- |
+| original `captures/screenshots/dungeon-35-entered-east-lit.png` | 256 px at y=16, 256 px at y=143 | 128 px at x=16, 128 px at x=271 |
+| engine, before | 256 px at y=16, 256 px at y=48, **none at y=143** | 128 px at x=16, 128 px at x=271 |
+| engine, after | 256 px at y=16, 256 px at y=143 | 128 px at x=16, 128 px at x=271 |
+
+Same four edges, same four corners, box `x 16..271 y 16..143` on both sides. The interiors
+still differ and that is expected: the CP7 fixture is a synthetic map in sector 20 while the
+reference frame is the real sector 35, so the corridor contents are not the same corridor.
+The frame is map-independent because it comes from the depth-0 tables, which is what makes it
+a legitimate acceptance target and the interior a non-target.
+
+CP7 ink moved 1530 to 1548, inside the gate's 400..1800 band, and the sprite control still
+discriminates (520 with strokes against 406 without). CP0-CP7 green, `check_all.sh` green,
+`assemble_clean.sh` green after the two header edits.
+
+The process failure is worth naming plainly, because it is not the same one the two previous
+addenda named. Those said, correctly, that looking at an image instead of measuring it produced
+four wrong claims in a day. This session had the measurements and still spent four sessions on
+the residual, because every measurement was of *ink present or absent in a band* and the defect
+was *ink present at the wrong coordinates*. A diff that counts missing pixels in a region cannot
+distinguish "not drawn" from "drawn elsewhere", and the number it returns reads like progress in
+both cases. The line dump answered it in one run, and the line dump was written the day before.
+The general form: when two renderings differ by a displacement, compare the primitives, never the
+raster.
+The transferable finding is narrower than the drama around it: **a register-carry
+transcription has to model every write a callee makes to shared state, not only the writes
+the caller can see.** `asm/67B3`'s header now says so, and `asm/6425` is named for what it
+draws. The rename itself is not done: `tools/gen_dungeon_draw.py` hard-codes the ten asm
+filenames in its `ROUTINES` list, so renaming is a tool edit plus a regeneration and is left
+for the same person who does that.

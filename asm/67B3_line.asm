@@ -7,6 +7,18 @@
 #           The plot it calls is asm/4B76; the registers are the same four asm/6078 and the
 #           shape routines load, which is why a shape routine's first line can inherit a
 #           coordinate from the routine before it.
+#           PEN semantics, recorded 2026-11-01, and this is the part that was missed: the four
+#           registers are a pen and a target, not two independent points. L_006a4b
+#           (`adc %al,0x479`) and L_006a8f (`adc %al,0x47a`) step the CURRENT point once per
+#           pixel of the major axis, so on return [DS:479]/[DS:47A] equal [DS:47B]/[DS:47C]
+#           and the next call starts where this one ended. A caller that loads only
+#           0x47B/0x47C is drawing from the previous endpoint, and asm/6425 does that three
+#           times running. The engine transcription carried x1/y1 as "last value explicitly
+#           written" instead of "pen", which is the whole of the CP7 residual wireframe
+#           difference: asm/6425's right edge rendered as a top-left->bottom-right diagonal
+#           and its bottom edge rendered as a left edge. 20 of 69 lines in a level-0 frame
+#           were slanted; now 3 are, and all three are asm/66CB's chest lid, which is meant
+#           to be.
 # func 67B3..68A2  len 00F0 B  evidence: call+reko
 # calls: L_004d76, L_0069ec, L_006a11, L_006a60
 # provenance: static, read in full 2026-10-29 for CP7; the twelve callers are all in this
