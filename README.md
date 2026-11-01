@@ -2,6 +2,7 @@
 
 [![asm-checksum](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml)
 [![engine-tests](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml)
+[![gate-suite](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/gate-suite.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/gate-suite.yml)
 
 A research reverse-engineering of **Ultima II** (Richard Garriott / Origin
 Systems, 1982/83): a readable, named, structured x86 real-mode assembly
@@ -203,16 +204,29 @@ tooling and documentation in this repo are our own authored work.
 ## Status
 
 * **Phase 1–3: complete and signed off** — evidence capture; function
-  boundaries + code/data separation; clean byte-exact ASM reconstruction
-  (1283 clean + 3 data + 13 excluded self-modifying = 1299 functions).
-  See `disasm/phase3-summary.md`.
-* **Phase 4 (in progress): portable C engine** in `engine/` — CP0 through CP4
-  green: title flow, character creation, status rendering, saves, and the
-  overworld with tile passability, the sector wrap and the food/time model.
-  Plan in `docs/phase4-plan.md`, running state in `docs/phase4-state.md`,
-  evidence log in `docs/phase4-implementation.md`. Live-emulator findings that
-  corrected static readings are in `docs/spice86-live-findings.md`.
+  boundaries + code/data separation; clean byte-exact ASM reconstruction.
+  The disposition counts sum to **1299 functions**: 1283 clean (reconstructed,
+  header-commented, individually byte-proven), 3 data, and 13 excluded
+  self-modifying. Those 1299 functions live in **1222 files** in `asm/`, because
+  merging and splitting preserve the canonical byte stream. See
+  `disasm/phase3-summary.md`; both numbers are regenerated, not recalled.
+* **Phase 4: portable C engine** in `engine/` — **CP0 through CP7 green**, and
+  `tools/check_all.sh` green. That is the title flow, character creation, status
+  rendering, saves and save-format compatibility with the original, the overworld
+  with tile passability, sector wrap and the food/time model, towns, commerce and
+  NPC dialogue, and the full dungeon engine: entering, light and torches, the
+  first-person wireframe, walking, combat, looting, traps, spawning and descending.
+  The wireframe and the creature sprites are validated pixel-for-pixel against
+  matched live states, not inferred.
+  Plan in `docs/phase4-plan.md`, running state in `docs/phase4-state.md`, evidence
+  log in `docs/phase4-implementation.md`. Live-emulator findings that corrected
+  static readings are in `docs/spice86-live-findings.md`, and there are a lot of
+  them: several behaviours were written down wrongly from the bytes and only a
+  running emulator refuted them.
 * **Phase 5 (planned): portable build** behind the INT/port seams.
+
+What is *not* claimed: the C engine is a reimplementation and is not byte-proven,
+and never will be. The proof lives in `asm/`; the engine's contract is behaviour.
 
 ## License
 
