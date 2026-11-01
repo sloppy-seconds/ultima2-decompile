@@ -767,6 +767,12 @@ static void u2_force_field(u2_ctx *ctx)
  * Modes other than foot have their own arms (asm/2557 horse, asm/2619 ship, asm/2604 plane,
  * asm/2542 rocket) and are NOT handled here — see u2_mode_passable() below, and
  * docs/passability-findings.md F14 for the corrected reading of those arms.
+ *
+ * THIS LADDER RETURNS A VERDICT, NOT A COST — and two tiles charge one. Entering map byte
+ * 0x04 (mode 0x02, swamp) costs 5 HP silently (asm/2495), and entering map byte 0x5C (mode
+ * 0x2E, force field) costs 1000 HP unless a ring protects (asm/24B5). Both are accepted
+ * here and neither cost is implemented. Full table, evidence and the gate that must encode
+ * all three owner controls: docs/handoff-tile-effects.md.
  */
 static int foot_ladder(unsigned mode)
 {
@@ -943,9 +949,25 @@ uint8_t u2_unlock_spend_key(uint8_t keys)
 
 /* asm/44D4 (X-IT). The guard order is the byte order and it is observable: a mounted player on
  * a non-grass, non-water cell still gets the on-foot test first, so an on-foot character is
- * answered " WHAT?" whatever is under them. mode_a is [DS:14] = tile >> 1, so 0x04 is grass
- * (map 0x08) and 0x00 is water (map 0x00..0x01). The water arm admits the ship alone: you may
- * only drop the ship where you are afloat, which is the tile its own BOARD arm left behind. */
+ * answered " WHAT?" whatever is under them.
+ *
+ * NAMING, and read this before touching any tile rule: mode_a is [DS:14] and
+ * mode_a == map_byte >> 1. The two numbers are constantly confused, and a previous session
+ * misread this very comment as calling map byte 0x04 "grass". It does not. In full:
+ *
+ *   map byte 0x00 -> mode 0x00  water
+ *   map byte 0x04 -> mode 0x02  SWAMP: entering it costs 5 HP on foot, silently (asm/2495)
+ *   map byte 0x08 -> mode 0x04  grass
+ *   map byte 0x0C -> mode 0x06  (plane refuses this one, asm/2604)
+ *   map byte 0x10 -> mode 0x08  mountain
+ *   map byte 0x5C -> mode 0x2E  force field: entering costs 1000 HP unless a ring protects
+ *
+ * So mode 0x04 is grass and mode 0x02 is swamp, and they are different tiles. The swamp and
+ * force-field costs are NOT yet implemented; see docs/handoff-tile-effects.md for the full
+ * table, the evidence, and the three owner controls a gate must encode.
+ *
+ * The water arm admits the ship alone: you may only drop the ship where you are afloat, which
+ * is the tile its own BOARD arm left behind. */
 int u2_dismount_rule(uint8_t stamp, uint8_t mode_a)
 {
     if (stamp >= 0x78u)
