@@ -8,10 +8,13 @@
 #           screen is restored.
 # callers: exactly one, runtime 0x5284, which is inside asm/5255. Nothing else in the executable
 #           reaches this routine.
-# provenance: static
+# provenance: static; visual result OBSERVED 2026-11-02 via its only caller — see
+#           captures/spice86/wound-flash-20261102 (white disc + inverted player at screen
+#           centre, XOR applied then restored, mask matches the table at runtime 0x5288
+#           record for record across both CGA banks at 80-byte scanline steps).
 # confidence: high for the mechanism (the loop, the segment table and the XOR are all read
-#             directly); the visual RESULT has not been observed, only inferred from the address
-#             range being video. Treat "it flashes" as inferred, "it XORs video" as read.
+#             directly) and now for the visual result too, which was previously inferred
+#             from the address range being video.
 # note: the declared range 4C1E..4C30 is a fragment boundary, not the routine. The loop body runs
 #           to about 0x4C54 (the ret), so most of what this does lives in the following tiling
 #           fragments. Known fragment split; see disasm/fragment-splits.tsv.
