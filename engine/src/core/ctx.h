@@ -71,6 +71,12 @@ typedef struct u2_ctx {
      * but hold no creature, refreshed each composed frame where the world is at hand.
      * "He left a copy of him behind", made checkable. See u2_monsters_ghost_cells(). */
     int diag_ghosts;
+    /* Diagnostic only: wound flashes rendered since the run began (each on+off
+     * pair is one). The flash leaves the frame bit-identical to how it found it,
+     * so without a counter no gate can see it happened at all — the same
+     * announce-yourself rule as g_unmeasured_tiles. Wired by E1;
+     * captures/spice86/wound-flash-20261102 is what it counts against. */
+    unsigned diag_flashes;
     /* The mirror diagnostic: creature slots that are NOT stamped into the grid, i.e. invisible
      * monsters. diag_ghosts == 0 says nothing about this direction, which is how a town entry
      * could report a clean frame while every NPC in it was unrenderable. */

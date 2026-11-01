@@ -69,10 +69,22 @@ def main():
             fails += 1
         print("  %s  %s — %s" % ("PASS" if ok else "FAIL", label, detail))
 
-    # enter: one step east onto the swamp.
+    # enter: one step east onto the swamp. Original mode: silent, like the original.
     text, s = state_case("enter", ["RIGHT"], tiles={G.EAST: 0x04})
-    check("enter", s and G.pos(s) == G.EAST and hp(s) == 9992,
-          "pos %s hp %d (want moved, 9992)" % (G.pos(s) if s else None, hp(s) if s else -1))
+    check("enter", s and G.pos(s) == G.EAST and hp(s) == 9992
+          and "[swamp" not in G.flatten(text),
+          "pos %s hp %d, no announcement (want moved, 9992, silent)" %
+          (G.pos(s) if s else None, hp(s) if s else -1))
+
+    # enter-enhanced: the E3 seam. Enhanced mode announces what the original left
+    # silent; the invented line is bracketed and lower-case so it cannot be mistaken
+    # for game text (docs/phase4-state.md E3's own rule).
+    work = G.seed("/var/tmp/u2-swamp-enter-enh", tiles={G.EAST: 0x04})
+    text = G.run_stdout(work, ["RIGHT"], "enter-enh", extra=["--enhanced"])
+    s = G.state_from_text(text)
+    check("enter-enhanced", s and hp(s) == 9992 and "[swamp -5 HP]" in G.flatten(text),
+          "hp %d, announcement %s (want 9992 and the [swamp -5 HP] line)" %
+          (hp(s) if s else -1, "present" if s and "[swamp -5 HP]" in G.flatten(text) else "MISSING"))
 
     # pass: standing ON the swamp and pressing PASS must cost nothing (owner control).
     text, s = state_case("pass", ["SPACE"], tiles={G.ENTRY: 0x04})
@@ -111,10 +123,10 @@ def main():
           (hp(s) if s else -1, "ok" if "RING" in G.flatten(text) else "missing"))
 
     if fails:
-        print("  FAIL  %d of 8 tile-effect cases wrong" % fails)
+        print("  FAIL  %d of 9 tile-effect cases wrong" % fails)
         return 1
-    print("  PASS  tile effects: swamp -5 on entry (3 owner controls + 2 controls), "
-          "underflow is death, field -1000 and its ring gate")
+    print("  PASS  tile effects: swamp -5 on entry (3 owner controls, silent in original "
+          "mode, announced in enhanced), underflow is death, field -1000 and its ring gate")
     return 0
 
 

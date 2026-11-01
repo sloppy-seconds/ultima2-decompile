@@ -648,10 +648,32 @@ fi
 # before this was trusted: a 6-HP charge turns `enter` red, and firing the ladder on the
 # tile you stand on instead of the tile you enter turns five of eight red.
 if U2_BIN=./u2 python3 tests/swamp_damage.py > "$WORK/e1.log" 2>&1; then
-    ok "CP5 E1: tile effects — swamp -5 on entry only (3 owner controls), underflow is death, field -1000 and its ring gate (8 cases)"
+    ok "CP5 E1: tile effects — swamp -5 on entry only (3 owner controls), underflow is death, field -1000 and its ring gate (9 cases, silent in original / announced in enhanced)"
 else
     sed 's/^/        /' "$WORK/e1.log" | tail -10
     bad "CP5 E1: the tile-effect ladder disagrees with asm/248B/2495/24B1/24B5"
+fi
+
+# --- E2: the wound flash, both directions ----------------------------------------------
+#
+# The ring (asm/5255 -> asm/4C1E, XOR on, tone, XOR off) marks the VICTIM'S cell:
+# the player's cell on a wound, the attacked creature's cell when a swing lands.
+# First observed live 2026-11-02 in captures/spice86/wound-flash-20261102 — three
+# player-cell flashes each coinciding with an HP drop, and one creature-cell flash
+# on the turn CMD: ATTACK-- entered the log. The engine's flash leaves the frame
+# bit-identical, so the gate reads the diag flash counter from the turn dumps and
+# correlates it against the HP pair turn by turn: wound flashes must equal wounded
+# turns, and any flash WITHOUT a wound can only be an attack flash.
+#
+# Control run red before trusting: deleting the attack hook leaves the wound arm
+# green and turns the attack arm red (11 flashes vs 11 wounded turns) — the two
+# hooks are proven independently, and the naive "flashes > 0" gate that the counter
+# tempts you to write would have passed on counter-hit flashes alone.
+if U2_BIN=./u2 python3 tests/wound_flash.py > "$WORK/e2.log" 2>&1; then
+    ok "CP5 E2: wound flash fires on the victim's cell — per wounded turn, on landed attacks, never on a quiet map (3 arms)"
+else
+    sed 's/^/        /' "$WORK/e2.log" | tail -8
+    bad "CP5 E2: the wound flash does not follow the victim"
 fi
 
 # --- V1: BOARD, and what one step costs in each travel mode ---------------------------

@@ -41,7 +41,7 @@ endif
 
 content: $(GEN)
 
-$(GEN): tools/extract/extractor.py $(GEN_DEPS) ../asm/014B_sub_014b.asm ../asm/03AC_sub_03ac.asm
+$(GEN): tools/extract/extractor.py $(GEN_DEPS) ../asm/014B_sub_014b.asm ../asm/03AC_sub_03ac.asm ../asm/5287_data_mixed.asm
 	@mkdir -p $(BUILD)
 	python3 tools/extract/extractor.py --exe $(EXE) -o $@
 

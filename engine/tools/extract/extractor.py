@@ -792,6 +792,29 @@ def c_escape(data):
     return '"' + "".join(out) + '"'
 
 
+def ring_table():
+    """The wound-flash XOR mask: the 64-byte table at runtime 0x5288.
+
+    Read from the committed db line of asm/5287_data_mixed.asm — the byte-exact
+    reconstruction — not from the exe, because the asm tree is the authority for
+    this file either way (the exe path would read the same bytes). asm/4C1E_video_xor_patch
+    consumes 16 records of 4 bytes, one per CGA scanline, 2bpp, leftmost pixel in
+    the top two bits: a 16x16 ring that inverts the victim's cell (0xff records)
+    behind a carved edge (the 0x0f/0xf0/0x3f/0xfc/0xc0/0x03 partials). The table
+    in the file is 66 bytes; the loop walks 64. Observed live 2026-11-02:
+    captures/spice86/wound-flash-20261102, mask matched record for record.
+    """
+    path = os.path.join(REPO, "asm", "5287_data_mixed.asm")
+    for line in open(path, encoding="utf-8"):
+        line = line.split("#")[0].strip()
+        if line.startswith("db 0x"):
+            vals = [int(t.strip(), 16) for t in line[3:].split(",")]
+            if len(vals) < 64:
+                raise SystemExit("extractor: ring table too short")
+            return vals[:64]
+    raise SystemExit("extractor: ring table db line not found in 5287_data_mixed.asm")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", default=os.path.join(REPO, "original", "ultimaii.exe"))
@@ -857,6 +880,14 @@ def main():
         body += ["", "/* Indexed name pool, file 0x4F53.. — see the extractor's NAME_TABLES "
                  "comment for\n * how the Z screen's group offsets pin each base. */"]
         body += tables
+    ring = ring_table()
+    body += ["",
+             "/* Wound-flash ring mask, asm/5287_data_mixed.asm table at runtime 0x5288:",
+             " * 16 records of 4 bytes at 2bpp, one scanline each, XORed into video by",
+             " * asm/4C1E and undone by the second call. See that header and",             " * captures/spice86/wound-flash-20261102. */",
+             "static const uint8_t U2_RING_XOR[64] = {",
+             "    " + ", ".join("0x%02X" % v for v in ring),
+             "};"]
     body += ["", "#endif /* U2_GEN_CONTENT_H */", ""]
     text = "\n".join(body)
 

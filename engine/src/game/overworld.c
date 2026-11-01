@@ -18,6 +18,8 @@
 #include "game/commerce.h"    /* u2_commerce_transact: the TRANSACT ray and its shops */
 #include "game/gates.h"       /* u2_gate_transit, u2_gate_turn: the time doors */
 #include "game/dungeon.h"     /* CP7: the interior sector */
+#include "game/feedback.h"    /* u2_feedback: the enhanced-mode announcement seam (E3) */
+#include "game/flash.h"       /* u2_flash_cell: the wound flash, both directions (E1) */
 #include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
 #include "core/font.h"
@@ -164,6 +166,16 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
     st->unk_52 = (uint8_t)lo;
     st->hp     = (uint8_t)hi;
     u2_status_draw(ctx);
+    /* E1, owed to original mode: the original flashes the ring and sounds a tone
+     * when the player is hit (asm/5255 called twice with asm/5EF2 between, the
+     * wound loop at 0x0BB2..0x0BCF), first observed live 2026-11-02 in
+     * captures/spice86/wound-flash-20261102. The ring marks the VICTIM's cell —
+     * here, the player, at the fixed view centre. The engine pools a turn's melee
+     * damage into one application, so this is one flash per wounded turn, not one
+     * per contact; the original loops per hit. The frame is bit-identical after.
+     * The text stays absent in both modes: the original prints no text here either
+     * (the flash and the tone ARE its feedback — see the long comment below). */
+    u2_flash_cell(ctx, U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
     /* NO TEXT IS PRINTED HERE, AND THAT IS NOW ESTABLISHED RATHER THAN ASSUMED.
      * The original's feedback for a wound is a tone plus a screen flash:
      *   - the wound loop is runtime 0x0BB2..0x0BCF, driven by DS:20 (contacts) and DS:21 (hits),
@@ -173,9 +185,11 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
      *   - asm/5255 -> asm/4C1E XORs a pattern table into CGA video (the segment table holds
      *     0xB8C8, 0xBAC8, 0xB8CD ... all inside 0xB800). XOR is its own inverse, which is why it
      *     is called twice -- the second call restores the screen. That is a flash.
-     * So the silence is faithful. What the engine is missing is the tone and the flash, not a
-     * message. Owner ruled 2026-10-26 that a sound substitutes for a message, so wiring the tone
-     * satisfies the rule; the flash is the nicer half and can follow.
+     * So the silence is faithful. What the engine used to be missing — the tone and the
+     * flash, not a message — is now wired: see u2_flash_cell above (E1). The 0x300 tone
+     * of the wound loop and the screen-flash geometry beyond the ring remain open halves.
+     * Owner ruled 2026-10-26 that a sound substitutes for a message, so the tone
+     * satisfies the rule; the flash is the nicer half and is in.
      * Provenance of this comment: two earlier versions were wrong and are gone. One claimed the
      * loop's callees printed a message; another claimed asm/5255 was the tone. Neither was true --
      * 0x5255 is the video XOR and the tones are 0x5EAC/0x5EF2 via asm/5DA9. The arithmetic
@@ -764,6 +778,10 @@ static void u2_swamp_damage(u2_ctx *ctx)
     }
     st->unk_52 = (uint8_t)lo;
     st->hp     = (uint8_t)hi;
+    /* Enhanced mode tells the player what the original left silent; original mode
+     * prints nothing, which is the silence asm/2495 cites above. One seam, one
+     * audit point — see game/feedback.h and docs/phase4-state.md E3. */
+    u2_feedback(ctx, "[swamp -5 HP]");
 }
 
 /* On-foot passability — asm/2423's ladder, transcribed rather than re-derived.
@@ -1536,6 +1554,17 @@ void u2_overworld_attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, in
     }
 
     seam_str_out(ctx, U2_S_HIT);
+
+    /* E1, the other direction: the same ring fires on the ATTACKED creature's
+     * cell when the player's swing lands — owner-confirmed and frame-confirmed
+     * (captures/spice86/wound-flash-20261102 frame 00257, the ring five
+     * scanlines above the player on the turn CMD: ATTACK-- entered the log).
+     * The victim is in the aimed cell, which is one view-cell off the player in
+     * the aim direction. Whether a MISSED swing also flashes is untested (named
+     * open inside G56's closure), so the flash rides the landed hit only. The
+     * interleaving of flash against the "--HIT!!!" print is not observed; this
+     * order is the engine's and says so. */
+    u2_flash_cell(ctx, U2_VIEW_PLAYER_COL + dx, U2_VIEW_PLAYER_ROW + dy);
 
     /* asm/2BE9 is three bytes: `call L_00133a`, then it falls into the "--HIT!!!"
      * printer at asm/2BEC. So the alarm rings before the player is told they
