@@ -1,8 +1,20 @@
 # Handoff — tile effects: implement swamp damage, and the tile-effect table
 
-**Status: not started.** Written 2026-11-02 from a live owner playtest plus a static
-read of the walk span. Everything below is graded; `observed` means a byte or a live
-memory value, `measured` means derived by a named tool, `owner` means Paul played it.
+**Status: executed 2026-11-02, the day it was written.** The swamp cost is implemented at
+the step site in `engine/src/game/overworld.c` (`u2_swamp_damage`, silent, BCD, underflow
+death), the force-field rung gained the missing `[DS:4A] == 0` gate, and both are gated by
+**CP5 E1** (`engine/tests/swamp_damage.py`, eight cases, wired into `run_cp5.sh`) including
+all three owner controls. Both gate controls were run red first: a 6-HP charge turns
+`enter` red, and firing the ladder on the tile you stand on instead of the tile you enter
+turns five of eight red. Items 1–6 of § 6 are done; the one genuinely open thread is new:
+the bytes put the ladder ahead of the verdict, so a refused mounted step onto a swamp may
+also pay — recorded as `docs/needs-gameplay.md` G55, not guessed. Two annotations in this
+document were corrected on the way through: the `jb`/`jmp` branch map in § 1 (the two arms
+were the other way round; the net fact never changed) and the reading of the `[DS:4A] == 0`
+gate — it is the sector's ones digit, the site kind, so "world map" here means the outdoor
+wilderness sectors (ones digit 0), and the effects fire on any of them, never inside a
+village, town, tower or dungeon. Everything below is graded; `observed` means a byte or a
+live memory value, `measured` means derived by a named tool, `owner` means Paul played it.
 
 > **Read this first, because it cost a whole session:** there are **two** numbers per
 > tile and they are constantly confused. A **map byte** is the raw byte in `mapxNN`.
@@ -38,8 +50,11 @@ asm/2495  L_002695  stc / mov al,[DS:52] / cmc / sbb al,0x05 / das / cmc
                       mov [DS:52],al        ; HP low BCD byte
                   mov al,[DS:51] / cmc / sbb al,0x00 / das / cmc
                       mov [DS:51],al        ; HP high BCD byte
-                  jb  L_0026b1              ; underflow -> death tail
-                  jmp L_000e62              ; else the redraw/continue tail
+                  jb  L_0026b1              ; no borrow (the cmc inverts) -> next rung, survive
+                  jmp L_000e62              ; borrow out -> death tail (asm/0C62)
+                  ; (corrected 2026-11-02: an earlier draft of this block had the two arms
+                  ; swapped. The trailing cmc after each das re-exposes the borrow inverted,
+                  ; so jb is the survival path. Net fact unchanged: underflow is death.)
 asm/24B1  L_0026b1  cmp al,0x2E             ; mode 0x2E == map byte 0x5C
                   jne L_002720              ; not the force field -> done
 asm/24B5          mov al,[DS:D6]            ; ring counter
@@ -83,9 +98,10 @@ swamp, nothing else.
 
 ## 3. The rule to implement
 
-> On the world map (`[DS:4A] == 0`), a step **onto** a tile whose **map byte is
-> `0x04`** costs **5 HP**, packed decimal, borrow propagated into the high byte.
-> Underflow is death, via the existing tail. **No message.**
+> On the world map (`[DS:4A] == 0` — the sector's ones digit, i.e. an outdoor wilderness
+> sector), a step **onto** a tile whose **map byte is `0x04`** costs **5 HP**, packed
+> decimal, borrow propagated into the high byte. Underflow is death, via the existing
+> tail. **No message.**
 
 Evidence for each clause:
 
@@ -140,15 +156,29 @@ engine may end up with a horse that wades.
 2. **Is map byte `0x04` "swamp"?** `owner` says it looks like swamp, and 1571 tiles
    scattered in patches fits. The art index may name it. Do not promote a guessed
    name into an `asm/` filename without a second witness.
-3. **Does the force field damage exist in the engine at all?** Not checked. If
-   `asm/24B5` is unimplemented, this handover is hiding a second missing effect, and
-   it is the more dramatic one — 1000 HP is instant death for any character.
+3. **Does the force field damage exist in the engine at all?** **Closed 2026-11-02: it
+   did** — `u2_force_field` in `overworld.c`, reached from the step site, and separately
+   `u2_combat_force_field` in `combat.c` gated by `combat_check.c`. What it did **not**
+   have was the `[DS:4A] == 0` gate, and site maps carry swamp tiles, so the step-site
+   call now carries the gate for both rungs and CP5 E1 guards both.
+4. **NEW, opened by the re-read: does a refused step onto a swamp also cost 5?** The
+   effect ladder sits at the *entry* of `asm/2423`, ahead of the food charge and ahead of
+   the verdict, so a horse turned away from the shallows at `asm/2626` would pay the 5
+   before the refusal. No capture has tested this; the engine implements the narrower
+   accepted-step claim and says so at the call site. `docs/needs-gameplay.md` G55.
 
 ## 6. Suggested order of work
 
+All six executed 2026-11-02, in the order listed, except that item 1 became a verification
+(the force field was already implemented) and gained the sector gate it was missing.
+
 1. Check whether the force field effect is implemented. If not, do it in the same
    change — they are one table and one code path.
-2. Read `asm/2557` and G40, settle the horse interaction.
+2. Read `asm/2557` and G40, settle the horse interaction. **Settled: G40 was closed
+   2026-10-29 by `captures/spice86/g40-horse-shallows` — the horse refuses map `0x04`,
+   the same tile foot enters and pays for, and `u2_mode_passable` already implemented it.
+   The two rules agree by construction: the vehicle arms reject mode `0x02`, so the only
+   accepted step onto a swamp is on foot.**
 3. Implement the swamp cost beside `foot_ladder`, silent, with the citation.
 4. Gate it with **all three** owner controls, not just the happy path:
    PASS on swamp costs nothing; safe -> swamp costs 5; swamp -> safe costs nothing.
