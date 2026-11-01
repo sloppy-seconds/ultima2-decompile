@@ -523,28 +523,24 @@ void u2_dungeon_enter(u2_ctx *ctx, u2_overworld *ow)
      * Entry is what clears it. */
     ctx->state.moved_flag = 0;
     ctx->state.site_floor = 0;
-    /* KNOWN-WRONG, left in place deliberately and only because fixing it needs a fixture
-     * rework this session ran out of room for. The original enters a dungeon FACING EAST:
-     * captures/spice86/dungeon-35-live/live-ds.bin reads DS:00..03 = 05 05 01 00, and a
-     * fresh 2026-10-29 capture driven the way a player goes in (wilderness sector 30, gate
-     * cell (25,5), press E) reads the same 05 05 01 00 with DS:483..484 copying it as 01 00.
-     * Two independent observations, so the north value below is an assumption that has since
-     * been refuted, not a measurement that still stands.
+    /* The original enters a dungeon FACING EAST.
      *
-     * It is not cosmetic: asm/6078 walks its three depth columns along the facing, so a
-     * wrong entry facing renders a different corridor than the one the player is in. It is
-     * also why the engine's wireframe still differs from the original's — measured at the
-     * matched state, the engine was missing 495 px and drawing 105 extra, concentrated at
-     * the bottom edge band (y 140..159) and the right edge (x 256..287).
+     * Two independent captures agree. captures/spice86/dungeon-35-live/live-ds.bin reads
+     * DS:00..03 = 05 05 01 00, and a 2026-10-29 capture driven the way a player goes in -
+     * wilderness sector 30, gate cell (25,5), press E - reads the same 05 05 01 00, with
+     * DS:483..484 copying it out as 01 00. The north value this line used to carry was an
+     * assumption that no capture had ever checked.
      *
-     * Flipping these two lines to (1,0) is the fix, and it breaks three cases in
-     * tests/run_cp7.sh whose key scripts were written as TURN RIGHT from north to reach the
-     * chest at (7,5) and the down ladder at (6,7). Those sequences must be re-derived for an
-     * east entry, and the entry facing should also be checked against a TOWER capture before
-     * it is treated as universal — both observations are sector 35 caves.
+     * It is not cosmetic. asm/6078 walks its three depth columns along the facing, so a
+     * wrong entry facing renders a different corridor from the one the player is standing
+     * in, and that is the best current explanation for the residual wireframe difference
+     * against the original.
+     *
+     * Caveat kept honest: both observations are sector 35 caves. If a tower capture ever
+     * shows a different entry facing, this is the line to revisit, with the bytes.
      */
-    ctx->state.face_dx = 0;
-    ctx->state.face_dy = (uint8_t)(int8_t)-1;      /* north — see the note above */
+    ctx->state.face_dx = (uint8_t)1;                      /* east */
+    ctx->state.face_dy = 0;
     u2_dungeon_probe(ctx, ow);
     /* Stamp everything the loader authored BEFORE the spawner runs, because
      * asm/68ED reads the grid stamps and not the creature arrays: an authored

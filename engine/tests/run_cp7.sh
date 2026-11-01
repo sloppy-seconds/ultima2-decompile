@@ -92,9 +92,11 @@ else
     fi
 
     # ---- 3. the four movement commands --------------------------------------
-    # asm/277B, and the facing is a signed pair rather than a compass enum: north is
-    # (0,-1), TURN RIGHT is a quarter turn, and ADVANCE walks the facing.
-    if run_case walk 'E\nI\n0xf3\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\n0xf2\n0xf1\n' "$WORK/walk.out"; then
+    # asm/277B, and the facing is a signed pair rather than a compass enum: the entry
+    # facing is EAST (1,0), TURN RIGHT is a clockwise quarter turn, and ADVANCE walks the
+    # facing. The route below is the same ten-cell walk it always was; it lost its leading
+    # TURN RIGHT when the entry facing became east, because that turn is now implicit.
+    if run_case walk 'E\nI\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\n0xf2\n0xf1\n' "$WORK/walk.out"; then
         said "$WORK/walk.out" "TURN RIGHT" \
             && ok "CP7 walk: the right arrow is TURN RIGHT, not a step east" \
             || bad "CP7 walk: expected TURN RIGHT"
@@ -104,7 +106,7 @@ else
             && ok "CP7 walk: the left arrow is TURN LEFT" || bad "CP7 walk: expected TURN LEFT"
         said "$WORK/walk.out" "RETREAT" \
             && ok "CP7 walk: the down arrow is RETREAT" || bad "CP7 walk: expected RETREAT"
-        # (5,5) -R-> east -A-> (6,5) -A-> (7,5) -R-> south -A-> (7,6) -A-> (7,7)
+        # entry east: -A-> (6,5) -A-> (7,5) -R-> south -A-> (7,6) -A-> (7,7)
         # -L-> east -B-> (6,7)
         p=$(pos_of "$WORK/walk.out")
         [ "$p" = "6 7" ] && ok "CP7 walk: the ten-key route ends at (6,7), where the map says" \
@@ -162,12 +164,12 @@ PY
     # ---- 5. chests ----------------------------------------------------------
     # asm/363B's site arm: the cell UNDER the player must be 0x40, the same bit the
     # renderer draws as a chest, and the cell is cleared afterwards.
-    if run_case chest 'E\nI\n0xf3\n0xf0\n0xf0\nG\n' "$WORK/chest.out"; then
+    if run_case chest 'E\nI\n0xf0\n0xf0\nG\n' "$WORK/chest.out"; then
         said "$WORK/chest.out" " CHEST!" \
             && ok "CP7 chest: GET on a 0x40 cell finds a chest" || bad "CP7 chest: no CHEST!"
         said "$WORK/chest.out" "IT CONTAINS " \
             && ok "CP7 chest: the contents line prints" || bad "CP7 chest: no IT CONTAINS"
-        if run_case chest_miss 'E\nI\n0xf3\n0xf0\nG\n' "$WORK/chest2.out"; then
+        if run_case chest_miss 'E\nI\n0xf0\nG\n' "$WORK/chest2.out"; then
             said "$WORK/chest2.out" "GET WHAT?" \
                 && ok "CP7 chest: one cell short of the chest it refuses, so the gate is the cell" \
                 || bad "CP7 chest: expected GET WHAT? on a plain floor cell"
@@ -179,7 +181,13 @@ PY
     # art the repo never commits. So the control is the same run with and without the
     # file: if the sprite pass ever stopped drawing, the two frames would agree and
     # the assertion would go red instead of quietly matching the no-art case.
-    if run_case spr0 'E\nI\n' "$WORK/spr0.out" && [ -f "$WORK/spr0/content/monsters" ]; then
+    #
+    # The TURN LEFT is load-bearing, not decoration. asm/68ED reads the stamp nibble of the
+    # CENTRE depth column, and asm/6078 builds that column along the facing. The authored
+    # creature sits at (5,4), due north of the arrival cell, so with the east entry facing it
+    # is in a side column and nothing is drawn ahead; turning to face it puts it at depth 1
+    # of the centre column, which is where the sprite pass looks.
+    if run_case spr0 'E\nI\n0xf2\n' "$WORK/spr0.out" && [ -f "$WORK/spr0/content/monsters" ]; then
         mv "$WORK/spr0/content/monsters" "$WORK/spr0/monsters.bak"
         ./u2 --headless --play-map --cleanroom --data-dir "$WORK/spr0/content" \
              --save-dir "$WORK/spr0/save" --script "$WORK/spr0.keys" \
@@ -219,7 +227,7 @@ PY
     # asm/147F fills empty slots with a computed HP, and asm/2B9B's site gate lets the
     # swing through with the facing as the direction. The seed authors one creature
     # directly north of the arrival cell so the first ATTACK has a named target.
-    if run_case fight 'E\nI\nA\nA\nA\nA\nA\nA\nA\nA\nA\n' "$WORK/fight.out"; then
+    if run_case fight 'E\nI\n0xf2\nA\nA\nA\nA\nA\nA\nA\nA\nA\n' "$WORK/fight.out"; then
         said "$WORK/fight.out" "ATTACK----HIT!!!" \
             && ok "CP7 fight: ATTACK lands on the creature in the cell you face" \
             || { bad "CP7 fight: expected a hit"; tail -3 "$WORK/fight.out.txt"; }
@@ -305,8 +313,8 @@ PY
     # kills and stops. Run B kills and advances. If the kill left the page sane, B is one
     # cell further than A. If the phantom-stamp bug is back, the advance is refused and the
     # two positions are identical.
-    if run_case stampA 'E\nI\nA\nA\nA\n' "$WORK/stampA.out" \
-       && run_case stampB 'E\nI\nA\nA\nA\n0xf0\n' "$WORK/stampB.out"; then
+    if run_case stampA 'E\nI\n0xf2\nA\nA\nA\n' "$WORK/stampA.out" \
+       && run_case stampB 'E\nI\n0xf2\nA\nA\nA\n0xf0\n' "$WORK/stampB.out"; then
         pa=$(pos_of "$WORK/stampA.out"); pb=$(pos_of "$WORK/stampB.out")
         if [ -n "$pa" ] && [ "$pa" = "$pb" ]; then
             bad "CP7 stamp: still frozen after a kill — ADVANCE from $pa was refused by a phantom stamp"
@@ -350,7 +358,7 @@ PY
     # cmd_D on a 0x20 cell in a dungeon increments [DS:25], and the grid the engine
     # reads is now the page that byte names — which is the floor term asm/1451 has
     # always carried and the engine used to ignore.
-    if run_case floor 'E\nI\n0xf3\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\nD\n' "$WORK/floor.out"; then
+    if run_case floor 'E\nI\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\nD\n' "$WORK/floor.out"; then
         said "$WORK/floor.out" "DESCEND" \
             && ok "CP7 floor: DESCEND runs on a 0x20 cell" || bad "CP7 floor: no DESCEND"
         said "$WORK/floor.out" "TO LEVEL 01" \
@@ -360,7 +368,7 @@ PY
         [ "$f" = "01" ] && ok "CP7 floor: DS:25 is 1" || bad "CP7 floor: DS:25 is '$f'"
         # And back out: in a dungeon KLIMB decrements, and dropping below zero is how
         # you leave. asm/3823's `js` is the whole rule.
-        if run_case floor_out 'E\nI\n0xf3\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\nD\nK\n' "$WORK/floor2.out"; then
+        if run_case floor_out 'E\nI\n0xf0\n0xf0\n0xf3\n0xf0\n0xf0\nD\nK\n' "$WORK/floor2.out"; then
             said "$WORK/floor2.out" "TO LEVEL 00" \
                 && ok "CP7 floor: KLIMB in a dungeon goes up, back to level 00" \
                 || bad "CP7 floor: expected TO LEVEL 00 after KLIMB"

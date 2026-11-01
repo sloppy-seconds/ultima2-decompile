@@ -18,8 +18,9 @@ Layout, floor 0 (page 0 = bytes 0..255, cell (x,y) at y*16 + x):
   y=8     #  #  #  #  D  #  #     D = 0x20 down ladder, reached by turning south at the chest
 
 Everything outside those cells is 0x80, solid rock, which is what 42% of the shipped
-mapx35 is too. The player enters at (5,5) facing north, so the first thing a walk does
-is hit a wall and have to turn.
+mapx35 is too. The player enters at (5,5) FACING EAST, which is what the original does
+(captures/spice86/dungeon-35-live reads DS:00..03 = 05 05 01 00), so the first ADVANCE walks
+down the y=5 corridor rather than into the wall to the north.
 
 Floor 1 (page 1 = bytes 256..511) is a different room with its own down ladder at
 (5,5), so DESCEND twice lands somewhere distinguishable from DESCEND once.
