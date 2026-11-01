@@ -196,7 +196,7 @@ PY
         ./u2 --headless --play-map --cleanroom --data-dir "$WORK/spr0/content" \
              --save-dir "$WORK/spr0/save" --script "$WORK/spr0.keys" \
              --dump-frame "$WORK/spr0/art.ppm" > /dev/null 2>&1
-            python3 - "$WORK/spr0/art.ppm" "$WORK/spr0/noart.ppm" <<'PY' && ok "CP7 sprites: the stroke table draws a creature the no-art run cannot" || bad "CP7 sprites: no sprite ink appeared (the pass is dead or the framing is wrong)"
+            python3 - "$WORK/spr0/art.ppm" "$WORK/spr0/noart.ppm" <<'PY' && ok "CP7 sprites: the stroke table draws a creature in the original's colours" || bad "CP7 sprites: no coloured sprite ink appeared (the pass is dead, the framing is wrong, or the pattern colour is not being used)"
 import sys
 
 def load(p):
@@ -206,18 +206,37 @@ def load(p):
 art, noart = load(sys.argv[1]), load(sys.argv[2])
 W = 320
 
-def px(b, x, y):
-    return b[(y * W + x) * 3] > 60
+def rgb(b, x, y):
+    i = (y * W + x) * 3
+    return b[i], b[i + 1], b[i + 2]
 
 # The centre band is where asm/68A3 puts a body: x*4 and y*4 with x in ~24..41 and
 # y in ~11..30 land at screen x 112..180 and y 60..136 once the (16,16) origin is
 # added. Anything outside that band is wireframe, which both runs draw.
+#
+# Brightness alone cannot be the test. asm/4BE0 writes the CGA 2bpp byte verbatim, so
+# a creature is cyan (0,170,170) with a magenta (170,0,170) detail, and cyan carries
+# no red at all -- an earlier version of this check read only the red channel and saw
+# nothing. Three of the eight patterns are also black, which ERASE, so total ink can
+# go DOWN when a sprite lands on wireframe. The property that matters is the colour.
 def band(b):
-    return sum(1 for y in range(56, 140) for x in range(100, 200) if px(b, x, y))
+    ink = cyan = mag = 0
+    for y in range(56, 140):
+        for x in range(100, 200):
+            r, g, bl = rgb(b, x, y)
+            if max(r, g, bl) > 60:
+                ink += 1
+            if g > 60 and r < 60:
+                cyan += 1
+            if r > 60 and bl > 60 and g < 60:
+                mag += 1
+    return ink, cyan, mag
 
-a, n = band(art), band(noart)
-print(f"        centre-band ink: with strokes {a}, without {n}")
-sys.exit(0 if a > n + 40 else 1)
+ai, ac, am = band(art)
+ni, nc, nm = band(noart)
+print(f"        centre-band: with strokes ink {ai} cyan {ac} magenta {am}; "
+      f"without ink {ni} cyan {nc} magenta {nm}")
+sys.exit(0 if (ac + am) > 40 and nc + nm == 0 else 1)
 PY
     else
         skip "CP7 sprites: no original/monsters to borrow (art is never committed)"

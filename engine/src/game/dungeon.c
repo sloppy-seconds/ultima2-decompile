@@ -4,6 +4,7 @@
  * bytes run out say so rather than filling the gap.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "game/dungeon.h"
@@ -273,14 +274,58 @@ int u2_dungeon_light_step(u2_ctx *ctx)
 typedef struct dg_view {
     u2_frame *f;
     int d;                    /* the depth index, [DS:482] in the original */
-    int x1, y1, x2, y2;       /* the line drawer's four registers, DS:479..47C */
+    int x1, y1, x2, y2;       /* the line drawer's four registers, DS:479..47C.
+                               * x1/y1 are the PEN, not a per-call start point: asm/67B3
+                               * steps [DS:479]/[DS:47A] until they equal [DS:47B]/[DS:47C],
+                               * so every line starts where the previous one ended unless the
+                               * caller overwrites them. See dg_line. */
+    const char *who;          /* diagnostic: which shape routine set the registers */
 } dg_view;
+
+/* Diagnostic seam. U2_DG_LINES=<path> makes every line the dungeon renderer draws land in
+ * a file, with the routine that drew it and the depth it was drawn at. It exists because
+ * comparing two wireframes by eye kept producing confident wrong answers - the missing
+ * bottom and right edges were measured at 495 px and localized to a band, but "which
+ * segment is absent" cannot be answered from a picture, and a raster diff cannot tell "not
+ * drawn" apart from "drawn somewhere else". It is what found the pen bug: the census is how
+ * many lines are slanted, and on a correct level-0 frame only asm/66CB's chest lid is.
+ * The pixel side needs no tool, just the longest ink runs in the window: a rectangle frame
+ * is two full-width horizontals and two full-height verticals, and text is not.
+ *
+ * Env-gated and off by default so no normal run pays for it and no test sees it. */
+static FILE *g_dg_lines;
 
 static void dg_line(dg_view *v)
 {
-    u2_frame_line(v->f, DG_ORIGIN_X + v->x1, DG_ORIGIN_Y + v->y1,
-                  DG_ORIGIN_X + v->x2, DG_ORIGIN_Y + v->y2, U2_CGA_WHITE);
+    if (g_dg_lines)
+    {
+        fprintf(g_dg_lines, "%s d=%d (%d,%d)->(%d,%d)\n",
+                v->who ? v->who : "?", v->d,
+                DG_ORIGIN_X + v->x1, DG_ORIGIN_Y + v->y1,
+                DG_ORIGIN_X + v->x2, DG_ORIGIN_Y + v->y2);
+        fflush(g_dg_lines);   /* a killed run must still leave its evidence on disk */
+    }
+    /* The degenerate case is not drawn, and must not move the pen either: asm/67B3's
+     * opening guard at 0x69B4 returns before the stepper when x1==x2 && y1==y2. */
+    if (v->x1 != v->x2 || v->y1 != v->y2)
+        u2_frame_line(v->f, DG_ORIGIN_X + v->x1, DG_ORIGIN_Y + v->y1,
+                      DG_ORIGIN_X + v->x2, DG_ORIGIN_Y + v->y2, U2_CGA_WHITE);
+
+    /* asm/67B3 is a stepper, not a reader: L_006a4b does `adc %al,0x479` and L_006a8f
+     * does `adc %al,0x47a` once per pixel of the major axis, so on return [DS:479] and
+     * [DS:47A] hold the ENDPOINT. The four registers are a pen and a target, not two
+     * independent points, and a shape routine that loads only 0x47B/0x47C (asm/6425 does
+     * it three times running, asm/6291 twice) is drawing from wherever the last line
+     * finished. Transcribing those loads as "carry x1/y1 unchanged" instead of "carry the
+     * pen" is what turned asm/6425's right edge into a top-left-to-bottom-right diagonal
+     * and its bottom edge into a left edge - the residual 495 px of missing ink, and the
+     * crossing diagonal Paul saw, were one defect and not two. */
+    v->x1 = v->x2;
+    v->y1 = v->y2;
 }
+
+/* Tag each shape call with the routine that made the lines, for the U2_DG_LINES seam. */
+#define DG_SH(v, fn) do { (v)->who = #fn; fn(v); } while (0)
 
 /* The twelve shape routines and the eight depth tables, transcribed from the
  * asm tree by tools/gen_dungeon_draw.py. Regenerate that file; do not hand-edit. */
@@ -361,8 +406,23 @@ static const uint8_t DG_DEPTH_LADDER[8] = {
     0x00, 0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc
 };
 
-static void dg_sprite_page(u2_overworld *ow, const uint8_t *strokes,
-                           int base, int colour)
+/* asm/4BE0 stores cs:[bp+0x48D4] VERBATIM into CGA 2bpp memory, twice: at di and at
+ * di+0x50, and 0x50 = 80 = one row of 320/4, so the second store is the row below.
+ * The byte is therefore not a sub-pixel mask and the pattern index is not a shape:
+ * it is four 2-bit pixels, and every stroke is a 4x2 block.
+ *
+ * The table is self-modified at startup. The static bytes in the exe are
+ * e8 08 0b 58 2d 49 54 00 and mean nothing; the runtime bytes, identical across six
+ * independent captures, are ff 11 88 cc 33 00 00 00, which decode as
+ *   ff -> white x4      11 -> black,cyan,black,cyan   88 -> magenta,black,magenta,black
+ *   cc -> white,black,white,black   33 -> black,white,black,white   00 -> erase
+ * So the pattern field is a COLOUR selector: that is why a creature is a cyan body
+ * with a magenta mouth, and why three of the eight entries are black — drawing a
+ * sprite clears pixels as well as setting them, and the store is unconditional.
+ *
+ * The colour index is the 2-bit value itself, because U2_CGA_BLACK/CYAN/MAGENTA/WHITE
+ * are 0..3 in CGA order. */
+static void dg_sprite_page(u2_overworld *ow, const uint8_t *strokes, int base)
 {
     int p = 0;
 
@@ -375,14 +435,15 @@ static void dg_sprite_page(u2_overworld *ow, const uint8_t *strokes,
         const int pat = DG_PATTERN[(b1 >> 5) & 7];
         p += 2;
 
-        /* asm/68A3: ax = x*4, bx = y*4. asm/4BE0: di = (ax + origin) >> 2 and the
-         * mask picks sub-pixels, so the screen x is origin + x*4 with the mask's
-         * high bit being the leftmost pixel. */
+        /* asm/68A3: ax = x*4, bx = y*4. asm/4BE0: di = (ax + origin_x) >> 2, so the
+         * leftmost pixel of the byte is origin_x + x*4 and the table's high bit
+         * (bits 7-6) is that leftmost pixel. */
         const int sx = DG_ORIGIN_X + x * 4;
         const int sy = DG_ORIGIN_Y + y * 4;
         for (int k = 0; k < 4; k++) {
-            if (pat & (0xc0 >> (2 * k)))
-                u2_frame_pixel(&ow->frame, sx + k, sy, (uint8_t)colour);
+            const uint8_t c = (uint8_t)((pat >> (6 - 2 * k)) & 3);
+            u2_frame_pixel(&ow->frame, sx + k, sy, c);
+            u2_frame_pixel(&ow->frame, sx + k, sy + 1, c);   /* the di+0x50 store */
         }
     }
 }
@@ -402,10 +463,9 @@ static void u2_dungeon_sprites(u2_ctx *ctx, u2_overworld *ow, const dg_scan *s)
             continue;
         if (di == 1) {
             const int blk = (stamp & (U2_STROKE_BLOCKS - 1)) * U2_STROKE_BLOCK;
-            dg_sprite_page(ow, ow->world.strokes, blk, U2_CGA_WHITE);
+            dg_sprite_page(ow, ow->world.strokes, blk);
         } else {
-            dg_sprite_page(ow, ow->world.strokes,
-                           DG_DEPTH_LADDER[di & 7], U2_CGA_WHITE);
+            dg_sprite_page(ow, ow->world.strokes, DG_DEPTH_LADDER[di & 7]);
         }
     }
 }
@@ -420,8 +480,10 @@ static void dg_draw(dg_view *v, const dg_scan *s)
      * it at the top of every iteration as well, which drew a depth frame for every open
      * cell — that is the nested-box over-draw, measured against the original at (8,5)
      * facing east as roughly twice the line crossings per row (13 vs 6 at y=30).
-     * Same bounding box, so the tables and the origin were never the problem. */
-    dg_6425(v);
+     * Same bounding box, so the tables and the origin were never the problem.
+     * asm/6425 loads [DS:479] and [DS:47A] before its first call, so it is self-contained
+     * and the pen it inherits does not matter — which is not true of the wall shapes. */
+    DG_SH(v, dg_6425);
 
     for (;;) {
         const int d = v->d;
@@ -429,24 +491,24 @@ static void dg_draw(dg_view *v, const dg_scan *s)
 
         if ((c & U2_DG_ROCK) == 0) {
             /* Open ahead: draw whatever the cell holds, then the side walls. */
-            if (c & U2_DG_DOWN) dg_6594(v);
-            if (c & U2_DG_UP)   dg_660c(v);
-            else if (c & U2_DG_CHEST) dg_66cb(v);
+            if (c & U2_DG_DOWN) DG_SH(v, dg_6594);
+            if (c & U2_DG_UP)   DG_SH(v, dg_660c);
+            else if (c & U2_DG_CHEST) DG_SH(v, dg_66cb);
 
             if (s->left[d] & U2_DG_ROCK) {
-                dg_6377(v);
+                DG_SH(v, dg_6377);
                 if ((s->left[d] & U2_DG_CHEST) && !(s->left[d] & U2_DG_DOWN))
-                    dg_64e2(v);
+                    DG_SH(v, dg_64e2);
             } else {
-                dg_6291(v);
+                DG_SH(v, dg_6291);
             }
 
             if (s->right[d] & U2_DG_ROCK) {
-                dg_63ce(v);
+                DG_SH(v, dg_63ce);
                 if ((s->right[d] & U2_DG_CHEST) && !(s->right[d] & U2_DG_DOWN))
-                    dg_653f(v);
+                    DG_SH(v, dg_653f);
             } else {
-                dg_6304(v);
+                DG_SH(v, dg_6304);
             }
 
             v->d = d + 1;
@@ -457,15 +519,17 @@ static void dg_draw(dg_view *v, const dg_scan *s)
         /* Rock ahead. asm/6144 runtime 0x635F: the depth frame is drawn again here,
          * then three tests decide whether the corridor ends or the far face is drawn
          * and the walk continues. */
-        dg_6425(v);
+        DG_SH(v, dg_6425);
         if ((c & U2_DG_CHEST) == 0) return;
         if (c & U2_DG_DOWN) return;
-        dg_648d(v);
+        DG_SH(v, dg_648d);
         if (d != 0) return;
         v->d = d + 1;
         if (v->d >= U2_DG_DRAW_DEPTH) return;
     }
 }
+
+#undef DG_SH
 
 void u2_dungeon_render(u2_ctx *ctx, u2_overworld *ow, int lit)
 {
@@ -478,6 +542,11 @@ void u2_dungeon_render(u2_ctx *ctx, u2_overworld *ow, int lit)
     memset(&v, 0, sizeof v);
     v.f = &ow->frame;
     v.d = 0;
+    /* Diagnostic: U2_DG_LINES=<path> records every drawn line with its routine and depth. */
+    {
+        const char *lp = getenv("U2_DG_LINES");
+        if (lp && lp[0] && !g_dg_lines) g_dg_lines = fopen(lp, "w");
+    }
     dg_draw(&v, &s);
 
     /* asm/68ED: the creature sprites. Transcribed rather than invented — see
