@@ -14,9 +14,14 @@
 #           table at runtime 0x5288 record for record, laid down at 80-byte scanline steps
 #           across both CGA banks. This is also the first observation of the wound loop
 #           (0x0BB2..0x0BCF) executing in any harvest.
-#           OPEN (G56): the owner reports the same effect on his own successful attack; all
-#           three captured flashes coincide with player HP loss, so "wound-only" versus
-#           "any hit event" is not yet discriminated. See the capture README.
+#           RESOLVED (G56, same capture): the owner clarified -- "I flashed when he hit me,
+#           and he flashed when I hit him" -- and a motif scan found the fourth event: frame
+#           00257, the identical ring at span offset 2836 (five scanlines above the player's
+#           3237), ~2.5 s after CMD: ATTACK-- enters the log. The ring marks the HIT UNIT'S
+#           CELL in both directions. The mechanism fits: this routine is one of four fixed-
+#           position wrappers (5255/525E/5267/5270) tail-calling the shared renderer asm/527F;
+#           which variant the attack path uses is not yet identified (no callers of the other
+#           three appear in asm/), and whether a MISS also flashes is untested.
 # confidence: high for the mechanism (call graph, XOR, table all read directly) and now for
 #             the visual result, previously "never been seen". The loop's trigger -- DS:20
 #             contacts and DS:21 hits -- is now exercised live; whether the flash also rides
