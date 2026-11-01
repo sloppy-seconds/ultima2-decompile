@@ -126,3 +126,13 @@ bestiary/view.html
 # image can COPY it. Never commit it: it is build output, and the host binary is the
 # one make test actually verified.
 deploy/novnc/u2-sdl
+
+# Accidental output directories, and the reason they are ignored rather than just
+# deleted. A tool that takes its output path as a positional argument will create a
+# directory named after whatever you meant as a help flag: `cp7_dungeon_seed.py -h`
+# made `-h/`, and a capture run given `0` made `0/`. Twenty-four PNGs under `0/` were
+# committed before anyone looked, and were removed on 2026-11-02. Note that `-h` is
+# also a git option, so `git ls-files -h` answers a question you did not ask instead
+# of the one you meant — check such names with `git ls-files -- './-h'`.
+/-h/
+/0/
