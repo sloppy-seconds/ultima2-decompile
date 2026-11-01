@@ -9,7 +9,8 @@ remains the only proven artefact — see `disasm/phase3-summary.md`.
 
 ```sh
 make                      # cc only, C11, no third-party dependencies
-make test                 # CP0 + CP1 + CP2 acceptance tests
+make test                 # CP0..CP7 acceptance tests (towns, combat, commerce,
+                          # dialogue and the dungeon engine are CP5..CP7)
 ./u2                      # interactive terminal play
 ./u2 --headless --script tests/title.keys --dump-state
 ./u2 --headless --script tests/title.keys --dump-each   # frame-by-frame grid log
