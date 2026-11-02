@@ -32,6 +32,13 @@ jobs:
       - name: Acceptance tests (CP0..CP4)
         run: make -C engine test
 
+      # The stale-binary tripwire. gate-suite has no build, so it can only skip this; here a
+      # build exists and the check is meaningful — it fails if a built binary is older than
+      # any source or header it was made from, which is the class of bug that shipped two
+      # mismatched deploys.
+      - name: Built binaries are not stale
+        run: make -C engine fresh
+
       # The command-loop ruling (AGENTS.md § 3): twelve handlers have never executed in a
       # capture, each must carry an UNPROVEN marker, and no checkpoint may be called
       # code-complete while one stands. Runs in both workflows -- here because it guards engine

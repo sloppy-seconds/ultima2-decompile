@@ -29,7 +29,7 @@ WORK=$(mktemp -d "${TMPDIR:-/var/tmp}/u2-cp6.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
 # --- 1. the pure spec --------------------------------------------------------
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/commerce_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/commerce_check" \
         tests/commerce_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/cc.err"; then
     "$WORK/commerce_check" > "$WORK/cc.out" 2>&1
     rc=$?

@@ -105,7 +105,10 @@ run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
 # never built simply skips rather than passing vacuously. This is the tripwire for the
 # stale-SDL-object class of bug: two deploys today shipped binaries that did not match
 # source, and neither `make` nor any gate said so.
-run "engine build fresh" engine/u2 -- make -C engine fresh
+# Declared optional, not required: gate-suite.yml has no build step, so as a required gate
+# this could only ever be red there — a permanent failure that trains everyone to ignore the
+# suite. It is enforced in engine-tests.yml, where a build actually exists.
+opt_run "engine build fresh" engine/u2 -- make -C engine fresh
 if [ "$CI_MODE" = 1 ] && [ -z "${ASM_GUARD_BASE:-}" ]; then
     # The guard compares a tree to a ref; with no base it can only pass vacuously, and it
     # now refuses rather than doing that. asm-checksum.yml is its real home because that
