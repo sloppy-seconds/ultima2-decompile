@@ -30,13 +30,19 @@ Two sources, in priority order:
 The manifest is (symbol, asm file, which string in that file). Offsets and
 names are facts about the binary and ours to publish.
 
+`--verify` is the drift gate and it is stronger than the build fallback, because
+it does not use DB_RE at all: it decodes every `db` payload of the file the
+manifest names — quoted text, bare hex byte lists, and lines that mix them — and
+requires each committed string to be present in those bytes. That proves 214 of
+the 220 committed strings against asm/ without duplicating any of them into this
+file. The 6 it cannot prove are named in UNPROVABLE_CEILING's comment.
+
 Usage:
   extractor.py [-o engine/content/gen_content.h] [--exe PATH] [--source auto|exe|asm]
   extractor.py --emit text      # SYMBOL<TAB>value per line, for test scripts
   extractor.py --check          # fail if the written header is not current
-  extractor.py --verify         # fail if the asm fallback disagrees with the
-                                # committed header, or the committed header has
-                                # an empty string (the CI drift gate)
+  extractor.py --verify         # fail if the committed header cannot be proven
+                                # against asm/, or carries an empty string
 """
 import argparse
 import hashlib
@@ -547,6 +553,79 @@ def decode_gas_string(s):
     return bytes(out)
 
 
+# Six committed strings cannot be proven against asm/, and the list is a ratchet
+# rather than a fact to keep current: a seventh name is a red, and if someone
+# ever re-decodes the four files involved the gate gets stronger and says so.
+# In every case the file the manifest names has no `db` data at all (or 15 bytes
+# of it), because the disassembler read the string as instructions; the bytes are
+# still in asm/ and still assemble byte-exactly, but there is no text form for a
+# locator to match. See docs/phase4-state.md.
+UNPROVABLE = frozenset({
+    "U2_S_INTRO_BESTSELLER",   # asm/01A1
+    "U2_S_DISK_PLAYER",        # asm/0764 (the text survives elsewhere: asm/7030:273)
+    "U2_S_Z_SPELL",            # asm/464D
+    "U2_S_MAGIC_SPELL_READY",  # asm/3B92 (15 db bytes in the file, none of them this)
+    "U2_S_FOOD_YES_A",         # asm/17F5
+    "U2_S_FOOD_YES_B",         # asm/17F5
+})
+
+DB_LINE_RE = re.compile(r"^\s*db\s+(.*?)\s*(?:#.*)?$")
+DB_TOKEN_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|0x([0-9a-fA-F]{1,2})')
+
+
+def decode_db_payload(payload):
+    """Decode one `db` payload to bytes: quoted text, a bare hex byte list, or a
+    line that mixes them (`db 0x8d,"KILLED--GOLD+",0x00`).
+
+    This deliberately does NOT reuse DB_RE, which matches only a whole quoted
+    literal ending in a terminator and is kept narrow on purpose: widening it
+    would renumber the db-index locators of every file with a leading glyph byte.
+    A presence check has no indices to break, so it can read what the tree
+    actually contains.
+    """
+    out = bytearray()
+    for m in DB_TOKEN_RE.finditer(payload):
+        if m.group(1) is not None:
+            out.extend(decode_gas_string(m.group(1)))
+        else:
+            out.append(int(m.group(2), 16))
+    return bytes(out)
+
+
+def asm_db_stream(fname):
+    """Every byte the asm tree declares as data in one file, in source order."""
+    buf = bytearray()
+    with open(os.path.join(REPO, "asm", fname), encoding="utf-8") as f:
+        for line in f:
+            m = DB_LINE_RE.match(line.rstrip("\n"))
+            if m:
+                buf.extend(decode_db_payload(m.group(1)))
+    return bytes(buf)
+
+
+def c_unescape(lit):
+    """Inverse of c_escape: an octal escape of up to three digits, a backslash or a quote, verbatim otherwise."""
+    out = bytearray()
+    i = 0
+    while i < len(lit):
+        ch = lit[i]
+        if ch != "\\":
+            out.extend(ch.encode("latin-1"))
+            i += 1
+            continue
+        nxt = lit[i + 1:i + 2]
+        if nxt in ("\\", '"'):
+            out.extend(nxt.encode("latin-1"))
+            i += 2
+            continue
+        m = re.match(r"[0-7]{1,3}", lit[i + 1:i + 4])
+        if not m:
+            raise ValueError(f"committed header has a bad escape: {lit[i:i + 4]!r}")
+        out.append(int(m.group(0), 8))
+        i += 1 + len(m.group(0))
+    return bytes(out)
+
+
 def parse_asm(path):
     """Return (func_lo, func_hi, [string bytes in file order]) for one asm file."""
     lo = hi = None
@@ -926,7 +1005,7 @@ def main():
         return 0
 
     if args.verify:
-        return verify_against_committed(rows, args.out, warn)
+        return verify_against_committed(args.out, warn)
 
     # Downgrade guard. The fallback header is a *lossy* header: 38 of its
     # strings are empty literals, and an empty literal prints as nothing, so a
@@ -949,69 +1028,73 @@ def main():
     return 0
 
 
-def verify_against_committed(rows, committed_path, warn):
+def verify_against_committed(committed_path, warn):
     """The drift gate, and the only one that can run without the player's copy.
 
-    `rows` here comes from the asm tree. For every string asm can actually
-    resolve, the committed header must carry the identical literal; for every
-    string asm cannot resolve, the committed header must still be non-empty,
-    because that is the whole reason it is committed. A disagreement means
-    either the asm tree or the committed text moved, and both are worth a red.
+    For every string in the committed header, the asm tree must contain those
+    exact bytes as data in the file the manifest names for it. That is the whole
+    claim, and it needs no copy of the text in this script: `asm/` assembles back
+    byte-for-byte identical to the binary (assemble_clean.sh), so bytes present
+    there are proven, not asserted. Presence is checked against the file's
+    decoded data stream rather than against DB_RE's quoted-literal index, which
+    is why this reaches the strings asm renders as byte lists or splits on the
+    game's newline glyph — 214 of 220, against 181 for the build fallback.
 
-    One documented exception, and it is not a loosening: the asm tree writes the
-    game's newline glyph as a separate byte outside the quoted literal
-    (`db "WELCOME, TO THE TRANSPORT",0x0d,"SHOPPE. I SELL YOU HORSE",0x00`), so
-    DB_RE sees only the first segment while the exe path reads the whole run.
-    Four strings differ that way and only that way, so the comparison ignores
-    the `\015` escape and accepts the asm text as a prefix of the committed
-    text. That is the honest limit of what asm can prove: it refutes a changed
-    prefix, and it cannot see past it. Anything it can see, it enforces.
+    Three ways to fail: a committed string that is empty (it would print as
+    nothing and let a text assertion pass vacuously), a manifest symbol the
+    committed header omits, or a string that asm cannot prove and that is not on
+    the known-unprovable list.
     """
     if not os.path.exists(committed_path):
         sys.exit(f"extractor: --verify: {committed_path} is missing")
-    cur = open(committed_path, encoding="utf-8").read()
-    committed = {}
-    for ln in cur.splitlines():
-        if ln.startswith("#define U2_S_"):
-            parts = ln.split(None, 2)
-            committed[parts[1]] = parts[2] if len(parts) > 2 else '""'
 
-    empties = [s for s, v in committed.items() if v == '""']
-    bad = 0
-    checked = 0
-    split = 0
-    for sym, val, origin in rows:
+    committed = {}
+    for ln in open(committed_path, encoding="utf-8"):
+        if ln.startswith("#define U2_S_"):
+            parts = ln.rstrip("\n").split(None, 2)
+            if len(parts) == 3 and parts[2].startswith('"') and parts[2].endswith('"'):
+                committed[parts[1]] = c_unescape(parts[2][1:-1])
+
+    files = {sym: fname for sym, fname, _ in MANIFEST}
+    empties = sorted(s for s, v in committed.items() if not v)
+    missing = sorted(s for s in files if s not in committed)
+
+    streams = {}
+    unprovable = []
+    for sym in sorted(committed):
+        val = committed[sym]
         if not val:
             continue
-        checked += 1
-        if sym not in committed:
-            warn(f"extractor: VERIFY {sym}: asm resolves it, the committed header omits it")
-            bad += 1
+        fname = files.get(sym)
+        if fname is None:
+            warn(f"extractor: VERIFY {sym}: in the committed header, not in the manifest")
+            missing.append(sym)
             continue
-        want = c_escape(val)
-        have = committed[sym]
-        if want == have:
-            continue
-        # Compare the literals without their surrounding quotes: a prefix of the
-        # committed text shares its opening quote but not its closing one.
-        wn = want[1:-1].replace("\\015", "")
-        hn = have[1:-1].replace("\\015", "")
-        if wn and hn.startswith(wn):
-            split += 1
-            continue
-        warn(f"extractor: VERIFY {sym}: asm says {val!r}, the committed header says "
-             f"{have} ({origin})")
-        bad += 1
-    for sym in sorted(empties):
+        if fname not in streams:
+            streams[fname] = asm_db_stream(fname)
+        if val not in streams[fname]:
+            unprovable.append(sym)
+
+    for sym in empties:
         warn(f"extractor: VERIFY {sym}: committed header carries an EMPTY string")
-    if bad or empties:
-        warn(f"extractor: VERIFY FAIL — {bad} disagreement(s), {len(empties)} empty "
-             f"string(s); {checked} asm-provable strings checked")
+    for sym in missing:
+        warn(f"extractor: VERIFY {sym}: the manifest lists it, the committed header omits it")
+    new = sorted(set(unprovable) - set(UNPROVABLE))
+    for sym in new:
+        warn(f"extractor: VERIFY {sym}: not present as data in the asm file that names it, "
+             f"and not on the known-unprovable list")
+    if empties or missing or new:
+        warn(f"extractor: VERIFY FAIL — {len(committed)} committed strings, "
+             f"{len(empties)} empty, {len(missing)} missing, "
+             f"{len(unprovable)} unprovable against asm/")
         return 1
-    print(f"extractor: VERIFY ok — {checked} asm-provable strings agree with "
-          f"{os.path.relpath(committed_path, REPO)} ({split} only up to a split db "
-          f"line, where asm cannot see further), none of {len(committed)} "
-          f"committed strings is empty")
+    if len(unprovable) < len(UNPROVABLE):
+        warn(f"extractor: note: only {len(unprovable)} strings are unprovable against asm/; "
+             f"the list still names {len(UNPROVABLE)}. Cross off what is now proven — this "
+             f"gate only ever gets stronger.")
+    print(f"extractor: VERIFY ok — {len(committed) - len(unprovable)} of {len(committed)} "
+          f"committed strings proven present in asm/ data, {len(unprovable)} unprovable "
+          f"(known list: {len(UNPROVABLE)}), none empty")
     return 0
 
 
