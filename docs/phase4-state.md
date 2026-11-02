@@ -2854,10 +2854,14 @@ south from the town's last row returns the character to the wilderness mouth `(3
 back to `30` — the engine's `u2_site_edge_crossed()` and `u2_overworld_site_leave()` already match this.
 
 **Not yet fixed.** Both gates are behaviour changes to shipped engine code and are awaiting the owner's
-go-ahead. The open question that the fix has to answer honestly is **what the filler tile is**: measured
-as a census (black, 220 cyan pixels per 320-px row, no magenta, no grey) but not identified as an art
-index, and it is not an out-of-bounds read of the grid, because the bytes after `DS:2800` are a string
-table. `docs/needs-gameplay.md` carries it as G57.
+go-ahead. The open question that the fix had to answer honestly is now answered: **the filler past the
+edge of a site sector is map byte `0x08`, art index `0x02` — the sector's own ground tile.** Proved by
+bitmap match, not inference: the off-grid cell cropped from `03-at-row63.png` is identical to
+`tmp/tiles/tile_02.png` at Hamming distance 0, and in the same frame a real town `0x08` cell and an
+off-grid cell have the identical census (245 black + 11 cyan each). The owner saw this before we
+measured it and called it grass, which is what it is. The same pass measured the byte→art mapping
+inside a site sector for the first time — 16 distinct map bytes, every one at `byte >> 2`, distance 0 —
+so `docs/art-index.md`'s transform holds on both sector classes. G57 is closed.
 
 **Tooling change that came out of this, and is in the tree:** `--dump-map` used to render only the fixed
 probe sector, so a frame from a loaded character could never be put beside it. It now renders from the
