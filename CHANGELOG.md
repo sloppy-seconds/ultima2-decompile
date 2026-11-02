@@ -39,6 +39,38 @@ C11 reimplementation of its engine, and automated proof standing behind both.
   mutation-tested — each can be demonstrated red on a deliberately wrong
   model, which is the project's standing rule for any checker.
 
+### Gameplay fidelity (2026-11-02, v0.0.5)
+
+* **Two owner-reported bugs, one root cause: the engine applied a world-map rule to
+  a site sector.** Time doors were stamped inside Port Boniface, and water appeared
+  around the town's south exit. Both were reproduced live in sector 31 and both are
+  fixed. The original stamps no door inside a settlement and does not even run the
+  door's countdown there — two independent mechanisms, so both are now gated on the
+  world map. And the viewport wraps only on the world map: `asm/5AB1` branches on
+  the mode byte and only the world-map arm masks the origin with `and $0x3f`, while
+  the interior arm deliberately does not. Past the edge of a site the original draws
+  the sector's own ground byte, `0x08`, which is why it reads as grass and not as a
+  glitch; the engine was wrapping and pulling the town's north sign band onto the
+  bottom of the screen.
+* **Why no earlier capture caught the wrap.** Every sector measured before this had
+  water at both its north and south rows, so wrapping and filling are pixel-identical
+  there. A settlement is the only sector whose north edge is not water, which makes it
+  the only place the two hypotheses can be told apart. The lesson is recorded in
+  `docs/harness-portability.md`: a capture earns its citation only if it could have
+  failed to.
+* **A third defect, found by trying to prove the first.** The view mode was set on
+  site entry and never re-derived, so a save loaded inside a town still wrapped, and
+  walking out of one would have left the world map un-wrapped. The mode is a function
+  of the sector's ones digit, not an event.
+* **Verified frame against frame.** With the same record loaded, the engine's render
+  of sector 31 at `(31,62)` now matches the original on all ten viewport rows and all
+  four CGA colours, counts included. `tests/site_viewport_gate.py` is new: it builds
+  its own town save, renders it, and asserts the property that distinguishes filler
+  from wrap. It was run against the real pre-fix mutation and went red, and so did
+  CP4; five selftest controls are demonstrated red on every `make test`.
+* `--dump-map` renders from the loaded save when one is present, not only from the
+  fixed probe sector. That is what made the comparison above possible at all.
+
 ### Release engineering (2026-11-02)
 
 * Single-file player binaries: `make sdl-static` (Linux; links only
