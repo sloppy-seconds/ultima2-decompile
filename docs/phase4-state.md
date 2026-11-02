@@ -2641,8 +2641,28 @@ needed the manifest's fourth tuple element; 20 are recoverable from `db 0x..` by
 lists; 9 more are split around the game's `0x0d` newline glyph and are recoverable
 by decoding mixed `db` lines; 3 are genuinely absent — `DISK_PLAYER` (its text
 survives in a different file, `asm/7030_space_collision.asm:273`) and the two
-`FOOD_YES_*` in `asm/17F5_sub_17f5.asm`, which has no `db` lines at all. That
-breakdown is the priced version of "fix the fallback", and it is still open.
+`FOOD_YES_*` in `asm/17F5_sub_17f5.asm`, which has no `db` lines at all.
+
+**That breakdown turned out to be the wrong question.** Hand-typing 35 texts into
+the manifest would have fixed the *build* fallback, which nothing uses any more,
+and would have copied the game's text into `extractor.py` as a third place to
+drift. What actually needed the stronger read was the *verifier*, and it needs no
+text at all: it already knows what to look for, because the committed header is
+the thing under test. So `--verify` decodes every `db` payload of the file the
+manifest names — quoted text, bare hex byte lists, and lines that mix them, which
+is exactly what `DB_RE` refuses to match and for the reason that comment gives —
+and asks whether the committed bytes are present in them. **214 of 220**, up from
+181, with nothing duplicated to make it work. The claim it makes is the one worth
+making: `asm/` assembles byte-for-byte identical, so bytes present there are
+proven, not asserted.
+
+Six are not present in any text form, in four files where the disassembler read
+the string as instructions: `INTRO_BESTSELLER` (`asm/01A1`), `DISK_PLAYER`
+(`asm/0764`), `Z_SPELL` (`asm/464D`), `MAGIC_SPELL_READY` (`asm/3B92`, 15 db bytes
+in the file and none of them this) and `FOOD_YES_A`/`FOOD_YES_B` (`asm/17F5`).
+They are named in the extractor's `UNPROVABLE` set, a string that is not provable
+and not on the list is a red, and if the list shrinks the gate says so instead of
+letting the constant rot.
 
 **What was done instead, by owner ruling the same day.** The generated header is
 committed. `engine/content/gen_content.h` is now tracked, the build has no rule to
@@ -2652,14 +2672,14 @@ a *hand-maintained* copy — and the three enforced checks that replace the old
 "never commit it" are in that bullet, in the header's own banner, and in
 `engine/README.md`.
 
-**The gate, and its controls.** `make -C engine content-check` regenerates from
-`asm/` and requires every string asm can prove to agree with the committed file,
-and no committed string to be empty. Four strings can only be checked up to a
-split `db` line, because that is as far as asm sees; the gate says so rather than
-silently passing them. Controls, all six demonstrated red before the gate was
-trusted: wrong text, blanked string, shortened prefix, missing symbol, and a
-fallback header attempting to overwrite the committed one. The last is refused by
-the extractor itself, not by the Makefile, so it holds however the tool is run.
+**The gate, and its controls.** `make -C engine content-check` requires every
+committed string to be non-empty, every manifest symbol to be present, and every
+string that asm cannot prove to be on the known-unprovable list. Controls, all six
+demonstrated red before the gate was trusted: wrong text, blanked string,
+shortened prefix, missing symbol, and a fallback header attempting to overwrite the
+committed one. The last is refused by the extractor itself, not by the Makefile, so
+it holds however the tool is run. They ship as
+`engine/tests/content_header_selftest.py` and run inside CP1 and `check_all`.
 
 **One trap found on the way, now asserted.** `CPPFLAGS` carried `-Ibuild` ahead of
 the new `-Icontent`, and a stale `build/gen_content.h` from the old scheme

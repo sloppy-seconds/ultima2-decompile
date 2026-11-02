@@ -106,10 +106,12 @@ The counts come from the save record, already mapped in `engine/src/core/state.h
 `weapons_owned[10]` at `DS:76`, `items_held[16]` at `DS:D6`, `readied_weapon` `DS:61`,
 `worn_armour` `DS:62`, `spell_pick` `DS:63`.
 
-**None of these strings are in `engine/build/gen_content.h` today** (90 `U2_S_` defines,
-none of them an item name). The extractor at `tools/extract/extractor.py` has to grow a
-table mode before the screen can be built without hardcoding text, which `status.c`'s
-header forbids on purpose.
+**These strings were not in the generated header when this was written** (90
+`U2_S_` defines, none of them an item name), and the extractor had no table mode.
+It has one now: `engine/content/gen_content.h` carries the indexed name pool as
+`U2_T_*` arrays, generated from the same bytes, so `status.c` builds the screen
+without hardcoded text. The path also moved — the header is committed at
+`engine/content/`, not built into `engine/build/`.
 
 ## 4. Measured behaviour, not assumed
 

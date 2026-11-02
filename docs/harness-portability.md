@@ -202,13 +202,19 @@ Newest first. One line per learning; the detail stays in the owning document.
   generalise. (1) Where one source is provably lossy, the build gets no rule to select it — the
   generated file is either committed or the build fails for want of it, and the lossy path is
   refused by the tool rather than by a wrapper, so it holds however the tool is invoked. (2)
-  Repurpose the lossy source as a cross-check: every item it *can* resolve must agree with the
-  committed artefact, and no committed item may be empty. (3) Where the two sources legitimately
-  disagree because one sees less, compare only as far as the weaker one can see and **print how
-  often you had to** — a silent prefix match is the same vacuous pass in a nicer costume. Then
-  demonstrate the gate red on each shape of drift (wrong text, blanked item, shortened prefix,
-  missing item, attempted downgrade). → Tier 2, gate design; and an argument for treating "the
-  fallback still builds" as a defect report rather than a success.
+  When you demote the lossy source to a cross-check, do not make it cross-check with the same
+  weak reader it failed with. The first version inherited the builder's quoted-literal index and
+  could only compare 82 per cent; reading the source's whole data payload instead — quoted text,
+  bare byte lists, and lines that mix them — proved 97 per cent, and the strings it still could
+  not reach were then nameable as a list that only ever shrinks. (3) A fudge in a check is a
+  diagnosis. That first version needed "compare only as far as the weaker source can see" to pass;
+  once the reader was replaced the allowance was unnecessary, and an allowance nobody needs is
+  usually hiding the thing that should be fixed. If a cross-check needs to be told how little to
+  look at, look at the reader. Then demonstrate the gate red on each shape of drift (wrong text,
+  blanked item, shortened prefix, missing item, attempted downgrade), and make an unprovable item
+  a named list rather than a tolerated count, so a new one is a red and a resolved one is a
+  message. → Tier 2, gate design; and an argument for treating "the fallback still builds" as a
+  defect report rather than a success.
 
 * **2026-10-29 — "No pixel-plot path anywhere in the tree" is a statement about the names, not
   about the code, and it can sit on an item for weeks and make it look owner-blocked.** A whole

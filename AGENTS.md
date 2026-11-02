@@ -215,8 +215,9 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
     test that greps the screen for text pass vacuously. The discipline that replaces "never
     commit it" is three checks, all enforced: the extractor is the file's only writer, `make
     -C engine content` refuses to run without the exe so a fallback can never overwrite the
-    good copy, and `make -C engine content-check` proves every string `asm/` can reach still
-    agrees with the committed file and that no committed string is empty. The build has no
+    good copy, and `make -C engine content-check` proves **214 of the 220** committed
+    strings are present as data in `asm/` and that none of them is empty; the six that
+    no locator can reach are named in a list that only ever shrinks. The build has no
     rule to remake the header at all, which is what makes a missing file a loud failure
     instead of a silent downgrade. Hand-maintained duplicates of game text in `docs/` stay
     forbidden: they have no generator and no gate.

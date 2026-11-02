@@ -79,15 +79,26 @@ header on a machine without the exe would ship a blank character-creation screen
 and every test that greps the screen for text would pass while nothing was
 printed. So the fallback is no longer a build source; it is the verifier.
 
+And as a verifier it does better than it does as a builder: **214 of 220**.
+`--verify` does not use the quoted-literal index at all. It decodes every `db`
+payload of the file the manifest names — quoted text, bare hex byte lists, and
+lines that mix them — and requires each committed string to be present in those
+bytes. Nothing is duplicated into the manifest to make that work, which is the
+whole point: the claim being checked is "asm/ contains these bytes", and `asm/`
+assembles back byte-for-byte identical, so present means proven. Six strings are
+not present in any text form, in four files where the disassembler read the
+string as instructions; they are named in `UNPROVABLE`, and a seventh name is a
+red.
+
 Three things make the committed copy safe, and all three are enforced:
 
 * the extractor is the file's only writer — its banner says "do not edit by hand"
 * `make content` refuses without the exe, and the extractor itself refuses to
   write a fallback header over an exe-derived one (`--force` overrides, by name)
-* `make content-check` fails if any string `asm/` can prove disagrees with the
-  committed text, or if any committed string is empty. Four strings can only be
-  checked up to a split `db` line, where `asm/` genuinely cannot see further, and
-  the gate says so in its output
+* `make content-check` fails if a committed string is empty, if the committed
+  header omits a symbol the manifest lists, or if a string asm cannot prove is
+  not on the known-unprovable list. If the list shrinks it says so instead of
+  staying quiet, because the gate is meant to only ever get stronger
 
 There is deliberately **no make rule to remake `$(GEN)`**. The build consumes the
 committed file and fails loudly if it is missing. `build/` is off the include
