@@ -62,7 +62,10 @@ RING_END = 0x003E                # exclusive; 16 entries of 2 bytes
 # handled generically and do not need an entry here.
 KEYS = {
     'escape': 'Escape', 'esc': 'Escape',
-    'return': 'Return', 'enter': 'Return',
+    # PcKeyboardKey spells it 'Enter'; 'Return' is rejected as invalid (found
+    # 2026-11-02 driving character creation — every Enter sent through this
+    # tool before that silently failed).
+    'return': 'Enter', 'enter': 'Enter',
     'space': 'Space',
     'up': 'Up', 'down': 'Down', 'left': 'Left', 'right': 'Right',
 }
