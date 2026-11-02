@@ -138,3 +138,5 @@ deploy/novnc/u2-sdl
 /0/
 engine/u2-sdl.exe
 engine/build-win/
+engine/u2-sdl-static
+engine/build-sdlstatic/

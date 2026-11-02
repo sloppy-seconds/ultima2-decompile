@@ -27,7 +27,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run sdl-win play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run sdl-win sdl-static play help fresh
 
 all: $(BIN)
 
@@ -166,6 +166,38 @@ $(WINOBJ)/%.o: %.c $(GEN)
 
 -include $(WIN_DEPS)
 
+# ---- Linux static-SDL build (make sdl-static) ---------------------------------
+#
+# The player-facing Linux binary: SDL2 linked static, glibc left dynamic (a
+# static glibc is a footgun, not a feature). SDL2 dlopens X11/Wayland/ALSA at
+# runtime, so what survives the link is a handful of libraries every desktop
+# already has — which is the point: a real player downloads one file and runs
+# it, and the container story stays what it is, a dev trick.
+# SDLSTAT_PREFIX is where libsdl2.a lives (the linuxbuild container builds it
+# from the pinned tarball, same source and flags as the Windows build).
+SDLSTAT_PREFIX ?= /opt/sdl2-linux
+SDLSTAT_CC     ?= $(CC)
+SDLSTAT_PKG    ?= env PKG_CONFIG_LIBDIR=$(SDLSTAT_PREFIX)/lib/pkgconfig:$(SDLSTAT_PREFIX)/lib64/pkgconfig pkg-config
+SDLSTAT_CFLAGS ?= $(shell $(SDLSTAT_PKG) --cflags sdl2 2>/dev/null)
+SDLSTAT_LIBS   ?= $(shell $(SDLSTAT_PKG) --static --libs sdl2 2>/dev/null)
+STATOBJ        := $(BUILD)-sdlstatic
+STAT_BIN       := u2-sdl-static
+STATOBJS       := $(patsubst %.c,$(STATOBJ)/%.o,$(SRCS))
+STAT_DEPS      := $(STATOBJS:.o=.d)
+
+sdl-static: $(STAT_BIN)
+
+$(STAT_BIN): $(STATOBJS)
+	$(SDLSTAT_CC) -static-libgcc -o $@ $^ $(SDLSTAT_LIBS)
+
+$(STATOBJ)/%.o: %.c $(GEN)
+	@test -n "$(SDLSTAT_CFLAGS)" || { echo "sdl-static: static SDL2 not found at $(SDLSTAT_PREFIX);" \
+	     "use deploy/linuxbuild/build.sh (container) or point SDLSTAT_PREFIX at a libsdl2.a prefix"; exit 1; }
+	@mkdir -p $(dir $@)
+	$(SDLSTAT_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDLSTAT_CFLAGS) -MMD -MP -c $< -o $@
+
+-include $(STAT_DEPS)
+
 # play: put the game on the operator's screen.
 #
 # Unlike sdl-run this synthesises the display environment from the socket files,
@@ -183,7 +215,7 @@ play: $(SDL_BIN)
 	fi
 
 clean:
-	rm -rf $(BUILD) $(SDLOBJ) $(WINOBJ) $(BIN) $(SDL_BIN) $(WIN_BIN)
+	rm -rf $(BUILD) $(SDLOBJ) $(WINOBJ) $(STATOBJ) $(BIN) $(SDL_BIN) $(WIN_BIN) $(STAT_BIN)
 
 # Fail loudly if a built binary is older than any source or header it is made from.
 #

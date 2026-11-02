@@ -30,10 +30,18 @@ make content              # regenerate build/gen_content.h only
 ```sh
 make sdl                  # native SDL2 build (needs SDL2 on the host; Bazzite:
                           # brew install sdl2 — an owner-approved dependency)
+make sdl-static           # single-file Linux player binary: SDL2 linked static,
+                          # glibc dynamic; needs a static libsdl2.a prefix — on
+                          # Bazzite run ../deploy/linuxbuild/build.sh
 make sdl-win              # Windows x86_64 .exe, static SDL — needs the mingw
                           # toolchain; on Bazzite run ../deploy/winbuild/build.sh
                           # which does exactly this inside a container
 ```
+
+The static builds are the player-facing artifacts: one file plus the user's own
+game data, no container and no package installs (the containers are build hosts
+only). `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
+at runtime — and `u2-sdl.exe` imports only stock Windows DLLs.
 
 `sdl-win` produces one `u2-sdl.exe` whose only DLL imports are stock Windows
 ones (SDL2 is built static from the pinned release tarball inside the winbuild
