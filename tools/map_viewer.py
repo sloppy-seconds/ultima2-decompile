@@ -10,12 +10,18 @@ Output is one HTML file with everything embedded: the 64 tile PNGs as data URIs,
 every sector's 4096 tile bytes, and the tile-art.tsv descriptions. Open it
 directly; it makes no network requests.
 
+`--serve` hosts it instead of writing it, for anyone on the LAN who is not sitting
+on this machine — which is the usual case when the owner is testing a build on
+another box. The served document is held in memory and there is no filesystem
+root, on purpose; see serve().
+
 Read-only by construction. It reads original/ and tmp/tiles/ and writes only to
 the --out path, refusing to write into original/ or references/.
 
 Usage:
     python3 tools/tile_atlas.py --out tmp/tiles        # first, if tiles missing
     python3 tools/map_viewer.py -o tmp/map-viewer.html
+    python3 tools/map_viewer.py --serve                # http://<this host>:8099/
 """
 import argparse
 import base64
@@ -217,6 +223,67 @@ IMGS_CLEAN.concat(HAS_ORIG?IMGS_ORIG:[]).forEach(im=>{ if(im.complete)return;
 """
 
 
+def lan_addr():
+    """Best-effort LAN address of this host, for printing a usable URL. No traffic
+    is sent; the UDP connect only makes the kernel pick a route."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def serve(html, bind, port):
+    """Host the generated viewer, and nothing else.
+
+    The document is built in memory and returned for every path, so the server
+    has no filesystem root at all. That is the whole design point: the obvious
+    implementation is `python3 -m http.server` in tmp/, and tmp/ holds a full
+    copy of the player's game files for every Spice86 launch. A viewer for map
+    bytes must not also be a LAN mirror of the game, so this serves one blob and
+    cannot be talked into serving anything else.
+    """
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    body = html.encode('utf-8')
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_HEAD = do_GET
+
+        def log_message(self, fmt, *args):
+            sys.stderr.write('  request from %s\n' % self.address_string())
+
+    try:
+        httpd = ThreadingHTTPServer((bind, port), Handler)
+    except OSError as e:
+        sys.exit('cannot bind %s:%d — %s (is something already on that port? '
+                 'pass --port)' % (bind, port, e))
+
+    shown = lan_addr() or bind
+    print('serving the viewer on http://%s:%d/  (Ctrl-C to stop)' % (shown, port))
+    if bind == '0.0.0.0':
+        print('  bound to all interfaces; anyone on the LAN can read the maps')
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print('\nstopped')
+    finally:
+        httpd.server_close()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -226,12 +293,25 @@ def main():
     ap.add_argument('--cleanroom', default='engine/assets/tiles/cleanroom/tiles',
                     help='cleanroom substitute art (SVG)')
     ap.add_argument('--art', default='disasm/tile-art.tsv')
-    ap.add_argument('-o', '--out', required=True)
+    ap.add_argument('-o', '--out',
+                    help='write the viewer here (mutually exclusive with --serve)')
+    ap.add_argument('--serve', action='store_true',
+                    help='host the viewer on the LAN instead of writing a file')
+    ap.add_argument('--port', type=int, default=8099,
+                    help='port for --serve (default 8099, the port this has '
+                         'always been reached on)')
+    ap.add_argument('--bind', default='0.0.0.0',
+                    help='address for --serve (default all interfaces; use '
+                         '127.0.0.1 to keep it local)')
     a = ap.parse_args()
 
-    low = os.path.abspath(a.out).lower()
-    if '/original/' in low or '/references/' in low:
-        sys.exit('refusing to write into original/ or references/')
+    if bool(a.serve) == bool(a.out):
+        sys.exit('pick one: -o FILE to write it, or --serve to host it')
+
+    if a.out:
+        low = os.path.abspath(a.out).lower()
+        if '/original/' in low or '/references/' in low:
+            sys.exit('refusing to write into original/ or references/')
 
     tiles = load_tiles(a.tiles, optional=True)
     clean = load_cleanroom(a.cleanroom, optional=False)
@@ -246,14 +326,22 @@ def main():
                 .replace('%TILES_CLEAN%', json.dumps([clean[i] for i in range(64)]))
                 .replace('%ART%', json.dumps(art))
                 .replace('%MAPS%', json.dumps(maps)))
-    with open(a.out, 'w') as f:
-        f.write(html)
-    print('wrote %s (%.1f MB)' % (a.out, len(html) / 1e6))
+
     print('  %d sectors: %s' % (len(maps), ' '.join(m['name'] for m in maps)))
     print('  cleanroom art: %d/64 SVG' % len(clean))
     print('  original art:  %d/64 PNG%s' % (len(tiles), '' if len(tiles) == 64
                                             else '  (not extracted - run tools/tile_atlas.py)'))
     print('  %d tile-art descriptions' % len(art))
+
+    if a.serve:
+        print('  viewer built in memory (%.1f MB); nothing was written to disk'
+              % (len(html) / 1e6))
+        serve(html, a.bind, a.port)
+        return
+
+    with open(a.out, 'w') as f:
+        f.write(html)
+    print('wrote %s (%.1f MB)' % (a.out, len(html) / 1e6))
     print('  open in a browser, or: playwright -> file://%s' % os.path.abspath(a.out))
 
 
