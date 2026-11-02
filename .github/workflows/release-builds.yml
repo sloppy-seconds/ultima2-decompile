@@ -1,0 +1,130 @@
+name: release-builds
+
+# Player-facing binaries, built when a release tag (v*) is pushed.
+#
+# This workflow replays, on runners, exactly what deploy/linuxbuild and
+# deploy/winbuild do on the dev box: build SDL2 from the pinned official
+# tarball (static, same flags in all three places — keep SDL2_VERSION below in
+# step with both Containerfiles), then link the engine against it. The
+# containers stay the local path; CI is the reproducible one.
+#
+# No game content is involved and none may appear in the artifacts: the engine
+# ships the cleanroom tile art compiled in, and the player supplies their own
+# copy of the game data (docs/cleanroom-procedure.md is the legal record; the
+# copyright line in AGENTS.md § 0 is why the artifacts are binaries only, never
+# a data pack).
+#
+# macOS is deliberately absent: the owner deferred it to a future macos-latest
+# job (Apple SDK cannot be redistributed, so it cannot be cross-built here).
+# See docs/phase4-state.md and the engine README.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  SDL2_VERSION: "2.32.8"   # keep in step with deploy/linuxbuild + deploy/winbuild
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: linux-static
+            sdl_flags: ""
+            make_target: sdl-static
+            artifact: u2-sdl-static
+          - name: windows-cross
+            sdl_flags: >-
+              -DCMAKE_SYSTEM_NAME=Windows
+              -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc
+            make_target: sdl-win
+            artifact: u2-sdl.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+          if [ "${{ matrix.name }}" = windows-cross ]; then
+            sudo apt-get install -y mingw-w64
+          fi
+
+      - name: Cache SDL2 ${{ env.SDL2_VERSION }} (${{ matrix.name }})
+        uses: actions/cache@v4
+        id: sdlcache
+        with:
+          path: sdl2-${{ matrix.name }}
+          key: sdl2-${{ matrix.name }}-${{ env.SDL2_VERSION }}-v1
+
+      - name: Build static SDL2
+        if: steps.sdlcache.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 -o SDL2.tar.gz \
+            "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz"
+          tar -xzf SDL2.tar.gz
+          cmake -S "SDL2-${SDL2_VERSION}" -B sdl2-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/sdl2-${{ matrix.name }}" \
+            -DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
+            -DSDL_TEST_LIBRARY=OFF \
+            ${{ matrix.sdl_flags }}
+          cmake --build sdl2-build
+          cmake --install sdl2-build
+
+      - name: Build the engine binary
+        run: |
+          if [ "${{ matrix.name }}" = windows-cross ]; then
+            PKG_CONFIG_LIBDIR="$GITHUB_WORKSPACE/sdl2-windows-cross/lib/pkgconfig" \
+              make -C engine ${{ matrix.make_target }}
+          else
+            make -C engine ${{ matrix.make_target }} \
+              SDLSTAT_PREFIX="$GITHUB_WORKSPACE/sdl2-linux-static"
+          fi
+
+      - name: Prove the link is really static
+        run: |
+          set -e
+          if [ "${{ matrix.name }}" = windows-cross ]; then
+            # the mingw-w64 metapackage already ships x86_64-w64-mingw32-objdump
+            x86_64-w64-mingw32-objdump -p engine/u2-sdl.exe | grep "DLL Name" | tee imports.txt
+            if grep -iE "SDL|libgcc|winpthread" imports.txt; then
+              echo "FAIL: non-stock DLL import found"; exit 1
+            fi
+          else
+            ldd engine/u2-sdl-static | tee deps.txt
+            if grep -iE "sdl" deps.txt; then
+              echo "FAIL: libsdl2 is dynamically linked"; exit 1
+            fi
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: engine/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum u2-sdl-static u2-sdl.exe > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/u2-sdl-static
+            dist/u2-sdl.exe
+            dist/SHA256SUMS.txt
