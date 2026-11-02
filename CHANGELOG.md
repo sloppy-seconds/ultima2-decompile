@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased (tag pending owner decision)
+## 0.1.0 — unreleased (first build tag is `v0.0.2`, cut 2026-11-02 to prove the release pipeline)
 
 The first release of the reproduction. What this project is, in one line: a
 byte-exact assembly reconstruction of the MS-DOS *Ultima II* binary, a portable
@@ -20,11 +20,13 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 
 ### The engine (Phase 4, in progress — CP0..CP7 green)
 
-* Portable C11, no third-party dependencies for the terminal build; the game
-  ships with **zero copyrighted content** — strings and tile geometry are
-  extracted at build time from the player's own copy, and the substitute tile
-  art was drawn under a documented cleanroom procedure
-  (`docs/cleanroom-procedure.md`).
+* Portable C11, no third-party dependencies for the terminal build. Copyrighted
+  content is split three ways and each part says so: the game's **text** is
+  committed in one generated file (`engine/content/gen_content.h`, extractor-
+  written, gated against `asm/`), the **art** is substituted under a documented
+  cleanroom procedure (`docs/cleanroom-procedure.md`), and the **world data** —
+  sector maps, monsters, dialogue, pictures — stays on the player's disk and is
+  never in this repository.
 * Implemented and gated: character creation (byte-compatible save records),
   the overworld with the proven passability ladder, towns and sites, monsters
   with the decoded spawn/AI rules, combat, commerce (TRANSACT and the talking
@@ -46,6 +48,20 @@ C11 reimplementation of its engine, and automated proof standing behind both.
   official source.
 * `release-builds.yml` builds both and attaches them with SHA256SUMS on a `v*`
   tag; the workflow itself fails if either binary's link stops being static.
+* **An SDL build now defaults to the window.** `--renderer=sdl|terminal` picks
+  the front end, defaulting to `sdl` in a binary compiled with SDL and terminal
+  otherwise, so the downloaded player binary needs no flags and no terminal; the
+  cc-only build the test suite drives keeps the text grid. `--sdl` remains an
+  alias. Asking a binary for a renderer it was not compiled with is now a refusal
+  with a reason, where it used to be silently ignored — which is how "the window
+  didn't open" got mistaken for a display problem. `--script` outside
+  `--headless` is refused for the same reason: no interactive backend reads it.
+* The Windows build had **never linked**, on any machine: mingw declares
+  `clock_gettime` and `nanosleep` and its CRT provides neither, so the failure
+  was at link and invisible to any host that did not cross-build. Fixed with a
+  per-platform clock backend (`src/platform/time_win32.c`). The Windows link also
+  dropped `-mwindows`, so the binary is console-subsystem and keeps its stderr —
+  under wine, that is the difference between a crash and a diagnosis.
 * macOS is a planned CI job (Apple SDK precludes cross-compiling from Linux).
 
 ### Fidelity notes worth knowing before playing
@@ -69,5 +85,6 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The `asm/5EAC` wound-loop tone is not wired (duration neither decoded nor
   measured); the floating damage number and sprite hit animation (E2/E4) are
   parked behind an animation-clock design question.
-* The Windows binary is link-verified but not yet run-verified (no wine smoke
-  test); the macOS build does not exist yet.
+* The Windows binary is link-verified and now console-subsystem so wine keeps its
+  stderr, but it is still **not run-verified**: nobody here has executed it. The
+  macOS build does not exist yet.

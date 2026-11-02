@@ -157,19 +157,25 @@ this repository alone, so if you can read this you can download them. To build
 one locally instead, `deploy/linuxbuild/build.sh` and `deploy/winbuild/build.sh`
 produce exactly what CI does, inside a container, and leave your host alone.
 
-**3. Run it, pointed at the game folder.**
+**3. Put the binary in that folder and run it.**
 
 ```bash
 sha256sum -c SHA256SUMS.txt            # if you downloaded a release
-chmod +x u2-sdl-static
-./u2-sdl-static --data-dir ~/u2
+mv u2-sdl-static ~/u2/ && cd ~/u2 && chmod +x u2-sdl-static
+./u2-sdl-static
 ```
 
-`--data-dir` is where the world comes from, and `ultimaii.exe` in it is where the
-tile art is extracted from on first run and cached afterwards. Without a data
-directory the engine says so: *no executable and no cached tiles: point --data-dir
-at your Ultima II directory*. Add `--cleanroom` to draw the substitute art instead
-of the original, and it will always announce that it is doing so.
+No flags. The data directory defaults to `.`, the same default drive the original
+used, and an SDL build opens the window by default. `ultimaii.exe` in the folder
+is where the tile art is extracted from on first run and cached afterwards (in
+`./saves/tiles.u2tl`, beside your save). If you would rather keep the binary
+somewhere else, say so once: `--data-dir ~/u2`.
+
+If the world is not there the engine says which part is missing — *no executable
+and no cached tiles: point --data-dir at your Ultima II directory* — rather than
+opening an empty map. Add `--cleanroom` to draw the substitute art instead of the
+original's, and it will always announce that it is doing so. `--renderer=terminal`
+runs the text front end in the same binary, if you want that for some reason.
 
 One honesty note about the two binaries. The Linux one is what the owner and the
 tests run. The Windows one is built by CI, links statically, imports only stock
@@ -197,7 +203,8 @@ make                      # cc only, C11, no third-party dependencies
 make test                 # CP0..CP7 acceptance checks
 ./u2 --data-dir ~/u2      # interactive terminal play
 
-make sdl && ./u2-sdl --data-dir ~/u2 --play-map    # SDL2 bitmap front end
+make sdl && ./u2-sdl --data-dir ~/u2    # SDL2 bitmap front end (the default
+                                        # renderer in that binary is the window)
 ```
 
 Two notes that save confusion:

@@ -40,7 +40,29 @@ make sdl-win              # Windows x86_64 .exe, static SDL — needs the mingw
 
 The static builds are the player-facing artifacts: one file plus the user's own
 game data, no container and no package installs (the containers are build hosts
-only). `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
+only).
+
+### Renderer selection
+
+`--renderer=sdl|terminal`, and the default is a property of the **build**: `sdl`
+in a binary compiled with SDL, `terminal` in the cc-only one. That is what lets
+`./u2-sdl-static` need no flags and no terminal, while every test script keeps
+driving the text build it has always driven. `--sdl` stays as an alias.
+
+Two refusals, both because a silently ignored flag reads exactly like a working
+one:
+
+* `--renderer=sdl` in a binary built without SDL is an error, not a quiet fall
+  back to the text grid. This is the failure a player meets first, and it used to
+  be indistinguishable from "the window failed to open".
+* `--script` outside `--headless` is refused. No interactive backend reads
+  `script_path`, so the keys would be dropped and the run would wait for a human.
+  `docs/phase4-state.md` had this recorded as "`--sdl` cannot take `--script`"
+  and blamed argument order; the order was never the problem.
+
+Gated: CP0 asserts the refusals on the terminal build, CP4 asserts the flagless
+SDL build really does present a frame (`--dump-screen` is SDL-only, so a written
+frame is the proof) and that `--renderer=terminal` writes none. `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
 at runtime — and `u2-sdl.exe` imports only stock Windows DLLs. Cutting a `v*`
 release tag builds both on CI and attaches them, with SHA256SUMS, via
 `.github/workflows/release-builds.yml`.

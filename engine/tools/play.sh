@@ -3,11 +3,10 @@
 #
 # Why this exists: the agent shell that drives this repo has no DISPLAY and no
 # WAYLAND_DISPLAY in its environment (it is not a graphical login session), so a
-# plain `./u2-sdl --sdl` silently falls back to the terminal renderer and looks
-# like it is running while drawing nothing anyone can see. The display has to be
-# synthesised from the socket files, which is what tools/spice86_common.sh already
-# does for the emulator; this is the same trick, kept in one place so it is not
-# tribal knowledge.
+# plain `./u2-sdl` — which now defaults to the window — fails at SDL init and
+# draws nothing anyone can see. The display has to be synthesised from the socket
+# files, which is what tools/spice86_common.sh already does for the emulator; this
+# is the same trick, kept in one place so it is not tribal knowledge.
 #
 # Usage:
 #   tools/play.sh                 player's own extracted art

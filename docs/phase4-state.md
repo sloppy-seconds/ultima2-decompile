@@ -1172,12 +1172,24 @@ was worthless — with the restore removed the leftover shows as the page still 
 item text, so grepping for item names passed a broken build. The diff gate goes non-empty in exactly
 that case.
 
-**Still open, and no longer a blocker for Z:** `--sdl` cannot take `--script` at all, because backend
-selection runs before argument parsing sets `ctx.script_path`. A note records this in
-`wire_backends()`. Until it is fixed the SDL build cannot be driven headlessly, so no SDL *pixel*
-bug can be gated in CI and every claim about what the SDL build looks like still comes from a human
-screenshot. `--dump-screen-at N` was built to help here and broke sector loading for a reason never
-found; it was dropped, not diagnosed, and should not be re-introduced blind.
+**Closed as a defect, still open as a capability (2026-11-02).** The recorded cause
+was wrong: backend selection does *not* run before argument parsing — `main()`
+parses everything, then calls `wire_backends()`. The real reason `--sdl --script`
+did nothing is simpler: no interactive backend reads `script_path`, so the flag was
+dropped in silence and the run waited for a human who was never coming. That
+silence is now a refusal (`--script` requires `--headless`, gated in CP0), and
+`--renderer=sdl|terminal` replaced the `--sdl` special case with a build-dependent
+default, so the wrong flag on the wrong binary says so instead of looking like a
+broken window.
+
+What remains genuinely open is the capability the note was reaching for: driving
+the **SDL renderer** from a script, which would let a pixel bug be gated in CI
+instead of resting on a human screenshot. `--headless` forces the null renderer,
+so the two have never been combinable. `--dump-screen-at N` was built to help here
+and broke sector loading for a reason never found; it was dropped, not diagnosed,
+and should not be re-introduced blind. The cheap half is now gated anyway: CP4
+proves the flagless SDL build presents a real frame under `SDL_VIDEODRIVER=dummy`,
+which is the regression guard for "the default silently stopped being the window".
 
 
 ## Invariants (checked at every checkpoint)
