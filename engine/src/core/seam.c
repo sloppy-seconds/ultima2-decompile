@@ -189,6 +189,20 @@ int seam_key_wait(u2_ctx *ctx, u2_key *out)
     return got;
 }
 
+int seam_key_wait_shown(u2_ctx *ctx, u2_key *out)
+{
+    /* The trace token is `present=menu` rather than a bare present because the gate that
+     * guards this contract reads the trace and has to distinguish "a prompt was put on
+     * screen before the blocking read" from every other present in the run. */
+    if (ctx->present_now) {
+        u2_trace(ctx, "present", "-", "present=menu before=key_wait");
+        ctx->present_now(ctx);
+    } else {
+        u2_trace(ctx, "present", "-", "present=skipped no_present_now");
+    }
+    return seam_key_wait(ctx, out);
+}
+
 uint8_t seam_rand_byte(u2_ctx *ctx)
 {
     uint8_t r = u2_rand_byte(ctx);

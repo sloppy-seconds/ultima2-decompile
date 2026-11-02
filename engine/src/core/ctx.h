@@ -101,9 +101,11 @@ typedef struct u2_ctx {
     int diag_unstamped_at_load;
 
     /* Set by the overworld loop to a function that composites and presents a whole frame.
-     * seam_key_wait calls it before blocking so a handler that printed something just before
-     * waiting has it on screen WITH the map, not over a blanked one. Null outside the
-     * overworld, where the text-layer flush alone is the whole screen. See seam.c. */
+     * A handler that prints a prompt and then blocks reaches it through
+     * seam_key_wait_shown, because the presenting loop sits ABOVE the handler: without that
+     * call the question lands on screen only when the handler returns, which is after the
+     * player typed blind. Null outside the overworld, where the text-layer flush alone is the
+     * whole screen. See seam.h for why this is not folded into seam_key_wait itself. */
     void (*present_now)(struct u2_ctx *ctx);
     int dump_each;          /* --dump-each: print the grid after every present */
     const char *dump_screen;/* --dump-screen F: SDL build saves the first

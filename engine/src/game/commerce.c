@@ -201,15 +201,15 @@ static void engine_gap(u2_ctx *ctx, const char *what)
  * runs at the title screen, where --dump-screen sets its done-flag during the flush and the
  * title flow loops on a no-key result forever. The original needs no such call anywhere -- it
  * writes to 0xB8000 and the CRT is always displaying it -- so this is port plumbing at the
- * three places that need it, not a property of every wait.
+ * places that need it, not a property of every wait.
  *
- * It composes a whole frame rather than flushing the text layer, because a bare text flush
- * presents the text surface alone and the map goes black behind the question. */
+ * It is now a thin alias for seam_key_wait_shown, which carries the contract, the composition
+ * detail (a whole frame, not a bare text flush, or the map goes black behind the question)
+ * and the same warning about folding it into the shared path. The shops keep the local verb
+ * because half a dozen call sites read better with it. */
 static int show_and_wait(u2_ctx *ctx, u2_key *k)
 {
-    if (ctx->present_now)
-        ctx->present_now(ctx);
-    return seam_key_wait(ctx, k);
+    return seam_key_wait_shown(ctx, k);
 }
 
 /* asm/2028_read_decimal_digit: block until one decimal digit arrives, echo it, return it.

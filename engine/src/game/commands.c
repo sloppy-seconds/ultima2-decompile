@@ -410,7 +410,10 @@ static u2_cmd_result cmd_R(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     int digit = -1;
     while (digit < 0) {
         u2_key k;
-        if (seam_key_wait(ctx, &k) == 0)
+        /* _shown: the menu above this line is invisible until something presents it, and
+         * the loop that presents sits above this handler. Owner-reported 2026-11-02 as a
+         * crash; it was the menu arriving only after the digit was typed. */
+        if (seam_key_wait_shown(ctx, &k) == 0)
             break;                       /* input exhausted: no original counterpart */
         if (k.ch >= '0' && k.ch <= '9') {
             digit = k.ch - '0';
@@ -532,8 +535,11 @@ static u2_cmd_result cmd_M(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
         /* seam_key_wait returns NON-ZERO when it got a key and 0 when there is none —
          * same convention creation.c:159 depends on. Getting this backwards is invisible
          * in the dispatch gate, which is why the gate for M reads the echoed digit and not
-         * just the prompt. */
-        if (seam_key_wait(ctx, &k) == 0)
+         * just the prompt.
+         *
+         * _shown for the same reason as cmd_R: the prompt is printed above and nothing
+         * between there and here puts it on the screen. */
+        if (seam_key_wait_shown(ctx, &k) == 0)
             break;                       /* input exhausted: no original counterpart */
         if (k.ch >= '0' && k.ch <= '9') {
             digit = k.ch - '0';
@@ -610,7 +616,9 @@ static u2_cmd_result cmd_W(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     int digit = -1;
     while (digit < 0) {
         u2_key k;
-        if (seam_key_wait(ctx, &k) == 0)
+        /* _shown: same as cmd_R two handlers up. The owner reported W alongside R for
+         * exactly this reason — the WEAR menu arrived after the digit. */
+        if (seam_key_wait_shown(ctx, &k) == 0)
             break;                       /* input exhausted: no original counterpart */
         if (k.ch >= '0' && k.ch <= '9') {
             digit = k.ch - '0';
@@ -1064,11 +1072,9 @@ static u2_cmd_result cmd_Y(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
         /* Show YELL WHAT? before waiting for the yell. Without this the prompt is written to
          * the vram and never presented, because the loop that presents sits above this
          * handler, so the player stares at an unchanged screen while the game waits for a
-         * word. Same reason as commerce.c's show_and_wait; see the comment there for why it
-         * is at the site and not in the shared seam. */
-        if (ctx->present_now)
-            ctx->present_now(ctx);
-        if (seam_key_wait(ctx, &k) == 0)
+         * word. Now the shared seam helper; see seam.h for why the helper is opt-in per site
+         * and cannot simply be folded into seam_key_wait. */
+        if (seam_key_wait_shown(ctx, &k) == 0)
             break;                        /* input exhausted: no original counterpart */
         if (k.ch == '\r') {
             seam_char_print(ctx, '\r');   /* asm/4562 prints the Enter itself */

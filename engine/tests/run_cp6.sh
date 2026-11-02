@@ -241,6 +241,24 @@ else
             || ok "CP6 R: the gate is agility, not the armour handler's strength"
     fi
 
+    # --- the prompt gate -----------------------------------------------------
+    # R, W and M all print a menu and then block for a digit. The presenting loop sits above
+    # the handler, so without a present at the site the menu reaches the screen only after
+    # the answer is typed, and the owner read that as a crash. tests/prompt_gate.py asserts
+    # the ordering from the trace; its selftest runs regardless, so the checker is never
+    # silently unexercised.
+    if python3 tests/prompt_gate.py --selftest >"$WORK/promptgate.self" 2>&1; then
+        ok "CP6 prompt gate selftest: all five controls can go red"
+    else
+        bad "CP6 prompt gate selftest failed:"
+        sed 's/^/        /' "$WORK/promptgate.self"
+    fi
+    if python3 tests/prompt_gate.py >"$WORK/promptgate.out" 2>&1; then
+        ok "CP6 prompt gate: R, W and M each put their menu on screen before reading the answer"
+    else
+        bad "CP6 prompt gate: $(grep '^FAIL' "$WORK/promptgate.out" | head -3 | tr '\n' ';')"
+    fi
+
     # (i) NEGATE TIME spends a STRANGE COIN (items_held[13], which is what DS:E3 is) and sets the
     #     creature-move freeze counter, which then ticks like the paralysis bytes.
     if run_case armour cmdn 'N\n' "$WORK/cmdn.out"; then
