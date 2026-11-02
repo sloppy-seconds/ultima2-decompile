@@ -2133,7 +2133,16 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
 int u2_overworld_dump(u2_ctx *ctx, const char *path)
 {
     u2_overworld ow;
-    if (u2_overworld_init(ctx, &ow) != 0) {
+    /* Two sources of position, and the difference matters when a frame is being
+     * compared against a capture: with no record loaded this renders the fixed
+     * probe sector, and with one it renders wherever that save left the player,
+     * including inside a town. Every capture of a settlement is taken from a
+     * loaded character, so a dump that could only ever show the probe sector
+     * could never be put beside one. */
+    const int rc = u2_save_record_present(ctx)
+                       ? u2_overworld_init_state(ctx, &ow)
+                       : u2_overworld_init(ctx, &ow);
+    if (rc != 0) {
         fprintf(stderr, "overworld: %s\n", ow.note);
         return -1;
     }
