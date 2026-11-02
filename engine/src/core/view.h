@@ -17,6 +17,8 @@
  *
  *   - the window is 20 columns x 10 rows  (cmp $0x14, cmp $0xa)
  *   - the top-left map cell is (x - 9, y - 5), so the player sits at (9, 5)
+ *   - the world map wraps: both origin axes get `and $0x3f` (asm/5B98). A site sector does
+ *     not (asm/5ABB, deliberately), and a cell past its edge draws the ground byte instead
  *   - tile index = (map_byte >> 1) & 0xFE  (clc; rcr al,1; and al,0xfe)
  *   - a cell outside the sector takes its tile from DS:12, not from the map
  *   - a tile whose index equals the underlay byte is suppressed with bit 7 set
@@ -37,6 +39,10 @@
 #define U2_VIEW_PLAYER_ROW 5
 #define U2_VIEW_NO_DRAW    0x80
 #define U2_VIEW_EMPTY      0x2E   /* the index that escapes suppression */
+/* What a site sector draws outside its own 64x64 array: the ground byte. Measured
+ * 2026-11-02 in Port Boniface, where the off-grid cell and a real 0x08 cell in the
+ * same frame have the identical bitmap and census. See core/view.c. */
+#define U2_VIEW_SITE_OFFGRID 0x08
 
 typedef struct u2_view {
     /* Staging grid, the DS:0x272 analogue: low 7 bits are the tile index,
@@ -58,9 +64,11 @@ static inline uint8_t u2_view_index(uint8_t map_byte)
  * Fill the viewport.
  *
  *   px, py      player position inside the sector, the DS:00 / DS:01 pair
- *   off_map     the DS:12 byte, which is a mode byte and not a tile (state.h's
- *               view_mode). It is the filler for the no-sector-resident case only;
- *               the proven fill loop wraps the viewport instead of blanking it.
+ *   off_map     the DS:12 byte. It carries two jobs, and asm/5AB1 is what splits them:
+ *               0xFF means the world map, which is a torus and wraps on both axes; any
+ *               other value means a site sector, which does not wrap, and cells past its
+ *               edge draw U2_VIEW_SITE_OFFGRID. It is also the filler for the
+ *               no-sector-resident case, and it is a mode byte, never a tile.
  *   underlay    the DS:0x372 analogue, U2_VIEW_TILES bytes; NULL means "no
  *               underlay layer", which suppresses nothing
  *   empty_gate  the DS:54E == 0xFF test; non-zero allows empty tiles to draw

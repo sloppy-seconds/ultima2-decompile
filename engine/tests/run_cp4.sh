@@ -311,6 +311,29 @@ else
     printf '  SKIP  no player content: --dump-map not exercised\n'
 fi
 
+# --- the site viewport gate -------------------------------------------------
+# A site sector must not draw the world map's wrap, and the mode that decides it is
+# derived from the sector's ones digit rather than from the act of entering one, so
+# a save loaded inside a town has to come back in site mode. The gate builds its own
+# Port Boniface save, renders it, and checks the three rows the original draws past
+# the edge. Its selftest runs whether or not the content is present, so the checker
+# is never silently unexercised; the render itself SKIPs loudly without original/.
+if python3 tests/site_viewport_gate.py --selftest >"$WORK/sitegate.self" 2>&1; then
+    ok "site viewport gate selftest: all five controls can go red"
+else
+    bad "site viewport gate selftest failed:"
+    sed 's/^/        /' "$WORK/sitegate.self"
+fi
+if python3 tests/site_viewport_gate.py >"$WORK/sitegate.out" 2>&1; then
+    if grep -q '^SKIP' "$WORK/sitegate.out"; then
+        printf '  SKIP  %s\n' "$(tail -1 "$WORK/sitegate.out" | sed 's/^SKIP  //')"
+    else
+        ok "$(tail -1 "$WORK/sitegate.out" | sed 's/^PASS  //')"
+    fi
+else
+    bad "site viewport gate: $(tail -1 "$WORK/sitegate.out" | sed 's/^FAIL  //')"
+fi
+
 # --- --data-dir is part of the documented contract ----------------------
 ./u2 --help 2>&1 | grep -q -- '--data-dir' \
     && ok "--data-dir is in the usage text" \

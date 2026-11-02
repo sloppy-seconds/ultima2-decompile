@@ -406,6 +406,14 @@ void u2_overworld_site_leave(u2_ctx *ctx, u2_overworld *ow)
     ow->y = ctx->state.entry_y;
     ow->sector_lo = 0;
     ctx->state.sector_second = 0;
+    /* The mode goes back with the digit it was derived from. asm/0C1F sets DS:12 to 4, reads
+     * DS:4A, and only falls through to asm/0C2B -- which sets it to 0xFF -- when that digit is
+     * zero, so the mode is a function of the ones digit rather than an event that site entry
+     * causes. Leaving it latched at 4 would keep the settlement's no-wrap rule on the world map
+     * after the player walked out, which is the same defect as the one that drew a town's north
+     * edge along its south. */
+    ctx->state.view_mode = 0xFF;
+    ow->view_mode = 0xFF;
 
     /* Same rule as site_enter(): sync in memory, write nothing unless the enhanced
      * knob asked for it. Leaving a site re-reads the pristine sector, which is what
@@ -1397,7 +1405,14 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     ow->y = ctx->state.entry_y;
     ow->sector_hi = ctx->state.sector_first;
     ow->sector_lo = ctx->state.sector_second;
-    ow->view_mode = 0xFF;         /* file 0x0A67: mov $0xff,[0x12] */
+    /* Not a constant. asm/0C1F sets DS:12 to 4, reads DS:4A, and falls through to asm/0C2B,
+     * which sets 0xFF, only when that digit is zero -- so a save left inside a settlement
+     * comes back in mode 4 and gets the settlement's viewport, and a save on the world map
+     * comes back wrapping. The `mov $0xff,[0x12]` at file 0x0A67 that this used to cite is
+     * the world-map arm of that pair, not an unconditional stamp: a town save rendered as a
+     * torus here, which is how the sign band of Port Boniface reached the bottom of the screen
+     * in the engine's own frame. */
+    ow->view_mode = ctx->state.sector_second ? 0x04 : 0xFF;
     if (overworld_open(ctx, ow) != 0) return -1;
     if (overworld_resume(ctx, ow) != 0) return -1;
 

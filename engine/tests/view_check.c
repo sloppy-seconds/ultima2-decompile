@@ -74,27 +74,82 @@ int main(void)
     CHECK(all, "every one of the 200 cells matches map[(y-5+r)*64 + (x-9+c)]");
     CHECK(v.drawn == U2_VIEW_TILES, "with no suppression all 200 cells are drawable");
 
-    /* --- the viewport WRAPS at the sector edge ---------------------------
+    /* --- the world map WRAPS at the sector edge --------------------------
      * This check used to assert the opposite — "take the off-map tile, not a
      * wrap" — and it passed, because it was written from a reading of asm/5AE1
      * rather than from the running game. A test that encodes a wrong belief is
      * worse than no test: it made the seam unfixable without going red first.
      * Replaced by live capture 2026-10-27 (owner at (0,11), sector 20): staging
-     * row 5 held the map's own columns 55..63 on the left of the screen. */
+     * row 5 held the map's own columns 55..63 on the left of the screen.
+     *
+     * The mode byte is 0xFF here on purpose. asm/5AB1 branches on it, and the wrap
+     * belongs to the world-map arm alone; the previous version of this test passed
+     * 0x2A, an arbitrary filler, which is a site mode and must NOT wrap. */
     synth_world();
-    u2_view_fill(&v, &world, 3, 3, 0x2A, no_underlay, 0);
+    u2_view_fill(&v, &world, 3, 3, 0xFF, no_underlay, 0);
     /* x-9 = -6 and y-5 = -2, both of which the original masks back into range. */
     int wrap_ok = 1;
     for (int c = 0; c < 9; c++)
         if (u2_view_at(&v, c, 0) !=
             u2_view_index(u2_world_tile_at(&world, (3 - 9 + c) & 63, (3 - 5) & 63)))
             wrap_ok = 0;
-    CHECK(wrap_ok, "columns left of the west edge show the wrapped map columns, not filler");
+    CHECK(wrap_ok, "on the world map, columns left of the west edge show the wrapped columns");
     CHECK(u2_view_at(&v, 9, 0) ==
               u2_view_index(u2_world_tile_at(&world, 3, (3 - 5) & 63)),
-          "the top row wraps in y as well as x");
+          "on the world map the top row wraps in y as well as x");
     CHECK(u2_view_at(&v, 19, 9) == u2_view_index(u2_world_tile_at(&world, 13, 7)),
           "cells that are inside the sector still come from the map");
+
+    /* --- a SITE sector does not wrap -------------------------------------
+     * Measured 2026-11-02 standing at (31,62) and (31,63) in Port Boniface,
+     * sector 31: every row past grid row 63 is one constant tile, and bitmap
+     * matching it against the extracted art gives the sector's own ground byte
+     * 0x08 — a real 0x08 cell in the same frame has the identical bitmap and
+     * census. captures/spice86/s31-south-edge/, and asm/5ABB is the branch that
+     * computes the origin without masking.
+     *
+     * The engine wrapped here, which pulled a town's north edge onto the bottom of
+     * the screen; in Port Boniface the north edge is a sign band, and the owner
+     * reported the result as water surrounding the south exit. These checks are the
+     * control that stops an unconditional `& 63` coming back. */
+    synth_world();
+    u2_view_fill(&v, &world, 31, 62, 0x04, no_underlay, 0);
+    const int ground = u2_view_index(U2_VIEW_SITE_OFFGRID);
+    CHECK(u2_view_at(&v, 9, 5) == u2_view_index(u2_world_tile_at(&world, 31, 62)),
+          "in a site the player's own cell still comes from the map");
+    CHECK(u2_view_at(&v, 9, 6) == u2_view_index(u2_world_tile_at(&world, 31, 63)),
+          "in a site the last grid row is still the last grid row");
+    int filler_ok = 1, not_wrapped = 1;
+    for (int r = 7; r < U2_VIEW_ROWS; r++)
+        for (int c = 0; c < U2_VIEW_COLS; c++) {
+            if (u2_view_at(&v, c, r) != ground) filler_ok = 0;
+            /* The wrapped answer would be row (r+57)&63; if any cell equals it, the
+             * wrap is back. Row 7 wrapped is map row 0, which the synthetic sector
+             * makes distinguishable from the ground byte at most columns. */
+            if (u2_view_at(&v, c, r) ==
+                u2_view_index(u2_world_tile_at(&world, (22 + c) & 63, (57 + r) & 63)) &&
+                u2_view_index(u2_world_tile_at(&world, (22 + c) & 63, (57 + r) & 63)) != ground)
+                not_wrapped = 0;
+        }
+    CHECK(filler_ok, "in a site, every cell past the last row draws the ground byte");
+    CHECK(not_wrapped, "in a site, no off-grid cell shows the wrapped far edge instead");
+
+    /* The same rule on the other three edges, and on the axis the world map proved first. */
+    synth_world();
+    u2_view_fill(&v, &world, 3, 3, 0x04, no_underlay, 0);
+    int west_ok = 1;
+    for (int c = 0; c < 6; c++)          /* x-9 = -6..-1; col 6 is x=0, which is inside */
+        if (u2_view_at(&v, c, 5) != ground) west_ok = 0;
+    CHECK(west_ok, "in a site, columns left of the west edge draw the ground byte too");
+    int north_ok = 1;
+    for (int r = 0; r < 2; r++)          /* y-5 = -2,-1; row 2 is y=0, which is inside */
+        if (u2_view_at(&v, 9, r) != ground) north_ok = 0;
+    CHECK(north_ok, "in a site, rows above the north edge draw the ground byte too");
+    int inside_ok = 1;
+    for (int c = 6; c <= 9; c++)
+        if (u2_view_at(&v, c, 5) != u2_view_index(u2_world_tile_at(&world, c - 6, 3)))
+            inside_ok = 0;
+    CHECK(inside_ok, "in a site, the cells that are inside the edge still come from the map");
 
     /* --- underlay suppression ------------------------------------------- */
     synth_world();
