@@ -98,6 +98,13 @@ cross-compiled from Linux (Apple SDK); it is a CI macos-runner job, deferred by
 the owner 2026-11-02. The Windows entry point is the SDL backend; the terminal
 backend compiles to a stub that says so.
 
+**The window is resizable and the picture scales with it.** The fit is integer and centred, so a
+source pixel is always exactly `s x s` device pixels and the remainder becomes letterbox bars;
+below 1:1 it fills the window instead, because cropping loses content and squashing does not.
+The geometry is `src/core/scale.c` — pure integer arithmetic, no SDL dependency — rather than
+something inside the backend, on the same rule as the palette: a renderer moves pixels, it does
+not decide what they look like. `tests/scale_check.c` gates it in the cc-only build.
+
 `build/`, `u2` and every generated header are gitignored.
 
 ## Game text is committed; art and data are not

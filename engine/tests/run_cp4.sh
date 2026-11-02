@@ -142,6 +142,24 @@ else
     fi
 fi
 
+# --- window scaling -------------------------------------------------------
+
+# The SDL backend fits the 320x200 frame into a resized window by integer scale.
+# The fit is pure integer arithmetic in core/scale.c, so it is tested here in the
+# cc-only build with no SDL and no display, on exactly the code the backend calls.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/scale_check" \
+   tests/scale_check.c src/core/scale.c 2>"$WORK/cc-scale.err"
+if [ $? -ne 0 ]; then
+    bad "scale test harness did not build: $(head -5 "$WORK/cc-scale.err")"
+else
+    if "$WORK/scale_check" > "$WORK/scale.out" 2>&1; then
+        ok "window scaling: integer fit, aspect, centring, degenerate sizes ($(grep -c '  ok  ' "$WORK/scale.out") checks)"
+    else
+        bad "scale check failed:"
+        sed 's/^/        /' "$WORK/scale.out"
+    fi
+fi
+
 # --- the framebuffer ------------------------------------------------------
 # Every display backend sits behind this, so a mistake here reaches all of them.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/frame_check" \

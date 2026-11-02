@@ -2988,3 +2988,52 @@ is gated and the call site is not. Confirming the splash on screen needs a perso
 **Copyright posture unchanged and worth restating:** the pictures are read at runtime from the
 player's own `--data-dir`, exactly like the tile art. Nothing is committed, nothing is substituted, and
 with the file absent the text screens are byte-for-byte what they were before this existed.
+
+## Resizing the window now scales the picture (owner-found, 2026-11-03)
+
+The owner asked whether SDL supports scaling, because dragging the window left the graphics
+unchanged. It did support it, and the backend already asked for it: `SDL_RenderCopy(ren, tex,
+NULL, NULL)` with a NULL destination means "fill the output rectangle", and
+`SDL_HINT_RENDER_SCALE_QUALITY=0` was set before the renderer existed so the upscale is
+nearest-neighbour. Three separate defects stood between that and what the player sees.
+
+1. **Nothing re-presented.** `input_sdl.c` pumped events but handled only `SDL_QUIT`,
+   `SDL_APP_TERMINATING` and `SDL_KEYDOWN`. `SDL_WINDOWEVENT_SIZE_CHANGED` was dropped, and the
+   game presents only when it has something new to draw — a resize is not something the game
+   says. So the window kept the stale frame until the next keypress, or forever on the title
+   menu. This is the whole reason it looked like SDL was ignoring the resize.
+2. **The stretch distorted.** A NULL destination fills whatever aspect the window happens to
+   be, so square source pixels became rectangles.
+3. **No HiDPI.** Without `SDL_WINDOW_ALLOW_HIGHDPI` the drawable is not the window size on a
+   scaled desktop, so the scale factor was wrong in a way the player cannot name.
+
+**The fit is integer, and that is a deliberate cost.** The source is 2bpp CGA: a pixel is the
+smallest unit the art has. At a fractional scale some source pixels become 3 device pixels and
+some 4, which on the dragon logo reads as the outline wobbling and on 8x8 font cells reads as
+text with uneven strokes. An integer scale makes every source pixel exactly `s x s` device
+pixels; the price is letterbox bars, which the original on a real CGA monitor never had and
+which every emulator of this era imposes anyway.
+
+**Below 1:1 the rule inverts**, and returns `scale = 0` to say so. If the window is smaller than
+320x200 there is no integer scale that fits, and the only alternative to a fractional fit is
+cropping. Squashing hides nothing and the player can drag it wider; cropping loses content.
+
+**The geometry is in `core/scale.c`, not in the backend.** Same principle as the palette and the
+do-not-draw rule: a renderer may move pixels, it may not decide what they should look like, and
+two backends each inventing their own fit would drift. The side benefit is that it is pure
+integer arithmetic with no SDL dependency, so `tests/scale_check.c` gates it in the default
+cc-only build with no display and no SDL installed, against the same code the SDL path calls.
+
+**Gate.** 13 named cases plus a sweep of roughly 52,000 window sizes checking four invariants:
+the scale is maximal for the output, the aspect is exactly preserved (cross-multiplied, no
+floats), the image is centred to within a pixel, and the rect never escapes the window. Four
+mutants each turn it red — per-axis scale (17,707 sweep failures), height-only scale (18,921),
+no centring (43,496), crop-instead-of-fill (14,738). The first draft of the test was itself
+wrong twice and both are worth recording: the centring tolerance assumed the spare pixel went
+left instead of right, and the sweep printed an `ok` line unconditionally, so it reported
+success on the same screen as 21,732 failures. A check that congratulates itself next to a wall
+of red is the same defect as a gate that cannot go red.
+
+**Not machine-verified, said plainly.** That the resize event repaints, and that the result looks
+right, needs a person with a window: the dummy video driver creates a fixed-size window and there
+is no flag to resize one. The arithmetic is gated; the event plumbing is not.

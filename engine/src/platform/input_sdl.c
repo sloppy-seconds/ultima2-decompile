@@ -98,6 +98,17 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
             if (ctx) ctx->exit_code = 0;
             return -1;
         }
+        /* A resize is the one event that changes what is on screen without the
+         * game having anything new to draw, and the game only presents when it
+         * does. Without this the window keeps the old frame until the next
+         * keypress, which is what made the picture look like it ignored the
+         * window. SIZE_CHANGED rather than RESIZED: it also covers the drawable
+         * changing under a HiDPI scale factor, where no resize was requested. */
+        if (e.type == SDL_WINDOWEVENT &&
+            e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+            u2_sdl_repaint(ctx);
+            continue;
+        }
         if (e.type != SDL_KEYDOWN) continue;
 
         switch (e.key.keysym.sym) {

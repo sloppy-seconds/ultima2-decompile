@@ -93,6 +93,30 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The pictures are read from the player's own directory at runtime, like the tile art.
   Nothing is committed and nothing is substituted.
 
+### Window scaling (2026-11-03)
+
+* **Resizing the window now scales the picture.** It did not, and the reason was three
+  separate things rather than one. SDL was already scaling — `SDL_RenderCopy` with a NULL
+  destination fills the output rectangle — but nothing re-presented after a resize, because
+  the event pump handled only quit and keydown and dropped `SDL_WINDOWEVENT_SIZE_CHANGED`.
+  The window kept the old frame until the game happened to draw a new one, which on the title
+  menu could be never.
+* The fit is now **integer and centred**, so a source pixel is always exactly `s x s` device
+  pixels and the letterbox bars take the remainder. This matters more here than in most
+  emulators: the art is 2bpp CGA, where a fractional scale makes some pixels 3 device pixels
+  wide and some 4, and the dragon's outline visibly wobbles. Below 1:1 the rule changes to
+  filling the window, because the alternative to a fractional fit is cropping, and hiding
+  part of the screen is worse than squashing it.
+* The geometry lives in `engine/src/core/scale.c`, not in the SDL backend, for the same reason
+  the palette does: a backend may move pixels and must not decide what they look like. It is
+  also pure integer arithmetic with no SDL dependency, so `tests/scale_check.c` gates it in the
+  cc-only build with no display, across a sweep of ~52,000 window sizes, checking maximality,
+  aspect, centring, containment and the degenerate cases. Four mutants (per-axis scale,
+  height-only scale, no centring, crop-instead-of-fill) each turn it red.
+* `SDL_WINDOW_ALLOW_HIGHDPI` is now set, so on a scaled desktop the drawable size is what the
+  window size claims, and the fit is recomputed from the renderer's output size every frame
+  rather than cached from a resize event.
+
 ### Fixed after v0.0.5
 
 * **`R` and `W` looked like a crash; they were a menu that never reached the screen.** The

@@ -140,6 +140,11 @@ extern const u2_audio    u2_audio_sdl;
  * were. Backs --video-drivers, and the release gate that refuses to ship a
  * player binary with no display backend. */
 int u2_sdl_list_video_drivers(void);
+/* Re-present the last frame after the window changed size. The game presents when
+ * it has something new to draw and a resize is not that, so the input backend's
+ * event pump has to ask for it. Defined in renderer_sdl.c; a no-op before the
+ * first frame. */
+void u2_sdl_repaint(u2_ctx *ctx);
 #endif
 
 #endif /* U2_PLATFORM_H */
