@@ -41,7 +41,9 @@ make sdl-win              # Windows x86_64 .exe, static SDL — needs the mingw
 The static builds are the player-facing artifacts: one file plus the user's own
 game data, no container and no package installs (the containers are build hosts
 only). `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
-at runtime — and `u2-sdl.exe` imports only stock Windows DLLs.
+at runtime — and `u2-sdl.exe` imports only stock Windows DLLs. Cutting a `v*`
+release tag builds both on CI and attaches them, with SHA256SUMS, via
+`.github/workflows/release-builds.yml`.
 
 `sdl-win` produces one `u2-sdl.exe` whose only DLL imports are stock Windows
 ones (SDL2 is built static from the pinned release tarball inside the winbuild
