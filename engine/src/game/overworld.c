@@ -782,6 +782,15 @@ static void u2_swamp_damage(u2_ctx *ctx)
      * prints nothing, which is the silence asm/2495 cites above. One seam, one
      * audit point — see game/feedback.h and docs/phase4-state.md E3. */
     u2_feedback(ctx, "[swamp -5 HP]");
+    /* Enhanced mode also gets the wound ring on the player's cell — the same
+     * visual the original plays when a blow lands (asm/5255), reused here as
+     * an enhancement at the owner's direction 2026-11-02. The original does
+     * NOT flash the swamp: observed three times over — controlled entries with
+     * the flash family at zero trace executions, and the owner's own failed
+     * replay (captures/spice86/swamp-flash-20261102) — so this call is gated
+     * on enhanced, and original mode keeps the silence asm/2495 cites. */
+    if (ctx->fidelity == U2_FIDELITY_ENHANCED)
+        u2_flash_cell(ctx, U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
 }
 
 /* On-foot passability — asm/2423's ladder, transcribed rather than re-derived.

@@ -69,22 +69,27 @@ def main():
             fails += 1
         print("  %s  %s — %s" % ("PASS" if ok else "FAIL", label, detail))
 
-    # enter: one step east onto the swamp. Original mode: silent, like the original.
+    # enter: one step east onto the swamp. Original mode: silent, like the original —
+    # no announcement AND no flash (the swamp provably does not flash; see
+    # captures/spice86/swamp-flash-20261102).
     text, s = state_case("enter", ["RIGHT"], tiles={G.EAST: 0x04})
     check("enter", s and G.pos(s) == G.EAST and hp(s) == 9992
-          and "[swamp" not in G.flatten(text),
-          "pos %s hp %d, no announcement (want moved, 9992, silent)" %
+          and "[swamp" not in G.flatten(text) and s["state"]["flashes"] == 0,
+          "pos %s hp %d, no announcement, no flash (want moved, 9992, silent)" %
           (G.pos(s) if s else None, hp(s) if s else -1))
 
-    # enter-enhanced: the E3 seam. Enhanced mode announces what the original left
-    # silent; the invented line is bracketed and lower-case so it cannot be mistaken
-    # for game text (docs/phase4-state.md E3's own rule).
+    # enter-enhanced: the E3 seam AND the enhanced swamp ring. Enhanced mode
+    # announces what the original left silent and flashes the wound ring on the
+    # player's cell — an enhancement, not fidelity; original mode must do neither.
     work = G.seed("/var/tmp/u2-swamp-enter-enh", tiles={G.EAST: 0x04})
     text = G.run_stdout(work, ["RIGHT"], "enter-enh", extra=["--enhanced"])
     s = G.state_from_text(text)
-    check("enter-enhanced", s and hp(s) == 9992 and "[swamp -5 HP]" in G.flatten(text),
-          "hp %d, announcement %s (want 9992 and the [swamp -5 HP] line)" %
-          (hp(s) if s else -1, "present" if s and "[swamp -5 HP]" in G.flatten(text) else "MISSING"))
+    check("enter-enhanced", s and hp(s) == 9992 and "[swamp -5 HP]" in G.flatten(text)
+          and s["state"]["flashes"] >= 1,
+          "hp %d, announcement %s, flashes %s (want 9992, the line, >=1 ring)" %
+          (hp(s) if s else -1,
+           "present" if s and "[swamp -5 HP]" in G.flatten(text) else "MISSING",
+           s["state"]["flashes"] if s else "-"))
 
     # pass: standing ON the swamp and pressing PASS must cost nothing (owner control).
     text, s = state_case("pass", ["SPACE"], tiles={G.ENTRY: 0x04})

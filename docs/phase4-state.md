@@ -1049,8 +1049,12 @@ faithful and stays faithful until enhanced mode takes it.
 **Partially un-deferred by the owner on 2026-11-02.** E1 is built: the ring flashes on the
 victim's cell (player on a wound, creature on a landed swing) with the `asm/5EF2` tone as
 its timer, gated by CP5 E2. The E3 seam is built as `game/feedback.c` and wired to the
-swamp announcement (`[swamp -5 HP]`, enhanced only), gated by CP5 E1's enhanced arm. E2
-(the floating damage number) and E4 (sprite hit animation) stay parked — the animation
+swamp announcement (`[swamp -5 HP]`, enhanced only), gated by CP5 E1's enhanced arm —
+which also gained the **enhanced swamp ring**: enhanced mode flashes the wound ring on
+the player's cell when the swamp bites, an enhancement the owner asked for the same day
+the original was proven NOT to flash the swamp (captures/spice86/swamp-flash-20261102);
+original mode stays silent and flashless, and both directions are asserted by CP5 E1.
+E2 (the floating damage number) and E4 (sprite hit animation) stay parked — the animation
 clock they need is still the blocker; E5's remaining effects (gold, items, stats) stay
 parked too, now with a seam to slot into.
 
