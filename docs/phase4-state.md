@@ -2686,3 +2686,41 @@ the new `-Icontent`, and a stale `build/gen_content.h` from the old scheme
 out-ranked the committed header — a wrong build that looked like the right one and
 would have restored all 38 empties. `build/` is off the include path and CP2 now
 fails if it goes back on.
+
+## v0.0.1: the first release run, and the three things it found (2026-11-02)
+
+A tag was cut with no claim on it except "see whether the release compiles work".
+It found three, and this is what each one was.
+
+* **linux-static: green.** The static-SDL player binary builds on a runner
+  straight from the committed header, which is the property the whole header
+  change existed to buy.
+* **windows-cross: red at link, and pre-existing.** `time_posix.c` compiled clean
+  under mingw and then failed to link, because mingw *declares* `clock_gettime`
+  and `nanosleep` and the msvcrt it links has neither. So the Windows build had
+  never worked, on any machine, and `deploy/winbuild/README.md` described it as
+  though it had. Fixed with a real per-platform backend —
+  `src/platform/time_win32.c`, `QueryPerformanceCounter` for ticks in PIT jiffies
+  and `Sleep()` for delays, swapped in by `WIN_SRCS` — chosen by host OS rather
+  than by mode, which is the one exception to how every other backend is picked.
+  The exe now links and imports only stock DLLs. **It has still never been run:**
+  no wine here and no Windows runner, so the tick maths and `Sleep()` granularity
+  are `inferred`, not `observed`, and the README says so rather than claiming a
+  working Windows build.
+* **gate-suite had been red since 2026-10-29** on `engine build fresh`: a required
+  gate with `engine/u2` as its prerequisite, in the one workflow that has no build
+  step. It could never be anything but red, which is the same failure as a gate
+  that can never be anything but green — it teaches everyone to ignore the suite.
+  Now declared optional, and `engine-tests.yml` runs `make -C engine fresh` where
+  a build exists and the check means something.
+
+And one of my own, from the header move: `run_cp6.sh` still compiled
+`commerce_check.c` with `-Ibuild`, so it passed on every dev box that had ever run
+`make` and failed on a runner that had not. The CP2 assert catches that in the
+Makefile and could not see it in a test script. Verified the way a runner does it
+this time: `make clean`, then the whole suite.
+
+The general form, for the harness doc: **a cross-build that only ever runs on a
+developer's machine is not a build target, it is a rumour.** The link step is
+where a portability lie dies, and only CI does the link step on the other
+platform.

@@ -190,6 +190,23 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-02 — A required gate that cannot run in the workflow that runs it is the same defect
+  as a gate that cannot fail, and a cross-build nobody but a runner ever links is a rumour.** Two
+  halves, both found by cutting a throwaway release tag instead of trusting local builds. First,
+  a staleness check was declared *required* with a built binary as its prerequisite, in the one
+  workflow that has no build step — so it had been red for days, and a permanent red is
+  indistinguishable from noise and trains everyone to skip the suite. A gate needs a home where it
+  can both pass and fail; if the only place it can run lacks its inputs, declare it optional there
+  and add it to the workflow that has them. Second, the platform cross-build had never linked on
+  CI, and never would have: the toolchain *declares* the POSIX time functions and its C runtime
+  does not provide them, so the failure lands at link rather than compile and every host that did
+  not cross-build saw a clean build. The fix is a real per-platform backend behind the seam that
+  already existed, not an `#ifdef` in the portable file. And the honest residue: the new backend
+  links, imports only system libraries, and has never executed — no emulator, no runner. Say that
+  in the same place that says it builds, or the next person will read "builds" as "works".
+  → Tier 2, gate design; and Tier 1 for "the verification you never run is the one that is
+  lying".
+
 * **2026-11-02 — A generator with a lossy fallback must not be runnable by the build, and the
   fallback must be demoted to verifier.** The content header for the reimplementation had two
   sources: the shipped binary, which resolves every string, and the reconstructed asm listing,

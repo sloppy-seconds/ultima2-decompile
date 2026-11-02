@@ -47,10 +47,17 @@ release tag builds both on CI and attaches them, with SHA256SUMS, via
 
 `sdl-win` produces one `u2-sdl.exe` whose only DLL imports are stock Windows
 ones (SDL2 is built static from the pinned release tarball inside the winbuild
-image — Fedora dropped `mingw64-sdl2`, so the image owns the build). The macOS
-build is deliberately not cross-compiled from Linux (Apple SDK); it is a CI
-macos-runner job, deferred by the owner 2026-11-02. The Windows entry point is
-the SDL backend; the terminal backend compiles to a stub that says so.
+image — Fedora dropped `mingw64-sdl2`, so the image owns the build). The wall
+clock is the one backend chosen by host OS rather than by mode:
+`src/platform/time_win32.c` replaces `time_posix.c` in the win targets, because
+mingw declares `clock_gettime` and `nanosleep` and then has nothing to link them
+against — a compile-clean, link-fail bug that only a cross-build can show, and
+the release workflow found it before this directory did. The Windows binary links
+and imports cleanly; it has never been executed, and `deploy/winbuild/README.md`
+says so. The macOS build is deliberately not cross-compiled from Linux (Apple
+SDK); it is a CI macos-runner job, deferred by the owner 2026-11-02. The Windows
+entry point is the SDL backend; the terminal backend compiles to a stub that says
+so.
 
 `build/`, `u2` and every generated header are gitignored.
 
