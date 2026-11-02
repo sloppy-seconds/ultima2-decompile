@@ -293,13 +293,14 @@ moves with `DS:6E` fixed at 4, where the identical poke in sector 30 advanced th
 moves. **The countdown does not run inside a site sector.** That is a separate mechanism from the
 stamp and it fails independently, which is why this is not one finding but two.
 
-**Engine.** `engine/src/game/gates.c` gets both wrong: `u2_gate_current_cell()` answers a cell with
-no site-kind test, so the door is drawn in a town, and `u2_gate_turn()` advances wherever the player
-happens to be. Both need gating on the world map, and `docs/phase4-state.md` carries it as a defect
-rather than a gap.
+**Engine, fixed the same day.** `engine/src/game/gates.c` had both wrong: `u2_gate_current_cell()`
+answered a cell with no site-kind test, so the door was drawn in a town, and `u2_gate_turn()`
+advanced wherever the player happened to be. Both now consult a `gate_is_on_world_map()` helper —
+two call sites, because the original has two mechanisms — and `tests/gate_check.c` asserts each with
+its own world-map control so neither refusal can be passing for the wrong reason.
 
 This is the same mistake as the viewport one measured in the same capture: the world map wraps both
-axes and a site sector does not, and `engine/src/core/view.c` applies the world-map rule to both, so
-Port Boniface's north sign band is drawn along the bottom of the screen as the water the owner
-reported. See `asm/5AB1_view_origin_by_mode`, `asm/5B98_view_origin_wrapped` and
-`asm/5ABB_view_origin_plain`, and the defect entry in `docs/phase4-state.md`.
+axes and a site sector does not, and `engine/src/core/view.c` applied the world-map rule to both, so
+Port Boniface's north sign band was drawn along the bottom of the screen as the water the owner
+reported. See `asm/5AB1_view_origin_by_mode`, `asm/5B98_sub_5b98` and `asm/5ABB_sub_5abb`, and the
+fix and its gate in `docs/phase4-state.md`.

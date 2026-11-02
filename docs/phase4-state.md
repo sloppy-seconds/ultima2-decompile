@@ -2853,15 +2853,42 @@ wilderness mouth produced `DS:00/01 = (31,62)`, which is what `overworld.c` hard
 south from the town's last row returns the character to the wilderness mouth `(34,20)` with the sector
 back to `30` — the engine's `u2_site_edge_crossed()` and `u2_overworld_site_leave()` already match this.
 
-**Not yet fixed.** Both gates are behaviour changes to shipped engine code and are awaiting the owner's
-go-ahead. The open question that the fix had to answer honestly is now answered: **the filler past the
-edge of a site sector is map byte `0x08`, art index `0x02` — the sector's own ground tile.** Proved by
+**Fixed 2026-11-02, same day, after the owner approved it.** Three changes, not two — verifying the
+first one is what found the third:
+
+* `engine/src/core/view.c` now branches the way `asm/5AB1` does. `off_map == 0xFF` is the world map
+  and wraps on both axes; anything else is a site, and a cell outside 0..63 draws
+  `U2_VIEW_SITE_OFFGRID` (`0x08`). The 8-bit origin arithmetic is kept, so an origin below zero
+  classifies as off-grid by `>= 64` exactly as the asm's `cmp $0x40 / jae` does.
+* `engine/src/game/gates.c` gained `gate_is_on_world_map()`, and both the stamp and the countdown
+  consult it. Two call sites because the original has two mechanisms.
+* **The third defect, found by trying to prove the first one.** `u2_overworld_init_state` set
+  `view_mode = 0xFF` unconditionally, so a save loaded inside a settlement came back in world-map
+  mode and wrapped anyway — the town render looked unchanged even after the viewport was fixed. And
+  `u2_overworld_site_leave` never reset it, so walking *out* of a town would have left the world map
+  wrapped-off. `asm/0C1F` sets `DS:12` to 4, reads `DS:4A`, and falls through to `asm/0C2B` — which
+  sets 0xFF — only when that digit is zero: **the mode is a function of the ones digit, not an event
+  that site entry causes.** Both paths now derive it from the digit.
+
+**Verification, and a gate that was shown to fail.** With the record loaded, the engine's frame of
+sector 31 at `(31,62)` now matches the original's on **all ten viewport rows**, on all four CGA
+colours, counts included — rows 7, 8 and 9 read black 4900 / cyan 220 in both. `tests/view_check.c`
+gained the site-mode assertions and `tests/gate_check.c` the two settlement refusals, each with its
+world-map control so a refusal cannot be passing for the wrong reason. `tests/site_viewport_gate.py`
+is new: it builds its own Port Boniface save, renders it, and asserts the three off-grid rows agree
+with each other and carry no glyph pixels — the property that distinguishes filler from wrap. Its
+`--selftest` has five controls, and the gate was additionally run against the real mutation
+(`torus = 1`, the pre-fix behaviour): it went red with `row 7 has 1420 grey pixels`, which is the
+exact census of the wrapped sign row measured earlier, and `CP4` went red with it. Both were restored
+and the mutation is not in the tree.
+
+The filler's identity: **map byte `0x08`, art index `0x02` — the sector's own ground tile.** Proved by
 bitmap match, not inference: the off-grid cell cropped from `03-at-row63.png` is identical to
 `tmp/tiles/tile_02.png` at Hamming distance 0, and in the same frame a real town `0x08` cell and an
 off-grid cell have the identical census (245 black + 11 cyan each). The owner saw this before we
 measured it and called it grass, which is what it is. The same pass measured the byte→art mapping
-inside a site sector for the first time — 16 distinct map bytes, every one at `byte >> 2`, distance 0 —
-so `docs/art-index.md`'s transform holds on both sector classes. G57 is closed.
+inside a site for the first time — 16 distinct map bytes, every one at `byte >> 2`, distance 0 — so
+`docs/art-index.md`'s transform holds on both sector classes. G57 is closed.
 
 **Tooling change that came out of this, and is in the tree:** `--dump-map` used to render only the fixed
 probe sector, so a frame from a loaded character could never be put beside it. It now renders from the
