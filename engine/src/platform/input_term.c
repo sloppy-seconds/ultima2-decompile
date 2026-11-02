@@ -4,7 +4,13 @@
  * seam: key_poll (asm/4F4D_key_poll.asm, INT 16h AH=01h) and the blocking
  * INT 16h AH=00h sites. The original polled the BIOS key queue; here poll()
  * is a non-blocking read of stdin and wait() is a blocking one.
+ *
+ * Platform: POSIX only. The Windows cross-build (make sdl-win) compiles the
+ * stub at the bottom of this file instead — termios and poll() have no mingw
+ * equivalent worth faking, and the Windows entry point is the SDL backend.
+ * The stub keeps main.c's backend table whole and fails honestly if selected.
  */
+#ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L   /* poll(), tcsetattr under -std=c11 */
 
 #include <errno.h>
@@ -182,3 +188,27 @@ const u2_input u2_input_term = {
     .wait = term_input_wait,
     .shutdown = term_input_shutdown,
 };
+
+#else  /* _WIN32 ---------------------------------------------------------------
+ * Stub: the terminal backend does not exist on Windows. init fails, so
+ * --term (the default without --sdl) reports rather than misbehaves, and the
+ * link stays complete without a second backend table in main.c.
+ */
+#include <stdio.h>
+#include "core/ctx.h"
+static int win_term_init(u2_ctx *ctx) { (void)ctx;
+    fprintf(stderr, "u2: terminal input is not available in this build; use --sdl\n");
+    return -1;
+}
+static int win_term_poll(u2_ctx *ctx, u2_key *out) { (void)ctx; (void)out; return -1; }
+static int win_term_wait(u2_ctx *ctx, u2_key *out) { (void)ctx; (void)out; return 0; }
+static void win_term_shutdown(u2_ctx *ctx) { (void)ctx; }
+
+const u2_input u2_input_term = {
+    .name = "term-stub",
+    .init = win_term_init,
+    .poll = win_term_poll,
+    .wait = win_term_wait,
+    .shutdown = win_term_shutdown,
+};
+#endif /* _WIN32 */

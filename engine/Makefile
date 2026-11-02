@@ -27,7 +27,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run sdl-win play help fresh
 
 all: $(BIN)
 
@@ -128,6 +128,44 @@ $(SDLOBJ)/%.o: %.c $(GEN)
 sdl-run: $(SDL_BIN)
 	./$(SDL_BIN) --sdl --play-map --data-dir ../original --save-dir saves
 
+# ---- Windows cross-build (make sdl-win) ------------------------------------------
+#
+# Static-SDL Windows binary, built with mingw-w64. The low-friction way to get
+# the toolchain on Bazzite is the container in deploy/winbuild/ (no host layering
+# on an immutable OS); build.sh runs exactly this target inside it. Override
+# CROSS= for a different triple. Fedora's mingw64-sdl2 ships libsdl2.a, so the
+# result is one .exe whose only DLL imports are stock Windows ones — that is the
+# whole point of the static link, and it is what the macOS path will NOT get for
+# free (Apple SDK, so that build is a CI macos runner, deferred by the owner
+# 2026-11-02).
+CROSS          ?= x86_64-w64-mingw32-
+WIN_CC         := $(CROSS)gcc
+WIN_PKGCONFIG  ?= pkg-config
+SDLWIN_CFLAGS  ?= $(shell $(WIN_PKGCONFIG) --cflags sdl2 2>/dev/null)
+# Drop SDL's main-rewrite define: this build keeps the console subsystem (stderr
+# diagnostics and the wine smoke test need it), so plain main() is the entry and
+# SDL2main is never pulled from the static archive. The define otherwise trips
+# -Werror=missing-prototypes on every build.
+SDLWIN_CFLAGS  := $(filter-out -Dmain=SDL_main,$(SDLWIN_CFLAGS))
+SDLWIN_LIBS    ?= $(shell $(WIN_PKGCONFIG) --static --libs sdl2 2>/dev/null)
+WINOBJ         := $(BUILD)-win
+WIN_BIN        := u2-sdl.exe
+WINOBJS        := $(patsubst %.c,$(WINOBJ)/%.o,$(SRCS))
+WIN_DEPS       := $(WINOBJS:.o=.d)
+
+sdl-win: $(WIN_BIN)
+
+$(WIN_BIN): $(WINOBJS)
+	$(WIN_CC) -static -o $@ $^ $(SDLWIN_LIBS)
+
+$(WINOBJ)/%.o: %.c $(GEN)
+	@command -v $(WIN_CC) >/dev/null || { echo "sdl-win: $(WIN_CC) not found; use deploy/winbuild/build.sh"; exit 1; }
+	@test -n "$(SDLWIN_CFLAGS)" || { echo "sdl-win: static mingw SDL2 not found (PKG_CONFIG_LIBDIR must reach libsdl2.a); use deploy/winbuild/build.sh"; exit 1; }
+	@mkdir -p $(dir $@)
+	$(WIN_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDLWIN_CFLAGS) -MMD -MP -c $< -o $@
+
+-include $(WIN_DEPS)
+
 # play: put the game on the operator's screen.
 #
 # Unlike sdl-run this synthesises the display environment from the socket files,
@@ -145,7 +183,7 @@ play: $(SDL_BIN)
 	fi
 
 clean:
-	rm -rf $(BUILD) $(SDLOBJ) $(BIN) $(SDL_BIN)
+	rm -rf $(BUILD) $(SDLOBJ) $(WINOBJ) $(BIN) $(SDL_BIN) $(WIN_BIN)
 
 # Fail loudly if a built binary is older than any source or header it is made from.
 #

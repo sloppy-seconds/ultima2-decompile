@@ -25,6 +25,23 @@ make content              # regenerate build/gen_content.h only
 `--headless`, `--script`, `--dump-state`, `--dump-each`, `--trace`, `--seed` and
 `--replay-report` are the agent-facing contract — see [docs/playing.md](docs/playing.md).
 
+### SDL and cross-builds
+
+```sh
+make sdl                  # native SDL2 build (needs SDL2 on the host; Bazzite:
+                          # brew install sdl2 — an owner-approved dependency)
+make sdl-win              # Windows x86_64 .exe, static SDL — needs the mingw
+                          # toolchain; on Bazzite run ../deploy/winbuild/build.sh
+                          # which does exactly this inside a container
+```
+
+`sdl-win` produces one `u2-sdl.exe` whose only DLL imports are stock Windows
+ones (SDL2 is built static from the pinned release tarball inside the winbuild
+image — Fedora dropped `mingw64-sdl2`, so the image owns the build). The macOS
+build is deliberately not cross-compiled from Linux (Apple SDK); it is a CI
+macos-runner job, deferred by the owner 2026-11-02. The Windows entry point is
+the SDL backend; the terminal backend compiles to a stub that says so.
+
 `build/`, `u2` and every generated header are gitignored.
 
 ## Zero game content

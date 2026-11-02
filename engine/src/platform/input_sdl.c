@@ -10,7 +10,8 @@
 #ifdef U2_HAVE_SDL
 
 #include <SDL.h>
-#include <signal.h>
+#include <signal.h>     /* mingw provides this (sig_atomic_t, signal()); what it
+                         * lacks is sigaction, guarded below. */
 
 #include "core/ctx.h"
 
@@ -44,6 +45,12 @@
  */
 static volatile sig_atomic_t g_term_signal;
 
+#ifdef _WIN32
+/* sigaction has no mingw equivalent, and console Ctrl+C on Windows terminates
+ * the process outright, which is the same observable end. The flag stays so
+ * sdl_poll's check compiles unchanged; nothing sets it here. */
+static void install_term_handlers(void) { }
+#else
 static void term_handler(int sig) { (void)sig; g_term_signal = 1; }
 
 static void install_term_handlers(void)
@@ -55,6 +62,7 @@ static void install_term_handlers(void)
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT,  &sa, NULL);
 }
+#endif
 
 static int sdl_poll(u2_ctx *ctx, u2_key *out)
 {

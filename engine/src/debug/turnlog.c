@@ -1,5 +1,6 @@
 /* turnlog.c — per-turn frame + state dump. See turnlog.h for why this exists. */
 #include "debug/turnlog.h"
+#include "core/compat.h"
 
 #include <errno.h>
 #include <stdio.h>

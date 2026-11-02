@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "core/world.h"
+#include "core/compat.h"
 
 /* Spelling candidates for the sector name. DOS names are case-insensitive, the
  * shipped pack is lowercase, and the Galaxy patch in the fan pack renames

@@ -136,3 +136,5 @@ deploy/novnc/u2-sdl
 # of the one you meant — check such names with `git ls-files -- './-h'`.
 /-h/
 /0/
+engine/u2-sdl.exe
+engine/build-win/

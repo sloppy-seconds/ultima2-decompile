@@ -39,6 +39,7 @@
 #include <unistd.h>
 
 #include "core/tiles.h"
+#include "core/compat.h"
 #include "core/sha256.h"
 
 #define CACHE_MAGIC   "U2TL"

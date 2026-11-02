@@ -18,6 +18,7 @@
 #include <sys/types.h>
 
 #include "core/save.h"
+#include "core/compat.h"
 
 _Static_assert(U2_OFF(name) == U2_PLAYER_RECORD_DS,
                "the saved record starts at the name field");
