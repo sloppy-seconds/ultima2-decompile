@@ -2893,3 +2893,41 @@ inside a site for the first time — 16 distinct map bytes, every one at `byte >
 **Tooling change that came out of this, and is in the tree:** `--dump-map` used to render only the fixed
 probe sector, so a frame from a loaded character could never be put beside it. It now renders from the
 record when one is present, which is what made the side-by-side above possible at all.
+
+## "It crashed" was a menu that never reached the screen (owner-found, 2026-11-02)
+
+The owner bought a mace in Linda, pressed `R` to ready it, and reported a crash. **Nothing crashed.**
+The READY WEAPON menu was printed and then the handler blocked for a digit, and the menu did not
+appear until after the digit was typed — so the window sat unchanged while the game waited for a key
+the player could not see a menu for. `W` did the same, and he found that himself. `cmd_M` had the
+identical defect and nobody had noticed it.
+
+**Why.** The original writes text to `0xB8000` and the CRT is always displaying it, so it has no
+present-before-read step anywhere. A port with a back buffer does, and the presenting loop sits
+*above* the command handler: `u2_overworld_loop` draws and presents, then dispatches the letter, and
+the handler's own output is not shown when the handler returns to the loop — it is shown on the *next*
+iteration, which is after the blocking read has already been satisfied.
+
+**The contract was documented and not implemented.** `core/ctx.h` said of `present_now`: "seam_key_wait
+calls it before blocking". It did not, and never had. That stale sentence is why three handlers were
+missing the call while the shops were not: the reader of the comment would look for the fix in the
+wrong place, and commerce.c had already patched it locally at its own sites.
+
+**The fix is per-site, and there is a reason it is not general.** `seam_key_wait_shown()` now lives in
+the seam layer and is called by `cmd_R`, `cmd_W`, `cmd_M`, the YELL prompt and (through
+`show_and_wait`) every shop. Folding the same behaviour into `seam_key_wait` itself was tried before
+and **broke CP4**: presenting from the shared wait path also runs at the title screen, where
+`--dump-screen` sets its done-flag during the flush and the title flow then loops on a no-key result
+forever. That history was in commerce.c's comment where only the shops could benefit from it; it is
+now on the helper in `seam.h`, where the next person adding a prompt will find it. `creation.c`'s waits
+stay on the plain seam for exactly that reason.
+
+**Gate.** `tests/prompt_gate.py` reads the engine's trace and asserts that between the prompt's
+`str_out` and the following `key_wait` there is a present — the user-visible property, not a proxy for
+it. Three cases (R, W, M), five selftest controls all demonstrated red, and the gate was run against
+the real mutation: reverting `cmd_R` alone made it say `prompt at line 64, read at line 140, nothing
+presented between: the player types blind` and nothing else. Wired into `make test-cp6`.
+
+**The general lesson, which is the second one this week.** A handler that asks the player something
+must put the question on screen before it blocks, and in a back-buffered port that is a call someone
+has to make. Any new `WHICH?`-style prompt needs `seam_key_wait_shown`, not `seam_key_wait`.

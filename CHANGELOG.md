@@ -71,6 +71,20 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * `--dump-map` renders from the loaded save when one is present, not only from the
   fixed probe sector. That is what made the comparison above possible at all.
 
+### Fixed after v0.0.5
+
+* **`R` and `W` looked like a crash; they were a menu that never reached the screen.** The
+  owner bought a mace in Linda, pressed `R`, and got a window that sat unchanged while the
+  game waited for a digit he could not see a menu for. The READY WEAPON menu was being
+  printed into a frame nobody had presented, and the presenting loop sits above the command
+  handler, so it appeared only after the answer was typed. `W` had it, and so did `M`.
+  `seam_key_wait_shown()` is now the documented way to ask the player something, used by
+  `R`, `W`, `M`, the yell prompt and every shop. It is deliberately per-site rather than
+  folded into the shared wait path — that was tried and hung the title screen — and the
+  history now sits on the helper in `seam.h` where the next prompt will find it. A new gate,
+  `tests/prompt_gate.py`, asserts from the trace that the question is on screen before the
+  read, and was demonstrated red against the real mutation.
+
 ### Release engineering (2026-11-02)
 
 * Single-file player binaries: `make sdl-static` (Linux; links only
