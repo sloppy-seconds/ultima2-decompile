@@ -46,6 +46,9 @@ static void usage(const char *argv0)
         "                  binary opens a window with no flags at all. Asking for a\n"
         "                  renderer the binary cannot provide is an error.\n"
         "  --sdl           alias for --renderer=sdl\n"
+        "  --video-drivers list the video drivers compiled into this binary and\n"
+        "                  exit. If the list has no x11 or wayland, the binary\n"
+        "                  cannot open a window on any desktop.\n"
         "  --play-map      enter the overworld screen directly (CP4 development entry)\n"
         "  --dev           development affordances only (Ctrl-Q ends the run). Off by\n"
         "                  default, and it never changes game behaviour: without it the\n"
@@ -314,6 +317,18 @@ int main(int argc, char **argv)
             trace_arg = "-";
         } else if (strncmp(a, "--trace=", 8) == 0) {
             trace_arg = a + 8;
+        } else if (strcmp(a, "--video-drivers") == 0) {
+            /* Diagnostic, and the release gate: a player binary with only dummy
+             * and offscreen can never show a window, and nothing else about it
+             * says so. Works with no display, so CI can run it. */
+#ifdef U2_HAVE_SDL
+            u2_sdl_list_video_drivers();
+#else
+            fprintf(stderr, "u2: this binary was built without SDL, so it has no "
+                            "video drivers to list.\n");
+            return 2;
+#endif
+            return 0;
         } else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
             usage(argv[0]);
             return 0;

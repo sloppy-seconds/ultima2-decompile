@@ -46,6 +46,38 @@ typedef struct sdl_video {
 
 static sdl_video *sv(u2_ctx *ctx) { return (sdl_video *)ctx->be_render; }
 
+/* One driver name per line, for --video-drivers. Does not initialise video, so it
+ * works on a machine with no display at all — which is exactly where the release
+ * gate needs to run it. */
+int u2_sdl_list_video_drivers(void)
+{
+    const int n = SDL_GetNumVideoDrivers();
+    for (int i = 0; i < n; i++)
+        printf("%s\n", SDL_GetVideoDriver(i));
+    return n;
+}
+
+/* Why a window could not be created is usually a one-word answer ("No available
+ * video device" means this binary has no display backend compiled in), and SDL
+ * does not say which backends it does have. Printing the list turns "nothing
+ * appeared" into something a player can act on, and it is the same line the
+ * release gate greps. */
+static void sdl_note_available_drivers(void)
+{
+    const int n = SDL_GetNumVideoDrivers();
+    const char *hint = getenv("SDL_VIDEODRIVER");
+
+    fprintf(stderr, "u2: video drivers in this binary (%d):", n);
+    for (int i = 0; i < n; i++)
+        fprintf(stderr, " %s", SDL_GetVideoDriver(i));
+    fputc('\n', stderr);
+    fprintf(stderr, "u2: SDL_VIDEODRIVER=%s\n", hint && *hint ? hint : "(unset)");
+    if (n <= 2)
+        fprintf(stderr, "u2: no display backend was compiled in — this binary was built"
+                        " from an SDL2 configured without X11 or Wayland dev packages."
+                        " It can only render headlessly.\n");
+}
+
 static int sdl_init(u2_ctx *ctx)
 {
     sdl_video *v = calloc(1, sizeof *v);
@@ -68,9 +100,12 @@ static int sdl_init(u2_ctx *ctx)
                               SDL_WINDOW_RESIZABLE);
     if (!v->win) {
         fprintf(stderr, "sdl: window: %s\n", SDL_GetError());
+        sdl_note_available_drivers();
         free(v);
         return -1;
     }
+    fprintf(stderr, "u2: video: %s\n",
+            SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "(unknown)");
     v->ren = SDL_CreateRenderer(v->win, -1, SDL_RENDERER_ACCELERATED);
     if (!v->ren) v->ren = SDL_CreateRenderer(v->win, -1, SDL_RENDERER_SOFTWARE);
     if (!v->ren) {

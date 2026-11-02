@@ -136,6 +136,10 @@ extern const u2_clock    u2_clock_win32;
 extern const u2_renderer u2_renderer_sdl;
 extern const u2_input    u2_input_sdl;
 extern const u2_audio    u2_audio_sdl;
+/* Print the video drivers compiled into this SDL2 and return how many there
+ * were. Backs --video-drivers, and the release gate that refuses to ship a
+ * player binary with no display backend. */
+int u2_sdl_list_video_drivers(void);
 #endif
 
 #endif /* U2_PLATFORM_H */

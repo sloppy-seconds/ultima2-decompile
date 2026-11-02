@@ -54,6 +54,17 @@ jobs:
           sudo apt-get install -y cmake ninja-build
           if [ "${{ matrix.name }}" = windows-cross ]; then
             sudo apt-get install -y mingw-w64
+          else
+            # SDL's cmake compiles out any video/audio backend whose headers are
+            # missing, and says nothing when it does. Without these the static
+            # SDL2 contains only dummy and offscreen: a player binary that links
+            # cleanly, passes the static-link check, and cannot open a window on
+            # any desktop. The gate below is what stops that shipping again.
+            sudo apt-get install -y \
+              libx11-dev libxext-dev libxfixes-dev libxcursor-dev libxi-dev \
+              libxinerama-dev libxrandr-dev libxxf86vm-dev libxss-dev libxcb1-dev \
+              libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+              libgl1-mesa-dev libasound2-dev libpulse-dev
           fi
 
       - name: Cache SDL2 ${{ env.SDL2_VERSION }} (${{ matrix.name }})
@@ -61,7 +72,7 @@ jobs:
         id: sdlcache
         with:
           path: sdl2-${{ matrix.name }}
-          key: sdl2-${{ matrix.name }}-${{ env.SDL2_VERSION }}-v1
+          key: sdl2-${{ matrix.name }}-${{ env.SDL2_VERSION }}-v2
 
       - name: Build static SDL2
         if: steps.sdlcache.outputs.cache-hit != 'true'
@@ -102,6 +113,19 @@ jobs:
             if grep -iE "sdl" deps.txt; then
               echo "FAIL: libsdl2 is dynamically linked"; exit 1
             fi
+          fi
+
+      # Ask the artifact what it can do, rather than trusting the build that made
+      # it. A binary whose only video drivers are dummy/offscreen is unplayable on
+      # a desktop and passes every other check here — which is exactly what shipped
+      # once. The cache key above is bumped to v2 because the old cached SDL2 was
+      # configured without these backends.
+      - name: The Linux binary has a real display backend
+        if: matrix.name == 'linux-static'
+        run: |
+          ./engine/u2-sdl-static --video-drivers | tee video-drivers.txt
+          if ! grep -qx -e x11 -e wayland video-drivers.txt; then
+            echo "FAIL: no x11 or wayland compiled in — this binary cannot open a window"; exit 1
           fi
 
       - uses: actions/upload-artifact@v4

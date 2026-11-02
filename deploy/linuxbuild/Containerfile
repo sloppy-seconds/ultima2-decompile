@@ -3,14 +3,30 @@
 # Same shape as winbuild: the toolchain and the SDL2 static build live in the
 # image, the host stays untouched (Bazzite is immutable). The output is
 # engine/u2-sdl-static: SDL2 linked static, glibc dynamic on purpose (a static
-# glibc is a footgun), X11/Wayland/ALSA dlopened by SDL at runtime — so the one
-# file runs on any mainstream desktop without installing anything.
+# glibc is a footgun).
+#
+# The -devel packages below are not optional garnish and this needs saying in the
+# file, because the first version of this image shipped a player binary that
+# could not open a window on any desktop. SDL's "dlopen at runtime" only removes
+# the *runtime* dependency; the backend still has to be configured into the build,
+# and SDL's cmake silently compiles out any backend whose headers are missing.
+# With none of these installed the resulting libsdl2.a contains `dummy` and
+# `offscreen` and nothing else — it links, it passes an ldd check, and it is
+# useless. `./u2-sdl-static --video-drivers` is the check that catches it, and
+# build.sh runs it.
 #
 # The SDL2 version and cmake flags MUST stay in step with winbuild's; both come
-# from the same pinned official tarball.
+# from the same pinned official tarball. (winbuild needs none of this: the win32
+# backend is built in from the mingw sysroot.)
 FROM quay.io/fedora/fedora:42
 RUN dnf -y install \
         make gcc python3 cmake ninja-build curl tar \
+        libX11-devel libXext-devel libXfixes-devel libXcursor-devel \
+        libXi-devel libXinerama-devel libXrandr-devel libXScrnSaver-devel \
+        libxcb-devel libxkbcommon-devel \
+        wayland-devel wayland-protocols-devel libdecor-devel \
+        mesa-libGL-devel mesa-libEGL-devel libdrm-devel \
+        alsa-lib-devel pulseaudio-libs-devel \
     && dnf clean all
 
 ARG SDL2_VERSION=2.32.8

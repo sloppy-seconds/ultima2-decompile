@@ -15,7 +15,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 IMAGE=u2-winbuild
 
-[ "${1:-}" = "--rebuild" ] && BUILD_FLAG=(--build) || BUILD_FLAG=()
+[ "${1:-}" = "--rebuild" ] && BUILD_FLAG=(--no-cache) || BUILD_FLAG=()
 
 if [ ${#BUILD_FLAG[@]} -gt 0 ] || ! podman image exists "$IMAGE"; then
     echo "winbuild: building image $IMAGE (one-off, cached after)"
