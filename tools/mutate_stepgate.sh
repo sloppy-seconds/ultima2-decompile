@@ -24,12 +24,13 @@ if old not in s:
 open(p,'w').write(s.replace(old,new,1))
 PY
     [ $? -ne 0 ] && { echo "  SKIP  $name (pattern not found)"; fail=$((fail+1)); return; }
-    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o /var/tmp/ai_mut \
+    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o /var/tmp/ai_mut \
             tests/ai_check.c /var/tmp/ai_mutant.c $SRCS 2>/dev/null; then
         # A mutant that will not compile tested nothing, and a mutation that tests nothing is
         # a miss, not a skip. The first version returned here without counting it, so a
-        # missing build/gen_content.h — the normal state of a fresh checkout or a CI runner,
-        # where the hardcoded path this script used to cd into does not exist either — made
+        # missing content/gen_content.h — which a checkout that lost a tracked file would
+        # produce, and where the hardcoded path this script used to cd into does not exist
+        # either — made
         # every mutation "skip", the totals came out `caught 0, MISSED 0`, and the harness
         # printed PASS while checking nothing at all.
         echo "  MISSED  $name (mutant would not compile — is engine/build built?)"

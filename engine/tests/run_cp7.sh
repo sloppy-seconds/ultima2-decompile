@@ -31,7 +31,7 @@ trap 'rm -rf "$WORK"' EXIT
 NEED="U2_S_ITS_DARK U2_S_IGNITE_TORCH U2_S_ADVANCE U2_S_RETREAT U2_S_TURN_LEFT U2_S_TURN_RIGHT U2_S_CHEST U2_S_DESCEND U2_S_TO_LEVEL"
 EMPTY=""
 for sym in $NEED; do
-    if grep -q "^#define ${sym} \"\"" build/gen_content.h 2>/dev/null; then
+    if grep -q "^#define ${sym} \"\"" content/gen_content.h 2>/dev/null; then
         EMPTY="${EMPTY} ${sym}"
     fi
 done

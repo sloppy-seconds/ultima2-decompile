@@ -52,7 +52,7 @@ fi
 NEED="U2_S_ARMOUR_MENU U2_S_WEAPONS_MENU U2_S_TRANSPORT_MENU U2_S_FOOD_COSTS U2_S_SHOP_SOLD"
 EMPTY=""
 for sym in $NEED; do
-    if grep -q "^#define ${sym} \"\"" build/gen_content.h 2>/dev/null; then
+    if grep -q "^#define ${sym} \"\"" content/gen_content.h 2>/dev/null; then
         EMPTY="${EMPTY} ${sym}"
     fi
 done

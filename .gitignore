@@ -80,9 +80,13 @@ tools/jwasm/*
 
 # ---------------------------------------------------------------------------
 # Phase 4 engine.
-# engine/build/ holds extractor-generated gen_*.h derived from the user's own
-# copy of the game — generated game content is never committed (see AGENTS.md
-# Licensing & Commit Policy and engine/README.md).
+# engine/build/ is build output and never committed. The one generated file the
+# repo DOES carry is engine/content/gen_content.h: the game's strings, extracted
+# from the owner's copy by engine/tools/extract/extractor.py and verified against
+# asm/ by `make -C engine content-check`. AGENTS.md § 0 ("The text/art line") is
+# the ruling, and the reason it is committed rather than rebuilt is that the asm
+# fallback cannot resolve 38 of them and a silent fallback would blank the
+# character-creation screen.
 # ---------------------------------------------------------------------------
 engine/build/
 engine/u2

@@ -23,10 +23,10 @@ if old not in s:
 open(p,'w').write(s.replace(old,new,1))
 PY
     if [ $? -ne 0 ]; then echo "  MISSED  $name (pattern not found)"; fail=$((fail+1)); return; fi
-    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o /var/tmp/speed_mut \
+    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o /var/tmp/speed_mut \
             tests/speed_check.c /var/tmp/speed_mut.c $SRCS 2>/dev/null; then
         # Not a skip: a mutant that will not compile checked nothing. Usual cause is an
-        # unbuilt engine — `make -C engine content` produces build/gen_content.h.
+        # unbuilt engine — the committed header is content/gen_content.h.
         echo "  MISSED  $name (mutant would not compile — is engine/build built?)"
         fail=$((fail+1)); return
     fi

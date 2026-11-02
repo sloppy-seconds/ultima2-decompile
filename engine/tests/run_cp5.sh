@@ -57,7 +57,7 @@ for sym in U2_S_IS_DEAD U2_S_KILLED U2_S_EXP_PLUS U2_S_HIT U2_S_MISS \
            U2_S_LEGS_PARALYZED U2_S_ARMS_PARALYZED U2_S_SLEEP_SPELL \
            U2_S_MAGIC_MISSILE U2_S_THIEF_STOLE U2_S_SITE_TOWN U2_S_ENTER \
            U2_S_PASS; do
-    if grep -q "^#define ${sym} \"\"" build/gen_content.h 2>/dev/null; then
+    if grep -q "^#define ${sym} \"\"" content/gen_content.h 2>/dev/null; then
         EMPTY_STRINGS="${EMPTY_STRINGS} ${sym}"
     fi
 done
@@ -84,7 +84,7 @@ fi
 # (must fail) on every run, before combat.c exists at all.
 run_model() {
     local m="$1" want="$2"
-    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/$m" \
+    if ! cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/$m" \
             tests/combat_check.c "tests/$m.c" src/core/rng.c src/core/state.c \
             2>"$WORK/$m.build"; then
         bad "CP5 control $m did not build:"
@@ -142,7 +142,7 @@ fi
 # reads from. Runs whether or not combat exists, and takes the real monx31 when
 # the player's content is present, because that is the only input that can
 # falsify the offset table rather than check the copy.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/monsters_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/monsters_check" \
         tests/monsters_check.c src/game/monsters.c src/core/world.c src/core/state.c \
         src/core/save.c src/core/rng.c 2>"$WORK/mon.build"; then
     MONREAL=""
@@ -168,7 +168,7 @@ fi
 # gate that keeps the engine's copy of it honest, plus the spawner's refusals —
 # which matter more than its successes, because a wrong refusal rate is a wrong
 # monster density and nothing else would notice.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/wander_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/wander_check" \
         tests/wander_check.c src/game/monsters.c src/core/world.c src/core/state.c \
         src/core/save.c src/core/rng.c 2>"$WORK/wander.build"; then
     if "$WORK/wander_check" > "$WORK/wander.out" 2>&1; then
@@ -190,7 +190,7 @@ fi
 # --- 1e. the attack (CP5 W3) ------------------------------------------------
 # Direct test of combat.c, not part of combat_check.c: the attack is implemented,
 # so it is tested against the real thing rather than specified against fixtures.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/attack_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/attack_check" \
         tests/attack_check.c src/game/combat.c src/game/monsters.c \
         src/core/rng.c src/core/state.c 2>"$WORK/atk.build"; then
     if "$WORK/attack_check" > "$WORK/atk.out" 2>&1; then
@@ -214,7 +214,7 @@ fi
 # captures/spice86/cp5-weak-fight/death1.png. It links the whole game core rather
 # than one file because the tail prints through the seam and repaints the status
 # band, and a stub of either would let the test pass on a half-implemented death.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/death_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/death_check" \
         tests/death_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/death.build"; then
     if "$WORK/death_check" > "$WORK/death.out" 2>&1; then
         n=$(sed -n 's/^death_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/death.out")
@@ -236,7 +236,7 @@ fi
 # asm/0A6D..0AB5 and asm/2122..2260. Links the whole game core for the same
 # reason the death check does: the turn prints, rolls, and moves bytes that the
 # renderer and the passability test both read.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/ai_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ai_check" \
         tests/ai_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/ai.build"; then
     if "$WORK/ai_check" > "$WORK/ai.out" 2>&1; then
         n=$(sed -n 's/^ai_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/ai.out")
@@ -259,7 +259,7 @@ fi
 # g30-clockcal/ gives DS:74, DS:554 and the DS:558 multiplier table, and the engine must
 # reproduce the DS:580 slots the original had actually stored. Model only -- nothing in
 # the engine calls it yet, because what each of the 20 slots gates is still unknown.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/speed_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/speed_check" \
         tests/speed_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/speed.build"; then
     if "$WORK/speed_check" > "$WORK/speed.out" 2>&1; then
         n=$(sed -n 's/^speed_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/speed.out")
@@ -282,7 +282,7 @@ fi
 # content is present, against every gate cell in every world sector: each must name
 # a sector file that exists. Without a content dir the data half SKIPs and the
 # table half still runs.
-if cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/site_check" \
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/site_check" \
         tests/site_check.c src/core/*.c src/game/*.c src/debug/*.c 2>"$WORK/site.build"; then
     SITEDATA=""
     for d in ../original ../../original; do
@@ -322,7 +322,7 @@ if [ ! -f src/game/combat.c ]; then
     exit "$fail"
 fi
 
-cc -std=c11 -Wall -Wextra -Werror -Isrc -Ibuild -o "$WORK/combat_check" \
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/combat_check" \
    tests/combat_check.c src/game/combat.c src/core/rng.c src/core/state.c \
    2>"$WORK/cc.err"
 if [ $? -ne 0 ]; then
