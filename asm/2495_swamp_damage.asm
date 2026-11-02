@@ -16,6 +16,12 @@
 #           OWNER control the same day: PASS while standing on swamp costs nothing,
 #           safe->swamp costs 5, swamp->safe costs nothing, so the charge is for ENTERING.
 #           Silent: the message log during the walk showed only PASS.
+#           NOT a flash event, and that is now observed, not just read: three controlled
+#           swamp entries 2026-11-02 (captures/spice86/swamp-flash-20261102) show the
+#           subtract executing with the flash family (asm/5255/525E/5267/5270 -> 527F ->
+#           4C1E) and both tone routines at ZERO executions. A recalled "it flashes like
+#           being hit" is the viewport redraw, not this routine.
+#           Borrow propagation confirmed by a poked single step: HP 0400 -> 0395.
 #           Renamed 2026-11-02 from sub_2495. Full table and the engine work still owed:
 #           docs/handoff-tile-effects.md.
 # provenance: static read of the asm/2423 span 2026-11-02, confirmed live the same day:
