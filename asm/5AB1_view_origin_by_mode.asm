@@ -13,6 +13,9 @@
 #           and DS:4A is the sector's low decimal digit (docs/monster-spawn.md § 15.2).
 #           Live cross-check 2026-10-28: DS:12 read 0xFF in sector 20 (digit 0) and 4 in
 #           sector 32 (digit 2). Two independent bytes agreeing on the same branch.
+#           Confirmed behaviourally 2026-11-02 in a third sector, 31 (digit 1, a village): the
+#           rendered frame shows the unwrapped arm, so the branch follows the ones digit and not
+#           the particular site. captures/spice86/s31-south-edge/.
 # Its only two readers in the tree are here and asm/5AF9_sub_5af9.asm (`mov 0x12,%al`).
 # label: kept as sub_5ab1 on purpose (CP3 cross-reference anchor).
 # func 5AB1..5AB7  len 0007 B  evidence: seed+call+reko

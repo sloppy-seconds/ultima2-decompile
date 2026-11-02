@@ -268,3 +268,38 @@ Still open for a future session, in the order that would unblock the most: trans
 a save; and find the routine that actually rotates the doors — `asm/2708`–`2775` was refuted as the
 candidate by a stop that never fired across two demonstrated rotations, so the implementing code is
 still undiscovered and those four files stay unnamed.
+
+## 8. A door is never inside a settlement — measured, 2026-11-02
+
+The owner reported time doors appearing inside Port Boniface in the engine and recalled that the
+original never puts one in a town. **The recollection is correct, and it holds for two independent
+reasons, both measured in `captures/spice86/s31-south-edge/`.**
+
+The character was seeded on the wilderness mouth rather than in the town, because a hand-placed town
+position has no return cell recorded (`tools/u2_edit.py`'s TRAP note): `mapx30` was scanned for
+gate cells by `tile >> 2` and the village mouth is `(34,20)`. Pressing `E` there produced
+`DS:00/01 = (31,62)` and `DS:49/4A = 03 01`, which is also the first live confirmation of the
+arrival cell the engine hardcodes in `overworld.c`.
+
+**One: nothing stamps.** With the rotation armed by `--poke 8be:6f=01` and the live slot at 2
+(`DS:6E = 4`), the whole 64x64 town grid was read back from `DS:1800` and holds **no `0xC0` at
+all**. The four era-3 table cells hold `0x70` town paving and `0x78` the player stamp. The control
+was run in the same session in sector 30, same era, same slot: exactly one `0xC0`, at `(33,23)`, the
+table cell. So the wilderness stamp is proven and the town stamp is proven absent, in one sitting,
+with the same bytes.
+
+**Two: the clock is stopped there.** The same poke inside sector 31 left `DS:6F` at `01` across six
+moves with `DS:6E` fixed at 4, where the identical poke in sector 30 advanced the slot within four
+moves. **The countdown does not run inside a site sector.** That is a separate mechanism from the
+stamp and it fails independently, which is why this is not one finding but two.
+
+**Engine.** `engine/src/game/gates.c` gets both wrong: `u2_gate_current_cell()` answers a cell with
+no site-kind test, so the door is drawn in a town, and `u2_gate_turn()` advances wherever the player
+happens to be. Both need gating on the world map, and `docs/phase4-state.md` carries it as a defect
+rather than a gap.
+
+This is the same mistake as the viewport one measured in the same capture: the world map wraps both
+axes and a site sector does not, and `engine/src/core/view.c` applies the world-map rule to both, so
+Port Boniface's north sign band is drawn along the bottom of the screen as the water the owner
+reported. See `asm/5AB1_view_origin_by_mode`, `asm/5B98_view_origin_wrapped` and
+`asm/5ABB_view_origin_plain`, and the defect entry in `docs/phase4-state.md`.

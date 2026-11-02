@@ -190,6 +190,26 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-02 — A measurement taken where two hypotheses look identical cannot decide between them,
+  however carefully it is taken, and the reconstruction will generalise the result to every case that
+  was never tested.** A viewport rule was established from a live capture and then applied to every
+  sector class. It was right for the class that was captured and wrong for the others, and it sat in
+  the code with a citation, which is the reason nobody re-tested it. The capture was not sloppy: the
+  sector used has the same tile at both of the edges the rule concerns, so wrapping and not-wrapping
+  render pixel-identically there. No amount of care at that boundary could have separated the two
+  hypotheses, and only a sector whose opposite edge carries distinctive content can. Three rules. (1)
+  Before citing a boundary measurement as the basis for a rule, ask what the measurement would look
+  like if the opposite rule were true — if the answer is "the same", the capture is not evidence for
+  the rule, it is evidence that the rule is untestable at that spot, and the work is to find the
+  sector class where the two differ. (2) When a rule is derived from a container's class rather than
+  from the container, enumerate the classes and say which were measured; a reconstruction that
+  applies one class's arithmetic everywhere is making a claim about the classes it never opened.
+  (3) A named routine in the reconstruction that branches on a mode byte and takes two near-identical
+  arms is a standing warning: the difference between the arms is usually the thing a later
+  generalisation throws away, and reading both arms before writing the rule is cheaper than one
+  owner-reported bug. → Tier 1, evidence discipline; and the standing rule that a capture earns its
+  citation only if it could have failed to.
+
 * **2026-11-02 — A gate that inspects the build's inputs is not a gate on the artifact's
   capability, and a dependency that degrades silently turns a green pipeline into a lie.** The
   shipped single-file Linux player binary had **no display backend whatsoever**: the third-party

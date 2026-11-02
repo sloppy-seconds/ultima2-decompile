@@ -2814,3 +2814,51 @@ What that promotes, and what it does not:
   for the wine run — no stderr log, no frame. If it is ever filed, the claim gets
   stronger; until then it is what a person reported, which outranks inference and
   still is not an artifact.
+
+## Two owner-reported bugs, both real, both the same root cause (2026-11-02)
+
+The owner reported that the engine puts moongates inside Port Boniface, and that water surrounds the
+south exit of Port Boniface. **Both are engine defects, both were reproduced, and both are the same
+mistake: a rule measured on the world map was applied to a site sector.** Capture:
+`captures/spice86/s31-south-edge/`, with the measurements and the per-row colour census in its README.
+
+**Defect 1 — time doors inside a settlement.** `engine/src/game/gates.c` stamps the active door with
+no site-kind test, and advances the countdown wherever the player is. The original does neither:
+
+* With the rotation armed inside sector 31, the town grid holds **zero `0xC0` cells**. The four era-3
+  table cells hold `0x70` paving and `0x78` the player stamp. The control, run in the same session in
+  sector 30 at the same era and slot, produced exactly one `0xC0` at the table cell `(33,23)`.
+* **The countdown does not tick inside a site at all.** `DS:6F` poked to `01` stayed `01` across six
+  moves inside sector 31, with `DS:6E` fixed; the same poke in sector 30 advanced the slot within four
+  moves. Two independent mechanisms, each failing on its own, which is why the fix is two gates and not
+  one.
+
+**Defect 2 — the south edge draws the north edge.** `engine/src/core/view.c` masks both axes with
+`& 63` unconditionally, and its comment justifies that with a single capture taken in sector 20, a
+world-map sector. The tree already names the correct rule: `asm/5AB1_view_origin_by_mode` branches on
+`DS:12`, and only the world-map arm (`asm/5B98_sub_5b98`) applies `and $0x3f`; the interior arm
+(`asm/5ABB_sub_5abb`) computes the same origin deliberately unwrapped. Measured in the town, the rows
+past the last grid row are **one constant filler tile** — identical colour census across four rows and
+two frames — and the town's north sign band never appears at the bottom, which is exactly what a wrap
+would put there. The engine renders the wrapped signs and water; the owner read that as a sea wall.
+
+**Why the wilderness could not have found this.** `mapx30` rows 0, 1 and 60..63 are all `0x00`. Every
+sector measured before today has water at both Y edges, so wrapping and filling are pixel-identical
+there. A settlement is the only sector whose north edge is not water, which makes it the only place
+the two hypotheses can be told apart. The one capture that had ever been taken inside a town settled it
+in one frame.
+
+**Also confirmed, and it was only inferred before:** the town arrival cell. Pressing `E` on the
+wilderness mouth produced `DS:00/01 = (31,62)`, which is what `overworld.c` hardcodes. And stepping
+south from the town's last row returns the character to the wilderness mouth `(34,20)` with the sector
+back to `30` — the engine's `u2_site_edge_crossed()` and `u2_overworld_site_leave()` already match this.
+
+**Not yet fixed.** Both gates are behaviour changes to shipped engine code and are awaiting the owner's
+go-ahead. The open question that the fix has to answer honestly is **what the filler tile is**: measured
+as a census (black, 220 cyan pixels per 320-px row, no magenta, no grey) but not identified as an art
+index, and it is not an out-of-bounds read of the grid, because the bytes after `DS:2800` are a string
+table. `docs/needs-gameplay.md` carries it as G57.
+
+**Tooling change that came out of this, and is in the tree:** `--dump-map` used to render only the fixed
+probe sector, so a frame from a loaded character could never be put beside it. It now renders from the
+record when one is present, which is what made the side-by-side above possible at all.

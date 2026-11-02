@@ -7,6 +7,13 @@
 # This is the byte-level statement that the overworld is a torus at the viewport level, and
 # that an interior sector is not -- which is the shape the engine's viewport-wrap fix
 # reached for from the other end. See docs/monster-spawn.md § 15.2 and handoff item 6.
+# scope measured 2026-11-02: the mask belongs to this branch and only this branch, and the
+#           wilderness alone could never have shown it. mapx30 rows 0, 1 and 60..63 are all
+#           0x00, so a wrap and a constant filler are pixel-identical at both Y edges of every
+#           sector measured before today. A settlement is the only sector whose north edge is
+#           not water, so a settlement is the only place the two hypotheses separate; they did
+#           in captures/spice86/s31-south-edge/, and the town took the unwrapped arm. See
+#           asm/5ABB_sub_5abb.asm.
 # label: kept as sub_5b98 on purpose (CP3 cross-reference anchor).
 # func 5B98..5BC1  len 002A B  evidence: seed+reko
 # provenance: static reassembly 2026-10-28
