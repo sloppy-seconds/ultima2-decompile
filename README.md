@@ -1,8 +1,8 @@
 # Ultima II — a faithful reproduction in portable C
 
-[![asm-checksum](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/asm-checksum.yml)
-[![engine-tests](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/engine-tests.yml)
-[![gate-suite](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/gate-suite.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-decompile/actions/workflows/gate-suite.yml)
+[![asm-checksum](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/asm-checksum.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/asm-checksum.yml)
+[![engine-tests](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/engine-tests.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/engine-tests.yml)
+[![gate-suite](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/gate-suite.yml/badge.svg)](https://github.com/sloppy-seconds/ultima2-rebuild/actions/workflows/gate-suite.yml)
 
 **Ultima II: Revenge of the Enchantress** (Richard Garriott / Origin Systems,
 1982/83), reimplemented as a native C11 program that plays the game without DOS
@@ -150,7 +150,7 @@ directory of community patches; this project's ground truth is the patched
 whatever executable you put in the data directory.
 
 **2. Get the binary.** Player binaries are attached to each [GitHub
-Release](https://github.com/sloppy-seconds/ultima2-decompile/releases) by
+Release](https://github.com/sloppy-seconds/ultima2-rebuild/releases) by
 `.github/workflows/release-builds.yml` — `u2-sdl-static` for Linux and
 `u2-sdl.exe` for Windows, with `SHA256SUMS.txt`. They are built on runners from
 this repository alone, so if you can read this you can download them. To build
