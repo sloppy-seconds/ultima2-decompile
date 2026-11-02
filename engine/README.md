@@ -89,12 +89,14 @@ clock is the one backend chosen by host OS rather than by mode:
 `src/platform/time_win32.c` replaces `time_posix.c` in the win targets, because
 mingw declares `clock_gettime` and `nanosleep` and then has nothing to link them
 against — a compile-clean, link-fail bug that only a cross-build can show, and
-the release workflow found it before this directory did. The Windows binary links
-and imports cleanly; it has never been executed, and `deploy/winbuild/README.md`
-says so. The macOS build is deliberately not cross-compiled from Linux (Apple
-SDK); it is a CI macos-runner job, deferred by the owner 2026-11-02. The Windows
-entry point is the SDL backend; the terminal backend compiles to a stub that says
-so.
+the release workflow found it before this directory did. The Windows binary now
+runs: the owner played it **under wine on Bazzite Linux** (2026-11-02) through
+character creation, the overworld, towns and combat, and it loaded a save the
+Linux build wrote. Wine is not Windows — see `deploy/winbuild/README.md` for what
+that does and does not establish. The macOS build is deliberately not
+cross-compiled from Linux (Apple SDK); it is a CI macos-runner job, deferred by
+the owner 2026-11-02. The Windows entry point is the SDL backend; the terminal
+backend compiles to a stub that says so.
 
 `build/`, `u2` and every generated header are gitignored.
 

@@ -23,11 +23,18 @@ per-platform backend (`src/platform/time_win32.c`, selected by `WIN_SRCS`), and
 as of 2026-11-02 the exe links and imports only stock DLLs — KERNEL32, USER32,
 GDI32, WINMM, msvcrt and friends, no SDL2.dll and no libwinpthread-1.dll.
 
-What is still **not** evidenced: the Windows binary has never been executed. There
-is no wine here and no Windows runner, so `time_win32.c`'s tick maths and
-`Sleep()` behaviour are inferred from the API, not observed. Anyone who runs
-`u2-sdl.exe` and reports what the screen did has proved something this repo
-cannot.
+What it has since been shown to do: the owner ran `u2-sdl.exe` **under wine on
+Bazzite Linux** (2026-11-02) and it started, created a character, played the
+overworld, entered a town and fought — and it loaded a `PLAYER` record written by
+the Linux build. That is the first observation of `time_win32.c` doing anything
+other than linking, and the first evidence of save portability between two engine
+binaries rather than between the engine and the original.
+
+What wine does **not** prove: real Windows driver behaviour. Wine implements the
+Win32 API, not the graphics and audio stack underneath it, so a real GPU path, a
+real sound device, and real filesystem semantics are still untested. Treat "runs
+under wine" as strong evidence the engine is portable and not as a Windows
+compatibility sign-off.
 
 macOS is not cross-compiled from Linux (Apple SDK); that build is a CI
 macos-runner job, deferred by the owner 2026-11-02.

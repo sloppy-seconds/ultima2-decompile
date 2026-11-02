@@ -177,11 +177,13 @@ opening an empty map. Add `--cleanroom` to draw the substitute art instead of th
 original's, and it will always announce that it is doing so. `--renderer=terminal`
 runs the text front end in the same binary, if you want that for some reason.
 
-One honesty note about the two binaries. The Linux one is what the owner and the
-tests run. The Windows one is built by CI, links statically, imports only stock
-Windows DLLs, and **has never been executed by anyone here** — there is no Windows
-machine and no emulator in the loop. If it works, that is a pleasant surprise
-worth an issue; if it does not, the bug report is the missing evidence.
+Both binaries have been played. The Linux one is what the owner and the tests run
+ day to day. The Windows one was run **under wine** (on Bazzite Linux, 2026-11-02):
+it starts, creates a character, plays the overworld, enters towns and fights, and
+it loads a save the Linux build wrote. Wine is not Windows — it implements the
+Win32 API, not the drivers under it — so a real GPU, a real sound device and real
+Windows filesystem behaviour are still untested. If you have actual Windows and it
+misbehaves, that report is worth more to this project than anything the CI can do.
 
 **4. Saves: there is no disk to manage.** The original ran from floppies and asked
 you to insert them; the engine keeps one file. Your character lives at

@@ -2715,10 +2715,9 @@ It found three, and this is what each one was.
   `src/platform/time_win32.c`, `QueryPerformanceCounter` for ticks in PIT jiffies
   and `Sleep()` for delays, swapped in by `WIN_SRCS` — chosen by host OS rather
   than by mode, which is the one exception to how every other backend is picked.
-  The exe now links and imports only stock DLLs. **It has still never been run:**
-  no wine here and no Windows runner, so the tick maths and `Sleep()` granularity
-  are `inferred`, not `observed`, and the README says so rather than claiming a
-  working Windows build.
+  The exe now links and imports only stock DLLs. It was first **run** later the
+  same day under wine (see the wine note at the end of this file), which promoted
+  the tick maths and `Sleep()` behaviour from `inferred` to `observed`.
 * **gate-suite had been red since 2026-10-29** on `engine build fresh`: a required
   gate with `engine/u2` as its prerequisite, in the one workflow that has no build
   step. It could never be anything but red, which is the same failure as a gate
@@ -2786,3 +2785,32 @@ either container script. Nobody had needed it until now. Fixed to `--no-cache`.
 The lesson is narrower than "test on a desktop", and more useful: **a build gate
 that inspects the build's inputs is not a gate on the artifact's capability.** Ask
 the artifact. It is usually one flag away from telling you.
+
+## Both player binaries have been played; Windows under wine (owner, 2026-11-02)
+
+The owner ran both released binaries on a Bazzite Linux machine and reports the
+same play through each: starts, creates a character, plays the overworld, enters
+towns, fights. The Windows `u2-sdl.exe` did this **under wine**, and it loaded a
+`PLAYER` record written by the Linux build.
+
+What that promotes, and what it does not:
+
+* `time_win32.c` was written on the strength of a linker error and an API
+  contract, and the docs said so. It now runs, and the game runs on it.
+  `QueryPerformanceCounter` ticks and `Sleep()` delays move from `inferred` to
+  **observed**.
+* The console-subsystem link change (`-mwindows` dropped) is what let wine keep
+  the stderr at all, so the diagnosis path that motivated it is real.
+* Save portability had only ever been checked engine-against-original
+  (`tools/save_cross_load.py`). Linux-written to Windows-read is a new axis and it
+  passed, which is worth having on record even though the record is a byte layout
+  and nothing in it should have differed.
+* **Wine is not Windows.** It implements the Win32 API, not the graphics, audio and
+  filesystem layers underneath. A real GPU path, a real sound device and real
+  Windows filesystem behaviour are still untested, and no amount of wine runs will
+  test them. `deploy/winbuild/README.md` says this rather than letting "works under
+  wine" read as a Windows sign-off.
+* Grade: **owner observation**, not a capture. There is no `captures/` directory
+  for the wine run — no stderr log, no frame. If it is ever filed, the claim gets
+  stronger; until then it is what a person reported, which outranks inference and
+  still is not an artifact.

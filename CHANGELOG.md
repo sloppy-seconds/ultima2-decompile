@@ -95,6 +95,10 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The `asm/5EAC` wound-loop tone is not wired (duration neither decoded nor
   measured); the floating damage number and sprite hit animation (E2/E4) are
   parked behind an animation-clock design question.
-* The Windows binary is link-verified and now console-subsystem so wine keeps its
-  stderr, but it is still **not run-verified**: nobody here has executed it. The
-  macOS build does not exist yet.
+* Both player binaries have been played by the owner. The Windows build was run
+  under wine on Bazzite Linux (2026-11-02): start, character creation, overworld,
+  towns and combat, and it loaded a `PLAYER` record written by the Linux build —
+  the first cross-platform save check between two engine binaries, as opposed to
+  engine-against-original. Wine is not Windows, so real GPU, audio and filesystem
+  behaviour on a real Windows box remain untested.
+* The macOS build does not exist yet.
