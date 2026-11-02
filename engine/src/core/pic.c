@@ -1,0 +1,118 @@
+/*
+ * pic.c — unpack one of the original's PIC screens into the engine's frame.
+ *
+ * See pic.h for the format evidence and the copyright posture. The short version: the files
+ * are literal images of CGA mode-4 video memory, and asm/5351 points DS at 0xB800 (that
+ * framebuffer segment) in what is clearly the picture load, so there is no codec here and no
+ * header to skip. Which instruction moves the bytes is not established; see pic.h. The engine's
+ * u2_frame already stores one CGA index per pixel, so this is a planar-to-linear unpack of
+ * 16,000 bytes into 64,000.
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "core/pic.h"
+
+#include "core/ctx.h"
+#include "core/frame.h"
+#include "debug/trace.h"
+
+/* 320x200 at 2bpp = 16000 bytes of pixel data. The files are padded up to a sector
+ * boundary (16384, or 16512 for picdra), and the padding is trailing, so reading
+ * exactly this many bytes from offset 0 is the whole of the read. */
+#define PIC_PIXEL_BYTES (U2_SCREEN_H * U2_SCREEN_ROW)     /* 200 * 80 = 16000 */
+#define PIC_ODD_FIELD   (U2_SCREEN_H / 2 * U2_SCREEN_ROW) /* 100 * 80 = 8000   */
+
+static const char *pic_dir(const u2_ctx *ctx)
+{
+    return (ctx && ctx->data_dir && *ctx->data_dir) ? ctx->data_dir : ".";
+}
+
+/* The pack ships these lowercase. The tile loader carries the same three-way case list
+ * for ultimaii.exe for the same reason: a copy that came off a FAT volume can arrive with
+ * the names uppercased, and refusing to look is indistinguishable from the file not
+ * existing, which is the failure mode worth avoiding. */
+static FILE *pic_open(const u2_ctx *ctx, const char *name)
+{
+    char path[512];
+    char upper[32];
+    size_t i = 0;
+
+    FILE *f = snprintf(path, sizeof path, "%s/%s", pic_dir(ctx), name) < (int)sizeof path
+                  ? fopen(path, "rb") : NULL;
+    if (f)
+        return f;
+
+    for (; name[i] && i + 1 < sizeof upper; i++) {
+        const char c = name[i];
+        upper[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+    }
+    upper[i] = '\0';
+    if (snprintf(path, sizeof path, "%s/%s", pic_dir(ctx), upper) >= (int)sizeof path)
+        return NULL;
+    return fopen(path, "rb");
+}
+
+static int pic_read(const u2_ctx *ctx, const char *name, uint8_t *out, size_t cap)
+{
+    if (cap < PIC_PIXEL_BYTES)
+        return 1;
+    FILE *f = pic_open(ctx, name);
+    if (!f)
+        return 1;
+    const size_t got = fread(out, 1, PIC_PIXEL_BYTES, f);
+    fclose(f);
+    /* Short is refused rather than zero-padded: a truncated picture would draw a
+     * plausible image with a band of black across it, which is worse than not drawing
+     * one at all, because it looks like the game rather than like a missing file. */
+    return got == PIC_PIXEL_BYTES ? 0 : 1;
+}
+
+int u2_pic_backend_has_frames(const u2_ctx *ctx)
+{
+    return (ctx && ctx->renderer && ctx->renderer->present_frame) ? 1 : 0;
+}
+
+int u2_pic_can_show(u2_ctx *ctx, const char *name)
+{
+    if (!u2_pic_backend_has_frames(ctx))
+        return 0;
+    FILE *f = pic_open(ctx, name);
+    if (!f)
+        return 0;
+    const long size = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
+    fclose(f);
+    return size >= PIC_PIXEL_BYTES;
+}
+
+int u2_pic_blit(u2_ctx *ctx, const char *name, struct u2_frame *f)
+{
+    if (!ctx || !name || !f)
+        return 1;
+
+    static uint8_t raw[PIC_PIXEL_BYTES];
+    if (pic_read(ctx, name, raw, sizeof raw) != 0) {
+        u2_trace(ctx, "pic", "535A", "name=%s loaded=0", name);
+        return 1;
+    }
+
+    /* CGA mode 4 interleaves by scanline: the even field lives at B8000 and the odd
+     * field at BA000, so line 2n is byte n*80 of the first field and line 2n+1 is
+     * byte n*80 of the second. Within a byte the leftmost pixel is the top two bits,
+     * which is the same convention the tile art uses (frame.h), so the two paths agree. */
+    for (int line = 0; line < U2_SCREEN_H; line++) {
+        const int field = (line & 1) ? PIC_ODD_FIELD : 0;
+        const uint8_t *src = raw + field + (line >> 1) * U2_SCREEN_ROW;
+        uint8_t *dst = f->px[line];
+        for (int b = 0; b < U2_SCREEN_ROW; b++) {
+            const uint8_t v = src[b];
+            dst[b * 4 + 0] = (uint8_t)((v >> 6) & 3);
+            dst[b * 4 + 1] = (uint8_t)((v >> 4) & 3);
+            dst[b * 4 + 2] = (uint8_t)((v >> 2) & 3);
+            dst[b * 4 + 3] = (uint8_t)(v & 3);
+        }
+    }
+    u2_trace(ctx, "pic", "535A", "name=%s loaded=1 bytes=%d", name, PIC_PIXEL_BYTES);
+    return 0;
+}

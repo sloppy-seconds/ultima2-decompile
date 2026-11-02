@@ -311,6 +311,22 @@ else
     printf '  SKIP  no player content: --dump-map not exercised\n'
 fi
 
+# --- the PIC unpack -----------------------------------------------------------
+# The original reads its splash pictures straight into CGA video memory, so the engine's
+# unpack has to get the even/odd field interleave exactly right — and a global colour
+# census cannot tell the right layout from a swapped one, which is why the checks are
+# row- and quadrant-level. Needs the player's own picdra, so it skips without the content.
+if [ -r "$MAPDIR/picdra" ] || [ -r "$MAPDIR/PICDRA" ]; then
+    cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/pic_check" \
+       tests/pic_check.c src/core/pic.c src/core/frame.c src/core/view.c src/debug/trace.c \
+        >"$WORK/cc-pic.err" 2>&1 \
+        && "$WORK/pic_check" >"$WORK/pic.out" 2>&1 \
+        && ok "PIC unpack: 16 checks, interleave pinned by scanline and quadrant census" \
+        || { bad "PIC unpack failed:"; tail -12 "$WORK/pic.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-pic.err" | sed 's/^/        /'; }
+else
+    printf '  SKIP  no player content: PIC unpack not exercised\n'
+fi
+
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is
 # derived from the sector's ones digit rather than from the act of entering one, so

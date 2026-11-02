@@ -27,10 +27,12 @@
  * only engine-authored strings are the CP3 stub notices, and they say so.
  *
  * Two things the original does that this module does not, on purpose:
- *   - it loads PIC picture files during the intro (the FCB names around file
- *     0x419 and the INT 21h sector read at asm/535A_sub_535a.asm). The engine
- *     has no bitmap content pipeline until CP9, so the text screens stand
- *     alone.
+ *   - it loads PIC picture files (the FCB names around file 0x419 and the INT 21h
+ *     sector read at asm/535A_sub_535a.asm). It now does, for the two sequences whose
+ *     pictures were observed: the intro splash and the demonstration poem. See core/pic.h
+ *     for the format evidence, which picture goes where, and what is still inferred. When
+ *     the player has no picture file, or the backend takes no frames, the text screens
+ *     stand alone exactly as they did before.
  *   - asm/03A9 (create) and the call at asm/03AC's head are character creation
  *     and the play setup; they are CP3 and are stubbed below.
  */
@@ -39,6 +41,9 @@
 #include "game/creation.h"
 #include "game/overworld.h"
 #include "game/status.h"
+#include "core/font.h"
+#include "core/frame.h"
+#include "core/pic.h"
 #include "core/save.h"
 #include "core/seam.h"
 #include "core/timer.h"
@@ -101,6 +106,9 @@ static int flow_stopped(const u2_ctx *ctx)
  * 1.5 s reads right and is the only number here that is a choice, not a fact. */
 #define INTRO_HOLD_MS 1500
 #define POEM_HOLD_MS  2000
+/* The splash hold is measured, not chosen: five consecutive one-second frames of the
+ * original all matched picdra, so the dragon is on screen for about five seconds. */
+#define SPLASH_HOLD_MS 5000
 
 static void draw_all(u2_ctx *ctx, const txt *lines, int n)
 {
@@ -148,6 +156,38 @@ static int hold_for_esc(u2_ctx *ctx, unsigned ms)
     return 0;
 }
 
+/* The original composites a picture by writing it into video memory and then printing
+ * its text over the top of it, which is why the demonstration's couplets sit ON the
+ * starfield rather than under it. The engine does it in the same order: picture into the
+ * frame, text rows over it, one present.
+ *
+ * seam_present_frame presents whatever ctx->frame points at, and the title flow owns no
+ * frame of its own (the overworld loop installs one when it starts), so this borrows the
+ * slot for the duration and puts it back. Leaving it installed would be the worse bug: the
+ * overworld would then composite into a frame nobody presents.
+ *
+ * Returns the hold_for_esc result so a caller treats ESC exactly as it already does.
+ * Returns 0 without drawing anything when the picture cannot be shown, which leaves the
+ * caller's text screen as the whole of what the player sees. */
+static int show_pic(u2_ctx *ctx, const char *name, int hold_ms)
+{
+    static u2_frame pic_frame;      /* 64 KB, and only ever one picture on screen */
+
+    if (!u2_pic_can_show(ctx, name))
+        return 0;
+    if (u2_pic_blit(ctx, name, &pic_frame) != 0)
+        return 0;
+    u2_font_draw_vram_rows(&pic_frame, &ctx->vram, 0, U2_ROWS - 1);
+
+    struct u2_frame *saved = ctx->frame;
+    ctx->frame = &pic_frame;
+    const int quit = seam_present_frame(ctx);
+    ctx->frame = saved;
+    if (quit)
+        return 1;                   /* the window closed */
+    return hold_for_esc(ctx, hold_ms);
+}
+
 /* asm/0142..020F: the two presentation screens. Returns 1 if ESC skipped. */
 static int present_intro(u2_ctx *ctx)
 {
@@ -162,6 +202,13 @@ static int present_intro(u2_ctx *ctx)
     draw_all(ctx, INTRO_2, NARR(INTRO_2));
     seam_present(ctx);
     if (hold_for_esc(ctx, INTRO_HOLD_MS))
+        return 1;
+
+    /* The dragon logo. Observed between the second presentation screen and the title
+     * menu, full screen, no text over it — the lettering in this one is part of the
+     * art. With no picture file this is simply skipped and the intro is what it has
+     * always been here: two text screens and the menu. */
+    if (show_pic(ctx, U2_PIC_TITLE, SPLASH_HOLD_MS))
         return 1;
     return 0;
 }
@@ -178,18 +225,31 @@ static int present_poem(u2_ctx *ctx)
     if (hold_for_esc(ctx, 800))
         return 1;
 
-    /* Owner acceptance for CP3: 'D' shows the first block of the poem and
-     * returns. The real demonstration is recorded gameplay with graphics, which
-     * needs the CP9 bitmap pipeline and the CP4 world; running the whole poem
-     * here stood in for a demo that does not exist yet and made 'D' look like a
-     * feature rather than a placeholder. */
-    for (int i = 0; i < 2 && i < NARR(POEM); i += 2) {
+    /* With a picture the demonstration is the real thing: the whole poem, couplet by
+     * couplet, over the starfield and the pyramid. Without one it stays the CP3
+     * placeholder, because a wall of scrolling text is not a demonstration and running
+     * all twelve lines at a terminal would read as a bug rather than a fallback.
+     *
+     * The picture-per-couplet split is INFERRED, not observed: the capture was sampled
+     * at one second and shows PICSPA first and PICMIN for the rest, which is not fine
+     * enough to say which couplet changes it. Recorded as needing a finer capture in
+     * docs/needs-gameplay.md rather than presented as settled.
+     */
+    const int pictures = u2_pic_can_show(ctx, U2_PIC_PYRAMID);
+    const int limit = pictures ? NARR(POEM) : 2;
+
+    for (int i = 0; i < limit && i < NARR(POEM); i += 2) {
         seam_clear_row(ctx, 23);
         seam_clear_row(ctx, 24);
         if (POEM[i].s[0])
             seam_str_out_at(ctx, POEM[i].col, POEM[i].row, POEM[i].s);
         if (i + 1 < NARR(POEM) && POEM[i + 1].s[0])
             seam_str_out_at(ctx, POEM[i + 1].col, POEM[i + 1].row, POEM[i + 1].s);
+        if (pictures) {
+            if (show_pic(ctx, i == 0 ? U2_PIC_STARS : U2_PIC_PYRAMID, POEM_HOLD_MS))
+                return 1;
+            continue;
+        }
         seam_present(ctx);
         if (hold_for_esc(ctx, POEM_HOLD_MS) || flow_stopped(ctx))
             return 1;
