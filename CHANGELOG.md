@@ -48,6 +48,16 @@ C11 reimplementation of its engine, and automated proof standing behind both.
   official source.
 * `release-builds.yml` builds both and attaches them with SHA256SUMS on a `v*`
   tag; the workflow itself fails if either binary's link stops being static.
+* **The first player binaries could not open a window on any desktop.** SDL's
+  cmake compiles out any video backend whose dev packages are missing and says
+  nothing while doing it, and neither build container installed any, so the
+  static `libsdl2.a` contained only `dummy` and `offscreen`. It linked, it was
+  genuinely static, and every check in the pipeline passed; a player on Wayland
+  saw nothing at all. `--video-drivers` now reports what a binary can actually
+  do, both build paths install the X11/Wayland and audio headers, and both
+  `deploy/linuxbuild/build.sh` and the release workflow fail if neither `x11` nor
+  `wayland` is in the artifact. A startup line (`u2: video: wayland`) and a
+  driver list on failure mean the next occurrence diagnoses itself.
 * **An SDL build now defaults to the window.** `--renderer=sdl|terminal` picks
   the front end, defaulting to `sdl` in a binary compiled with SDL and terminal
   otherwise, so the downloaded player binary needs no flags and no terminal; the

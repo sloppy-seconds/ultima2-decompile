@@ -2736,3 +2736,53 @@ The general form, for the harness doc: **a cross-build that only ever runs on a
 developer's machine is not a build target, it is a rumour.** The link step is
 where a portability lie dies, and only CI does the link step on the other
 platform.
+
+## The player binary could not open a window on any desktop (found 2026-11-02, by a person)
+
+`v0.0.2` and `v0.0.3` shipped a Linux player binary with **no display backend at
+all**. Measured off the released artifact, not inferred:
+
+```
+$ strings -a u2-sdl-static | grep -icE 'x11|wayland'
+0
+$ strings -a u2-sdl-static | grep -iE '^(dummy|offscreen|x11|wayland)$'
+dummy
+offscreen
+```
+
+Cause: SDL's cmake compiles out any video or audio backend whose dev packages are
+missing, and it does so quietly. Neither `deploy/linuxbuild/Containerfile` (which
+installed make, gcc, python3, cmake, ninja, curl, tar) nor the CI job (cmake,
+ninja) installed a single X11 or Wayland header, so the static `libsdl2.a` had
+nothing to build the backends from. `SDL_*_SHARED=ON` — the thing the Containerfile
+comment cited as proof the binary would run anywhere — only defers the dependency
+ to runtime; the backend still has to be configured in at build time. The comment
+was not wrong about the mechanism, it was wrong about what had been built.
+
+Why nothing caught it: every check in the pipeline tests *linkage*, and linkage was
+fine. `ldd` shows no libsdl2, the static-link gate passes, the CP4 SDL gate runs
+under `SDL_VIDEODRIVER=dummy` and gets a real frame — a headless test that proves
+the render chain and says nothing about whether a window can exist. The only thing
+that would ever notice was running it on a desktop, which is exactly what the
+owner did.
+
+Fixed in three layers, because a one-line fix here would have been the same class
+of miss next time:
+
+* both build paths install the X11/Xcb/Wayland/GL/ALSA/Pulse dev packages;
+* `--video-drivers` prints what a binary can do, without needing a display, and a
+  failed `SDL_CreateWindow` now prints the driver list and `SDL_VIDEODRIVER`, while
+  a successful one prints `u2: video: wayland`;
+* `deploy/linuxbuild/build.sh` and `release-builds.yml` both **fail the build**
+  unless `x11` or `wayland` is in the artifact's list. Control run against the
+  released `v0.0.3` binary: rejected. The CI SDL2 cache key went to v2, because the
+  cached archive was the broken one and a green run on a stale cache would have
+  hidden the fix.
+
+Also found on the way: `build.sh --rebuild` passed `--build` to `podman build`,
+which is not a flag it accepts, so **the rebuild path had never once worked** in
+either container script. Nobody had needed it until now. Fixed to `--no-cache`.
+
+The lesson is narrower than "test on a desktop", and more useful: **a build gate
+that inspects the build's inputs is not a gate on the artifact's capability.** Ask
+the artifact. It is usually one flag away from telling you.

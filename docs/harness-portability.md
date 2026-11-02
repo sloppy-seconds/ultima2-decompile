@@ -190,6 +190,24 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-02 — A gate that inspects the build's inputs is not a gate on the artifact's
+  capability, and a dependency that degrades silently turns a green pipeline into a lie.** The
+  shipped single-file Linux player binary had **no display backend whatsoever**: the third-party
+  media library's build system compiles out any platform backend whose headers are absent and
+  reports nothing when it does, and neither the build container nor CI installed a single one.
+  So the artifact contained only the headless drivers. Every check passed — the link was genuinely
+  static, the checksum matched, and the pixel-path gate ran under a null video driver and produced
+  a correct frame, which proves the render chain and says nothing about whether a window can exist.
+  Three rules. (1) When a dependency silently narrows itself, configure it loudly (install the
+  headers) and then **ask the artifact what it can do** — one diagnostic flag that enumerates
+  compiled-in backends, needs no display, and is greppable by CI, converts a class of silent
+  degradation into a red build. (2) A headless test standing in for a graphical one proves the
+  layer below the display, not the display; do not let its green mean more than that. (3) When a
+  failure is reported by a human as "nothing appeared", treat it as missing diagnostics first: the
+  fix is usually to make the program name the thing it could not do, which is what the same flag
+  now prints on startup and on failure. → Tier 2, build/gate design; and the standing rule that a
+  capability you never asked the artifact about is a capability you do not have.
+
 * **2026-11-02 — A required gate that cannot run in the workflow that runs it is the same defect
   as a gate that cannot fail, and a cross-build nobody but a runner ever links is a rumour.** Two
   halves, both found by cutting a throwaway release tag instead of trusting local builds. First,

@@ -62,7 +62,22 @@ one:
 
 Gated: CP0 asserts the refusals on the terminal build, CP4 asserts the flagless
 SDL build really does present a frame (`--dump-screen` is SDL-only, so a written
-frame is the proof) and that `--renderer=terminal` writes none. `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
+frame is the proof) and that `--renderer=terminal` writes none.
+
+### `--video-drivers`, and why the static build needs X11/Wayland headers
+
+`--video-drivers` prints the video backends compiled into the binary and exits,
+with no display required. It exists because the first player binaries were
+unplayable on a desktop: SDL's cmake **silently compiles out** any backend whose
+dev packages are missing, and the build containers installed none, so the static
+`libsdl2.a` contained only `dummy` and `offscreen`. The binary linked, was
+properly static, passed every check in the pipeline, and could not create a
+window anywhere. `deploy/linuxbuild/build.sh` and `release-builds.yml` now both
+fail unless `x11` or `wayland` appears in that list.
+
+If a window still does not open, run it and read the line: SDL init failure now
+prints the drivers present and the value of `SDL_VIDEODRIVER`, and a successful
+startup prints which driver it got (`u2: video: wayland`). `u2-sdl-static` links only libc/libm/libdl — SDL dlopens X11/Wayland/ALSA
 at runtime — and `u2-sdl.exe` imports only stock Windows DLLs. Cutting a `v*`
 release tag builds both on CI and attaches them, with SHA256SUMS, via
 `.github/workflows/release-builds.yml`.
