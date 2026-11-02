@@ -5,11 +5,15 @@ name: engine-tests
 # work is in progress and must not be read as a problem with the byte-exact
 # reconstruction, which has its own always-green-or-broken badge.
 #
-# No game content is involved. CI has no `original/ultimaii.exe`, so the string
-# extractor runs in asm-fallback mode and recovers 37 of 64 strings; that is a
-# supported configuration and CP1 asserts it explicitly. Anything that must be
-# byte-identical to the shipped binary cannot be verified here, which is why the
-# committed CP2 replay evidence is checked against the fallback build too.
+# The engine's strings come from `engine/content/gen_content.h`, which is
+# generated from the owner's copy of the game and committed precisely so that a
+# runner without `original/ultimaii.exe` still builds a complete game. The asm
+# fallback resolves 181 of 220 strings and blanks the other 38, so it is no
+# longer a build source; it is the verifier. `content-check` below proves the
+# committed text still agrees with the byte-proven asm/ tree for every string
+# asm can reach, and that no committed string is empty. Anything that must be
+# byte-identical to the shipped binary still cannot be verified here, which is
+# why the committed CP2 replay evidence is checked against this build too.
 
 on:
   push:
@@ -21,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Content header agrees with the asm tree (drift gate)
+        run: make -C engine content-check
       - name: Build engine (cc only, no dependencies)
         run: make -C engine
       - name: Acceptance tests (CP0..CP4)

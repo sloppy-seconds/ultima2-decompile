@@ -8,11 +8,14 @@ name: release-builds
 # step with both Containerfiles), then link the engine against it. The
 # containers stay the local path; CI is the reproducible one.
 #
-# No game content is involved and none may appear in the artifacts: the engine
-# ships the cleanroom tile art compiled in, and the player supplies their own
-# copy of the game data (docs/cleanroom-procedure.md is the legal record; the
-# copyright line in AGENTS.md § 0 is why the artifacts are binaries only, never
-# a data pack).
+# The binaries carry the game's text compiled in, from the committed
+# content/gen_content.h — that is the ruling in AGENTS.md § 0 ("The text/art
+# line"), and it is why a release build must never fall back to regenerating that
+# header from asm/ (38 strings would go empty and the character-creation screen
+# would ship blank). Art is different and is substituted: the engine ships the
+# cleanroom tile art compiled in, and the player supplies their own copy of the
+# game data (docs/cleanroom-procedure.md is the legal record; the same § 0 is why
+# the artifacts are binaries only, never a data pack).
 #
 # macOS is deliberately absent: the owner deferred it to a future macos-latest
 # job (Apple SDK cannot be redistributed, so it cannot be cross-built here).

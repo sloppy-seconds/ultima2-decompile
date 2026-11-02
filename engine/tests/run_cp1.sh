@@ -146,9 +146,38 @@ for s in U2_S_CMD_PROMPT U2_S_INVALID_MOVE U2_S_ATTACK U2_S_HIT \
     fi
 done
 
-# No game text may be committed: the generated header must stay ignored.
-git check-ignore -q build/gen_content.h \
-    && ok "generated content header is gitignored" \
-    || bad "build/gen_content.h is NOT ignored"
+# The content header is committed on purpose, and this used to assert the
+# opposite. AGENTS.md § 0 ("The text/art line") rules that the game's text is
+# publishable because the reconstruction already carries every byte of it; what
+# made "never commit it" safe was never the ignoring, it was that the file was
+# generated rather than hand-written. So the rule inverts to the property that
+# actually mattered: the file is tracked (a CI runner has no exe to rebuild it
+# from, and the asm fallback blanks 38 strings), it holds no empty string, and
+# it still agrees with the byte-proven asm/ tree.
+if git ls-files --error-unmatch content/gen_content.h >/dev/null 2>&1; then
+    ok "content/gen_content.h is tracked (generated, committed)"
+else
+    bad "content/gen_content.h is not tracked — a build without the player's copy would get the lossy asm fallback"
+fi
+
+if grep -q '^#define U2_S_[A-Z_]* ""$' content/gen_content.h 2>/dev/null; then
+    bad "content header carries an empty string — the engine prints nothing there and a text assertion would pass vacuously"
+else
+    ok "content header has no empty U2_S_ strings"
+fi
+
+if python3 tools/extract/extractor.py --source asm --verify -o content/gen_content.h >/dev/null 2>&1; then
+    ok "content header agrees with the asm tree (drift gate)"
+else
+    bad "content header disagrees with the asm tree — run: make -C engine content-check"
+fi
+
+# And the gate must still be able to fail. Six controls, each proven red; a
+# control whose pattern has moved is a failure, not a skip.
+if python3 tests/content_header_selftest.py >/dev/null 2>&1; then
+    ok "content header gate controls all still go red (selftest)"
+else
+    bad "content header gate can no longer fail where it enforces — run: python3 engine/tests/content_header_selftest.py"
+fi
 
 [ "$fail" = "0" ] && { echo "CP1 TEST: PASS"; exit 0; } || { echo "CP1 TEST: FAIL"; exit 1; }

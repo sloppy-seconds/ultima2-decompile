@@ -83,6 +83,11 @@ else
 fi
 
 echo "== gates over tracked inputs (CI-runnable) =="
+# The content header is committed game text, so the only thing standing between a
+# silent fallback and a blank character-creation screen is the drift gate — and a
+# gate that cannot go red has not been proven. Controls first, then the gate.
+run "content_header selftest" engine/content/gen_content.h -- python3 engine/tests/content_header_selftest.py
+run "content_header gate" engine/content/gen_content.h -- python3 engine/tools/extract/extractor.py --source asm --verify -o engine/content/gen_content.h
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
 # The derived half. captures/spice86/ is gitignored, so this is optional by declaration and
 # SKIPs in CI rather than pretending to have checked. It is the gate that makes `exec` generated
@@ -121,14 +126,15 @@ fi
 
 echo "== mutation harnesses (prove the model tests can go red) =="
 if [ "$FAST" = 1 ]; then
-    # Deliberate: these compile the engine nine times each and need build/gen_content.h, which
+    # Deliberate: these compile the engine nine times each and need the committed
+    # content header plus a build tree, which
     # only a build produces. Their CI home is engine-tests.yml, where `make -C engine` has
     # already run — not gate-suite, which has no build and would only ever skip them.
     echo "  SKIP  mutate_speed               (--fast: needs the engine build; runs in engine-tests.yml)"
     echo "  SKIP  mutate_stepgate            (--fast: needs the engine build; runs in engine-tests.yml)"
 else
-    run "mutate_speed" engine/build/gen_content.h -- bash engine/tests/mutate_speed.sh
-    run "mutate_stepgate" engine/build/gen_content.h -- bash tools/mutate_stepgate.sh
+    run "mutate_speed" engine/content/gen_content.h -- bash engine/tests/mutate_speed.sh
+    run "mutate_stepgate" engine/content/gen_content.h -- bash tools/mutate_stepgate.sh
 fi
 
 echo "== DOS string atlas (needs original/, gitignored by policy) =="

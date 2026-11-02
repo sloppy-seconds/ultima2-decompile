@@ -143,9 +143,18 @@ else
     bad "engine/evidence/cp2-playthrough.json is missing"
 fi
 
-# --- nothing generated may be committed ----------------------------------
-git check-ignore -q build/gen_content.h \
-    && ok "generated content header is gitignored" \
-    || bad "build/gen_content.h is NOT ignored"
+# --- the committed header is the one the compiler actually sees --------------
+# engine/build/ is still ignored, and a tree that was built before the header
+# was committed can still hold a stale build/gen_content.h there. If build/ were
+# on the include path that stale file would shadow the committed one and
+# silently restore the 38 empty strings, so the include path is asserted rather
+# than trusted.
+if grep -q 'Ibuild' Makefile; then
+    bad "Makefile puts build/ on the include path — a stale build/gen_content.h would shadow the committed header"
+elif ! grep -q 'Icontent' Makefile; then
+    bad "Makefile does not put content/ on the include path — #include \"gen_content.h\" cannot resolve"
+else
+    ok "content/ is the only generated-header dir on the include path"
+fi
 
 [ "$fail" = "0" ] && { echo "CP2 TEST: PASS"; exit 0; } || { echo "CP2 TEST: FAIL"; exit 1; }
