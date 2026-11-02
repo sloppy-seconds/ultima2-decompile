@@ -149,12 +149,13 @@ directory of community patches; this project's ground truth is the patched
 `ultimaii.exe` described under Target & provenance below, and the engine reads
 whatever executable you put in the data directory.
 
-**2. Get the binary.** Player binaries are attached to each GitHub Release by
+**2. Get the binary.** Player binaries are attached to each [GitHub
+Release](https://github.com/sloppy-seconds/ultima2-decompile/releases) by
 `.github/workflows/release-builds.yml` — `u2-sdl-static` for Linux and
-`u2-sdl.exe` for Windows, with `SHA256SUMS.txt`. If no release is published yet,
-build one locally instead: `deploy/linuxbuild/build.sh` and
-`deploy/winbuild/build.sh` produce exactly what CI does, inside a container, and
-leave your host alone.
+`u2-sdl.exe` for Windows, with `SHA256SUMS.txt`. They are built on runners from
+this repository alone, so if you can read this you can download them. To build
+one locally instead, `deploy/linuxbuild/build.sh` and `deploy/winbuild/build.sh`
+produce exactly what CI does, inside a container, and leave your host alone.
 
 **3. Run it, pointed at the game folder.**
 
@@ -169,6 +170,12 @@ tile art is extracted from on first run and cached afterwards. Without a data
 directory the engine says so: *no executable and no cached tiles: point --data-dir
 at your Ultima II directory*. Add `--cleanroom` to draw the substitute art instead
 of the original, and it will always announce that it is doing so.
+
+One honesty note about the two binaries. The Linux one is what the owner and the
+tests run. The Windows one is built by CI, links statically, imports only stock
+Windows DLLs, and **has never been executed by anyone here** — there is no Windows
+machine and no emulator in the loop. If it works, that is a pleasant surprise
+worth an issue; if it does not, the bug report is the missing evidence.
 
 **4. Saves: there is no disk to manage.** The original ran from floppies and asked
 you to insert them; the engine keeps one file. Your character lives at
