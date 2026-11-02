@@ -124,6 +124,12 @@ extern const u2_audio    u2_audio_null;
 extern const u2_clock    u2_clock_posix;
 extern const u2_clock    u2_clock_script;
 
+/* The wall clock is the one backend chosen by the host OS rather than by the
+ * mode, and it is compiled per platform: the Makefile's win target builds
+ * time_win32.c instead of time_posix.c, because mingw links neither
+ * clock_gettime nor nanosleep. */
+extern const u2_clock    u2_clock_win32;
+
 /* The SDL backends exist only in the `make sdl` build, so the default cc-only
  * build never references them and needs no third-party headers. */
 #ifdef U2_HAVE_SDL

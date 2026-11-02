@@ -115,6 +115,15 @@ static void usage(const char *argv0)
 
 static int wire_backends(u2_ctx *ctx)
 {
+    /* Every backend here is chosen by mode. The wall clock is the exception and
+     * is chosen by the host OS: mingw has no clock_gettime or nanosleep to link,
+     * so a Windows build gets time_win32.c and nothing else. */
+#ifdef _WIN32
+#  define U2_CLOCK_HOST u2_clock_win32
+#else
+#  define U2_CLOCK_HOST u2_clock_posix
+#endif
+
     if (ctx->mode == U2_MODE_HEADLESS) {
         ctx->renderer = &u2_renderer_null;
         ctx->audio    = &u2_audio_null;
@@ -126,13 +135,13 @@ static int wire_backends(u2_ctx *ctx)
          * choosing it changes nothing about what the game draws. */
         ctx->renderer = &u2_renderer_sdl;
         ctx->audio    = &u2_audio_sdl;
-        ctx->clock    = &u2_clock_posix;
+        ctx->clock    = &U2_CLOCK_HOST;
         ctx->input    = &u2_input_sdl;
 #endif
     } else {
         ctx->renderer = &u2_renderer_term;
         ctx->audio    = &u2_audio_beep;
-        ctx->clock    = &u2_clock_posix;
+        ctx->clock    = &U2_CLOCK_HOST;
         ctx->input    = &u2_input_term;
     }
 

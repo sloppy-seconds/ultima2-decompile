@@ -22,8 +22,10 @@ EXE      ?= ../original/ultimaii.exe
 SRCS     := src/main.c \
             $(wildcard src/core/*.c) \
             $(wildcard src/game/*.c) \
-            $(wildcard src/platform/*.c) \
+            $(filter-out src/platform/time_win32.c,$(wildcard src/platform/*.c)) \
             $(wildcard src/debug/*.c)
+# time_win32.c is excluded from every Linux build and re-added by the win
+# targets; see WIN_SRCS. The portable default is the POSIX clock.
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS))
 DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
@@ -158,7 +160,11 @@ SDLWIN_CFLAGS  := $(filter-out -Dmain=SDL_main,$(SDLWIN_CFLAGS))
 SDLWIN_LIBS    ?= $(shell $(WIN_PKGCONFIG) --static --libs sdl2 2>/dev/null)
 WINOBJ         := $(BUILD)-win
 WIN_BIN        := u2-sdl.exe
-WINOBJS        := $(patsubst %.c,$(WINOBJ)/%.o,$(SRCS))
+# The clock is the one object that is not portable: mingw declares
+# clock_gettime and nanosleep and then has no symbols to link them against, so
+# the Windows tree swaps the backend rather than patching the POSIX one.
+WIN_SRCS       := $(filter-out src/platform/time_posix.c,$(SRCS)) src/platform/time_win32.c
+WINOBJS        := $(patsubst %.c,$(WINOBJ)/%.o,$(WIN_SRCS))
 WIN_DEPS       := $(WINOBJS:.o=.d)
 
 sdl-win: $(WIN_BIN)
