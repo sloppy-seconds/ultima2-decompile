@@ -2931,3 +2931,60 @@ presented between: the player types blind` and nothing else. Wired into `make te
 **The general lesson, which is the second one this week.** A handler that asks the player something
 must put the question on screen before it blocks, and in a back-buffered port that is a call someone
 has to make. Any new `WHICH?`-style prompt needs `seam_key_wait_shown`, not `seam_key_wait`.
+
+## The splash pictures: the engine now shows them (owner-found, 2026-11-03)
+
+The owner noticed the engine's splash has no graphics. It did not, deliberately: `title.c` said the
+original loads PIC picture files during the intro and "the engine has no bitmap content pipeline
+until CP9, so the text screens stand alone." The CP9 pipeline turned out to be a non-event.
+
+**There is no image format.** The files are literal images of CGA mode-4 video memory, and the
+engine's `u2_frame` already stores one CGA index per pixel, so the "decoder" is a planar unpack of
+16,000 bytes into 64,000. Even scanlines live at offset 0, odd at 8000, two bits per pixel, leftmost
+pixel in the top two bits.
+
+**What is not established, and is written down rather than papered over.** `asm/5351_sub_5351.asm` is
+`mov $0xb800,%ax ; mov %ax,%ds`, and 0xB800 in mode 4 is the framebuffer, so the game certainly aims a
+read at video. But `asm/535A_sub_535a.asm`, which follows it, restores `DS` and asks for **one** FCB
+record into a fixed `DS:0x245` — not 16,384 bytes. Either the picture arrives by a path not yet
+identified, or it arrives in many one-record reads with the buffer advanced by a caller nobody has
+found. Both fit the bytes and neither is proven, so both asm files keep their placeholder names and
+their headers say which half is inferred. The engine does not need the answer: it reads the file itself.
+
+**Proven, not assumed.** Decoding `picdra` with that layout reproduces a live captured frame of the
+original's splash at **100% colour-class agreement over 4000 sampled pixels**, and the engine's own
+`u2_pic_blit` produces a frame whose census is **identical** to the capture's (13604 black / 1567 cyan
+/ 539 magenta / 290 white, sampled every second pixel). The only difference is the engine's white being
+255 where the emulator renders 170 — the same engine-wide palette choice already recorded against the
+town comparison, not a picture problem.
+
+**What the original actually shows, and the grade on each:**
+
+| sequence | picture | grade |
+| --- | --- | --- |
+| intro, after the second presentation screen, held ~5 s | `PICDRA` (the Ultima II dragon logo) | observed — five consecutive one-second frames matched at 100% |
+| 'D' demonstration, first couplet | `PICSPA` (starfield) | observed at 1 s sampling |
+| 'D' demonstration, remaining couplets | `PICMIN` (the pyramid) | observed at 1 s sampling; **which couplet switches it is inferred** |
+| `PICDNG`, `PICTWN`, `PICOUT` | referenced by name in the executable | **where they appear is not established** |
+| `PICCAS` | referenced at file offset `0x6ba` | **has no file in the pack** — a load that can never find its data |
+
+**Gate.** `tests/pic_check.c`, 16 checks, wired into CP4. The interesting part is what a census
+*cannot* do: every candidate layout for these bytes is a permutation of the same 16,000 bytes, so the
+global colour census is **identical** for the correct interleave, for the two fields swapped, and for a
+naive non-interleaved read (all three give 52433/6061/4370/1136). A test written on the global census
+would pass on a decode that drew the picture combed. What separates them is placement: scanline 4
+carries eight magenta pixels and scanline 5 carries none under the correct layout, and swapping the
+fields moves those eight to scanline 5. The gate asserts that by name, plus four quadrant censuses.
+It also asserts a missing file is a clean refusal that leaves the frame untouched, and that `piccas`
+is still absent — so if a future pack adds it, something notices.
+
+**What is NOT gated, said plainly.** The `title.c` wiring cannot be exercised by any automated path
+today. `--headless` installs the null renderer, which has no `present_frame`, so a headless run
+correctly declines the picture; `--dump-screen` ends the run at the first presented frame, which is
+`INTRO_1`'s text, three screens before the splash; and `--script` requires `--headless`. So the decode
+is gated and the call site is not. Confirming the splash on screen needs a person with a window, or a
+`--dev` affordance to dump the Nth frame rather than the first.
+
+**Copyright posture unchanged and worth restating:** the pictures are read at runtime from the
+player's own `--data-dir`, exactly like the tile art. Nothing is committed, nothing is substituted, and
+with the file absent the text screens are byte-for-byte what they were before this existed.

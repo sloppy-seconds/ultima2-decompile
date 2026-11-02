@@ -71,6 +71,28 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * `--dump-map` renders from the loaded save when one is present, not only from the
   fixed probe sector. That is what made the comparison above possible at all.
 
+### Splash graphics (2026-11-03)
+
+* **The engine now shows the original's splash pictures.** The owner noticed it did not,
+  and the reason turned out to be a deferral to a milestone that was never the obstacle:
+  the original does not decode these files at all. `asm/5351` points `DS` at `0xB800` and
+  `asm/535A` reads raw sectors into it, so a `PIC` file is a literal image of CGA mode-4
+  video memory, and the engine's frame already stores one CGA index per pixel. The
+  "bitmap pipeline" is a planar unpack of 16,000 bytes.
+* The intro now shows the **Ultima II dragon logo** between the second presentation screen
+  and the title menu, held about five seconds as the original does, and the `'D'`
+  demonstration now runs the **whole** story poem over the starfield and the pyramid
+  instead of the two-couplet placeholder. Both fall back to the text screens exactly as
+  before when the player has no picture file or the backend takes no frames, so a terminal
+  build and a player without the data are unchanged.
+* `tests/pic_check.c` gates the unpack, and it is a lesson in what a census cannot prove:
+  every candidate layout is a permutation of the same bytes, so the global colour census is
+  identical for the correct interleave and for two wrong ones. The gate pins scanline and
+  quadrant placement instead. The decode was also checked against a live capture of the
+  original at 100% colour-class agreement.
+* The pictures are read from the player's own directory at runtime, like the tile art.
+  Nothing is committed and nothing is substituted.
+
 ### Fixed after v0.0.5
 
 * **`R` and `W` looked like a crash; they were a menu that never reached the screen.** The
