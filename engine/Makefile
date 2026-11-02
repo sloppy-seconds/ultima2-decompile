@@ -158,6 +158,12 @@ SDLWIN_CFLAGS  ?= $(shell $(WIN_PKGCONFIG) --cflags sdl2 2>/dev/null)
 # -Werror=missing-prototypes on every build.
 SDLWIN_CFLAGS  := $(filter-out -Dmain=SDL_main,$(SDLWIN_CFLAGS))
 SDLWIN_LIBS    ?= $(shell $(WIN_PKGCONFIG) --static --libs sdl2 2>/dev/null)
+# SDL's pkg-config adds -mwindows, which produces a GUI-subsystem PE. Keep the
+# console subsystem instead: the engine writes its diagnostics to stderr, and a
+# GUI-subsystem binary under wine loses them — which is exactly the evidence a
+# cross-build needs when it fails to start. The comment above promising a console
+# subsystem for the wine smoke test was aspirational until this line.
+SDLWIN_LIBS    := $(filter-out -mwindows,$(SDLWIN_LIBS))
 WINOBJ         := $(BUILD)-win
 WIN_BIN        := u2-sdl.exe
 # The clock is the one object that is not portable: mingw declares

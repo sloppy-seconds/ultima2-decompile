@@ -395,6 +395,19 @@ PY
             && ok "headless SDL frame carries ink ($ink non-black pixels, not a blank upload)" \
             || bad "headless SDL frame is blank or unreadable (ink=$ink)"
     fi
+    # The default, with no flag at all. This is the player's path: the downloaded
+    # binary is double-clicked or run bare, with no terminal and no idea that
+    # --sdl exists. --dump-screen is implemented only by the SDL renderer, so a
+    # frame here is proof the default resolved to sdl and not to the text grid.
+    rm -f "$WORK/sdl-default.ppm"
+    SDL_VIDEODRIVER=dummy timeout -s KILL 20 ./u2-sdl --dump-screen "$WORK/sdl-default.ppm" \
+        >/dev/null 2>&1
+    def_size=$( [ -s "$WORK/sdl-default.ppm" ] && wc -c < "$WORK/sdl-default.ppm" | tr -d ' ' )
+    if [ "$def_size" = "192015" ]; then
+        ok "SDL build defaults to the window: a flagless run wrote the 320x200 frame"
+    else
+        bad "SDL build did not default to the SDL renderer (flagless --dump-screen gave '${def_size:-nothing}')"
+    fi
 else
     printf '  SKIP  u2-sdl not built (make sdl) — headless SDL path not exercised\n'
 fi

@@ -172,4 +172,34 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     esac
 fi
 
+# --- renderer selection: a flag that cannot be honoured must refuse ----------
+# This is the terminal (cc-only) build, so --renderer=sdl is a request this binary
+# cannot serve. It used to be ignored in silence, which made the wrong binary plus
+# the right flag look exactly like a window that failed to open -- and that is how
+# a player meets it now that the SDL build defaults to the window. Every branch
+# here is a control for itself: a wrong exit code fails the gate.
+if ./u2 --renderer=sdl --headless --script "$SCRIPT" >/dev/null 2>"${WORK:-/var/tmp}/cp0-renl.err"; then
+    bad "--renderer=sdl was accepted by a build with no SDL backend"
+else
+    grep -q "without an SDL backend" "${WORK:-/var/tmp}/cp0-renl.err" \
+        && ok "--renderer=sdl in a non-SDL build refuses and says why" \
+        || bad "--renderer=sdl failed, but not with the message a player can act on"
+fi
+
+if ./u2 --renderer=bogus >/dev/null 2>&1; then
+    bad "--renderer=bogus was accepted"
+else
+    ok "--renderer rejects a value it does not implement"
+fi
+
+# A key script is read only by the headless input backend. Silently dropping it is
+# how a scripted run ends up waiting for a human, so it is refused out loud.
+if timeout -s KILL 10 ./u2 --script "$SCRIPT" >/dev/null 2>"${WORK:-/var/tmp}/cp0-script.err"; then
+    bad "--script was accepted without --headless, and would have been ignored"
+else
+    grep -q -- "--script needs --headless" "${WORK:-/var/tmp}/cp0-script.err" \
+        && ok "--script without --headless refuses instead of ignoring the keys" \
+        || bad "--script without --headless failed without the explanatory message"
+fi
+
 [ "$fail" = "0" ] && { echo "CP0 TEST: PASS"; exit 0; } || { echo "CP0 TEST: FAIL"; exit 1; }

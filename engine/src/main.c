@@ -40,7 +40,12 @@ static void usage(const char *argv0)
         "  --headless      null renderer + script input + deterministic clock\n"
         "  --script FILE   key script (see tests/title.keys)\n"
         "  --dump-state    print the screen grid and a JSON state dump on exit\n"
-        "  --sdl           bitmap window instead of the text grid (make sdl build)\n"
+        "  --renderer=R    sdl | terminal. The default depends on how this binary was\n"
+        "                  built: sdl when it was compiled with SDL (`make sdl`,\n"
+        "                  `sdl-static`, `sdl-win`), terminal otherwise. So a player\n"
+        "                  binary opens a window with no flags at all. Asking for a\n"
+        "                  renderer the binary cannot provide is an error.\n"
+        "  --sdl           alias for --renderer=sdl\n"
         "  --play-map      enter the overworld screen directly (CP4 development entry)\n"
         "  --dev           development affordances only (Ctrl-Q ends the run). Off by\n"
         "                  default, and it never changes game behaviour: without it the\n"
@@ -130,7 +135,7 @@ static int wire_backends(u2_ctx *ctx)
         ctx->clock    = &u2_clock_script;
         ctx->input    = ctx->script_path ? &u2_input_script : &u2_input_term;
 #ifdef U2_HAVE_SDL
-    } else if (ctx->use_sdl) {
+    } else if (ctx->renderer_choice == U2_RENDERER_SDL) {
         /* The bitmap shell. It only moves pixels the engine already composed;
          * choosing it changes nothing about what the game draws. */
         ctx->renderer = &u2_renderer_sdl;
@@ -215,7 +220,17 @@ int main(int argc, char **argv)
         if (strcmp(a, "--headless") == 0) {
             ctx.mode = U2_MODE_HEADLESS;
         } else if (strcmp(a, "--sdl") == 0) {
-            ctx.use_sdl = 1;
+            ctx.renderer_choice = U2_RENDERER_SDL;      /* legacy alias */
+        } else if (strncmp(a, "--renderer=", 11) == 0) {
+            const char *r = a + 11;
+            if (strcmp(r, "sdl") == 0)
+                ctx.renderer_choice = U2_RENDERER_SDL;
+            else if (strcmp(r, "terminal") == 0)
+                ctx.renderer_choice = U2_RENDERER_TERMINAL;
+            else {
+                fprintf(stderr, "u2: --renderer takes 'sdl' or 'terminal' (got '%s')\n", r);
+                return 2;
+            }
         } else if (strcmp(a, "--play-map") == 0) {
             ctx.play_map = 1;
         } else if (strcmp(a, "--dev") == 0) {
@@ -307,6 +322,34 @@ int main(int argc, char **argv)
             usage(argv[0]);
             return 2;
         }
+    }
+
+    /* The renderer default is a property of the *build*, not of the run. The
+     * binary a player downloads is the SDL one, and it should open a window when
+     * double-clicked with no flags and no terminal; the cc-only build the whole
+     * test suite drives keeps the text grid it has always had. */
+#ifdef U2_HAVE_SDL
+    if (ctx.renderer_choice == U2_RENDERER_AUTO) ctx.renderer_choice = U2_RENDERER_SDL;
+#else
+    if (ctx.renderer_choice == U2_RENDERER_AUTO) ctx.renderer_choice = U2_RENDERER_TERMINAL;
+    if (ctx.renderer_choice == U2_RENDERER_SDL) {
+        /* This used to be ignored in silence, which made the wrong binary plus the
+         * right flag look exactly like a window that failed to open. */
+        fprintf(stderr, "u2: this binary was built without an SDL backend, so "
+                        "--renderer=sdl cannot be honoured. Build it with `make sdl`,\n"
+                        "or use --renderer=terminal.\n");
+        return 2;
+    }
+#endif
+    /* A key script is read by the script input backend, which is wired only in
+     * headless mode. docs/phase4-state.md recorded this as "--sdl cannot take
+     * --script" and blamed argument order; the real cause is that no interactive
+     * backend reads script_path at all, so the flag was quietly dropped. Silently
+     * ignoring a script is how a scripted run ends up waiting for a human. */
+    if (ctx.script_path && ctx.mode != U2_MODE_HEADLESS) {
+        fprintf(stderr, "u2: --script needs --headless; no interactive backend reads a"
+                        " key script, so it would be ignored.\n");
+        return 2;
     }
 
     /* --keep-site-state is an enhanced-mode knob. Refusing it in original mode is the

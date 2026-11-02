@@ -22,6 +22,19 @@ typedef enum u2_fidelity {
     U2_FIDELITY_ENHANCED = 1    /* same rules; dead ends removed */
 } u2_fidelity;
 
+/* Which front end to wire, chosen by --renderer (or the legacy --sdl alias).
+ * AUTO is resolved in main() from how the binary was *built*: an SDL build opens
+ * the window, a cc-only build uses the text grid. That is what lets a downloaded
+ * player binary need no flags at all while every test script keeps driving the
+ * terminal build it has always driven. Asking for a renderer the binary was not
+ * compiled with is an error, never a silent fall back -- a flag whose whole job
+ * is "show me a window" must not be the one thing that fails quietly. */
+typedef enum u2_renderer_choice {
+    U2_RENDERER_AUTO = 0,
+    U2_RENDERER_SDL = 1,
+    U2_RENDERER_TERMINAL = 2
+} u2_renderer_choice;
+
 typedef struct u2_ctx {
     u2_mode mode;
     /* Fidelity axis — independent of `mode`, which is a renderer axis.
@@ -144,7 +157,9 @@ typedef struct u2_ctx {
                                 default drive, holding mapxNN / monxNN / tlkxNN.
                                 Never created; see core/world.h. */
     int save_seeded;         /* set when the blank PLAYER file was created here */
-    int use_sdl;             /* --sdl: bitmap backends (make sdl build only) */
+    u2_renderer_choice renderer_choice;  /* --renderer=sdl|terminal; see the enum.
+                                 Named apart from `renderer`, which is the backend
+                                 pointer this selection resolves *to*. */
     int play_map;            /* --play-map: enter the CP4 overworld directly */
     int dev;                 /* --dev: development affordances, off by default.
                               * THE RULE, and it is the reason the flag exists: --dev may add

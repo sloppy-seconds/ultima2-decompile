@@ -191,13 +191,14 @@ const u2_input u2_input_term = {
 
 #else  /* _WIN32 ---------------------------------------------------------------
  * Stub: the terminal backend does not exist on Windows. init fails, so
- * --term (the default without --sdl) reports rather than misbehaves, and the
+ * --renderer=terminal (the default in a non-SDL build) reports rather than misbehaves, and the
  * link stays complete without a second backend table in main.c.
  */
 #include <stdio.h>
 #include "core/ctx.h"
 static int win_term_init(u2_ctx *ctx) { (void)ctx;
-    fprintf(stderr, "u2: terminal input is not available in this build; use --sdl\n");
+    fprintf(stderr, "u2: terminal input is not available in this build; use"
+                    " --renderer=sdl (the default in an SDL build)\n");
     return -1;
 }
 static int win_term_poll(u2_ctx *ctx, u2_key *out) { (void)ctx; (void)out; return -1; }
