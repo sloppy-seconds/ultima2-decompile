@@ -62,8 +62,31 @@ int u2_gate_slot(uint8_t gate_index)
     return (gate_index & 0x7) / 2;
 }
 
+/* The doors belong to the world map and to nothing else.
+ *
+ * Measured 2026-11-02 inside Port Boniface (sector 31, ones digit 1), entered the honest way
+ * through its wilderness mouth so a return cell was on record. Two separate things stop there,
+ * and each was proven on its own:
+ *
+ *   - **nothing stamps.** With the rotation armed by a poke to DS:6F and the live slot at 2, the
+ *     whole 64x64 town grid held no 0xC0 at all; the four era-3 table cells held 0x70 paving and
+ *     0x78 the player stamp. The control, same session, same era and slot, in sector 30, produced
+ *     exactly one 0xC0 at the table cell (33,23).
+ *   - **the clock is stopped.** The same poke left DS:6F at 01 across six moves with DS:6E fixed,
+ *     where the wilderness advanced the slot within four moves.
+ *
+ * Two mechanisms failing independently is why both are gated here rather than one standing in for
+ * the other: a stamp test alone would still let the index rotate invisibly inside a town and come
+ * back out of step. captures/spice86/s31-south-edge/. */
+static int gate_is_on_world_map(const u2_ctx *ctx)
+{
+    return ctx->state.sector_second == 0;
+}
+
 void u2_gate_turn(u2_ctx *ctx, struct u2_overworld *ow)
 {
+    if (!gate_is_on_world_map(ctx))
+        return;
     /* Observed sequence is 8,7,6,...,2,1 and then the next tick reloads to 8 with the
      * index advanced — the reload happens ON the 1, not on a tick at zero. */
     if (ctx->state.gate_countdown <= 1) {
@@ -84,6 +107,10 @@ int u2_gate_current_cell(const u2_ctx *ctx, const struct u2_overworld *ow, int *
      * slot-0 cell is ordinary ground; the original stamps nothing until the countdown
      * first expires (era 0, forced expiry, captures/spice86/era0-probe). */
     if (!ow->gate_stamped)
+        return 0;
+    /* And no door exists inside a settlement, however long the player stands there.
+     * See gate_is_on_world_map. */
+    if (!gate_is_on_world_map(ctx))
         return 0;
     return u2_gate_cell(ctx->state.sector_first,
                         u2_gate_slot(ctx->state.gate_index), x, y);

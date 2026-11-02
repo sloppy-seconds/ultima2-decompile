@@ -93,6 +93,43 @@ int main(int argc, char **argv)
     CHECK(ctx.state.gate_index == 0, "index wraps 06 -> 00 after four rotations, got %u",
           ctx.state.gate_index);
 
+    /* --- a settlement has no doors, and no clock ---------------------------
+     * Measured 2026-11-02 inside Port Boniface (sector 31, ones digit 1) with the rotation
+     * armed: the town grid held no 0xC0 at all, and DS:6F sat unchanged across six moves
+     * where the same poke in sector 30 rotated the slot within four. Two mechanisms, and
+     * each is asserted on its own so neither can be carried by the other.
+     * captures/spice86/s31-south-edge/. */
+    static u2_overworld ow_site;          /* static: it carries tiles and frame buffers */
+    memset(&ow_site, 0, sizeof ow_site);
+    ow_site.gate_stamped = 1;             /* armed: on the world map this WOULD stamp */
+    memset(&ctx, 0, sizeof ctx);
+    ctx.state.sector_first = 3;
+    ctx.state.sector_second = 1;          /* a village sector */
+    ctx.state.gate_index = 4;             /* slot 2, the live slot in the capture */
+    ctx.state.gate_countdown = 1;
+    int sgx = -1, sgy = -1;
+    CHECK(!u2_gate_current_cell(&ctx, &ow_site, &sgx, &sgy),
+          "inside a settlement the armed door answers no cell");
+    /* The control that makes the refusal above mean something: identical state on the
+     * world map does stamp, so what refused is the site test and not the stamp flag,
+     * the table, or the slot arithmetic. */
+    ctx.state.sector_second = 0;
+    sgx = sgy = -1;
+    CHECK(u2_gate_current_cell(&ctx, &ow_site, &sgx, &sgy) && sgx == 33 && sgy == 23,
+          "the same state on the world map stamps (33,23), got (%d,%d)", sgx, sgy);
+    /* And the clock, with the same shape of control. */
+    ctx.state.sector_second = 1;
+    ctx.state.gate_countdown = 1;
+    for (int i = 0; i < 6; ++i)
+        u2_gate_turn(&ctx, &ow_site);
+    CHECK(ctx.state.gate_index == 4 && ctx.state.gate_countdown == 1,
+          "the countdown does not advance inside a settlement (index %u, cd %u)",
+          ctx.state.gate_index, ctx.state.gate_countdown);
+    ctx.state.sector_second = 0;
+    u2_gate_turn(&ctx, &ow_site);         /* one tick on the world map, cd was 1 */
+    CHECK(ctx.state.gate_index == 6,
+          "the same tick on the world map does rotate, got index %u", ctx.state.gate_index);
+
     /* --- the two transit refusals that need no sector load -----------------
      * Both return before u2_world_load, so they run without a content directory.
      * The positive legs (era2 slot1 <-> era1 slot1, era2 slot2 <-> era3 slot2) are the
