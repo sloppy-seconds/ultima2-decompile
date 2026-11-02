@@ -190,6 +190,26 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-02 — A generator with a lossy fallback must not be runnable by the build, and the
+  fallback must be demoted to verifier.** The content header for the reimplementation had two
+  sources: the shipped binary, which resolves every string, and the reconstructed asm listing,
+  which resolves about eighty per cent of them and yields an empty literal for the rest — because
+  a bulk wave that renders a span as byte lists or as mis-decoded instructions leaves no quoted
+  text for a locator to match. Every developer machine had the binary, so nobody noticed that CI,
+  and therefore every artefact CI shipped, silently took the lossy path. The defect is not the
+  gap, it is that an empty literal is a **value**: the program runs, the screen renders, and every
+  assertion that greps output for the missing text passes while nothing was printed. Three rules
+  generalise. (1) Where one source is provably lossy, the build gets no rule to select it — the
+  generated file is either committed or the build fails for want of it, and the lossy path is
+  refused by the tool rather than by a wrapper, so it holds however the tool is invoked. (2)
+  Repurpose the lossy source as a cross-check: every item it *can* resolve must agree with the
+  committed artefact, and no committed item may be empty. (3) Where the two sources legitimately
+  disagree because one sees less, compare only as far as the weaker one can see and **print how
+  often you had to** — a silent prefix match is the same vacuous pass in a nicer costume. Then
+  demonstrate the gate red on each shape of drift (wrong text, blanked item, shortened prefix,
+  missing item, attempted downgrade). → Tier 2, gate design; and an argument for treating "the
+  fallback still builds" as a defect report rather than a success.
+
 * **2026-10-29 — "No pixel-plot path anywhere in the tree" is a statement about the names, not
   about the code, and it can sit on an item for weeks and make it look owner-blocked.** A whole
   first-person renderer was undiscovered because the search was for a routine that writes to a

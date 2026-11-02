@@ -90,21 +90,26 @@ contract is behaviour.
   — not a factory-shipped copy. The pack **appears to already include community
   patches**, so "byte-exact" here means byte-exact to *this* image:
   `ultimaii.exe`, 37,344 bytes, md5 `fe884d5117971073ac8097cc7a6aca25`.
-* **This repository contains no game files.** The original executable, the game
-  data, and raw runtime captures are copyrighted and are not distributed here
-  (`.gitignore` enforces it as policy, and the git history is clean of them). To
-  reproduce or play, supply your own legally obtained copy.
+* **This repository contains no game data.** The sector maps, monster and dialogue
+  files, pictures and saves are copyrighted and are not distributed here
+  (`.gitignore` enforces it as policy, and the git history is clean of them). The
+  game's *text* is published, in one generated file, for the reasons in AGENTS.md
+  § 0. To reproduce or play, supply your own legally obtained copy of the data.
 * The reconstructed assembly is a derivative work of the copyrighted binary in
   symbolic form, published for **research, education and interoperability** in the
   tradition of other classic-game decompilation projects. If you represent the
   rights holder and want something changed or removed, open an issue — it will be
   acted on promptly.
 
-### Art is substituted, not copied
+### Text is committed; art is substituted
 
 Text is load-bearing for fidelity and cannot be substituted — if the engine prints
-anything other than `NO DOOR THERE!` it is simply wrong — so the game's strings
-are extracted from the user's own binary at build time and are never hardcoded.
+anything other than `NO DOOR THERE!` it is simply wrong. So the game's strings are
+in this repository, in one generated file, `engine/content/gen_content.h`. It is
+produced by `engine/tools/extract/extractor.py` and never hand-edited, and
+`make -C engine content-check` proves it still agrees with the byte-proven `asm/`
+tree, which carries the same text as part of the reconstruction. The reasoning,
+including why text and art get different treatment, is in AGENTS.md § 0.
 
 **Art and sound are different**: they can be redrawn, so they are. The engine ships
 original substitute tile art under `engine/assets/tiles/cleanroom/`, made to a
@@ -114,16 +119,70 @@ chain and the times it failed are documented in `docs/cleanroom-procedure.md`. T
 gate that checks substitute art against the originals is run *against* finished
 art and is never handed to whoever draws it.
 
+**The world data is neither.** `mapxNN` sector maps, `monxNN` monster data,
+`tlkxNN` NPC dialogue, the `pic*` pictures and the `player` save are the game, not
+the engine, and they stay on your disk. Ultima II is not a single-file game: the
+37 KB executable is the engine and the pack used here is 94 files totalling about
+2.2 MB.
+
 ## Playing it
 
-### The C engine — the thing you actually play
+### The player binary — nothing to build, no DOS
+
+One file, statically linked, plus your own copy of the game.
+
+**1. Get the game files.** Use a copy you already own, or the distribution this
+project was built against: [archive.org/details/msdos_Ultima_II_-_Revenge_of_the_Enchantress_1983](https://archive.org/details/msdos_Ultima_II_-_Revenge_of_the_Enchantress_1983).
+Download `Ultima_II_-_Revenge_of_the_Enchantress_1983.zip` and unzip it to a
+folder of its own, say `~/u2`. That folder must be **writable**: the original
+rewrote its own sector files, and so does the engine.
+
+```bash
+mkdir -p ~/u2 && cd ~/u2
+unzip ~/Downloads/Ultima_II_-_Revenge_of_the_Enchantress_1983.zip
+ls | head        # ultimaii.exe, mapxNN, monxNN, tlkxNN, picdng..pictwn, player
+```
+
+If the archive unpacks into a directory of its own, point `--data-dir` at the
+folder that actually holds `ultimaii.exe`. The pack also ships an `updated/`
+directory of community patches; this project's ground truth is the patched
+`ultimaii.exe` described under Target & provenance below, and the engine reads
+whatever executable you put in the data directory.
+
+**2. Get the binary.** Player binaries are attached to each GitHub Release by
+`.github/workflows/release-builds.yml` — `u2-sdl-static` for Linux and
+`u2-sdl.exe` for Windows, with `SHA256SUMS.txt`. If no release is published yet,
+build one locally instead: `deploy/linuxbuild/build.sh` and
+`deploy/winbuild/build.sh` produce exactly what CI does, inside a container, and
+leave your host alone.
+
+**3. Run it, pointed at the game folder.**
+
+```bash
+sha256sum -c SHA256SUMS.txt            # if you downloaded a release
+chmod +x u2-sdl-static
+./u2-sdl-static --data-dir ~/u2
+```
+
+`--data-dir` is where the world comes from, and `ultimaii.exe` in it is where the
+tile art is extracted from on first run and cached afterwards. Without a data
+directory the engine says so: *no executable and no cached tiles: point --data-dir
+at your Ultima II directory*. Add `--cleanroom` to draw the substitute art instead
+of the original, and it will always announce that it is doing so.
+
+**4. Saves: there is no disk to manage.** The original ran from floppies and asked
+you to insert them; the engine keeps one file. Your character lives at
+`--save-dir DIR/PLAYER`, default `./saves`, created automatically if absent. It is
+the same 256-byte record format the original used, so a save the original wrote
+loads here and a save the engine wrote loads there — `tools/save_cross_load.py`
+proves both directions against the live game. Keep `--save-dir` somewhere writable
+even if you mount the game folder read-only.
+
+### Building the engine from source
 
 **Requirements:** a C11 compiler and `python3`. The terminal build has **no
 third-party libraries at all**. `make sdl` additionally needs SDL2 (on
 Fedora/Bazzite the `sdl2-compat` package provides `sdl2-config`).
-
-The engine reads the game's own content files, so point it at an extracted copy
-with `--data-dir`:
 
 ```bash
 cd engine
@@ -134,13 +193,15 @@ make test                 # CP0..CP7 acceptance checks
 make sdl && ./u2-sdl --data-dir ~/u2 --play-map    # SDL2 bitmap front end
 ```
 
-Two build-time notes that save confusion:
+Two notes that save confusion:
 
-* If you place your original as `../original/ultimaii.exe`, the build extracts
-  all 64 game strings from the binary itself. Without it the build still succeeds
-  but falls back to the asm listing and recovers 37 of 64, so some messages will
-  be missing. The fallback is deliberate and CI-tested.
-* `build/`, `u2` and every generated header are gitignored.
+* The strings are already in the repo (`engine/content/gen_content.h`), so a
+  checkout builds a complete game with no copy of the binary present. If you do
+  have one at `../original/ultimaii.exe`, `make content` refreshes that file from
+  it; `make content-check` verifies the committed copy against `asm/` without it.
+* `build/`, the binaries and the tile cache are gitignored. `content/` is the one
+  generated directory that is tracked, and it is the one thing a build must never
+  regenerate by itself.
 
 The headless and scripted modes (`--headless`, `--script`, `--dump-state`,
 `--dump-each`, `--trace`, `--seed`, `--replay-report`) are the contract the tests

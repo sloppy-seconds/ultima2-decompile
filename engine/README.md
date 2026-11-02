@@ -54,26 +54,50 @@ the SDL backend; the terminal backend compiles to a stub that says so.
 
 `build/`, `u2` and every generated header are gitignored.
 
-## Zero game content
+## Game text is committed; art and data are not
 
-Nothing from the original binary is committed: no strings, no tables, no
-extracted headers. `tools/extract/extractor.py` produces `build/gen_content.h`
-at build time from a copy the user owns:
+The engine's strings live in `content/gen_content.h`, which is **generated and
+committed**. That is deliberate, and it is ruled in AGENTS.md § 0 ("The text/art
+line"): the game's text is the one kind of content the engine cannot substitute,
+and the reconstruction in `asm/` already carries every byte of it.
+
+The reason it is committed rather than rebuilt is that the two sources are not
+equal. `tools/extract/extractor.py` reads either of them:
 
 ```sh
-python3 tools/extract/extractor.py --exe ../original/ultimaii.exe   # normal
-python3 tools/extract/extractor.py --source asm                     # no copy (CI)
-python3 tools/extract/extractor.py --emit text                      # for tests
+make content          # from ../original/ultimaii.exe — all 220 strings
+make content-check    # the drift gate: asm/ vs the committed header, needs no exe
+python3 tools/extract/extractor.py --emit text    # SYMBOL<TAB>value, for tests
 ```
 
-With no copy present the extractor falls back to the `db` lines of the
-byte-proven `asm/` tree, as the plan specifies. Two title strings live inside
-regions Phase 3 reconstructed as mis-decoded code (`asm/02A3`, `asm/02E6`), so
-they have no `db` line and cannot come from the fallback; the extractor yields
-them empty and the engine skips those two lines rather than inventing text.
-`make content-check` fails if the header is stale.
+The `asm/` fallback resolves **181 of 220** and leaves 38 as empty literals,
+because those strings sit in regions Phase 3 rendered as byte lists or as
+mis-decoded code rather than as `db "..."` text — the whole character-creation
+screen, the seven `STREET_*` talk lines, the WEAR menu and the grocery question
+among them. An empty literal prints as nothing, so a build that regenerated the
+header on a machine without the exe would ship a blank character-creation screen,
+and every test that greps the screen for text would pass while nothing was
+printed. So the fallback is no longer a build source; it is the verifier.
 
-That is what keeps this directory cleanly Apache-2.0.
+Three things make the committed copy safe, and all three are enforced:
+
+* the extractor is the file's only writer — its banner says "do not edit by hand"
+* `make content` refuses without the exe, and the extractor itself refuses to
+  write a fallback header over an exe-derived one (`--force` overrides, by name)
+* `make content-check` fails if any string `asm/` can prove disagrees with the
+  committed text, or if any committed string is empty. Four strings can only be
+  checked up to a split `db` line, where `asm/` genuinely cannot see further, and
+  the gate says so in its output
+
+There is deliberately **no make rule to remake `$(GEN)`**. The build consumes the
+committed file and fails loudly if it is missing. `build/` is off the include
+path for the same reason: a stale `build/gen_content.h` from before this change
+would otherwise shadow the committed header and silently restore the 38 empties.
+
+Art and sound stay substituted under the cleanroom (`assets/tiles/cleanroom/`,
+`docs/cleanroom-procedure.md`), and the world data — `mapxNN`, `monxNN`, `tlkxNN`,
+the tile art the engine extracts at runtime — is still the player's own copy and
+is never in this repository.
 
 ## Screen model
 

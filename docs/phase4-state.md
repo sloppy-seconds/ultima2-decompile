@@ -1267,8 +1267,9 @@ lands.
 bolted on after the text layer has hardened.**
 
 The engine currently has no language axis at all. Text reaches the screen as
-compile-time `#define` string literals in `engine/build/gen_content.h`, generated
-from the original executable by the Makefile. That is simultaneously the good news
+compile-time `#define` string literals in `engine/content/gen_content.h`, generated
+from the original executable by the Makefile and committed so a build without the
+exe is still a complete game. That is simultaneously the good news
 and the obstacle.
 
 **Good news: a seam already exists.** Every string is reached through a `U2_S_*`
@@ -2612,3 +2613,56 @@ the caller can see.** `asm/67B3`'s header now says so, and `asm/6425` is named f
 draws. The rename itself is not done: `tools/gen_dungeon_draw.py` hard-codes the ten asm
 filenames in its `ROUTINES` list, so renaming is a tool edit plus a regeneration and is left
 for the same person who does that.
+
+## The release binary would have shipped a blank character-creation screen (found and fixed 2026-11-02)
+
+While drafting README instructions for the player binaries (`u2-sdl-static`,
+`u2-sdl.exe`, attached to a `v*` release by `release-builds.yml`) it emerged that
+no release built so far would have been playable. The cause was that the two
+string sources are not equal and nothing was checking which one a build got:
+
+| source | strings | empty |
+| --- | --- | --- |
+| `original/ultimaii.exe` (every dev box) | 220 | 0 |
+| `asm/` fallback (every CI runner, every release build) | 219, one omitted outright | **38** |
+
+An empty literal prints as nothing, so a release binary would have shown an empty
+title copyright, an empty character-creation screen (the `GENERATION`/`POINTS`/`FORM`
+headings, the four races, the four classes, the sex labels, `TO PLAY ULTIMA ][`),
+the seven `STREET_*` talk lines, the WEAR armour menu, the strength refusal and the
+grocery question. Worse for test credibility, every assertion that greps the screen
+for one of those strings would have passed while nothing was printed.
+
+**Why the fallback loses them.** 38 of the 220 sit in regions Phase 3 rendered as
+byte lists or as mis-decoded instructions rather than as `db "..."` text, so the
+manifest's `run` locators have no asm-side literal to resolve against. Measured by
+probing each one against the tree: 6 are in fact already quoted text and only
+needed the manifest's fourth tuple element; 20 are recoverable from `db 0x..` byte
+lists; 9 more are split around the game's `0x0d` newline glyph and are recoverable
+by decoding mixed `db` lines; 3 are genuinely absent — `DISK_PLAYER` (its text
+survives in a different file, `asm/7030_space_collision.asm:273`) and the two
+`FOOD_YES_*` in `asm/17F5_sub_17f5.asm`, which has no `db` lines at all. That
+breakdown is the priced version of "fix the fallback", and it is still open.
+
+**What was done instead, by owner ruling the same day.** The generated header is
+committed. `engine/content/gen_content.h` is now tracked, the build has no rule to
+regenerate it, and `make content` refuses without the exe. AGENTS.md § 0's
+"convenience copy" bullet is amended to say what the rule was always protecting —
+a *hand-maintained* copy — and the three enforced checks that replace the old
+"never commit it" are in that bullet, in the header's own banner, and in
+`engine/README.md`.
+
+**The gate, and its controls.** `make -C engine content-check` regenerates from
+`asm/` and requires every string asm can prove to agree with the committed file,
+and no committed string to be empty. Four strings can only be checked up to a
+split `db` line, because that is as far as asm sees; the gate says so rather than
+silently passing them. Controls, all six demonstrated red before the gate was
+trusted: wrong text, blanked string, shortened prefix, missing symbol, and a
+fallback header attempting to overwrite the committed one. The last is refused by
+the extractor itself, not by the Makefile, so it holds however the tool is run.
+
+**One trap found on the way, now asserted.** `CPPFLAGS` carried `-Ibuild` ahead of
+the new `-Icontent`, and a stale `build/gen_content.h` from the old scheme
+out-ranked the committed header — a wrong build that looked like the right one and
+would have restored all 38 empties. `build/` is off the include path and CP2 now
+fails if it goes back on.

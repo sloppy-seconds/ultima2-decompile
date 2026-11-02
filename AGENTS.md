@@ -206,9 +206,20 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
     in sidecar files (`pic*`, the tile data) that `asm/` does not reconstruct, and unlike text
     they *can* be redrawn — which is why `engine/assets/tiles/cleanroom/` and
     `docs/cleanroom-procedure.md` exist.
-  * What is additionally forbidden is a **convenience copy** of content the reconstruction
-    already carries. The generated `gen_content.h` is derived at build time and gitignored;
-    hand-maintained duplicates of game text in `docs/` would both drift and add exposure.
+  * **A second copy of the text is allowed only where a generator writes it.** What is
+    forbidden is a *hand-maintained* copy, because two hand-maintained copies drift and then
+    lie. `engine/content/gen_content.h` is committed (owner ruling, 2026-11-02) because the
+    alternative was the worse defect: the asm fallback resolves 181 of 220 strings and blanks
+    the other 38, so every build without the player's `ultimaii.exe` — every CI runner, and
+    therefore every release binary — shipped a blank character-creation screen and let any
+    test that greps the screen for text pass vacuously. The discipline that replaces "never
+    commit it" is three checks, all enforced: the extractor is the file's only writer, `make
+    -C engine content` refuses to run without the exe so a fallback can never overwrite the
+    good copy, and `make -C engine content-check` proves every string `asm/` can reach still
+    agrees with the committed file and that no committed string is empty. The build has no
+    rule to remake the header at all, which is what makes a missing file a loud failure
+    instead of a silent downgrade. Hand-maintained duplicates of game text in `docs/` stay
+    forbidden: they have no generator and no gate.
 * **OPEN TODO — the committed text table, for i18n.** A locale layer wants one canonical table
   keyed by stable IDs, so a translation can replace the English without touching code. The keys
   already exist: the extractor's `STRINGS` list is exactly `U2_S_NAME -> (asm file, which db
@@ -216,7 +227,8 @@ never be committed to git.** The `.gitignore` enforces this; do not work around 
   armour, spells, items, stats, races, classes — `docs/status-screen-z.md` § 7) is emitted as
   seven whole arrays with no per-entry symbol, so a translator would translate arrays rather
   than entries. When i18n is scheduled, give each pool entry a `U2_S_`-style ID and keep the
-  values generated, not committed. Deliberately not done now.
+  values emitted by the extractor into the committed header, never hand-written. Deliberately
+  not done now.
 * When in doubt about whether an artefact is safe to commit, **do not commit it and ask the user.**
 
 ---
