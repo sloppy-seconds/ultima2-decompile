@@ -172,6 +172,13 @@ int main(int argc, char **argv)
         ctx.state.world = 4;
         CHECK(u2_world_load(&ctx, &w, 0, jup) == U2_WORLD_OK && w.mon[0] == 0x22,
               "on Jupiter, monsters prefer the patched updated/MONG40");
+        /* Dialogue follows the same rule: tlkx/tlkg mirror mapx/mapg. */
+        path_for(q, sizeof q, dir, "tlkx40");
+        CHECK(write_file(q, earth, U2_TLKX_BYTES) == 0, "unpatched tlkx40 written");
+        snprintf(q, sizeof q, "%.400s/updated/TLKG40", dir);
+        CHECK(write_file(q, planet, U2_TLKX_BYTES) == 0, "patched updated/TLKG40 written");
+        CHECK(u2_world_load_tlkx(&ctx, &w, jup) == U2_WORLD_OK && w.tlkx[0] == 0x22,
+              "on Jupiter, dialogue prefers the patched updated/TLKG40");
         ctx.state.world = 0;
     }
 

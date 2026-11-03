@@ -233,15 +233,34 @@ u2_world_result u2_world_load_tlkx(u2_ctx *ctx, u2_world *w, u2_sector_id id)
     size_t got = 0;
     const char *used = NULL;
 
-    for (size_t i = 0; i < sizeof k_tlk_prefixes / sizeof k_tlk_prefixes[0]; i++) {
+    /* Same world-aware preference as u2_world_load: on a planet the sector's dialogue
+     * collides with an Earth era (tlkx/tlkg mirror mapx/mapg), so prefer the patched
+     * tlkg -- in ./updated then the root -- before the unpatched tlkx. On Earth the tlkx
+     * spelling is the era dialogue and the order is unchanged. tlkx is read-only, so the
+     * label is recorded for provenance only. docs/planet-maps-galaxy-patch.md. */
+    struct cand { const char *dir; const char *prefix; const char *label; };
+    struct cand list[8];
+    int n = 0;
+    const char *base = world_dir(ctx);
+    if (ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
+        list[n++] = (struct cand){ base, "updated/TLKG", "TLKG" };
+        list[n++] = (struct cand){ base, "updated/tlkg", "tlkg" };
+        list[n++] = (struct cand){ base, "TLKG", "TLKG" };
+        list[n++] = (struct cand){ base, "tlkg", "tlkg" };
+    }
+    for (size_t i = 0; i < sizeof k_tlk_prefixes / sizeof k_tlk_prefixes[0] && n < 8; i++)
+        list[n++] = (struct cand){ base, k_tlk_prefixes[i], k_tlk_prefixes[i] };
+
+    for (int i = 0; i < n; i++) {
         FILE *f;
-        u2_world_path(path, sizeof path, ctx, k_tlk_prefixes[i], id);
+        snprintf(path, sizeof path, "%s/%s%u%u", list[i].dir, list[i].prefix,
+                 (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
         f = fopen(path, "rb");
         if (!f)
             continue;
         got = fread(w->tlkx, 1, U2_TLKX_BYTES, f);
         fclose(f);
-        used = k_tlk_prefixes[i];
+        used = list[i].label;
         break;
     }
 

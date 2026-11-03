@@ -45,6 +45,14 @@ The monster-layout files behave identically: `monx`/`mong` mirror `mapx`/`mapg`,
 `RENGAL.BAT`: it *creates* `mong10/15/30/40/45` by copying `mong20`, so the inner planets
 share Venus's creature table rather than each shipping a distinct one.
 
+The third family is the sector **dialogue**: `tlkx`/`tlkg` (the NPC lines asm/22D5 reads into
+`DS:476`). `RENGAL.BAT` deletes six of them — `tlkx61/71/81/82/92/93`, the outer-planet site
+sectors — because it ships corrected `TLKG` counterparts and the loader tries `tlkx` first.
+All six differ from their `TLKG` (measured), so the delete is content-correcting, not
+cosmetic. Sectors 32 and 41 also have a differing `TLKG` but are **not** deleted: they are
+ambiguous (Earth-era-3/4 *and* Mars/Jupiter sites), so `tlkx` stays for Earth and `tlkg` is
+added for the planet, disambiguated at runtime like the maps.
+
 ## 3. The disambiguation is the world byte, not the filename
 
 A sector number is genuinely ambiguous: **sector 40 is both Earth-2112 (era 4) and Jupiter
@@ -56,8 +64,8 @@ outer `mapx` files to `mapg` rather than deleting them.
 
 ## 4. Engine behaviour (implemented)
 
-`engine/src/core/world.c:u2_world_load` is now world-aware, for both sector kinds (monster
-layouts `monx`/`mong` collide with Earth eras exactly as `mapx`/`mapg` do):
+`engine/src/core/world.c` is now world-aware for all three per-sector families
+(`mapx`/`mapg`, `monx`/`mong`, `tlkx`/`tlkg` — each collides with Earth eras the same way):
 
 - **On Earth (`world == 0`)**: unchanged — `mapx`/`monx`, then `MAPX`/`MONX`, then
   `mapg`/`mong`, `MAPG`/`MONG`.
@@ -73,7 +81,8 @@ writes the root spelling, never an `updated/` path).
 
 Gated by `engine/tests/world_check.c`: on Earth sector 40 loads the era map; on Jupiter it
 prefers `updated/MAPG40`; with the patched copy removed it falls back to `mapx40`; and the
-same three cases hold for the monster layout (`updated/MONG40` over `monx40`).
+same three cases hold for the monster layout (`updated/MONG40` over `monx40`) and the
+dialogue (`updated/TLKG40` over `tlkx40`, via `u2_world_load_tlkx`).
 
 ## 5. Parked: a placeholder map when the patch is absent
 
