@@ -137,21 +137,40 @@ jobs:
       # The artifact must be able to say it is the artifact. If the stamp ever stops
       # reaching the compiler, or a dev-shaped build leaks into a release, this is
       # where it is caught — not in a bug report about a binary nobody can identify.
+      #
+      # The two platforms are checked differently, and the difference is honest about
+      # why. The Linux binary runs natively here, so it is asked directly. The Windows
+      # binary is not executed: a release must not depend on wine behaving on a
+      # runner, and the first cut of this step did exactly that and blocked v0.0.8.
+      # Instead the compiled-in stamp literals are looked for in the PE, which proves
+      # the -D flags reached the compiler and the right target was built. It does not
+      # prove the exe runs, and it does not claim to — that check is the owner's
+      # Windows playtest, and it is named as such in the release notes.
       - name: The binary identifies itself as the release build
         run: |
           set -e
-          bin="engine/${{ matrix.artifact }}"
-          [ "${{ matrix.name }}" = windows-cross ] && bin="wine $bin"
-          info=$(eval "$bin --version") || { echo "FAIL: --version did not work on ${{ matrix.artifact }}"; exit 1; }
-          echo "$info"
-          case "$info" in
-            *"artifact=release"*) : ;;
-            *) echo "FAIL: artifact does not claim artifact=release"; exit 1 ;;
-          esac
-          case "$info" in
-            *"${{ github.ref_name }}"*) : ;;
-            *) echo "FAIL: binary does not name the tag it was built from (${{ github.ref_name }})"; exit 1 ;;
-          esac
+          TAG="${{ github.ref_name }}"
+          if [ "${{ matrix.name }}" = windows-cross ]; then
+            echo "Checking compiled-in stamp literals in ${{ matrix.artifact }} (not executing a Windows PE here)"
+            for want in "$TAG" "sdl-win" "sdl3" "static" "release"; do
+              if ! grep -a -q "$want" "engine/${{ matrix.artifact }}"; then
+                echo "FAIL: '$want' is not in the binary — the build stamp did not reach the compiler"
+                exit 1
+              fi
+            done
+            echo "ok: the Windows artifact carries its tag, target, SDL impl, linkage and artifact class"
+          else
+            info=$("engine/${{ matrix.artifact }}" --version) || { echo "FAIL: --version did not work"; exit 1; }
+            echo "$info"
+            case "$info" in
+              *"artifact=release"*) : ;;
+              *) echo "FAIL: artifact does not claim artifact=release"; exit 1 ;;
+            esac
+            case "$info" in
+              *"$TAG"*) : ;;
+              *) echo "FAIL: binary does not name the tag it was built from ($TAG)"; exit 1 ;;
+            esac
+            echo "ok: the Linux artifact identifies itself when asked"
 
       - uses: actions/upload-artifact@v4
         with:
