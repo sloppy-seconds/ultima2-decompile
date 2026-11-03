@@ -19,19 +19,29 @@ gated and the risky unknown (the tile atlas) is de-risked before the big pipelin
   EGA framebuffer image (mode-D, 1 byte/pixel, paletted). Confirmed by size; layout to be
   confirmed by spike S1.
 
-## 1. The one real unknown: where do the EGA *tiles* come from?
+## 1. The tile atlas: RESOLVED (spike S2, 2026-11-04)
 
-`PIC*-E` are full-screen pictures (splash/castle/etc.), not the per-cell tile atlas. The
-in-game map is drawn from the 64-tile atlas, which today is 2bpp CGA from the exe. For the
-map to render in 16 colours we need a 16-colour tile atlas, and it is not yet established
-where the patch keeps it. Three possibilities, in order of hopefulness:
-1. The patched `original/updated/ultima2.com` embeds a 16-colour tile table (parallel to the
-   CGA one at `U2_TILE_INDEX_FILE_OFF`).
-2. The patch remaps the same 2bpp tiles through a richer 16-colour palette at draw time
-   (i.e. no new tile data — EGA mode just uses 16 of the palette for the same 4-plane art).
-3. There is no upgraded tile atlas and only the full-screen pictures gain colour.
+The EGA tile atlas is a data file named **`EGATILES`**, which `u2ega.exe` opens at runtime
+via DOS block-read (INT 21h AH=27h) exactly like it opens `PLAYER` and `MONSTERS` — the
+`EGATILES` string sits in the code next to those two filenames, not as an embedded table.
+`Files.txt` in the pack says it plainly: `U2EGA.EXE - EGA Game Binary & tiles`.
 
-**This decides the value of the whole feature**, so it is spike S2 and gates everything after.
+The file is present at **`references/u2upgrade/EGATILES`** (the full Exodus "U2 Upgrade"
+source package, broader than the `original/updated/` runtime dir). Measured shape: **8320
+bytes = a ~128-byte header/index + 64 tiles x 128 bytes**, where a tile is 16x16 at **4bpp
+packed (two 16-colour pixels per byte)** — confirmed by the byte pattern (every byte splits
+into two nibbles <= 0xF, e.g. `0x99` = two pixels of colour 9). This is possibility (1) from
+the earlier draft: a genuine 16-colour atlas, not a palette remap. The `Readme.txt` agrees:
+the upgrade redraws tiles "conforming loosely to the Apple II colour scheme" and borrows
+some from U1/U4.
+
+Bonus for the options menu: the pack ships **four themes** — `EGATILES`,
+`EGATHEME.10/EGATILES`, `EGATHEME.ALT/EGATILES`, `EGATHEME.C64/EGATILES` (all 8320 bytes,
+different content) — plus `CGATILES` and `CGACOMP.PAL`. A "switch graphic set" menu row maps
+directly onto picking a theme file.
+
+Exact header/index layout is still to be confirmed (spike S1b below), but the atlas exists
+and its location and rough format are settled, so Phase 3 is no longer gated on an unknown.
 
 ## 2. Phase 0 — spikes (no engine change, throwaway scripts under /var/tmp)
 
@@ -39,12 +49,11 @@ where the patch keeps it. Three possibilities, in order of hopefulness:
   palette, write a PNG. If it is the overworld screen in 16 colours, the loader is trivial
   (linear index, no planar decode). If it is 4-plane, it needs a planar unpack like `pic.c`.
   *Gate:* the PNG is recognisably the outdoor screen, not noise.
-- **S2 — locate the EGA tile atlas.** Grep `updated/ultima2.com` for the tile index-table
-  signature `tiles.c` already knows (`U2_TILE_MAGIC_BYTE`/`MAGIC_BYTE2`, uniform stride). If
-  a 16-colour (1 byte/pixel, 16×16 = 256 bytes/tile) table is present, extract one tile and
-  render it. If not, conclude possibility (2) or (3) from § 1.
-  *Gate:* a written verdict on which of the three cases holds. This verdict reshapes Phases
-  3 and beyond.
+- **S2 — RESOLVED (see § 1).** The EGA atlas is `references/u2upgrade/EGATILES`, 4bpp-packed.
+  Remaining sub-spike **S1b**: confirm the exact header/index layout and extract one tile
+  (e.g. tile 0) to a PNG to prove the 16x16 @ 4bpp reading. *Gate:* a recognisable tile.
+- **S2b — themes.** Confirm the four `EGATILES` variants differ only in art (same format), so
+  the menu can offer them as interchangeable graphic sets.
 
 Both spikes are cheap and neither touches the engine. Do them first and record the result in
 `docs/ega-graphics.md` before writing pipeline code.
