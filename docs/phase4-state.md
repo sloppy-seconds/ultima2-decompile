@@ -17,7 +17,7 @@ Statuses: todo | in-progress | done | blocked | awaiting-gate
 | CP6 | Towns + full command set | **in progress — command dispatch landed 2026-10-25** | The dispatch is built in the shape the bytes have it: `engine/src/game/commands.c` owns a 26-slot table indexed like `cs:0730`, the A-Z range test sits before it (asm/09FB then asm/0A18) so "not a command letter" stays a distinct outcome from "a handler that declined", and `U2_CMD_UNKNOWN` prints nothing because the illegal-command site is a different routine and is not wired. `u2_overworld_loop` no longer handles any command letter inline — the six that were there (A, E, P, Q, U, Z) migrated one at a time under the tests, joining H and J, and A/U needed the pending-aim state to move onto `u2_overworld` first because the original consumes the direction key inside the handler chain. Do not copy a count of what is implemented into this cell: `python3 tools/cmd_marker_gate.py` prints it, and a hand-kept number here would be the second copy AGENTS.md forbids. What CP6 still needs is not the dispatch but the subsystems the empty slots name — spell state (C, M), town NPCs and the merchant tables (O, T — **T's shop half landed 2026-10-29 in `engine/src/game/commerce.c`; what is left there is the talking half, which needs a `tlkx` loader**), the steal effect wired to a world direction (S), an inventory view (V), armour ownership and the strength gate (W), vehicles (B, L) — plus the four letters with no execution evidence at all, which are parked by owner decision. | 2026-10-29 |
 | CP7 | Time travel + space + dungeons | **partly informed 2026-10-21** | Dungeons are sectors, not a separate format: entering a cave moved `DS:49/4A` from `3,0` to `3,5` and loaded `mapx35`, with no video mode change (stays CGA mode 4). Rendered as a first-person wireframe. Light is a **step counter** at `DS:26`, zeroed on entry, ~150 on `I`, decremented per move, and `mapx25`/`35`/`45` are byte-identical. Command dispatch is mode-aware: `A` is ATTACK outside and ADVANCE inside. Full detail: `docs/spice86-live-findings.md` § 13. | 2026-10-21 |
 | CP8 | Endgame + full playthrough 🔒 | todo | | |
-| CP9 | SDL2 CGA renderer | todo — **unblocked 2026-10-28e** | owner approved installing system packages | 2026-10-28e |
+| CP9 | SDL2 CGA renderer | todo — **unblocked 2026-10-28e**; the SDL2-versus-SDL3 choice is now **open and unevaluated until 2026-11-03**, see `docs/sdl2-vs-sdl3.md` | owner approved installing system packages | 2026-10-28e |
 | CP10 | Sign-off 🔒 | todo | | |
 
 ## Resume notes (read this first after a compaction)
@@ -3037,3 +3037,10 @@ of red is the same defect as a gate that cannot go red.
 **Not machine-verified, said plainly.** That the resize event repaints, and that the result looks
 right, needs a person with a window: the dummy video driver creates a fixed-size window and there
 is no flag to resize one. The arithmetic is gated; the event plumbing is not.
+
+**This fix surfaced a bigger question, and it is now written down.** Chasing why the local SDL build
+and the release SDL build differ led to the discovery that no SDL2-versus-SDL3 decision was ever
+recorded, and that the host "SDL2" is `sdl2-compat` over SDL3 while the release pins real SDL2
+2.32.8. The evaluation, the measured port surface, the option that SDL2 already had integer scaling
+via `SDL_RenderSetIntegerScale()`, and a recommendation are in `docs/sdl2-vs-sdl3.md`. Nothing in
+that document is implemented.
