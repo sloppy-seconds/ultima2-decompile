@@ -62,6 +62,21 @@
 #   landings were on a lethal tile (0x00 water, then 0x0c forest) and both ran the death
 #   tail at runtime 0x0E62; landing on 0x08 grass is predicted safe and has NOT been
 #   tested. And the plane's airborne flag (W6) remains open.
+#
+# CORRECTION 2026-11-03, and it matters for the engine: THE SOUTHWARD FLIGHT IS THE
+#   DIVE, NOT THE LAUNCH. The static reading above attached the auto-flight-south loop to
+#   the launch, because asm/38B0's rocket branch contains it and nothing had ever been
+#   inside the rocket to tell the two apart. Live says otherwise. Launching from the pad
+#   spent one TRI-LITHIUM and left the position byte pair at (38,3) with the view going to
+#   the starfield; the position only began marching after a SECOND L in orbit, which first
+#   printed 'CMD: DIVE' / 'CMD: LANDING REQUESTED!' / 'YOU ARE ORBITING <world>.' /
+#   '(PRESS ANY KEY)'. So the sequence is B (board) -> L (launch to orbit) -> optionally H
+#   (hyperwarp between worlds) -> L (dive) -> the unsteerable southward march -> tile verdict.
+#   Note also the guard on the launch block, [DS:6D]==0 AND [DS:4A]==0: it needs Earth AND a
+#   wilderness sector, and both observed launches were from sector 41 (ones digit 1), so
+#   that block -- the return-point triple and the save call -- has still never executed.
+#   engine/src/game/commands.c:launch_rocket currently runs the descent at launch and so
+#   is wrong on this point; it needs splitting into launch-to-orbit and dive.
 #   Also measured, from the same dumps: shipcap3 boarded the frigate and its DS:E2 still
 #   reads 01 afterwards, so boarding CHECKS the gating item and does not spend it. One
 #   sample, and it assumes the starting count was 1.

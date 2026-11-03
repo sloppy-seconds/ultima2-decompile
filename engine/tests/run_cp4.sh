@@ -160,6 +160,27 @@ else
     fi
 fi
 
+# --- the world coordinate model ----------------------------------------------
+
+# Orbit, hyperwarp and dive. Pure integer rules in game/space.c with no SDL and no
+# display, so the same code a command handler will call is what runs here. The
+# evidence is captures/spice86/g39-rocket-flight, the first session ever inside a
+# rocket, and the descent assertions are the interesting ones: that rule was written
+# from bytes before anyone had launched, and then predicted both live landings to the
+# cell. Mutants are driven by tests/space_check_selftest.sh.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/space_check" \
+   tests/space_check.c src/game/space.c 2>"$WORK/cc-space.err"
+if [ $? -ne 0 ]; then
+    bad "space test harness did not build: $(head -5 "$WORK/cc-space.err")"
+else
+    if "$WORK/space_check" > "$WORK/space.out" 2>&1; then
+        ok "space model: world tables, off-course gate, dive sector, descent ($(grep -c '  PASS  ' "$WORK/space.out") checks)"
+    else
+        bad "space check failed:"
+        sed 's/^/        /' "$WORK/space.out"
+    fi
+fi
+
 # --- the framebuffer ------------------------------------------------------
 # Every display backend sits behind this, so a mistake here reaches all of them.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/frame_check" \
@@ -217,7 +238,7 @@ fi
 # P lands where the player stood. Plus the outdoors guard and the CP11
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/save_q_check" \
-   tests/save_q_check.c src/game/overworld.c src/game/commands.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
+   tests/save_q_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
    src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -237,7 +258,7 @@ fi
 # file 0x0B0D spends 10 food per PASS and file 0x0B2E sends a borrow to the
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/food_check" \
-   tests/food_check.c src/game/overworld.c src/game/commands.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
+   tests/food_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
    src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \

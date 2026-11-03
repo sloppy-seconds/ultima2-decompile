@@ -21,6 +21,22 @@
 #           alone (6/6/6 before and after a RIGHT). DS:4CA..4CC sit outside the save
 #           record (DS:36..135) and are never persisted, which is why state.h has no
 #           name for them and why a DS dump of the save block cannot find them.
+# THE TABLES, extracted from original/ultimaii.exe at file offset 0x7212 (runtime
+#           0x7012; file = runtime + 0x200, per AGENTS). Located by pattern, not by
+#           arithmetic: exactly one 30-byte run in the whole binary has table[0]==6/6/6
+#           and table[9]==9/9/9, which are the two values this capture read off live
+#           screens. Two independent observations pin a 30-byte table.
+#               world  XENO YAKO ZABO      world  XENO YAKO ZABO
+#                 0      6    6    6         5      2    8    5
+#                 1      5    4    5         6      9    4    6
+#                 2      3    3    4         7      4    0    5
+#                 3      6    2    3         8      0    1    4
+#                 4      1    3    4         9      9    9    9
+#           All entries are single decimal digits 0..9. asm/7030 compares your position
+#           against these to decide which world you orbit, so the typed destination has
+#           to EQUAL a world's triple to orbit it. Consequence worth knowing: the
+#           off-course roll is rand & 7, so it can never produce a 9, so world 9 ('X')
+#           is unreachable by misfortune -- you have to type 9/9/9 deliberately.
 # ARMOUR GATE at L_006c57: `mov 0x62,%al ; cmp $0x5,%al ; jae L_006c79`, and only the
 #           not-taken arm reaches 'YOU HAVE EXPLODED!'. The armour pool is SKIN CLOTH
 #           LEATHER CHAIN PLATE REFLECT POWER NONE, so the gate is armour >= 5: REFLECT

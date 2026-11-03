@@ -108,6 +108,7 @@ run "cmd_marker_gate" engine/src docs/phase4-state.md -- python3 tools/cmd_marke
 # against fixtures, so it works on a machine with no SDL installed at all — which is
 # the CI runner, and the place the probe is most likely to be wrong unnoticed.
 run "sdl_probe selftest" engine/tools/sdl_probe.sh -- bash engine/tests/sdl_probe_selftest.sh
+run "space_check selftest" engine/tests/space_check_selftest.sh -- bash engine/tests/space_check_selftest.sh
 # Whether a container image still matches its Containerfile. The old test was "does
 # an image exist", so an edited recipe was silently ignored — which cost a full
 # SDL3 container cycle to a message blaming the Makefile. Runs against a podman

@@ -20,6 +20,7 @@
 #include "game/status.h"
 #include "game/overworld.h"
 #include "game/dungeon.h"
+#include "game/space.h"
 
 /* Generated at build time from the user's copy (engine/tools/extract/extractor.py). */
 #include "gen_content.h"
@@ -952,6 +953,13 @@ static u2_cmd_result launch_plane(u2_ctx *ctx, u2_overworld *ow)
  * timing, and the engine reproduces exactly that.
  *
  * Not modelled, and deliberately so rather than guessed:
+ *   * THE DESCENT IS ATTACHED TO THE WRONG EVENT. Live play says launching goes to orbit
+ *     and a SECOND L dives, and the southward march belongs to the dive (see the
+ *     CORRECTION block in asm/38B0_cmd_L.asm). It is left here anyway because the engine
+ *     has no way to tell the two states apart: in the capture, on the pad and in orbit
+ *     both read DS:13 = 0x28 and DS:6D = 0x00, and no byte that distinguishes them has
+ *     been found. Inventing a flag would be claiming a mechanism. Tracked as G62 in
+ *     docs/needs-gameplay.md; until it is answered this handler is a faithful half.
  *   * the return-point triple DS:69/DS:6A/DS:6B and the save call at asm/24FD. Those bytes
  *     are not in state.h, DS:6D (the guard on the whole block) is the world byte — Earth 0,
  *     planets 1..9, deep space 0x0A — and the pair belongs to the planet subsystem CP7 has
@@ -989,10 +997,10 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
     seam_str_out(ctx, U2_S_PRESS_ANY_KEY);
 
     for (;;) {
-        /* asm/3B94: y += 2 always; x += 1 whenever the new y is a multiple of 8. */
-        ow->y = (int)(((uint8_t)ow->y + 2u) & 0x3Fu);
-        if ((ow->y & 7) == 0)
-            ow->x = (int)(((uint8_t)ow->x + 1u) & 0x3Fu);
+        /* asm/3B94: y += 2 always; x += 1 whenever the new y is a multiple of 8.
+         * The rule lives in game/space.c so the gate in tests/space_check.c drives
+         * the same arithmetic this loop runs, rather than a copy of it. */
+        u2_space_descent_step((uint8_t *)&ow->x, (uint8_t *)&ow->y);
 
         u2_overworld_draw(ctx, ow);
 
@@ -1001,7 +1009,7 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
         if (r < 0) break;                       /* input exhausted: the original blocks here */
         if (r) {
             /* asm/3BCE: the tile it stopped on decides everything. */
-            if ((u2_world_tile_at(&ow->world, ow->x, ow->y) & 0x7F) != 0x08) {
+            if (!u2_space_dive_survives(u2_world_tile_at(&ow->world, ow->x, ow->y))) {
                 u2_death(ctx);
             }
             cmd_done(ctx);
