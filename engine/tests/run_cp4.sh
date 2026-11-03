@@ -239,7 +239,7 @@ fi
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/save_q_check" \
    tests/save_q_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
-   src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
+   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
    src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-saveq.err"
@@ -259,7 +259,7 @@ fi
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/food_check" \
    tests/food_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
-   src/core/save.c src/core/tiles.c src/core/sha256.c src/core/seam.c \
+   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
    src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-food.err"
@@ -365,6 +365,21 @@ if [ -r "$MAPDIR/picdra" ] || [ -r "$MAPDIR/PICDRA" ]; then
 else
     printf '  SKIP  no player content: PIC unpack not exercised\n'
 fi
+
+# --- the EGA 16-colour pipeline ----------------------------------------------
+# --ega adds a 16-colour path: the EGA palette, a 4bpp tile blit, the EGATILES
+# atlas loader and the linear PIC*-E loader. The pure-pipeline checks (palette
+# table, blit decode, 16-entry writer) always run; the atlas and pic checks SKIP
+# inside the binary when the fan pack is absent (CI has no references/ or
+# original/updated/), so this block runs unconditionally and never goes red for a
+# missing pack. See docs/ega-graphics-plan.md.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ega_check" \
+   tests/ega_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c \
+   src/core/pic_ega.c src/core/pic.c src/debug/trace.c \
+    >"$WORK/cc-ega.err" 2>&1 \
+    && "$WORK/ega_check" >"$WORK/ega.out" 2>&1 \
+    && ok "EGA pipeline: palette, 4bpp blit, atlas + PIC*-E loaders ($(grep -c '^  ok' "$WORK/ega.out") checks)" \
+    || { bad "EGA pipeline failed:"; tail -16 "$WORK/ega.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-ega.err" | sed 's/^/        /'; }
 
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is

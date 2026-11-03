@@ -26,6 +26,7 @@
 #include "core/timer.h"
 #include "core/state.h"
 #include "core/save.h"
+#include "core/tiles_ega.h"
 #include "core/rng.h"
 #include "core/replay.h"
 #include "debug/trace.h"
@@ -118,8 +119,21 @@ static void usage(const char *argv0)
         "                    engine reads the player's own files the way the original\n"
         "                    read them from its default drive (default: .). It is read\n"
         "                    AND written: the original rewrites its own sectors.\n"
+        "  --ega             use the fan pack's 16-colour EGA art (EGATILES tiles and\n"
+        "                    PIC*-E pictures) instead of the original CGA. An art axis\n"
+        "                    only: it changes no rules and is available in both fidelity\n"
+        "                    modes. Falls back to CGA when the EGA files are absent.\n"
+        "                    PROVISIONAL: superseded by the graphics-set switch in the\n"
+        "                    options menu (docs/options-menu.md).\n"
+        "  --ega-theme NAME  which EGA tile theme to load: default, 10, alt, c64\n"
+        "                    (default: default). PROVISIONAL, as --ega.\n"
+        "  --ega-theme-dir DIR  where to find EGATILES / EGATHEME.* and the PIC*-E\n"
+        "                    files. Default order: this flag, then --data-dir, then\n"
+        "                    references/u2upgrade. PROVISIONAL, as --ega.\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
+        "  Ctrl-T  cycle the EGA tile theme (only with --ega; walks the themes\n"
+        "          directory in alphabetical order)\n"
         "  --mode M          reserved for CP11; only 'original' exists today\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
@@ -265,6 +279,15 @@ int main(int argc, char **argv)
             ctx.save_dir = argv[++i];
         } else if (strcmp(a, "--cleanroom") == 0) {
             ctx.cleanroom = 1;
+        } else if (strcmp(a, "--ega") == 0) {
+            /* Art axis only; independent of --enhanced and --cleanroom. The EGA
+             * loaders fall back to CGA when the files are absent, so this can
+             * never fail a launch. */
+            ctx.art_mode = U2_ART_EGA;
+        } else if (strcmp(a, "--ega-theme") == 0 && i + 1 < argc) {
+            ctx.ega_theme = argv[++i];
+        } else if (strcmp(a, "--ega-theme-dir") == 0 && i + 1 < argc) {
+            ctx.ega_theme_dir = argv[++i];
         } else if (strcmp(a, "--data-dir") == 0 && i + 1 < argc) {
             ctx.data_dir = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
@@ -397,6 +420,20 @@ int main(int argc, char **argv)
         fprintf(stderr, "u2: --keep-site-state needs --enhanced; the original persists "
                         "no sector state on a transition (docs/save-format.md \u00a7 10)\n");
         return 2;
+    }
+
+    /* --ega is strict (owner, 2026-11-04): if the themes directory does not exist
+     * or the chosen theme is not in it, refuse to start rather than fall back to
+     * CGA. This supersedes the plan's original "never fail a launch" default; the
+     * point is that asking for EGA art and quietly getting CGA is the failure mode
+     * worth avoiding, and it is checked here at launch so the run dies before any
+     * screen is drawn, not after the title flow. */
+    if (ctx.art_mode == U2_ART_EGA) {
+        char ega_err[512];
+        if (u2_tiles_ega_validate(&ctx, ega_err, sizeof ega_err) != U2_TILES_EGA_OK) {
+            fprintf(stderr, "u2: --ega refused: %s\n", ega_err);
+            return 2;
+        }
     }
 
     /* Announce which art this run was asked for, at startup rather than when the

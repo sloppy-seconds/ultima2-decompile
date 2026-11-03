@@ -22,6 +22,22 @@ typedef enum u2_fidelity {
     U2_FIDELITY_ENHANCED = 1    /* same rules; dead ends removed */
 } u2_fidelity;
 
+/* Which art set the display draws from — an independent axis from `fidelity`
+ * (which is a rules axis) and from `mode` (a renderer axis). It changes no game
+ * rules, so it is available in both fidelity modes.
+ *   U2_ART_CGA  the original 4-colour path: CGA tiles extracted from the
+ *               executable (or the cleanroom substitutes) and the CGA pics.
+ *               The shipped default; byte-for-byte what the engine drew before
+ *               EGA existed.
+ *   U2_ART_EGA  the fan pack's 16-colour EGATILES atlas and PIC*-E pictures,
+ *               read from the resolved themes dir. Falls back to CGA whenever
+ *               the EGA art is absent, so it is never a launch failure.
+ * Chosen at launch with --ega; see docs/ega-graphics-plan.md. */
+typedef enum u2_art_mode {
+    U2_ART_CGA = 0,
+    U2_ART_EGA = 1
+} u2_art_mode;
+
 /* Which front end to wire, chosen by --renderer (or the legacy --sdl alias).
  * AUTO is resolved in main() from how the binary was *built*: an SDL build opens
  * the window, a cc-only build uses the text grid. That is what lets a downloaded
@@ -46,6 +62,14 @@ typedef struct u2_ctx {
      *                         restart after character creation is the first one.
      * Chosen at launch with --enhanced; never switched mid-run. */
     u2_fidelity fidelity;
+    /* Art axis — independent of `fidelity` and `mode`. U2_ART_CGA (default) is
+     * the 4-colour path; U2_ART_EGA selects the fan pack's 16-colour atlas and
+     * pictures when present, falling back to CGA when not. Read once at launch
+     * by --ega; the theme and themes-dir refine where the EGA art is found. */
+    u2_art_mode art_mode;
+    const char *ega_theme;       /* --ega-theme NAME; NULL means "default" */
+    const char *ega_theme_dir;   /* --ega-theme-dir PATH; NULL means use the
+                                  * resolution order in core/tiles_ega.h */
     const u2_renderer *renderer;
     const u2_input    *input;
     const u2_audio    *audio;

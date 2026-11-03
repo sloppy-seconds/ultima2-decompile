@@ -27,6 +27,36 @@ void u2_frame_palette(uint8_t out[4][3])
     memcpy(out, pal, sizeof pal);
 }
 
+void u2_frame_palette_ega(uint8_t out[16][3])
+{
+    /* The standard EGA palette. These are the 0xAA-scaled RGB values the EGA
+     * adapter drives (the six levels are 0x00/0xAA/0xFF), which is what the fan
+     * pack's EGA art was authored to look right on. The first four entries are
+     * deliberately NOT the CGA table's values: EGA's index 1 is blue and 2 is
+     * red, where CGA mode 4 uses cyan and magenta. A CGA frame rendered through
+     * this table would show blue grass and red walls, which is why the art mode
+     * picks the table and the two are never mixed (docs/ega-graphics-plan.md § 4). */
+    static const uint8_t pal[16][3] = {
+        {   0,   0,   0 },   /*  0 black        */
+        {   0,   0, 170 },   /*  1 blue         */
+        {   0, 170,   0 },   /*  2 green        */
+        {   0, 170, 170 },   /*  3 cyan         */
+        { 170,   0,   0 },   /*  4 red          */
+        { 170,   0, 170 },   /*  5 magenta      */
+        { 170,  85,   0 },   /*  6 brown        */
+        { 170, 170, 170 },   /*  7 light grey   */
+        {  85,  85,  85 },   /*  8 grey         */
+        {  85,  85, 255 },   /*  9 light blue   */
+        {  85, 255,   0 },   /* 10 light green  */
+        {  85, 255, 255 },   /* 11 light cyan   */
+        { 255,  85,  85 },   /* 12 light red    */
+        { 255,  85, 255 },   /* 13 light magenta*/
+        { 255, 255,  85 },   /* 14 yellow       */
+        { 255, 255, 255 }    /* 15 white        */
+    };
+    memcpy(out, pal, sizeof pal);
+}
+
 void u2_frame_clear(u2_frame *f, uint8_t colour)
 {
     if (!f) return;
@@ -50,6 +80,24 @@ void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y)
             if (dx < 0 || dx >= U2_SCREEN_W) continue;     /* clipped */
             const uint8_t b = src[col >> 2];
             f->px[dy][dx] = (uint8_t)((b >> (6 - 2 * (col & 3))) & 3);
+        }
+    }
+}
+
+void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x, int y)
+{
+    if (!f || !t) return;
+    if (tile < 0 || tile >= U2_TILE_COUNT) return;
+
+    for (int row = 0; row < U2_TILE_H; row++) {
+        const int dy = y + row;
+        if (dy < 0 || dy >= U2_SCREEN_H) continue;         /* clipped */
+        const uint8_t *src = t->px[tile] + row * U2_TILE_EGA_STRIDE;
+        for (int col = 0; col < U2_TILE_W; col++) {
+            const int dx = x + col;
+            if (dx < 0 || dx >= U2_SCREEN_W) continue;     /* clipped */
+            const uint8_t b = src[col >> 1];
+            f->px[dy][dx] = (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4));
         }
     }
 }
@@ -118,6 +166,31 @@ void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
     f->presents++;
 }
 
+void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t,
+                            int overlay_tile, int overlay_col, int overlay_row)
+{
+    if (!f || !v || !t) return;
+
+    for (int row = 0; row < U2_VIEW_ROWS; row++) {
+        for (int col = 0; col < U2_VIEW_COLS; col++) {
+            /* Same staging->art mapping as the CGA composite (see above); only
+             * the atlas and the blit differ, so the two paths cannot drift on
+             * which tile a cell selects. */
+            const int staging = u2_view_at(v, col, row);
+            if (staging < 0) continue;
+            u2_frame_blit_tile_ega(f, t, u2_view_art(staging),
+                                   col * U2_TILE_W, row * U2_TILE_H);
+        }
+    }
+
+    if (overlay_tile >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
+        overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
+        u2_frame_blit_tile_ega(f, t, overlay_tile,
+                               overlay_col * U2_TILE_W, overlay_row * U2_TILE_H);
+    }
+    f->presents++;
+}
+
 /* Big-endian-ish 16/32-bit writers for the two container formats. */
 static void put16le(FILE *f, unsigned v)
 {
@@ -144,6 +217,25 @@ int u2_frame_write_ppm(const u2_frame *f, const char *path,
     for (int y = 0; y < U2_SCREEN_H; y++) {
         for (int x = 0; x < U2_SCREEN_W; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 3];
+            fputc(rgb[0], fp); fputc(rgb[1], fp); fputc(rgb[2], fp);
+        }
+    }
+    const int err = ferror(fp);
+    if (fclose(fp) != 0 || err) return -1;
+    return 0;
+}
+
+int u2_frame_write_ppm16(const u2_frame *f, const char *path,
+                         const uint8_t pal[16][3])
+{
+    if (!f || !path || !pal) return -1;
+    FILE *fp = fopen(path, "wb");
+    if (!fp) return -1;
+
+    fprintf(fp, "P6\n%d %d\n255\n", U2_SCREEN_W, U2_SCREEN_H);
+    for (int y = 0; y < U2_SCREEN_H; y++) {
+        for (int x = 0; x < U2_SCREEN_W; x++) {
+            const uint8_t *rgb = pal[f->px[y][x] & 15];
             fputc(rgb[0], fp); fputc(rgb[1], fp); fputc(rgb[2], fp);
         }
     }
@@ -181,6 +273,43 @@ int u2_frame_write_bmp(const u2_frame *f, const char *path,
     for (int y = U2_SCREEN_H - 1; y >= 0; y--) {      /* BMP is bottom-up */
         for (int x = 0; x < U2_SCREEN_W; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 3];
+            fputc(rgb[2], fp); fputc(rgb[1], fp); fputc(rgb[0], fp);  /* BGR */
+        }
+    }
+    const int err = ferror(fp);
+    if (fclose(fp) != 0 || err) return -1;
+    return 0;
+}
+
+int u2_frame_write_bmp16(const u2_frame *f, const char *path,
+                         const uint8_t pal[16][3])
+{
+    if (!f || !path || !pal) return -1;
+
+    const unsigned row_bytes = U2_SCREEN_W * 3;      /* 960, already padded */
+    const unsigned pixels = row_bytes * U2_SCREEN_H;
+    FILE *fp = fopen(path, "wb");
+    if (!fp) return -1;
+
+    fputc('B', fp); fputc('M', fp);
+    put32le(fp, 14 + 40 + pixels);
+    put32le(fp, 0);
+    put32le(fp, 14 + 40);
+    put32le(fp, 40);
+    put32le(fp, U2_SCREEN_W);
+    put32le(fp, U2_SCREEN_H);
+    put16le(fp, 1);
+    put16le(fp, 24);
+    put32le(fp, 0);                 /* BI_RGB, uncompressed */
+    put32le(fp, pixels);
+    put32le(fp, 2835);              /* 72 dpi */
+    put32le(fp, 2835);
+    put32le(fp, 0);
+    put32le(fp, 0);
+
+    for (int y = U2_SCREEN_H - 1; y >= 0; y--) {      /* BMP is bottom-up */
+        for (int x = 0; x < U2_SCREEN_W; x++) {
+            const uint8_t *rgb = pal[f->px[y][x] & 15];
             fputc(rgb[2], fp); fputc(rgb[1], fp); fputc(rgb[0], fp);  /* BGR */
         }
     }

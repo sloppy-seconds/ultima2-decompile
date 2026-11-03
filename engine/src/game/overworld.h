@@ -14,6 +14,7 @@
 #include "core/ctx.h"
 #include "core/frame.h"
 #include "core/tiles.h"
+#include "core/tiles_ega.h"
 #include "core/view.h"
 #include "core/world.h"
 
@@ -36,6 +37,15 @@
 typedef struct u2_overworld {
     u2_world world;
     u2_tiles tiles;
+    /* The EGA atlas, loaded only when --ega is set and the files are present.
+     * `use_ega` is the resolved decision: 1 means draw the map window from
+     * tiles_ega in 16 colours, 0 means the CGA `tiles` above. It is 0 whenever
+     * art_mode is CGA, and also 0 when EGA was asked for but the art was absent
+     * (the fallback is silent in state, announced once at load). */
+    u2_tiles_ega tiles_ega;
+    int          use_ega;
+    char         ega_theme[32];   /* the theme name currently loaded, so Ctrl-T
+                                   * knows where in the alphabetical cycle it is */
     u2_view  view;
     u2_frame frame;
     int      x, y;                 /* position inside the sector, DS:00/01 */

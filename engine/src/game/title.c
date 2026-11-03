@@ -44,6 +44,7 @@
 #include "core/font.h"
 #include "core/frame.h"
 #include "core/pic.h"
+#include "core/pic_ega.h"
 #include "core/save.h"
 #include "core/seam.h"
 #include "core/timer.h"
@@ -173,10 +174,18 @@ static int show_pic(u2_ctx *ctx, const char *name, int hold_ms)
 {
     static u2_frame pic_frame;      /* 64 KB, and only ever one picture on screen */
 
-    if (!u2_pic_can_show(ctx, name))
-        return 0;
-    if (u2_pic_blit(ctx, name, &pic_frame) != 0)
-        return 0;
+    /* EGA first when the art axis asks for it: the fan pack's PIC*-E is a full
+     * 16-colour image and the richer art wins. If it is absent the CGA pic is
+     * used unchanged, so --ega never blanks a splash that CGA could show. */
+    int shown = 0;
+    if (ctx->art_mode == U2_ART_EGA && u2_pic_can_show_ega(ctx, name))
+        shown = (u2_pic_blit_ega(ctx, name, &pic_frame) == 0);
+    if (!shown) {
+        if (!u2_pic_can_show(ctx, name))
+            return 0;
+        if (u2_pic_blit(ctx, name, &pic_frame) != 0)
+            return 0;
+    }
     u2_font_draw_vram_rows(&pic_frame, &ctx->vram, 0, U2_ROWS - 1);
 
     struct u2_frame *saved = ctx->frame;

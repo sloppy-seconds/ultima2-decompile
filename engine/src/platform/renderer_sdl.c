@@ -34,7 +34,9 @@ typedef struct sdl_video {
     SDL_Renderer *ren;
     SDL_Texture  *tex;
     uint32_t     * staging;   /* 320x200 RGBA, filled from the indexed frame */
-    Uint32        pal[4];
+    Uint32        pal[16];    /* CGA fills 0..3 (rest black); EGA fills all 16.
+                               * The upload indexes with & 15, so a CGA frame
+                               * (values 0..3) reads the same four entries. */
     unsigned      frames;
     const struct u2_frame *last;  /* last frame uploaded, so a window resize can
                                    * repaint without the game drawing a new one */
@@ -168,8 +170,16 @@ static int sdl_init(u2_ctx *ctx)
         return -1;
     }
 
-    uint8_t pal[4][3];
-    u2_frame_palette(pal);
+    uint8_t pal[16][3];
+    const int ega = (ctx->art_mode == U2_ART_EGA);
+    if (ega) {
+        u2_frame_palette_ega(pal);
+    } else {
+        u2_frame_palette(pal);          /* fills pal[0..3] */
+        for (int i = 4; i < 16; i++)    /* CGA never indexes past 3; keep the
+                                         * rest defined so & 15 is well-formed */
+            { pal[i][0] = pal[i][1] = pal[i][2] = 0; }
+    }
     /* SDL3 replaced SDL_AllocFormat with a read-only details struct, and MapRGBA
      * now takes that plus an explicit palette (NULL: RGBA8888 has none). The
      * details pointer is owned by SDL and must not be freed. */
@@ -180,7 +190,7 @@ static int sdl_init(u2_ctx *ctx)
             SDL_DestroyRenderer(v->ren); SDL_DestroyWindow(v->win); free(v);
             return -1;
         }
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 16; i++)
             v->pal[i] = SDL_MapRGBA(f, NULL, pal[i][0], pal[i][1], pal[i][2], 255);
     }
 
@@ -204,7 +214,7 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
     for (int y = 0; y < U2_SCREEN_H; y++) {
         const uint8_t *src = fr->px[y];
         uint32_t *dst = v->staging + (size_t)y * U2_SCREEN_W;
-        for (int x = 0; x < U2_SCREEN_W; x++) dst[x] = v->pal[src[x] & 3];
+        for (int x = 0; x < U2_SCREEN_W; x++) dst[x] = v->pal[src[x] & 15];
     }
 
     /* Destination is computed, not NULL. NULL means "fill the output rect", which
@@ -247,9 +257,17 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
      * a display (SDL_VIDEODRIVER=dummy). The input backend ends the run once
      * this flag is set. */
     if (ctx->dump_screen && !v->dumped) {
-        uint8_t pal[4][3];
-        u2_frame_palette(pal);
-        if (u2_frame_write_ppm(fr, ctx->dump_screen, pal) == 0)
+        int wrc;
+        if (ctx->art_mode == U2_ART_EGA) {
+            uint8_t pal[16][3];
+            u2_frame_palette_ega(pal);
+            wrc = u2_frame_write_ppm16(fr, ctx->dump_screen, pal);
+        } else {
+            uint8_t pal[4][3];
+            u2_frame_palette(pal);
+            wrc = u2_frame_write_ppm(fr, ctx->dump_screen, pal);
+        }
+        if (wrc == 0)
             ctx->dump_screen_done = 1;
         v->dumped = 1;
     }

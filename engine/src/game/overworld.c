@@ -1279,6 +1279,26 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
         return -1;
     }
 
+    /* The EGA art axis. The CGA tiles above are loaded regardless — they are the
+     * fallback and the source the note describes — and EGA is layered on top only
+     * when asked for and present. A missing EGATILES is not an error: use_ega
+     * stays 0, the map draws in CGA exactly as before, and the one-line notice
+     * says why (docs/ega-graphics-plan.md § 7). */
+    ow->use_ega = 0;
+    if (ctx->art_mode == U2_ART_EGA) {
+        const u2_tiles_ega_result er =
+            u2_tiles_ega_open(ctx, &ow->tiles_ega, ctx->ega_theme);
+        if (er == U2_TILES_EGA_OK) {
+            ow->use_ega = 1;
+            snprintf(ow->ega_theme, sizeof ow->ega_theme, "%s",
+                     ctx->ega_theme && *ctx->ega_theme ? ctx->ega_theme : U2_EGA_THEME_DEFAULT);
+            fprintf(stderr, "u2: ega art: tiles from %s\n", ow->tiles_ega.source);
+        } else {
+            fprintf(stderr, "u2: --ega requested but no EGA tiles (%s); "
+                            "drawing in CGA\n", u2_tiles_ega_result_text(er));
+        }
+    }
+
     u2_world_result wr = u2_world_open(ctx);
     if (wr != U2_WORLD_OK) {
         snprintf(ow->note, sizeof ow->note, "content directory: %s",
@@ -1543,9 +1563,14 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
     /* The player is not terrain: the game's own staging buffer holds 0x78 at the
      * player's cell, which halves to art 60, a humanoid figure. That is evidence
      * from the captured DS rather than a guess, so the real sprite is drawn. */
-    u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles,
-                       U2_OVERWORLD_PLAYER_ART,
-                       U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+    if (ow->use_ega)
+        u2_frame_draw_view_ega(&ow->frame, &ow->view, &ow->tiles_ega,
+                               U2_OVERWORLD_PLAYER_ART,
+                               U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+    else
+        u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles,
+                           U2_OVERWORLD_PLAYER_ART,
+                           U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
 
     /* One framebuffer, per the CP4b decision: the map window owns pixel rows
      * 0..159 and the text grid owns rows 20..24 — status block, CMD prompt
@@ -1790,6 +1815,31 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
          * check lives in the loop and not in a command handler, which is the exact mistake
          * being undone. */
         if (ctx->dev && k.ch == 0x11) break;
+
+        /* Ctrl-T (0x14): cycle the EGA tile theme. Gated on the EGA art mode and
+         * a loaded atlas, not on --dev: it is pure presentation, changes no rule,
+         * and is only meaningful when there is a theme to cycle. It advances to the
+         * next theme in alphabetical order of the themes directory, reloads the
+         * atlas in place, and names the new theme on the message line (the whole
+         * map recolouring is the primary feedback; this says which theme you got).
+         * The next loop iteration redraws, so no explicit present is needed here. */
+        if (ctx->art_mode == U2_ART_EGA && ow->use_ega && k.ch == 0x14) {
+            char next[32];
+            if (u2_tiles_ega_next_theme(ow->tiles_ega.dir, ow->ega_theme,
+                                        next, sizeof next) > 0) {
+                u2_tiles_ega cand;
+                if (u2_tiles_ega_open_in(ctx, &cand, ow->tiles_ega.dir, next)
+                        == U2_TILES_EGA_OK) {
+                    ow->tiles_ega = cand;
+                    snprintf(ow->ega_theme, sizeof ow->ega_theme, "%s", next);
+                    char msg[48];
+                    snprintf(msg, sizeof msg, "EGA THEME: %s", next);
+                    seam_str_out_at(ctx, 0, U2_MSG_TOP, msg);
+                    fprintf(stderr, "u2: ega theme -> %s\n", next);
+                }
+            }
+            continue;
+        }
 
         int dx = 0, dy = 0;
         const char *word = NULL;
@@ -2189,9 +2239,17 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         u2_gate_turn(ctx, ow);
     }
     if (ctx->frame_dump_path) {
-        uint8_t pal[4][3];
-        u2_frame_palette(pal);
-        if (u2_frame_write_ppm(&ow->frame, ctx->frame_dump_path, pal) != 0)
+        int wrc;
+        if (ow->use_ega) {
+            uint8_t pal[16][3];
+            u2_frame_palette_ega(pal);
+            wrc = u2_frame_write_ppm16(&ow->frame, ctx->frame_dump_path, pal);
+        } else {
+            uint8_t pal[4][3];
+            u2_frame_palette(pal);
+            wrc = u2_frame_write_ppm(&ow->frame, ctx->frame_dump_path, pal);
+        }
+        if (wrc != 0)
             fprintf(stderr, "u2: --dump-frame could not write %s\n",
                     ctx->frame_dump_path);
     }
@@ -2217,9 +2275,17 @@ int u2_overworld_dump(u2_ctx *ctx, const char *path)
     }
     u2_overworld_draw(ctx, &ow);
 
-    uint8_t pal[4][3];
-    u2_frame_palette(pal);
-    if (u2_frame_write_ppm(&ow.frame, path, pal) != 0) {
+    int wrc;
+    if (ow.use_ega) {
+        uint8_t pal[16][3];
+        u2_frame_palette_ega(pal);
+        wrc = u2_frame_write_ppm16(&ow.frame, path, pal);
+    } else {
+        uint8_t pal[4][3];
+        u2_frame_palette(pal);
+        wrc = u2_frame_write_ppm(&ow.frame, path, pal);
+    }
+    if (wrc != 0) {
         fprintf(stderr, "overworld: could not write %s\n", path);
         return -1;
     }

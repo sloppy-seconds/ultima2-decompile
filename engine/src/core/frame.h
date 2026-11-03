@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 #include "core/tiles.h"
+#include "core/tiles_ega.h"
 #include "core/view.h"
 
 #define U2_SCREEN_W   320
@@ -47,6 +48,16 @@
 #define U2_CGA_MAGENTA  2
 #define U2_CGA_WHITE    3
 
+/* The frame carries one byte per pixel. In the CGA path that byte is 0..3; in
+ * the EGA path (`--ega`) it is 0..15. The storage is identical either way —
+ * widening CGA to EGA is a palette and value-range change, not a framebuffer
+ * rewrite — so a backend reads `px[y][x]` as an index into whichever palette the
+ * art mode selected. The CGA constants above stay valid in both modes because
+ * EGA's first four entries are the CGA-compatible black/cyan/magenta/white
+ * positions; a CGA frame is a legal (if 4-colour) EGA frame. */
+#define U2_PALETTE_CGA_ENTRIES 4
+#define U2_PALETTE_EGA_ENTRIES 16
+
 typedef struct u2_frame {
     /* One byte per pixel, value 0..3. 64 KB, which is fine on any host and
      * keeps the blit trivially readable; a 2bpp packed variant is a later
@@ -59,11 +70,23 @@ typedef struct u2_frame {
  * may substitute its own; this is the default, not an assertion about hardware. */
 void u2_frame_palette(uint8_t out[4][3]);
 
+/* The sixteen EGA palette entries as 8-bit RGB, in the standard EGA order
+ * (black, blue, green, cyan, red, magenta, brown, light grey, grey, light blue,
+ * light green, light cyan, light red, light magenta, yellow, white). This is the
+ * hardware palette the fan pack's EGA art was authored against; the themes ship
+ * no palette of their own (docs/ega-graphics-plan.md § 3, spike S1b). */
+void u2_frame_palette_ega(uint8_t out[16][3]);
+
 void u2_frame_clear(u2_frame *f, uint8_t colour);
 
 /* Blit one tile at a pixel position. Out-of-bounds pixels are clipped rather
  * than wrapped, so a partially off-screen tile cannot corrupt the frame. */
 void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y);
+
+/* The EGA twin of the tile blit. Same geometry and clipping, but the source is
+ * a 4bpp `u2_tiles_ega` tile (high nibble = left pixel) and the values written
+ * into the frame are 0..15 rather than 0..3. The CGA blit above is untouched. */
+void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x, int y);
 
 /*
  * One pixel, and a Bresenham line built from it.
@@ -110,6 +133,11 @@ void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour);
 void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
                         int overlay_tile, int overlay_col, int overlay_row);
 
+/* The EGA twin of the view composite: same do-not-draw rule and overlay, but it
+ * blits from a `u2_tiles_ega` atlas so the map window lands in 16 colours. */
+void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t,
+                            int overlay_tile, int overlay_col, int overlay_row);
+
 /* Write the frame as a binary PPM (P6) mapped through `pal`. Uncompressed, so
  * it needs no zlib and no dependency — which is what makes "look at the real
  * tiles today" possible without SDL2. Returns 0 on success. */
@@ -119,5 +147,13 @@ int u2_frame_write_ppm(const u2_frame *f, const char *path,
 /* Same, as an uncompressed 24-bit BMP, for viewers that prefer it. */
 int u2_frame_write_bmp(const u2_frame *f, const char *path,
                        const uint8_t pal[4][3]);
+
+/* The 16-colour variants of the two writers, for a frame composed in the EGA
+ * art mode. They index `pal` with the full 0..15 range; the 4-entry writers above
+ * mask to 0..3 and are the CGA path, left byte-for-byte untouched. */
+int u2_frame_write_ppm16(const u2_frame *f, const char *path,
+                         const uint8_t pal[16][3]);
+int u2_frame_write_bmp16(const u2_frame *f, const char *path,
+                         const uint8_t pal[16][3]);
 
 #endif /* U2_FRAME_H */
