@@ -93,6 +93,32 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The pictures are read from the player's own directory at runtime, like the tile art.
   Nothing is committed and nothing is substituted.
 
+### Build honesty (2026-11-03)
+
+* **A binary can now say what it is.** `--version` prints the build target, which SDL
+  implementation it linked, whether statically or dynamically, whether it is the shipped
+  artifact or a development build, and both the compile-time and the runtime SDL version.
+  Having both versions is the point: a binary stamped `sdl2` whose runtime disagrees is holding
+  a compatibility layer, and that discrepancy was previously invisible from the running program.
+* **`make sdl` now asks what it is linking instead of hoping.** A new probe,
+  `engine/tools/sdl_probe.sh`, prefers a static SDL2 prefix (the release shape) and otherwise
+  identifies the host library. On Bazzite and Arch that is `sdl2-compat`, the SDL2 API
+  implemented over SDL3, and a build against it compiles, runs, and is not what the release
+  ships — so the build now says so out loud and stamps the binary to agree. `U2_STRICT_SDL=1`
+  turns the notice into a refusal, for a CI job that means to build the real thing.
+* **`make test` gained 16 checks over these two things.** `engine/tests/sdl_probe_selftest.sh`
+  runs 12 controls against fixtures rather than a live host, so it behaves identically on a
+  runner with no SDL installed at all, and two of them exist to police each other (a shim caught
+  by path versus a shim caught only by version number). `run_cp0.sh` adds four `--version`
+  assertions including a check for the unstamped fallback by name, because the silent version of
+  that failure is a binary that compiles fine and can no longer be identified.
+* **The CP4 SDL gate prefers `u2-sdl-static` over `u2-sdl`** and prints which it drove. Until now
+  the one gate touching the SDL backend exercised an implementation we do not ship.
+* **Release artifacts carry their own tag**, and the workflow fails if a built artifact does not
+  claim `artifact=release` or does not name the tag it was built from.
+* The plan's CP9 milestone was corrected in place: it specified a 640x200 window and a 16-colour
+  palette, and the engine ships 320x200 and four colours, because mode 4 never had sixteen.
+
 ### Window scaling (2026-11-03)
 
 * **Resizing the window now scales the picture.** It did not, and the reason was three

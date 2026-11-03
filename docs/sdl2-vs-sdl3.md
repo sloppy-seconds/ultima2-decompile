@@ -1,8 +1,9 @@
 # SDL2 or SDL3 — an evaluation, and the record of why nobody ever made the choice
 
-**Status: open decision for the owner.** Nothing here is implemented. This document exists
-because the question "why SDL2?" could not be answered from the repository, and that turned out
-to be the interesting finding rather than a preamble to it.
+**Status: C implemented 2026-11-03 (§ 8). The SDL2-versus-SDL3 choice (B) is still open for the
+owner.** Nothing in § 5 option B is implemented. This document exists because the question "why
+SDL2?" could not be answered from the repository, and that turned out to be the interesting finding
+rather than a preamble to it.
 
 Grades follow the project convention: **measured** = derived from this tree or an installed
 header by a named tool; **observed** = read from a primary source; **inferred** = reasoned, not
@@ -203,3 +204,65 @@ that is not about the line.
 4. **`docs/phase4-plan.md` CP9 still specifies "640x200 window" and "16-color palette"**, and the
    shipped renderer is 320x200 and four colours. The milestone drifted from its own plan and the
    plan was never corrected.
+
+---
+
+## 8. What was done: option C, 2026-11-03
+
+The owner chose "C then B". C is implemented; B is not.
+
+**`engine/tools/sdl_probe.sh`** decides which SDL a build should link and says what it found, as
+`key=value` lines the Makefile can `eval` and a test can grep. It prefers a static prefix (the
+release shape) and otherwise interrogates the host. Two independent signals identify the compat
+shim, and they are deliberately redundant because each fails where the other works:
+
+- **the path**, which is proof: brew installs `sdl2-config` as a symlink into
+  `Cellar/sdl2-compat/<ver>/bin/`, and resolving it names the project.
+- **the version number**, which is a heuristic: `sdl2-compat` versions itself in the same 2.32.x
+  space as real SDL2 but far above it (2.32.54..74 versus a real maximum of 2.32.10). This is what
+  catches Fedora, where `/usr/bin/sdl2-config` is a plain file with nothing to learn from the path.
+
+`engine/tests/sdl_probe_selftest.sh` holds 12 controls against fixtures, not against a live host,
+so it runs identically on a runner with no SDL installed — which is where the probe is most likely
+to be wrong and least likely to be noticed. Two of the controls exist to police each other: a shim
+whose path says `sdl2-compat` while its version says a real SDL2 must be caught by the path, and a
+shim on a clean path must be caught by the number. Without the first, the path check could be dead
+code and the suite would not notice. Wired into `check_all`.
+
+**`make sdl` now consults the probe.** A static prefix wins outright and is stamped
+`artifact=release`; otherwise the build proceeds and prints, in as many words, that what it just
+built is a dev binary and not the shipped artifact. `U2_STRICT_SDL=1` turns that notice into a
+refusal, which is what a CI job that means to build the real thing should set.
+
+**The refusal was first filed in the wrong place, and the fix is the interesting part.** The guard
+went into the object-compile rule, which make skips whenever the objects are up to date — so
+`make sdl U2_STRICT_SDL=1` printed the dev note and exited 0 on a dirty tree. A check that only
+fires on a clean tree is a check that quietly stops firing, which is the same class of defect as
+`asm_body_guard` comparing `HEAD` to itself in CI. It now lives in a phony `sdl-probe-check`
+prerequisite, which always runs, and the control that caught it is recorded in the Makefile comment
+rather than left in a commit message.
+
+**`--version`**, so a binary can finally answer the question this whole document is about:
+
+```
+u2 engine 0.1.0-unreleased build=sdl sdl=sdl2-compat linkage=dynamic artifact=dev \
+    sdl_version=2.32.74 runtime_sdl=2.32.74
+```
+
+The stamp is compile-time and the runtime version is asked of the backend through the seam, because
+core may not call SDL directly; having both is the point, since the two disagreeing is itself the
+signal that a binary stamped `sdl2` is holding a shim. `core/version.c` gives every macro a
+fallback definition so a hand-rolled `cc` build still compiles, and `run_cp0.sh` asserts against
+the fallback by name (`unstamped`), because the silent version of that failure is a binary that
+compiles fine and can no longer be identified. Control demonstrated: an unstamped build prints
+`build=unstamped` and the gate goes red.
+
+**The CP4 SDL gate now prefers `u2-sdl-static` over `u2-sdl`** and prints which it drove, which
+closes § 7 item 2: the one gate that touches the SDL backend was testing an implementation we do
+not ship.
+
+**The release workflow stamps the tag into the binary** and fails if the artifact does not claim
+`artifact=release` or does not name the tag it was built from.
+
+**Not done, deliberately:** the pin bump 2.32.8 → 2.32.10. That belongs to option A/B, and moving
+it now would change the release artifact without the SDL-major decision being made.

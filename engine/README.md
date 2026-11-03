@@ -105,6 +105,14 @@ The geometry is `src/core/scale.c` — pure integer arithmetic, no SDL dependenc
 something inside the backend, on the same rule as the palette: a renderer moves pixels, it does
 not decide what they look like. `tests/scale_check.c` gates it in the cc-only build.
 
+**`--version` says which build you are holding**, and `make sdl` asks before it links. The reason is
+`docs/sdl2-vs-sdl3.md`: on Bazzite and Arch, `sdl2-config` resolves to `sdl2-compat`, which is the
+SDL2 API implemented over SDL3, so a dev build compiles, runs, and is not the artifact the release
+ships. `engine/tools/sdl_probe.sh` decides and reports; a static prefix wins and is stamped
+`artifact=release`, anything else prints that it is a dev build. `U2_STRICT_SDL=1` makes that a
+refusal. The output distinguishes the compile-time stamp from the runtime SDL version, because the
+two disagreeing is itself the signal.
+
 `build/`, `u2` and every generated header are gitignored.
 
 ## Game text is committed; art and data are not

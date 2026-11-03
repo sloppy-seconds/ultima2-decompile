@@ -178,6 +178,15 @@ backend retained. `speaker_freq` -> SDL audio beeps. 0x8d-glyph mapping decided
 here.
 **Gate:** owner compares vs DOSBox look (one-off eyeball).
 
+> **Correction, 2026-11-03, left in place rather than rewritten.** This spec drifted
+> from what shipped and nobody amended it, which is the failure mode of a plan that
+> is read as history instead of as a contract. As built: the window is **320x200**
+> (mode 4's real resolution, `asm/4A3E`), not 640x200, and the palette is the
+> **four** CGA mode-4 indices, not sixteen — the binary sets mode 4, so sixteen
+> colours were never available to it. The `0x8d` glyph mapping and the audio beeps
+> did land here. See `docs/sdl2-vs-sdl3.md` § 7 item 4, and note that the milestone
+> title is also where the SDL2-versus-SDL3 choice was silently made.
+
 ### CP10 — Sign-off (GATE)
 `disasm/phase4-summary.md`: coverage (asm functions implemented vs engine
 modules), honest limits (unverified corners, selfmod interpretation), tag

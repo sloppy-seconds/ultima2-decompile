@@ -3044,3 +3044,24 @@ recorded, and that the host "SDL2" is `sdl2-compat` over SDL3 while the release 
 2.32.8. The evaluation, the measured port surface, the option that SDL2 already had integer scaling
 via `SDL_RenderSetIntegerScale()`, and a recommendation are in `docs/sdl2-vs-sdl3.md`. Nothing in
 that document is implemented.
+
+## Build honesty: option C of the SDL decision (2026-11-03)
+
+The owner chose "C then B" from `docs/sdl2-vs-sdl3.md`. **C is implemented; B (the SDL3 port) is
+not, and remains an open owner decision.** Read that document's § 8 for the full record; this is the
+index entry.
+
+What shipped: `engine/tools/sdl_probe.sh` (decides and names the SDL a build links), its 12-control
+fixture suite `engine/tests/sdl_probe_selftest.sh` (wired into `check_all`), a build stamp on every
+target, `--version`, four new `--version` assertions in CP0, the CP4 SDL gate preferring
+`u2-sdl-static`, and a release workflow that stamps the tag and refuses an artifact that cannot name
+it.
+
+The one worth knowing cold, because it is the recurring shape in this project: the strict-mode
+refusal was first written into the object-compile rule, which make skips when objects are current, so
+`make sdl U2_STRICT_SDL=1` printed the warning and exited 0 on a dirty tree. It now lives in a phony
+`sdl-probe-check` prerequisite that always runs. Same class as `asm_body_guard` comparing `HEAD` to
+itself in CI: **a check that only fires under conditions you do not control is not a check.**
+
+Deliberately not done: the 2.32.8 → 2.32.10 pin bump. That changes the release artifact and belongs
+with the SDL-major decision, not before it.
