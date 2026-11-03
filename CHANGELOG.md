@@ -93,6 +93,29 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The pictures are read from the player's own directory at runtime, like the tile art.
   Nothing is committed and nothing is substituted.
 
+### SDL3 (2026-11-03)
+
+* **The engine now builds against SDL3.** The owner chose to replace SDL2 outright rather than
+  carry two backends. SDL3 is what Fedora, Arch and Homebrew actually ship as "SDL2" these days
+  (via `sdl2-compat`, an SDL2 API layer over SDL3), upstream has put SDL2 in maintenance, and the
+  two features wanted this week — integer scaled presentation and a drawable-size change event —
+  are SDL3 API. Release artifacts pin **SDL3 3.4.18** from the official tarball, statically linked,
+  in all three build paths (local container, Windows cross container, CI).
+* The port was three files and 17 symbols, and two of the changes were the kind that fail quietly.
+  **SDL3 defaults textures to linear filtering**, so a port that missed it would still draw and
+  still pass every colour-class test while showing smeared 2bpp CGA; nearest-neighbour is now an
+  explicit per-texture call that warns if refused. And **`SDL_InitSubSystem` returns `bool` where
+  SDL2 returned 0 for success**, which written naively reads every successful init as a failure.
+  Also: `SDL_RenderTexture` takes float rectangles, `SDL_CreateRenderer` lost its flags, the
+  resize event split into `RESIZED` and `PIXEL_SIZE_CHANGED`, and audio moved wholesale to the
+  stream API — which retired a latent wart where the old code queued against a hardcoded device id.
+* `core/scale.c` stays. SDL3 has integer logical presentation as a platform mode, and it is
+  deliberately not used: the hand-computed fit is what the gate can test with no SDL installed, and
+  it owns the below-1:1 policy SDL's mode leaves unspecified.
+* `make sdl` now needs SDL3 and says so if it cannot find it. A machine with only SDL2 gets a
+  refusal naming the mismatch, because "no SDL" on a box that has SDL2 sends someone to install the
+  wrong thing.
+
 ### Build honesty (2026-11-03)
 
 * **A binary can now say what it is.** `--version` prints the build target, which SDL

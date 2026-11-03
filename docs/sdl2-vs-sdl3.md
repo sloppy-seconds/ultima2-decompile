@@ -1,9 +1,8 @@
 # SDL2 or SDL3 — an evaluation, and the record of why nobody ever made the choice
 
-**Status: C implemented 2026-11-03 (§ 8). The SDL2-versus-SDL3 choice (B) is still open for the
-owner.** Nothing in § 5 option B is implemented. This document exists because the question "why
-SDL2?" could not be answered from the repository, and that turned out to be the interesting finding
-rather than a preamble to it.
+**Status: C and B both implemented 2026-11-03 (§ 8, § 9). The engine now builds against SDL3
+only.** What remains open is verification on real hardware: the Windows artifact has not been run
+on Windows, and the Linux player binary has not been run on a desktop by a person since the port.
 
 Grades follow the project convention: **measured** = derived from this tree or an installed
 header by a named tool; **observed** = read from a primary source; **inferred** = reasoned, not
@@ -264,5 +263,66 @@ not ship.
 **The release workflow stamps the tag into the binary** and fails if the artifact does not claim
 `artifact=release` or does not name the tag it was built from.
 
-**Not done, deliberately:** the pin bump 2.32.8 → 2.32.10. That belongs to option A/B, and moving
-it now would change the release artifact without the SDL-major decision being made.
+**Not done, deliberately:** the pin bump 2.32.8 → 2.32.10. That belongs to option B, and § 9
+supersedes it — the project moved to SDL3 rather than updating the SDL2 pin.
+
+---
+
+## 9. What was done: option B, 2026-11-03
+
+The owner chose replace-outright over dual-backend. The engine now builds against **SDL3 only**;
+there is no SDL2 path left to fall back to.
+
+**The port, as measured in § 2.** Three files, 17 symbols. It took about the effort the estimate
+implied, and the estimate was useful precisely because it had been measured rather than guessed.
+
+**What actually changed, and the things that would have been silent:**
+
+- `SDL_CreateWindow` lost its x/y arguments; `SDL_CreateRenderer` lost its flags and gained a
+  renderer-name string, so the accelerated-then-software ladder is now `NULL` then
+  `SDL_SOFTWARE_RENDERER`.
+- `SDL_WINDOW_ALLOW_HIGHDPI` → `SDL_WINDOW_HIGH_PIXEL_DENSITY`; `SDL_WINDOWEVENT_SIZE_CHANGED`
+  → `SDL_EVENT_WINDOW_RESIZED` **or** `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED`. The second is the one
+  that matters for the scaling fix: it is the drawable changing under a HiDPI scale factor, which
+  SDL2 only reported through a single combined event.
+- **`SDL_HINT_RENDER_SCALE_QUALITY` is gone and SDL3 defaults textures to linear filtering.**
+  This is the silent one. A port that missed it still draws, still passes every test that counts
+  pixels by colour class, and shows smeared 2bpp CGA to the player. It is now an explicit
+  `SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST)` whose failure prints a warning naming the
+  consequence.
+- **`SDL_InitSubSystem` returns `bool` where SDL2 returned 0 for success.** Written naively in
+  `input_sdl.c` this inverts the meaning: every successful init reads as a failure. The seam
+  contract is 0 = ok, so the conversion is explicit and commented.
+- `SDL_RenderCopy` → `SDL_RenderTexture` with **float** rectangles. The integer fit from
+  `core/scale.c` is widened at the call site rather than the arithmetic being moved to floats,
+  because the integer version is what `tests/scale_check.c` can assert on.
+- `SDL_GetVersion()` returns one packed int instead of filling a struct.
+- Audio moved wholesale: `SDL_OpenAudio`/`SDL_QueueAudio`/`SDL_PauseAudio` are gone, replaced by
+  `SDL_OpenAudioDeviceStream` + `SDL_ResumeAudioDevice` + `SDL_PutAudioStreamData`. This also
+  removed a latent wart: the old code queued against a hardcoded device id of `1`.
+- `sigaction` stopped compiling. SDL2's `sdl2-config` added `-D_GNU_SOURCE` to every build and
+  SDL3's `pkg-config` does not, so under `-std=c11` the POSIX declarations vanish. Fixed the
+  codebase's own way — a per-file `_POSIX_C_SOURCE`, matching `input_term.c` and `time_posix.c`
+  — rather than a global define.
+
+**What `core/scale.c` got out of the deal.** SDL3 has `SDL_LOGICAL_PRESENTATION_INTEGER_SCALE`,
+which is the letterbox-plus-integer behaviour as a platform mode. It is **not** used, and that is a
+deliberate decision rather than an oversight: the hand-computed fit is what `tests/scale_check.c`
+can gate in a build with no SDL at all, and it owns the sub-1:1 policy (fill rather than clip) that
+SDL's mode does not specify. If the platform mode proves better on real compositors and fullscreen,
+that is an argument to revisit it, not an argument to have guessed at it now.
+
+**Build and release.** `sdl_probe.sh` was rewritten for the new question — it now looks for a static
+`libSDL3.a` prefix, then `pkg-config sdl3`, and refuses with a named reason if only SDL2 is present,
+because "no SDL" on a machine that has SDL2 sends someone to install the wrong thing. Its fixture
+suite grew a case for exactly that. `SDLSTAT_PREFIX` moved to `/opt/sdl3-linux`; both container
+images and the release workflow pin **SDL3 3.4.18** from the official tarball, and the CI cache key
+names the major version so an SDL2 entry can never be served to an SDL3 build.
+
+**Verified here:** builds against SDL3 3.4.18; `--version` reports `sdl=sdl3` with stamped and
+runtime versions agreeing; `--video-drivers` lists `wayland x11 kmsdrm offscreen dummy evdev`, which
+satisfies the release gate; the CP4 headless path still produces the byte-identical 192015-byte
+frame; CP0–CP7 and `check_all` green.
+
+**Not verified, and it needs a person:** a window on a real desktop, sound on real hardware, and the
+Windows artifact on real Windows. The wine smoke test covers startup, not rendering.

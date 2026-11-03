@@ -3065,3 +3065,29 @@ itself in CI: **a check that only fires under conditions you do not control is n
 
 Deliberately not done: the 2.32.8 → 2.32.10 pin bump. That changes the release artifact and belongs
 with the SDL-major decision, not before it.
+
+## The engine moved to SDL3 (option B, 2026-11-03)
+
+Follows immediately from the section above; read `docs/sdl2-vs-sdl3.md` § 9 for the full record.
+The owner chose replace-outright over dual-backend, so **there is no SDL2 path in this tree any
+more**. Release artifacts pin SDL3 3.4.18 from the official tarball, static, in all three build
+paths.
+
+Two changes are worth knowing cold because neither announces itself:
+
+- **SDL3 textures default to linear filtering.** `SDL_HINT_RENDER_SCALE_QUALITY` is gone. A port
+  that missed this still draws, still passes every colour-class census test in the tree, and shows
+  the player smeared 2bpp CGA. It is now an explicit
+  `SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST)` that warns if refused.
+- **`SDL_InitSubSystem` returns `bool`, where SDL2 returned 0 for success.** Copied over unchanged
+  it inverts the meaning in `input_sdl.c`, where the failure path is deliberately quiet.
+
+Also: `SDL_RenderTexture` takes float rects (the integer fit from `core/scale.c` is widened at the
+call site, because the integer version is what `tests/scale_check.c` can gate); the resize event
+split into `RESIZED` and `PIXEL_SIZE_CHANGED`; and `sigaction` needs a per-file `_POSIX_C_SOURCE`
+now that `pkg-config` no longer supplies `-D_GNU_SOURCE` the way `sdl2-config` did.
+
+`SDL_LOGICAL_PRESENTATION_INTEGER_SCALE` exists and is deliberately unused — see § 9 for why.
+
+**Not verified by a human since the port:** a window on a real desktop, sound on real hardware, and
+the Windows artifact on real Windows. The wine smoke test covers startup, not rendering.

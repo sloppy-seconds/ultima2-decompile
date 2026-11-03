@@ -952,7 +952,7 @@ Newest first. One line per learning; the detail stays in the owning document.
   missing interpreter rather than a rebuild or a patchelf; (2) "self-contained" covers the
   runtime and not the system ICU, and without it the process aborts at argument parsing with
   the reason only on stdout, so a container that stays up looks merely idle; (3) the bundled
-  SDL2 dlopens its X11 dependencies at runtime, so `ldd` on it lists nothing useful and the
+  SDL dlopens its X11 dependencies at runtime, so `ldd` on it lists nothing useful and the
   X client libraries have to be declared by hand. A harness that vendors a tool build should
   record which of these three it has to satisfy, because none of them appear in the tool's own
   documentation as container concerns.
