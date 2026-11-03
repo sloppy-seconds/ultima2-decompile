@@ -109,6 +109,11 @@ run "sdl_probe selftest" engine/tools/sdl_probe.sh -- bash engine/tests/sdl_prob
 # SDL3 container cycle to a message blaming the Makefile. Runs against a podman
 # stub, so it needs no daemon and no images.
 run "image_fresh selftest" deploy/image_fresh.sh -- bash deploy/image_fresh_selftest.sh
+# The release workflow's shell is only parsed by the runner, minutes after a tag is
+# pushed, and two v0.0.8 attempts died on things a local `bash -n` catches instantly
+# (a missing `fi`, and an unquoted substitution). This renders every run: block with
+# the matrix values filled in and syntax-checks both variants.
+run "workflow shell parses" .github/workflows/release-builds.yml -- python3 tools/workflow_shellcheck.py
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
 run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
 # Only meaningful when the binaries exist, so they are the required paths and a tree that

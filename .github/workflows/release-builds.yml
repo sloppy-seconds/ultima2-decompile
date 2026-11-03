@@ -171,6 +171,7 @@ jobs:
               *) echo "FAIL: binary does not name the tag it was built from ($TAG)"; exit 1 ;;
             esac
             echo "ok: the Linux artifact identifies itself when asked"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
