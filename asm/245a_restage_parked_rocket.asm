@@ -5,11 +5,22 @@
 #           ends on the command-complete tail, so it is entered as a command arm rather
 #           than as a subroutine of the load path.
 # NAMED 2026-11-03 from a reader/writer sweep of the whole tree; it was a bulk-wave stub
-#           headed "behavior not yet reviewed". What it does is settled by its bytes. WHO
-#           JUMPS HERE is not -- no label reference to L_00265a was found in the corpus,
-#           which is the same shape cmd_I, cmd_D and cmd_K had before the Phase 2 map was
-#           re-cut: an `e8`/`e9` whose operand lives in the neighbouring fragment. The
-#           caller is therefore an open question and is NOT claimed by this name.
+#           headed "behavior not yet reviewed". What it does is settled by its bytes.
+# CALLER RESOLVED 2026-11-04 (docs/handoff-2026-11-03.md § 3.6). There is no branch to
+#           L_00265a anywhere in the binary -- no e8/e9/ea/9a and no stored word 0x265a
+#           (the one apparent hit at file 0x620e is the segment-override bytes 3e 26 in
+#           code, not a pointer). It is reached by FALL-THROUGH from asm/2453, which is
+#           itself a fall-through arm of asm/243E, and the whole 243E..245a run sits
+#           INSIDE asm/2423_passability (runtime 0x2423..0x2680) -- the same Phase 2 map
+#           cut that hid cmd_I/cmd_D/cmd_K. asm/2453 is:
+#               mov 0x6d,%al ; cmp $0x0,%al ; je L_002674   ; on Earth, skip the restage
+#           so this restage arm runs only when the world byte is NOT Earth. The block it
+#           falls out of (asm/243E) restores the outdoor position from DS:5A/DS:5B, forces
+#           the sector ones digit to 0 (a wilderness sector), calls the sector reload
+#           L_002490, and then -- off Earth only -- re-stamps the parked rocket at
+#           DS:6A/DS:6B before jumping to cmd_done. That is the arrival path: a rocket
+#           landing in a non-Earth wilderness sector restores the return cell and puts the
+#           ship back on the grid.
 #           See asm/38B0_cmd_L for the DS:69/6A/6B triple's semantics.
 # func 245A..2473  len 001A B  evidence: seed+reko
 # calls: L_000c33, L_0052b3
