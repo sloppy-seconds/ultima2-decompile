@@ -33,7 +33,23 @@ exact byte-for-byte fidelity.
 > `docs/moongates.md` (time doors:
 > observed mechanic, decoded table, engine implementation, and three recorded self-corrections worth
 > reading for method as much as content).** To start a fresh
-> agent, read `docs/handoff-2026-10-29b.md` first (**current entry point** — the overnight run that
+> agent, read `docs/handoff-2026-11-03.md` first (**current entry point** — the rocket and
+> space session: G39, G59, G60 and G62 closed and G63/G64 added. `DS:13 = 0x28` finally
+> observed after 167 empty harvests; the parked-rocket triple `DS:69/6A/6B` decoded, which
+> is the reason a rocket launch silently saves; the world coordinate tables at file
+> `0x7212`; the off-course gate `(fuel & 3) == 3`; `YOU HAVE EXPLODED!` shown to be a halt
+> and not a death; death shown to be memory-only and not a save; site entry shown to
+> auto-save and to pin the outdoor state; and G62 closed by finding that **there is no
+> discriminator byte** — the in-space command loop is `asm/6999` and it has no `ret`. **§ 2
+> of that file is mandatory reading: seven claims proved wrong, five written by this
+> project inside one day, three corrected within hours of being made.** Its § 4 carries the
+> working recipes — harvest-before-teardown, headless for scripted driving, find fields by
+> DS diff, locate tables by pattern, controlled A/B, mutate your gate — and § 5 the
+> hazards, including the trace loss on `up.sh --down` and the runtime/file offset
+> direction). Then `docs/handoff-2026-10-29b.md` (superseded as the entry point but **not
+> obsoleted** — its § 4 recipes and § 5 hazard list still stand, including the Spice86
+> noVNC key-injection crash that the 11-03 session walked into anyway), then the overnight
+> run that
 > closed D13, G40 and D12 and part of G46: `DS:4E` is charisma proven twice, the horse really does
 > refuse shallows and the engine already matched, `DS:25` is the site floor and is renamed
 > `site_floor`, KILL and BLINK observed, `cmd_D` executed at last, plus the three hold-a-value-
