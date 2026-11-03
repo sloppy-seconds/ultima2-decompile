@@ -166,11 +166,20 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     struct cand list[10];
     int n = 0;
     const char *base = world_dir(ctx);
-    if (is_map && ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
-        list[n++] = (struct cand){ base, "updated/MAPG", "MAPG" };
-        list[n++] = (struct cand){ base, "updated/mapg", "mapg" };
-        list[n++] = (struct cand){ base, "MAPG", "MAPG" };
-        list[n++] = (struct cand){ base, "mapg", "mapg" };
+    if (ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
+        /* Monster layouts collide with Earth eras exactly as maps do (monx/mong mirror
+         * mapx/mapg), so the same patched-first order applies to both kinds. */
+        if (is_map) {
+            list[n++] = (struct cand){ base, "updated/MAPG", "MAPG" };
+            list[n++] = (struct cand){ base, "updated/mapg", "mapg" };
+            list[n++] = (struct cand){ base, "MAPG", "MAPG" };
+            list[n++] = (struct cand){ base, "mapg", "mapg" };
+        } else {
+            list[n++] = (struct cand){ base, "updated/MONG", "MONG" };
+            list[n++] = (struct cand){ base, "updated/mong", "mong" };
+            list[n++] = (struct cand){ base, "MONG", "MONG" };
+            list[n++] = (struct cand){ base, "mong", "mong" };
+        }
     }
     for (size_t i = 0; i < nprefixes && n < 10; i++)
         list[n++] = (struct cand){ base, prefixes[i], prefixes[i] };

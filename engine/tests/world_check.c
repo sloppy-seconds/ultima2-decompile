@@ -164,6 +164,14 @@ int main(int argc, char **argv)
         unlink(q);
         CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x11,
               "with no patched map, a planet falls back to the unpatched mapx bytes");
+        /* Monster layouts follow the same rule: monx/mong mirror mapx/mapg. */
+        path_for(q, sizeof q, dir, "monx40");
+        CHECK(write_file(q, earth, U2_MON_TILES) == 0, "unpatched monx40 written");
+        snprintf(q, sizeof q, "%.400s/updated/MONG40", dir);
+        CHECK(write_file(q, planet, U2_MON_TILES) == 0, "patched updated/MONG40 written");
+        ctx.state.world = 4;
+        CHECK(u2_world_load(&ctx, &w, 0, jup) == U2_WORLD_OK && w.mon[0] == 0x22,
+              "on Jupiter, monsters prefer the patched updated/MONG40");
         ctx.state.world = 0;
     }
 

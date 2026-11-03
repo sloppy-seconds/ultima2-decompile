@@ -40,6 +40,11 @@ era is the tens digit, `asm/3546`), so they collided with worlds 1-4 (sectors 10
 
 Grade: **measured** — `md5sum original/mapxNN` against `original/updated/MAPGNN`.
 
+The monster-layout files behave identically: `monx`/`mong` mirror `mapx`/`mapg`, and root
+`monx10–45` differ from `updated/MONG10–45` while 44/50–93 are identical. One nuance from
+`RENGAL.BAT`: it *creates* `mong10/15/30/40/45` by copying `mong20`, so the inner planets
+share Venus's creature table rather than each shipping a distinct one.
+
 ## 3. The disambiguation is the world byte, not the filename
 
 A sector number is genuinely ambiguous: **sector 40 is both Earth-2112 (era 4) and Jupiter
@@ -51,12 +56,15 @@ outer `mapx` files to `mapg` rather than deleting them.
 
 ## 4. Engine behaviour (implemented)
 
-`engine/src/core/world.c:u2_world_load` is now world-aware for map loads:
+`engine/src/core/world.c:u2_world_load` is now world-aware, for both sector kinds (monster
+layouts `monx`/`mong` collide with Earth eras exactly as `mapx`/`mapg` do):
 
-- **On Earth (`world == 0`)**: unchanged — `mapx`, `MAPX`, then `mapg`, `MAPG`.
+- **On Earth (`world == 0`)**: unchanged — `mapx`/`monx`, then `MAPX`/`MONX`, then
+  `mapg`/`mong`, `MAPG`/`MONG`.
 - **On a planet (`world != 0`, not deep space `0x0A`)**: prefer the patched map, in this
-  order — `updated/MAPG`, `updated/mapg`, `MAPG`, `mapg` — then fall back to the unpatched
-  `mapx`/`MAPX` bytes when no patched map exists.
+  order — `updated/MAPG`/`updated/MONG`, `updated/mapg`/`updated/mong`, `MAPG`/`MONG`,
+  `mapg`/`mong` — then fall back to the unpatched `mapx`/`monx` bytes when no patched file
+  exists.
 
 So the reconstruction reflects the *real* planets when the Galaxy patch is present (in the
 content root or in `./updated`), and degrades to the unpatched bytes when it is not. A map
@@ -64,7 +72,8 @@ read from `./updated` records a bare `MAPG`/`mapg` prefix so write-back stays le
 writes the root spelling, never an `updated/` path).
 
 Gated by `engine/tests/world_check.c`: on Earth sector 40 loads the era map; on Jupiter it
-prefers `updated/MAPG40`; with the patched copy removed it falls back to `mapx40`.
+prefers `updated/MAPG40`; with the patched copy removed it falls back to `mapx40`; and the
+same three cases hold for the monster layout (`updated/MONG40` over `monx40`).
 
 ## 5. Parked: a placeholder map when the patch is absent
 
