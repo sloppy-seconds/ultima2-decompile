@@ -58,6 +58,35 @@
 #           Earth orbit -- the launch with PLATE printed HYPERWARP ENGAGED! and left the
 #           character alive and ticking. It fires from the status path, not the launch.
 # func 6999..6B3C  len 01A4 B  evidence: call+reko
+# THIS ROUTINE IS THE IN-SPACE COMMAND LOOP, and it never returns. Decoded 2026-11-03,
+#           which closes docs/needs-gameplay.md G62 (what tells the rocket it is in orbit
+#           rather than on the pad). The answer is: nothing, because there is no such byte.
+#           The state is which loop owns input, and that lives on the stack.
+#   Entry: L_006b99, and its ONLY caller in the whole tree is asm/38B0_cmd_L line 177 --
+#           cmd_L's rocket arm calls into here after PREPARE FOR LAUNCH! and stays here.
+#   Loop:  L_006c79 head -> call L_0071a3 (asm/6FA3) -> print 'CMD: ' -> L_006c86 calls
+#           L_006d3d (asm/6B3D), delays via L_000911 with bx=0x14, polls via L_00514d,
+#           and `cmp $0xff,%ah ; jne L_006c86` spins until a key arrives.
+#   Dispatch on the key, and note the four arrow arms compare against BYTES AT
+#           DS:26E..DS:271 (a scan-code table), not against literals:
+#             cmp 0x271,%al -> L_006cd8  'LEFT'
+#             cmp 0x270,%al -> L_006cf0  'RIGHT'
+#             cmp 0x26e,%al -> L_006d0a  'CLIMB'
+#             cmp 0x26f,%al -> L_006d24  'DIVE'
+#             cmp $0x48,%al -> L_0070c5  'H' -> lands inside asm/6DFD_hyperwarp_flow
+#             cmp $0x4c,%al -> L_007385  'L' -> lands inside asm/7030_space_collision
+#           Each arrow arm prints its word, calls L_006ec4 (asm/6CC4), sets the pair
+#           DS:47B/DS:47C, and jmps back to the loop head.
+#   EXIT: there is NO `ret` anywhere in this routine -- zero occurrences, checked. The loop
+#           leaves only by JUMPING into another routine: 'H' into the hyperwarp flow, 'L'
+#           into the landing path. So the descent loop that sits after `call L_006b99` in
+#           asm/38B0's span is NOT the launch falling through; it is reached from the
+#           landing path. That independently confirms the CORRECTION recorded in
+#           asm/38B0_cmd_L.asm from live play: the southward march belongs to the dive.
+#   Consequence for the engine: it needs a nested space loop inside the rocket launch --
+#   readout, CMD: prompt, arrows/H/L -- that exits by breaking into the descent, not a
+#   discriminator byte and not two separate command handlers. The engine's single
+#   dispatcher is why G62 looked for a flag that never existed.
 # strings: "  FUEL="; "  XENO="; "  YAKO="; "  ZABO=" (+5 more)
 # calls: L_000911, L_004c3e, L_00514d, L_0051df (str_out), L_0053eb, L_006c77, L_006c79, L_006c86 (+12 more)
 # provenance: observed 2026-11-03 -- captures/spice86/g39-rocket-flight/
