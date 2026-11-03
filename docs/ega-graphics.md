@@ -2,6 +2,7 @@
 
 Status: **design only, not built.** Owner idea, 2026-11-04. This is intended as an interim
 launch flag that `docs/options-menu.md` can later replace with a graphics-set switch.
+Implementation plan: `docs/ega-graphics-plan.md`.
 
 ## 1. What the assets are
 
