@@ -3,8 +3,7 @@
 **Status: C and B both implemented and released as v0.0.8 on 2026-11-03 (§ 8, § 9). The engine
 now builds against SDL3 only.** Both release artifacts were played on real hardware by the owner
 before the tag — the static Linux binary on a desktop and the Windows binary on real Windows, not
-wine. The one item from the original verification list that has *not* been separately confirmed is
-sound on real hardware; see § 9.
+wine. Sound is confirmed working on the Linux build and unconfirmed on Windows; see § 9.
 
 Grades follow the project convention: **measured** = derived from this tree or an installed
 header by a named tool; **observed** = read from a primary source; **inferred** = reasoned, not
@@ -333,7 +332,10 @@ they target instead of inferred from a cross-build, and it is the evidence the C
 cannot produce: the workflow inspects the Windows binary's compiled-in stamp rather than pretending
 to execute it under wine.
 
-**Still not separately confirmed: sound.** The audio backend moved wholesale to SDL3's stream API,
-and silence is indistinguishable from a working-but-quiet tone in every automated check in the tree.
-"I can play it" does not establish that the PC-speaker tones fire, so this stays open on the record
-rather than being swept up by the adjacent success.
+**Sound: confirmed on Linux, unconfirmed on Windows.** The owner reported on 2026-11-03 that the
+Linux build produces sound, "at least partially", which retires the worry that the SDL3 stream-audio
+port was silently silent. It is not a full confirmation: which tones fire has not been enumerated,
+and nobody has listened to the Windows artifact on real Windows. The reason this stays on the record
+rather than being ticked off is that **silence passes every automated check in the tree** — the audio
+backend moved wholesale to SDL3's stream API, and a binary that plays perfectly and makes no noise
+looks identical to one that works. The only available evidence is a person listening.
