@@ -299,8 +299,17 @@ void u2_status_draw_full(u2_ctx *ctx)
     z_list(ctx, 1, 9,  U2_S_Z_WEAPONS_LIST, st->weapons_owned,
            (int)sizeof st->weapons_owned, Z_TBL(U2_T_WEAPONS), 1, 10,
            U2_S_Z_PLURAL_DASH, -1, NULL);
-    z_list(ctx, 1, 12, U2_S_Z_ARMOUR_LIST, st->owned_armour,
-           (int)sizeof st->owned_armour, Z_TBL(U2_T_ARMOUR), 1, 7,
+    /* The Z armour list reads the SAME array the WEAR menu and a commerce buy
+     * write — armour_owned at DS:97 — indexed one below the name: armour_owned[0]
+     * is CLOTH, which is name index 1. The original's loop at asm/47D0 does
+     * `mov 0x96(%di),%al` with di=1..6 (DS:97..9C) and prints ARMOUR_TABLE[di];
+     * z_list uses one index for both, so the counts are shifted to align here.
+     * (The old code read owned_armour at DS:80, a phantom nothing writes.) */
+    uint8_t armour_disp[8] = {0};
+    for (int i = 1; i <= 6; i++)
+        armour_disp[i] = st->armour_owned[i - 1];
+    z_list(ctx, 1, 12, U2_S_Z_ARMOUR_LIST, armour_disp,
+           (int)sizeof armour_disp, Z_TBL(U2_T_ARMOUR), 1, 7,
            U2_S_Z_PLURAL_DASH, -1, NULL);
     z_list(ctx, 1, 14, U2_S_Z_SPELLS_LIST, st->spell_counts,
            (int)sizeof st->spell_counts, Z_TBL(U2_T_SPELLS), 1, 10,

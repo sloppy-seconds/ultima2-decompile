@@ -112,7 +112,10 @@ static void z_checks(u2_ctx *ctx)
     st->stat_str = st->stat_agi = st->stat_sta = 0x40;
     st->stat_cha = st->stat_wis = st->stat_int = 0x40;
     for (int i = 0; i < 10; i++) st->weapons_owned[i] = 1;
-    for (int i = 0; i < 8; i++)  st->owned_armour[i] = 0;
+    for (int i = 0; i < 6; i++)  st->armour_owned[i] = 0;
+    st->armour_owned[0] = 1;   /* CLOTH owned. The Z list must show it: this is the
+                                * regression guard for the DS:80-vs-DS:97 field mix-up
+                                * that made owned armour invisible on the status page. */
     for (int i = 0; i < 10; i++) st->spell_counts[i] = 0;
     for (int i = 0; i < 16; i++) st->items_held[i] = 1;
 
@@ -162,6 +165,14 @@ static void z_checks(u2_ctx *ctx)
         char band[512];
         z_at(ctx, 9, 10, "DAGGERS-01", "weapons list starts at index 1");
         z_band(ctx, 9, 11, band, sizeof band);
+        /* The armour list reads armour_owned (DS:97), indexed one below the name,
+         * so armour_owned[0] must render as CLOTHS (name index 1), not SKIN. */
+        char aband[256];
+        z_band(ctx, 12, 13, aband, sizeof aband);
+        ok(strstr(aband, "CLOTHS-01") != NULL,
+           "owned armour (armour_owned[0]) shows on the Z page");
+        ok(strstr(aband, "SKIN") == NULL,
+           "SKIN (name index 0) is never listed — pins the count/name off-by-one");
         ok(strstr(band, "HANDS") == NULL,
            "HANDS is never listed (loop starts at index 1)");
         ok(strstr(band, "QUICK SWORDS-01") != NULL,

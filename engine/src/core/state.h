@@ -362,12 +362,13 @@ typedef struct u2_state {
     /* 0x76 */ uint8_t weapons_owned[10]; /* one count per weapon, 10 entries.
                                         * Proven, docs/save-format.md. asm/363B and
                                         * asm/19D7 add; asm/3F5D steals. */
-    /* 0x80 */ uint8_t owned_armour[8]; /* the owned-armour counts the Z screen's ARMOUR:
-                                        * list reads — `mov al,[di+0x80]` in the loop at
-                                        * asm/464E's tail, bounds 1..6, plural "S-". This
-                                        * retires the CANDIDATE note that used to sit on
-                                        * reserved_80: the display site is the citation
-                                        * that was missing. docs/status-screen-z.md § 7. */
+    /* 0x80 */ uint8_t reserved_80[8];    /* DS:80..87: purpose unknown. This was briefly
+                                        * named owned_armour on the belief the Z screen's
+                                        * ARMOUR: list read it, but that was a mis-citation
+                                        * (asm/464E is the SPELL- fragment). The Z armour
+                                        * loop at asm/47D0 actually reads `mov 0x96(%di),%al`
+                                        * with di=1..6, i.e. DS:97..9C = armour_owned below.
+                                        * Nothing writes DS:80, so it is reserved again. */
     /* 0x88 */ uint8_t reserved_88[0x0E];
     /* 0x96 */ uint8_t reserved_96;        /* DS:96 itself: G8 found nothing reads it */
     /* 0x97 */ uint8_t armour_owned[6];    /* owned count per armour type, indexed by the WEAR
@@ -564,7 +565,7 @@ _Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
 _Static_assert(U2_OFF(world)         == 0x06D, "world moved");
 _Static_assert(U2_OFF(weapons_owned)  == 0x076, "weapons_owned moved");
 _Static_assert(U2_OFF(items_held)     == 0x0D6, "items_held moved");
-_Static_assert(U2_OFF(owned_armour)   == 0x080, "owned_armour moved");
+_Static_assert(U2_OFF(reserved_80)    == 0x080, "reserved_80 moved");
 _Static_assert(U2_OFF(spell_counts)   == 0x0B6, "spell_counts moved");
 _Static_assert(U2_OFF(paral_legs)     == 0x26B, "paral_legs moved");
 _Static_assert(U2_OFF(paral_arms)     == 0x26C, "paral_arms moved");
