@@ -1,0 +1,83 @@
+# Planet maps and the Galaxy patch
+
+Status: **finding recorded, engine behaviour implemented 2026-11-04.** The custom-placeholder
+map is parked (see § 5).
+
+## 1. The problem
+
+Ultima II shipped on three floppies: a Program Master disk (Earth and its time periods), a
+Player Master disk, and a Galactic disk (the other planets). MS-DOS had no directories, so
+Garriott reused the same map filenames on the Earth and Galactic disks. On floppies that was
+fine — you physically swapped disks when you went into space.
+
+When the game was later collapsed into a single folder for the CD collections (Ultima
+Collection, GOG, the EA re-releases), the copy step overwrote the Galactic planet maps with
+Earth's era maps, because they shared names. The result: in an unpatched modern copy, flying
+to Mercury, Venus, Mars or Jupiter lands you on a clone of an Earth time period. Planet X
+(sector 90) survived because its name did not collide, and because X is the only planet needed
+to finish the game, nobody noticed before shipping.
+
+The fan-made **Ultima II Upgrade Patch** (Pix's Ultima Patcher) restores the galaxy maps and
+also upgrades CGA to EGA. Our pack ships that patch, present but **not applied**.
+
+## 2. Measured against our own bytes
+
+`original/` is the fan pack. It carries the root `mapxNN` files (the merged, partly-broken
+set) and an `original/updated/` directory holding the Galaxy patch: `MAPG10..MAPG93`,
+`MONG10..`, `RENGAL.BAT`, and a patched `ultima2.com`. `run.bat` offers "1 = original,
+2 = updated"; option 2 `cd updated` and runs the patched binary.
+
+Comparing each root `mapxNN` to the patch's `updated/MAPGNN` (md5 of the 4224-byte file):
+
+| sectors | world(s) | root vs patch |
+| --- | --- | --- |
+| 10, 15, 20, 30, 32, 40, 41, 45 | Mercury, Venus, Mars, Jupiter (1-4) | **DIFFERENT** — root is the Earth-era clone, MAPG is the real planet |
+| 44, 50, 60, 61, 70, 71, 80, 81, 82, 85, 90, 92, 93 | Saturn..Pluto, X (5-9) | **IDENTICAL** — no collision, survived the overwrite |
+
+The boundary is exactly the collision: Earth's five time periods occupy sectors 00-49 (the
+era is the tens digit, `asm/3546`), so they collided with worlds 1-4 (sectors 10-40). Worlds
+5-9 (sectors 50-90) had no Earth counterpart and were never overwritten.
+
+Grade: **measured** — `md5sum original/mapxNN` against `original/updated/MAPGNN`.
+
+## 3. The disambiguation is the world byte, not the filename
+
+A sector number is genuinely ambiguous: **sector 40 is both Earth-2112 (era 4) and Jupiter
+(world 4)**, and sector 20 is both Earth-1423 (era 2, the starting area) and Venus. The
+filename alone cannot tell them apart; the world byte `DS:6D` can. `0` means Earth (use the
+`mapx` era map); `1..9` means a planet (use the `mapg` planet map). This is why the patched
+binary reads `mapg` in space and `mapx` on Earth, and why `RENGAL.BAT` renames the surviving
+outer `mapx` files to `mapg` rather than deleting them.
+
+## 4. Engine behaviour (implemented)
+
+`engine/src/core/world.c:u2_world_load` is now world-aware for map loads:
+
+- **On Earth (`world == 0`)**: unchanged — `mapx`, `MAPX`, then `mapg`, `MAPG`.
+- **On a planet (`world != 0`, not deep space `0x0A`)**: prefer the patched map, in this
+  order — `updated/MAPG`, `updated/mapg`, `MAPG`, `mapg` — then fall back to the unpatched
+  `mapx`/`MAPX` bytes when no patched map exists.
+
+So the reconstruction reflects the *real* planets when the Galaxy patch is present (in the
+content root or in `./updated`), and degrades to the unpatched bytes when it is not. A map
+read from `./updated` records a bare `MAPG`/`mapg` prefix so write-back stays legal (it
+writes the root spelling, never an `updated/` path).
+
+Gated by `engine/tests/world_check.c`: on Earth sector 40 loads the era map; on Jupiter it
+prefers `updated/MAPG40`; with the patched copy removed it falls back to `mapx40`.
+
+## 5. Parked: a placeholder map when the patch is absent
+
+If a player's copy has neither the patched maps nor a usable unpatched planet map, the
+engine should not show a silently-wrong Earth clone. Parked work item: build a custom
+placeholder sector whose tiles spell a readable sign — that the planet maps are missing and
+how to remediate (apply the Galaxy patch / run `RENGAL.BAT`, or supply `updated/MAPGNN`) —
+and use it as the last-resort fallback for a planet sector with no map at all. Not built;
+the current fallback is the unpatched bytes.
+
+## 6. Consequences for prior findings
+
+Any earlier claim about Mercury/Venus/Mars/Jupiter sectors (10-45) that was read off the root
+`mapx` files is about Earth-clones, not the real planets, and should be re-checked against
+`updated/MAPG*`. The rocket-landing work in `docs/needs-gameplay.md` G59 used sector 40
+(Earth) and sector 90 (X), both valid maps, so it is unaffected.

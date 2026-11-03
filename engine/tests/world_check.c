@@ -138,6 +138,35 @@ int main(int argc, char **argv)
     id.hi = 3; id.lo = 0;
     path_for(p, sizeof p, dir, "mapx30");
 
+    /* --- the Galaxy patch: off Earth, prefer the patched mapg map over the unpatched
+     *     mapx clone -- in ./updated first, then the content root -- and fall back to the
+     *     unpatched bytes when no patched map exists. Sector 40 is BOTH Earth-era-4 and
+     *     Jupiter, so the world byte is what disambiguates. docs/planet-maps-galaxy-patch.md */
+    {
+        u2_sector_id jup = { .hi = 4, .lo = 0 };
+        static uint8_t earth[U2_SECTOR_TILES], planet[U2_SECTOR_TILES];
+        char q[544];
+        for (size_t i = 0; i < U2_SECTOR_TILES; i++) { earth[i] = 0x11; planet[i] = 0x22; }
+        char udir[544]; snprintf(udir, sizeof udir, "%.400s/updated", dir);
+        mkdir(udir, 0755);
+        path_for(q, sizeof q, dir, "mapx40");
+        CHECK(write_file(q, earth, U2_SECTOR_TILES) == 0, "unpatched Earth-clone mapx40 written");
+        snprintf(q, sizeof q, "%.400s/updated/MAPG40", dir);
+        CHECK(write_file(q, planet, U2_SECTOR_TILES) == 0, "patched updated/MAPG40 written");
+
+        ctx.state.world = 0;
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x11,
+              "on Earth, sector 40 is the era map (mapx), not the planet map");
+        ctx.state.world = 4;
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x22,
+              "on Jupiter, sector 40 prefers the patched updated/MAPG40");
+        snprintf(q, sizeof q, "%.400s/updated/MAPG40", dir);
+        unlink(q);
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x11,
+              "with no patched map, a planet falls back to the unpatched mapx bytes");
+        ctx.state.world = 0;
+    }
+
     /* --- write-back: dirty tracking, tail preservation, atomicity ---- */
     memset(&w, 0, sizeof w);
     CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK, "reload mapx30 for write-back");

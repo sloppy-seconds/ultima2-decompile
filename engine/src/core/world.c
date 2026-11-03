@@ -153,16 +153,39 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     size_t nprefixes;
     prefixes = prefix_list(is_map, &nprefixes);
 
-    for (size_t i = 0; i < nprefixes && !found; i++) {
+    /* Candidate (dir, prefix) pairs, tried in order. On a planet the sector filename is
+     * shared with an Earth era -- sector 40 is both Earth-2112 and Jupiter -- and the
+     * fan pack ships the true planet maps under the mapg spelling, either in the
+     * content root or in ./updated awaiting RENGAL.BAT (docs/planet-maps-galaxy-patch.md).
+     * So when the world byte says we are off Earth, try the patched mapg copies first and
+     * fall back to the unpatched mapx bytes only when no patched map exists. On Earth
+     * (world 0) the mapx spelling IS the era map and the order is the historical one.
+     * The `label` is the bare prefix recorded for store, so a map read from ./updated
+     * still writes back under a legal root prefix rather than the illegal "updated/MAPG". */
+    struct cand { const char *dir; const char *prefix; const char *label; };
+    struct cand list[10];
+    int n = 0;
+    const char *base = world_dir(ctx);
+    if (is_map && ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
+        list[n++] = (struct cand){ base, "updated/MAPG", "MAPG" };
+        list[n++] = (struct cand){ base, "updated/mapg", "mapg" };
+        list[n++] = (struct cand){ base, "MAPG", "MAPG" };
+        list[n++] = (struct cand){ base, "mapg", "mapg" };
+    }
+    for (size_t i = 0; i < nprefixes && n < 10; i++)
+        list[n++] = (struct cand){ base, prefixes[i], prefixes[i] };
+
+    for (int i = 0; i < n && !found; i++) {
         FILE *f;
-        u2_world_path(path, sizeof path, ctx, prefixes[i], id);
+        snprintf(path, sizeof path, "%s/%s%u%u", list[i].dir, list[i].prefix,
+                 (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
         f = fopen(path, "rb");
         if (!f)
             continue;
         got = fread(is_map ? w->map : w->mon, 1, want, f);
         fclose(f);
         found = 1;
-        used = prefixes[i];
+        used = list[i].label;
     }
 
     if (!found)
