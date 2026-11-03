@@ -641,6 +641,45 @@ paralyzed step takes the same reject path as walking into a mountain. That is wh
 `--INVALID MOVE!` is what the owner saw while paralyzed, and it means the engine
 must model paralysis as a movement rejection, not a combat overlay.
 
+- [ ] **Publish the map viewer to GitHub Pages with cleanroom art. PARKED by owner
+      2026-11-04, pending a decision — do not start without one.** The ask was a public
+      Pages build of `tools/map_viewer.py` using only the cleanroom tiles, with a
+      disclaimer that the graphics are substitutes and not the original art.
+
+      **The blocker is not the art, it is the map data.** Cleanroom tiles settle the
+      tile-art half. The viewer's actual payload is the `mapxNN` sector bytes, and the
+      protected thing in a sector map is the *layout* — which tile sits at each of the
+      4096 cells. Re-encoding that as a rendered PNG changes the medium, not the work:
+      a faithful render of the real layout reproduces it, exactly as a traced redraw
+      would. So "we ship the image, not the bytes" does not clear it. The owner's
+      observation that fan maps and viewers are widely published online is true and was
+      weighed; the counter is that prevalence is tolerance, not licence, and that
+      `AGENTS.md` already answers this for us — the fan upgrade pack sits in
+      `references/` and is deliberately gitignored, and release artifacts are "binaries
+      only, never a data pack."
+
+      **What is unambiguously ours and publishable today:** the viewer code, the
+      cleanroom SVGs, and our own `disasm/tile-art.tsv` descriptions. Note also that
+      the viewer links to `tile-review.html`, an original-vs-cleanroom sheet built from
+      the originals — a public build must strip that link.
+
+      **Open decision for the owner.** Either pick a variant that ships no game data:
+      (A) load-your-own file input, parsed client-side, nothing uploaded, plus a save-PNG
+      button so a visitor renders their own sectors; (B) a synthetic demo sector we
+      author; (C) both — the recommended shape, and it delivers the workflow the owner
+      was after on their own data; (D) tile atlas only, no map view. Or (E) explicitly
+      amend the `AGENTS.md` data rule to allow publishing derived map renders, which is
+      a policy decision to record with its authorisation, not an implementation detail
+      to route around via the file format.
+
+      **Mechanical notes for whoever picks it up:** `map_viewer.py` already has
+      `--cleanroom` and an optional `--tiles`, so a `--public` mode that omits the
+      original PNGs entirely is small; `load_maps()` currently hard-exits when no
+      `mapx*` is present and needs a no-data path. There is no PNG export today (no
+      `toDataURL`/`download` anywhere in the file) — the canvas is live only, so the
+      save-image button is new work, roughly five lines. A Pages workflow would be the
+      repo's first; see `.github/workflows/release-builds.yml` for the existing pattern.
+
 ## CP5 — combat tickets (scoped 2026-10-21; mechanics landed 2026-10-22, wiring in progress)
 
 Scope rule for this checkpoint: **no stubs.** A stub for "resist paralysis" encodes
