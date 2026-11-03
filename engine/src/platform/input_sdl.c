@@ -133,6 +133,21 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
         case SDLK_RETURN: out->ch = 0x0D;         out->scan = 0x1C;       return 1;
         case SDLK_SPACE:  out->ch = ' ';          out->scan = 0x39;       return 1;
         default:
+            /* Ctrl+letter: the original's INT 16h handed the control byte back in
+             * AL (Ctrl-Q = 0x11, Ctrl-T = 0x14), and the engine's dev/EGA keys
+             * test for exactly those bytes -- the terminal backend delivers them
+             * because a raw tty read yields the control character. SDL instead
+             * reports the letter with a KMOD_CTRL modifier, so without this
+             * translation Ctrl-Q reaches the command dispatcher as 'q' and saves
+             * the game instead of quitting, and Ctrl-T transacts. Masking the
+             * letter to its control code matches what the hardware delivered. */
+            if ((e.key.mod & SDL_KMOD_CTRL) &&
+                ((e.key.key >= 'a' && e.key.key <= 'z') ||
+                 (e.key.key >= 'A' && e.key.key <= 'Z'))) {
+                out->ch   = (uint8_t)(e.key.key & 0x1F);
+                out->scan = (uint8_t)e.key.scancode;
+                return 1;
+            }
             /* Printable ASCII arrives with its character, as INT 16h would
              * have handed it over in AL. */
             if (e.key.key >= 32 && e.key.key < 127) {
