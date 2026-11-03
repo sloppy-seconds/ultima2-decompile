@@ -329,12 +329,76 @@ would have shown otherwise had silently refused. The full picture, measured with
 
 | action | what lands on disk |
 | --- | --- |
-| crossing a site edge (leave or enter a town) | **nothing** but nothing at all — `mapx`/`monx` byte-identical to pristine |
+| crossing a site edge (leave or enter a town) | `mapx`/`monx` byte-identical to pristine — **but that measurement compared the sector files only; see "Open: the site-entry save" below, which may make this row wrong** |
 | `Q` outdoors, gate satisfied | `player`, **and `mapxNN` and `monxNN` of the sector you are standing in** |
 | `Q` inside a town | refused: `ONLY OUTDOORS!`, nothing written |
 | `Q` outdoors with `DS:6D != 0` | refused: `ONLY ON EARTH!`, nothing written |
 | **death, any cause** | **nothing.** The zeroing is memory-only |
-| **rocket launch from a wilderness sector** | `player`, written by the save body itself, no `Q` pressed |
+| **rocket launch from a wilderness sector** | `player` **only** — not `mapxNN`, not `monxNN` |
+| **entering a site** (town, tower, dungeon, castle, village) | **probably `player` too — see the open question below, this doc currently says otherwise** |
+
+### The rocket launch saves, silently, and bypasses the save guards
+
+`asm/38B0`'s rocket branch, behind the guard `[DS:6D] == 0 AND [DS:4A] == 0` — Earth *and*
+a wilderness sector:
+
+```asm
+L_003b52:  mov %al,0x6b      ; DS:6B = y
+L_003b55:  mov $0x1,%al
+L_003b57:  mov %al,0x69      ; DS:69 = 1
+L_003b5a:  call L_0024fd     ; the save body, immediately
+```
+
+It calls the save body **directly**, not through `asm/3DFA_offer_only_outdoors_earth`, so
+it does not pass the guards that print `ONLY OUTDOORS!` and `ONLY ON EARTH!`. Its own
+guard happens to be the same condition, which is why the effect looks like a normal save.
+
+Measured as a controlled pair, same character and same actions, differing only in the
+sector the launch happened in:
+
+| run | launch sector | `player` on disk vs the seed given to it |
+| --- | --- | --- |
+| g62 | **40** wilderness, `DS:4A = 0` | **DIFFERS** — 12 bytes, food `999999` -> `999941` |
+| g60 | **41** site sector, `DS:4A = 1` | **IDENTICAL** — the game never wrote it |
+
+And `mapx40`, `monx40`, `mapx41`, `monx41`, `mapx30` were byte-identical to pristine in
+**both** runs. So the launch writes the player record and nothing else, which means the
+sector write described in the table above is *not* inside `L_0024fd`, or is conditional on
+something the launch path does not set. Unresolved, and it matters: two routes into the
+same save body write different sets of files.
+
+### Why this is a hazard for a player, not a curiosity
+
+Owner's account, and the bytes we have so far are consistent with it: **entering space
+forces a save, so a bad trip is permanent.** The trap is real and it is reachable —
+`asm/6DFD` dumps an off-course ship into deep space, `asm/7030` answers `REQUEST DENIED!`
+from deep space so you cannot land, and hyperwarp costs one TRI-LITHIUM per jump. Run out
+of fuel in deep space and the character is stranded in a game that already wrote the
+stranding to disk. Backing up the player file before a launch is not superstition.
+
+The same account says **time-period transitions force a save too**. That half is
+`recalled` and not yet found: the five other callers of `L_0024fd` turned out to be
+site-entry routines, not time doors, and `docs/moongates.md` does not evidence a
+transition save. Where to look is named below.
+
+### Open: the site-entry save, which this doc currently contradicts
+
+`asm/341E` (village), `asm/343F` (`-TOWN`, `-TOWER`), `asm/34B5`/`asm/34CF` (`-CASTLE`)
+and `asm/34E4` (`-DUNGEON`) all share one shape — record the return cell, then save:
+
+```asm
+mov %al,0x5a    ; DS:5A = entry_x
+mov %al,0x5b    ; DS:5B = entry_y
+call L_0024fd   ; the save body
+```
+
+If that reaches disk, then **every site entry silently saves the game**, and the first row
+of the table above ("crossing a site edge writes nothing") is wrong. That row came from
+`captures/spice86/save-wilderness`, which measured `mapx`/`monx` byte-identity and may
+never have compared `player` against its seed. The test is cheap and is the same A/B used
+above: seed in a wilderness sector, walk into a town gate, diff `player` against the seed.
+Not yet run. Recorded rather than asserted, because the row it would correct is a measured
+row and it deserves a measurement, not an inference from a `call` site.
 
 ### Death does not touch the file (measured 2026-11-03)
 
