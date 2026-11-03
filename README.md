@@ -177,6 +177,21 @@ opening an empty map. Add `--cleanroom` to draw the substitute art instead of th
 original's, and it will always announce that it is doing so. `--renderer=terminal`
 runs the text front end in the same binary, if you want that for some reason.
 
+**Optional: EGA graphics.** `--ega` draws the map and pictures in 16 colours using the
+fan-made *Ultima II Upgrade* art instead of the original CGA's 4. It changes no rules and
+works with or without `--enhanced`; CGA stays the default. The art is not in this repo — you
+supply it from your own copy: point `--ega-theme-dir` at the folder holding `EGATILES`, choose
+a set with `--ega-theme`, and press **Ctrl-T** in play to cycle themes live. `--ega` is strict,
+so it refuses to start (rather than silently drawing CGA) when the art is missing. Full detail
+in `docs/ega-graphics.md`.
+
+**Missing or cloned planet maps.** In a stock CD/GOG copy the planet maps (Mercury, Venus,
+Mars, Jupiter) are effectively missing: they shared filenames with Earth's era maps and were
+overwritten when the three floppies were collapsed into one folder, so flying to a planet
+lands you on an Earth clone. The engine tells Earth from planet by the world byte and prefers
+the restored `updated/MAPG*` maps when your copy has them (from the same *Ultima II Upgrade*
+/ Galaxy patch that provides the EGA art). Details in `docs/planet-maps-galaxy-patch.md`.
+
 Both binaries have been played. The Linux one is what the owner and the tests run
  day to day. The Windows one was run **under wine** (on Bazzite Linux, 2026-11-02):
 it starts, creates a character, plays the overworld, enters towns and fights, and

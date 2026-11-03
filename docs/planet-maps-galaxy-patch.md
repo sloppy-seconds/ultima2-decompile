@@ -1,7 +1,8 @@
 # Planet maps and the Galaxy patch
 
 Status: **finding recorded, engine behaviour implemented 2026-11-04.** The custom-placeholder
-map is parked (see § 5).
+map is parked (see § 5). Player-facing summary: README.md, "Missing or cloned planet maps";
+the same *Ultima II Upgrade* package also carries the EGA art (`docs/ega-graphics.md`).
 
 ## 1. The problem
 

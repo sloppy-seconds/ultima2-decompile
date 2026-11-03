@@ -1,82 +1,84 @@
-# EGA graphics (`--ega`) — design proposal
+# EGA graphics (`--ega`)
 
-Status: **design only, not built.** Owner idea, 2026-11-04. This is intended as an interim
-launch flag that `docs/options-menu.md` can later replace with a graphics-set switch.
-Implementation plan: `docs/ega-graphics-plan.md`.
+Status: **implemented 2026-11-04.** Owner idea, 2026-11-04; built the same day. This is the
+user-facing page — what EGA mode is, how to turn it on, and where the art comes from. The
+build record, format-spike verdicts and internals live in `docs/ega-graphics-plan.md`.
 
-## 1. What the assets are
+`--ega` draws the game in **16 colours** instead of the original CGA's 4, using the fan-made
+*Ultima II Upgrade* art (recoloured tiles and full-screen pictures). It is a presentation
+axis only: it changes no rules, and it is available with or without `--enhanced`. CGA stays
+the shipped default and is byte-for-byte unchanged; nothing about a run changes unless you ask
+for EGA.
 
-The fan pack's Galaxy/EGA patch (`original/updated/`) ships 16-colour versions of the
-original CGA screens alongside the CGA ones:
+## 1. What you need
 
-| CGA (original) | EGA (patch) | CGA size | EGA size |
-| --- | --- | --- | --- |
-| `picout` | `PICOUT-E` | 16384 | 64000 |
-| `pictwn` | `PICTWN-E` | 16384 | 64000 |
-| `picdng` | `PICDNG-E` | 16384 | 64000 |
-| `picdra` | `PICDRA-E` | 16512 | 64000 |
-| `picmin` | `PICMIN-E` | 16384 | 64000 |
-| `picspa` | `PICSPA-E` | 16384 | 64000 |
-| — (castle) | `PICCAS-E` | — | 64000 |
+The EGA art is **not part of this repository.** It is Origin's art, recoloured by the fan
+patch, so it is never committed — the same rule as every other piece of original art here
+(`AGENTS.md` licensing; the cleanroom wall). You supply it from your own copy.
 
-The CGA files are 320×200 at 2bpp planar (4 colours); `pic.c` already unpacks them
-(planar-to-linear, 16000 bytes into the frame). The `-E` files are **64000 = 320×200×1
-byte**, which strongly implies a **linear, one-palette-index-per-pixel** image at EGA's
-16-colour depth — i.e. no planar decode, just a palette map. That is a hypothesis to
-confirm, not an established fact (see § 4 spike).
+The art ships in the Exodus **"Ultima II Upgrade"** package (the same patch that also restores
+the planet maps — see `docs/planet-maps-galaxy-patch.md`). The files the engine reads:
 
-`u2ega.exe`, `cgapatch.exe`, `dngpatch.exe` in `updated/` are the patchers that swap these
-in for the original game; we do not run them, we would read the files directly.
+| file | what it is |
+| --- | --- |
+| `EGATILES` | the 16-colour tile atlas — the map, towns, buildings and figures (the dominant visual) |
+| `EGATHEME.10/`, `EGATHEME.ALT/`, `EGATHEME.C64/` | alternative tile themes, each holding its own `EGATILES` |
+| `PICDRA-E`, `PICSPA-E`, `PICMIN-E`, `PICDNG-E`, `PICTWN-E`, `PICOUT-E`, `PICCAS-E` | the 16-colour full-screen pictures (some copies spell these `PICDRA.EGA` etc.) |
 
-## 2. Legal posture — already solved by the existing model
+If you already ran the Exodus installer on your game, these files are in your game folder (the
+runtime copies land under `updated/`). If you have the raw upgrade package instead, they are
+at its top level and in the `EGATHEME.*` subfolders.
 
-The EGA art is Origin's (recoloured by the patch), so it is **never committed** — same rule
-as all original art (`AGENTS.md` licensing section; the cleanroom wall). But the engine
-already loads original art **from the user's own copy at runtime** (`u2_tiles_extract`,
-CP0 prints "art source: original tiles extracted from the user's copy"). Enhanced mode
-would read `updated/PIC*-E` from the player's `--data-dir` the same way. The committed
-**cleanroom** substitute art (`engine/assets/tiles/cleanroom/`) stays the fallback when the
-user's copy has no EGA files. No new copyright exposure; the cleanroom gate still applies
-to anything we ship.
+## 2. Where to put them and how to run
 
-## 3. The real work (this is a pipeline change, not a toggle)
+Point the engine at the folder that holds `EGATILES`:
 
-The engine's frame stores **one CGA index per pixel (4 colours) end to end** — frame,
-renderer, and palette all assume it. EGA is 16 colours, so:
+```bash
+./u2-sdl --ega --data-dir ~/u2 --ega-theme-dir ~/u2/updated
+```
 
-1. **Colour-depth pipeline.** A 16-colour path through `core/frame`, the renderer(s), and
-   the palette. This is the bulk of the effort and touches the display seam broadly.
-2. **A `PIC*-E` loader.** Likely simple if the linear-index hypothesis holds (read 64000
-   bytes, map through the EGA palette); needs confirming.
-3. **A tile-atlas source for EGA.** The engine extracts the CGA tile atlas from
-   `ultimaii.exe`; the EGA tiles live in the `PIC*-E` files instead, a different source and
-   layout. This is the least-understood piece.
-4. **The `--ega` flag itself.** Small: a mode on `u2_ctx` (parallel to `fidelity`), read at
-   launch, selecting the EGA art path when the files are present and falling back to CGA /
-   cleanroom when not.
+The themes directory is resolved as follows:
 
-## 4. Recommended first step: a format spike (no engine change)
+1. If you pass `--ega-theme-dir DIR`, that directory is used and must contain the chosen
+   theme — there is no fall-through, so a wrong path is reported rather than papered over.
+2. Otherwise the engine tries `--data-dir`, then (on a developer checkout) `references/u2upgrade/`,
+   and uses the first that contains the theme.
 
-Before committing to the pipeline work, a throwaway script should confirm the `PIC*-E` byte
-layout: is it linear 1-byte-index, or 4-plane EGA planar? Render one `PICOUT-E` to a PNG
-both ways and look at it. This decides whether the loader is trivial (linear) or needs a
-planar unpack like `pic.c`. Cheap, and it de-risks the whole proposal.
+Pick a theme with `--ega-theme` — one of `default`, `10`, `alt`, `c64` (default is the
+canonical set the game itself uses):
+
+```bash
+./u2-sdl --ega --data-dir ~/u2 --ega-theme c64
+```
+
+While playing, **Ctrl-T** cycles to the next theme found in the directory (alphabetical
+order), live — no restart. The map recolours and the message line names the theme you landed
+on.
+
+`--ega` is **strict**: if the themes directory does not exist, or the chosen theme is not in
+it, the engine refuses to start and prints why, rather than quietly falling back to CGA. (The
+full-screen pictures are the one soft case: if a `PIC*-E` is absent, that picture falls back
+to its CGA version.)
+
+## 3. What is drawn in EGA, and what is not
+
+- The overworld map, towns and figures: from `EGATILES`.
+- The title splash and the demo pictures: from the `PIC*-E` files when present, else the CGA
+  picture.
+- The status text band stays in the CGA colours (indices 0 and 3), which read as black and
+  cyan on the EGA palette. This is a known cosmetic limitation of the interim flag, not a
+  bug; the options menu will own text colouring later.
+
+## 4. Legal posture
+
+Identical to the CGA tile art and the original pictures: the EGA files are the player's own,
+read at run time from the directory you point at, and never committed. The committed cleanroom
+substitute tiles (`engine/assets/tiles/cleanroom/`) remain the shipped fallback when no EGA
+art is present. No new art enters the repository.
 
 ## 5. Relationship to the options menu
 
-`--ega` is deliberately a launch flag so it can exist **before** the options menu. When
-`docs/options-menu.md` lands, the graphics choice becomes a live-switchable row (graphics
-is presentation, safe to change mid-run — see that doc's D-B) and `--ega` becomes its
-default seed, exactly like the other enhanced knobs. So `--ega` is the interim and the menu
-row is the end state; building `--ega` first does not create throwaway work, because the
-underlying 16-colour pipeline is the same either way.
-
-## 6. Open questions (owner)
-
-- Is 16-colour EGA the target, or is the goal "use whatever richer art the user's patch
-  provides" (which could later include the EGA dungeon/space variants individually)?
-- Does `--ega` require `--enhanced`, or is it an independent art axis available in both
-  modes? (It changes no rules, so it could be mode-independent.)
-- Fallback when the user's copy has CGA but no `PIC*-E`: silently use CGA, or tell the
-  player the EGA set is missing (consistent with the missing-planet-maps sign idea in
-  `docs/planet-maps-galaxy-patch.md` § 5)?
+`--ega` is an interim launch flag. When `docs/options-menu.md` lands, the art mode and theme
+become live-switchable menu rows (graphics is presentation, safe to change mid-run) seeded
+from these flags, and the flags are folded into the settings model. The underlying 16-colour
+pipeline is the same either way, so this is not throwaway work.
