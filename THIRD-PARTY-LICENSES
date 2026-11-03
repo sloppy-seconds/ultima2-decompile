@@ -8,6 +8,34 @@ Game content (`original/`, `references/`, `captures/`) is never committed, so it
 never appears here. Tool builds fetched as infrastructure (`tools/spice86/`,
 `tools/reko/`) are gitignored and are not distributed by this repository.
 
+## SDL3 — zlib licence
+
+- **Where:** linked statically into `engine/u2-sdl-static` and `engine/u2-sdl.exe`.
+  Not vendored into the repository: it is fetched and built by
+  `deploy/linuxbuild`, `deploy/winbuild` and `release-builds.yml` from the pinned
+  official tarball.
+- **What:** Simple DirectMedia Layer, the window/input/audio backend behind
+  `engine/src/platform/*_sdl.c`.
+- **Version:** 3.4.18, pinned in three places that must stay in step
+  (`SDL3_VERSION` in the workflow and in both Containerfiles).
+- **Source:**
+  `https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz`
+- **Licence:** zlib. Full text kept at `engine/licenses/SDL3-LICENSE.txt`, copied
+  byte-for-byte from the tarball's `LICENSE.txt`, and compiled into the binaries so
+  `--licenses` prints it.
+- **Modifications:** none. Built unmodified with
+  `-DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST_LIBRARY=OFF`.
+- **Why it is recorded here at all, given zlib does not require it.** The zlib
+  licence asks for an acknowledgment only as something "appreciated but not
+  required", and its third clause binds source distributions rather than binaries,
+  so a statically linked SDL would not oblige us to ship anything. The reason is
+  this file's own purpose: provenance should be a lookup. Every release from v0.0.2
+  through v0.0.7 shipped a statically linked SDL2 with no entry here at all, which
+  is a gap by our standard even though it was never a breach of theirs.
+- **Checkable per artifact:** `--version` reports the SDL implementation and linkage
+  actually compiled in, and `--licenses` prints the licence text, so the claim does
+  not depend on trusting a build log.
+
 ## font8x8 — Public Domain
 
 - **Where:** `engine/src/core/font8x8_basic.h`

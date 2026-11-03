@@ -28,14 +28,18 @@ make content              # regenerate build/gen_content.h only
 ### SDL and cross-builds
 
 ```sh
-make sdl                  # native SDL2 build (needs SDL2 on the host; Bazzite:
-                          # brew install sdl2 — an owner-approved dependency)
-make sdl-static           # single-file Linux player binary: SDL2 linked static,
-                          # glibc dynamic; needs a static libsdl2.a prefix — on
+make sdl                  # native SDL3 build (needs SDL3 on the host; make sure
+                          # pkg-config can see sdl3.pc — an owner-approved
+                          # dependency). Prints a loud note when what it linked is
+                          # not the pinned static SDL3 the release ships.
+make sdl-static           # single-file Linux player binary: SDL3 linked static,
+                          # glibc dynamic; needs a static libSDL3.a prefix — on
                           # Bazzite run ../deploy/linuxbuild/build.sh
-make sdl-win              # Windows x86_64 .exe, static SDL — needs the mingw
+make sdl-win              # Windows x86_64 .exe, static SDL3 — needs the mingw
                           # toolchain; on Bazzite run ../deploy/winbuild/build.sh
                           # which does exactly this inside a container
+make licenses             # regenerate src/core/licenses_data.h from LICENSE and
+make licenses-check       # engine/licenses; the header is committed, not built
 ```
 
 The static builds are the player-facing artifacts: one file plus the user's own

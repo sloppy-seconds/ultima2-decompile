@@ -93,6 +93,28 @@ C11 reimplementation of its engine, and automated proof standing behind both.
 * The pictures are read from the player's own directory at runtime, like the tile art.
   Nothing is committed and nothing is substituted.
 
+### Licensing and attribution (2026-11-03)
+
+* **`--licenses` prints the full licensing and attribution record from inside the
+  binary.** The release is a single file with no accompanying documents, so a
+  recipient holding only the executable had no way to find out what was in it. The
+  texts are compiled in from committed sources, so it works with no data directory,
+  no network and no SDL present.
+* It covers SDL3 (zlib, verbatim), font8x8 (public domain, with provenance), the
+  substitute tile art (our own work, and how the cleanroom procedure made it), our
+  own Apache-2.0, and a notice stating plainly what the binary does and does not
+  contain from the original game — no art, no sound, no world data, but yes to the
+  short functional text strings the engine must print.
+* **SDL3 was missing from `THIRD-PARTY-LICENSES` entirely**, and every release from
+  v0.0.2 through v0.0.7 shipped a statically linked SDL with no entry there. zlib
+  does not oblige us to ship anything — its acknowledgment is "appreciated but not
+  required" and its third clause binds source distributions, not binaries — so this
+  was never a breach. It was a gap by this file's own standard, which exists so that
+  provenance is a lookup rather than an archaeology dig.
+* The generated header is committed with no build rule, the same discipline as the
+  content header, and `make licenses-check` plus a CP0 gate prove it still matches
+  its sources. A silently shortened licence list looks exactly like a complete one.
+
 ### SDL3 (2026-11-03)
 
 * **The engine now builds against SDL3.** The owner chose to replace SDL2 outright rather than

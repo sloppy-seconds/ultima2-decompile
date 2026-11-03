@@ -208,8 +208,11 @@ make                      # cc only, C11, no third-party dependencies
 make test                 # CP0..CP7 acceptance checks
 ./u2 --data-dir ~/u2      # interactive terminal play
 
-make sdl && ./u2-sdl --data-dir ~/u2    # SDL2 bitmap front end (the default
+make sdl && ./u2-sdl --data-dir ~/u2    # SDL3 bitmap front end (the default
                                         # renderer in that binary is the window)
+
+./u2 --licenses                         # the full licensing and attribution
+./u2-sdl-static --licenses              # record; it travels inside the binary
 ```
 
 Two notes that save confusion:
