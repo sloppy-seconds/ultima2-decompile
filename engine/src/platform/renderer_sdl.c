@@ -16,7 +16,7 @@
 
 #ifdef U2_HAVE_SDL
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -70,9 +70,12 @@ void u2_sdl_runtime_info(char *out, size_t n)
 {
     if (!out || n == 0) return;
     out[0] = '\0';
-    SDL_version v;
-    SDL_GetVersion(&v);
-    snprintf(out, n, "%u.%u.%u", (unsigned)v.major, (unsigned)v.minor, (unsigned)v.patch);
+    /* SDL3 returns one packed integer instead of filling a struct. The packing is
+     * major*1e6 + minor*1e3 + patch, so 3004018 is 3.4.18; decoding it by hand
+     * rather than with SDL_VERSIONNUM keeps this readable without pulling in the
+     * version header's macro name. */
+    const int v = SDL_GetVersion();
+    snprintf(out, n, "%d.%d.%d", v / 1000000, (v / 1000) % 1000, v % 1000);
 }
 
 /* Why a window could not be created is usually a one-word answer ("No available
@@ -92,7 +95,7 @@ static void sdl_note_available_drivers(void)
     fprintf(stderr, "u2: SDL_VIDEODRIVER=%s\n", hint && *hint ? hint : "(unset)");
     if (n <= 2)
         fprintf(stderr, "u2: no display backend was compiled in — this binary was built"
-                        " from an SDL2 configured without X11 or Wayland dev packages."
+                        " from an SDL3 configured without X11 or Wayland dev packages."
                         " It can only render headlessly.\n");
 }
 
@@ -101,21 +104,26 @@ static int sdl_init(u2_ctx *ctx)
     sdl_video *v = calloc(1, sizeof *v);
     if (!v) return -1;
 
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+    /* SDL3 returns bool, where SDL2 returned 0 for success. Inverting the test
+     * rather than the call is the whole change, but it is the kind of change that
+     * compiles either way and silently inverts the meaning: `!= 0` on a bool would
+     * have made every successful init look like a failure and every failed one
+     * look fine. */
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         fprintf(stderr, "sdl: %s\n", SDL_GetError());
         free(v);
         return -1;
     }
 
-    /* Nearest-neighbour before the renderer exists, so the hint applies. A
-     * filtered upscale would smear 2bpp art into mush; crisp blocks are what
-     * the original looks like on a real CGA monitor. */
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
-
+    /* SDL3 dropped SDL_HINT_RENDER_SCALE_QUALITY and made the default LINEAR
+     * filtering, so nearest-neighbour is now per-texture and must be asked for
+     * explicitly after the texture exists. This is the one change on this list
+     * that fails silently and beautifully: a bilinear upscale of 2bpp CGA still
+     * draws, it just smears every pixel into a gradient, and a screenshot taken
+     * in a hurry looks like a plausible retro blur rather than a bug. */
     v->win = SDL_CreateWindow("Ultima II (engine reconstruction)",
-                              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               U2_SCREEN_W * SDL_SCALE, U2_SCREEN_H * SDL_SCALE,
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!v->win) {
         fprintf(stderr, "sdl: window: %s\n", SDL_GetError());
         sdl_note_available_drivers();
@@ -124,8 +132,14 @@ static int sdl_init(u2_ctx *ctx)
     }
     fprintf(stderr, "u2: video: %s\n",
             SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "(unknown)");
-    v->ren = SDL_CreateRenderer(v->win, -1, SDL_RENDERER_ACCELERATED);
-    if (!v->ren) v->ren = SDL_CreateRenderer(v->win, -1, SDL_RENDERER_SOFTWARE);
+
+    /* SDL3 dropped the renderer flags: NULL means "you choose", which is what the
+     * accelerated-then-software ladder used to spell out. The fallback is kept
+     * because a machine with a broken GPU driver is exactly where a reconstruction
+     * project still wants to run, and SDL_SOFTWARE_RENDERER is now the name rather
+     * than a flag. */
+    v->ren = SDL_CreateRenderer(v->win, NULL);
+    if (!v->ren) v->ren = SDL_CreateRenderer(v->win, SDL_SOFTWARE_RENDERER);
     if (!v->ren) {
         fprintf(stderr, "sdl: renderer: %s\n", SDL_GetError());
         SDL_DestroyWindow(v->win);
@@ -142,6 +156,9 @@ static int sdl_init(u2_ctx *ctx)
         free(v);
         return -1;
     }
+    if (!SDL_SetTextureScaleMode(v->tex, SDL_SCALEMODE_NEAREST))
+        fprintf(stderr, "u2: WARNING: nearest-neighbour scaling refused (%s);"
+                        " 2bpp art will be smeared\n", SDL_GetError());
     v->staging = malloc(sizeof(uint32_t) * U2_SCREEN_W * U2_SCREEN_H);
     if (!v->staging) {
         SDL_DestroyTexture(v->tex);
@@ -153,17 +170,18 @@ static int sdl_init(u2_ctx *ctx)
 
     uint8_t pal[4][3];
     u2_frame_palette(pal);
-    /* SDL_MapRGBA needs a format object; build the same one the texture uses. */
+    /* SDL3 replaced SDL_AllocFormat with a read-only details struct, and MapRGBA
+     * now takes that plus an explicit palette (NULL: RGBA8888 has none). The
+     * details pointer is owned by SDL and must not be freed. */
     {
-        SDL_PixelFormat *f = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
+        const SDL_PixelFormatDetails *f = SDL_GetPixelFormatDetails(SDL_PIXELFORMAT_RGBA8888);
         if (!f) {
             free(v->staging); SDL_DestroyTexture(v->tex);
             SDL_DestroyRenderer(v->ren); SDL_DestroyWindow(v->win); free(v);
             return -1;
         }
         for (int i = 0; i < 4; i++)
-            v->pal[i] = SDL_MapRGBA(f, pal[i][0], pal[i][1], pal[i][2], 255);
-        SDL_FreeFormat(f);
+            v->pal[i] = SDL_MapRGBA(f, NULL, pal[i][0], pal[i][1], pal[i][2], 255);
     }
 
     ctx->be_render = v;
@@ -196,15 +214,31 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
      * frame rather than cached from a resize event, because the drawable size is
      * also what changes under a HiDPI scale factor with no resize at all. */
     int ow = 0, oh = 0;
-    SDL_GetRendererOutputSize(v->ren, &ow, &oh);
+    /* Renamed in SDL3, and it returns bool: a failure here leaves ow/oh at zero,
+     * the fit comes back empty, and the frame is cleared to black. Checked rather
+     * than ignored, because "the window went black" is otherwise undiagnosable. */
+    if (!SDL_GetRenderOutputSize(v->ren, &ow, &oh)) {
+        fprintf(stderr, "u2: render output size: %s\n", SDL_GetError());
+        return;
+    }
     u2_fit fit = u2_fit_integer(ow, oh, U2_SCREEN_W, U2_SCREEN_H);
-    SDL_Rect dst_rect = { fit.x, fit.y, fit.w, fit.h };
 
-    SDL_UpdateTexture(v->tex, NULL, v->staging, U2_SCREEN_W * (int)sizeof(uint32_t));
-    SDL_RenderClear(v->ren);
-    if (fit.w > 0 && fit.h > 0)
-        SDL_RenderCopy(v->ren, v->tex, NULL, &dst_rect);
-    SDL_RenderPresent(v->ren);
+    if (!SDL_UpdateTexture(v->tex, NULL, v->staging, U2_SCREEN_W * (int)sizeof(uint32_t))) {
+        fprintf(stderr, "u2: texture upload failed: %s\n", SDL_GetError());
+        return;
+    }
+    (void)SDL_RenderClear(v->ren);
+    if (fit.w > 0 && fit.h > 0) {
+        /* SDL_RenderCopy is SDL_RenderTexture in SDL3, and its rectangles are
+         * floats. The fit is computed in integers in core/scale.c and widened here
+         * rather than the other way round: the integer arithmetic is what the gate
+         * in tests/scale_check.c can assert on, and an exact int -> float widening
+         * of these magnitudes loses nothing. */
+        const SDL_FRect dst_f = { (float)fit.x, (float)fit.y,
+                                  (float)fit.w, (float)fit.h };
+        (void)SDL_RenderTexture(v->ren, v->tex, NULL, &dst_f);
+    }
+    (void)SDL_RenderPresent(v->ren);
     v->frames++;
     v->last = fr;
 

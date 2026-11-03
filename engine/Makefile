@@ -38,8 +38,8 @@ STAMP = -DU2_VERSION='"$(U2_VERSION)"' \
         -DU2_ARTIFACT='"$(5)"'
 
 STAMP_TERMINAL  = $(call STAMP,terminal,none,none,,dev)
-STAMP_SDLSTATIC = $(call STAMP,sdl-static,sdl2,static,,release)
-STAMP_SDLWIN    = $(call STAMP,sdl-win,sdl2,static,,release)
+STAMP_SDLSTATIC = $(call STAMP,sdl-static,sdl3,static,,release)
+STAMP_SDLWIN    = $(call STAMP,sdl-win,sdl3,static,,release)
 
 BIN      := u2
 BUILD    := build
@@ -140,19 +140,18 @@ test-cp6:
 test-cp7:
 	bash tests/run_cp7.sh
 
-# CP9 placeholder. SDL2 must be approved and installed by the owner first;
+# CP9 placeholder. SDL must be approved and installed by the owner first;
 # this target deliberately does not attempt any install.
-# SDL2 is an owner-approved dependency (docs/phase4-plan.md § 6 stop-and-ask), so
+# SDL is an owner-approved dependency (docs/phase4-plan.md § 6 stop-and-ask), so
 # it never enters the default build: the objects are compiled a second time into
 # a separate directory with -DU2_HAVE_SDL, and src/platform/*_sdl.c are empty
 # without that define. `make` alone still needs nothing but a C compiler.
 #
-# Which SDL `make sdl` links is decided by tools/sdl_probe.sh, not by hoping
-# sdl2-config points at something sensible, because on Bazzite and Arch it points
-# at sdl2-compat: the SDL2 API implemented over SDL3. That build compiles and
-# runs and is not what the release ships, which is the exact class of defect that
-# looks like success. The probe prefers a static prefix (the release shape) and
-# otherwise reports what the host really is.
+# Which SDL `make sdl` links is decided by tools/sdl_probe.sh. The project builds
+# against SDL3 only (docs/sdl2-vs-sdl3.md § 9): the old behaviour of asking
+# sdl2-config was what quietly produced a binary linked against sdl2-compat, the
+# SDL2 API implemented over SDL3, which compiled and ran and was not what shipped.
+# A host with only SDL2 now gets a refusal that names the mismatch.
 # Lazy on purpose: `make test` and `make clean` must not pay for a probe they
 # never use, and a recursive assignment is only expanded if an SDL target asks.
 SDL_PROBE    = $(shell sh tools/sdl_probe.sh --quiet 2>/dev/null)
@@ -166,8 +165,8 @@ ifeq ($(SDL_MODE),static)
 SDL_CFLAGS  = $(SDLSTAT_CFLAGS)
 SDL_LIBS    = $(SDLSTAT_LIBS)
 else
-SDL_CFLAGS  = $(shell sdl2-config --cflags 2>/dev/null)
-SDL_LIBS    = $(shell sdl2-config --libs 2>/dev/null)
+SDL_CFLAGS  = $(shell pkg-config --cflags sdl3 2>/dev/null)
+SDL_LIBS    = $(shell pkg-config --libs sdl3 2>/dev/null)
 endif
 
 STAMP_SDL = $(call STAMP,sdl,$(SDL_IMPL),$(SDL_LINKAGE),$(SDL_HOSTVER),$(SDL_ARTIFACT))
@@ -184,12 +183,12 @@ sdl: sdl-probe-check $(SDL_BIN)
 # note and exited 0 with everything already compiled. A phony prerequisite always
 # runs.
 sdl-probe-check:
-	@test -n "$(SDL_CFLAGS)" || { echo "sdl: no usable SDL2 found (probe said mode=$(SDL_MODE))." \
-	     "Options: deploy/linuxbuild/build.sh for the release artifact; install SDL2;" \
-	     "or point SDLSTAT_PREFIX at a prefix containing lib/libSDL2.a."; exit 1; }
+	@test -n "$(SDL_CFLAGS)" || { echo "sdl: no usable SDL3 found (probe said mode=$(SDL_MODE))." \
+	     "Options: deploy/linuxbuild/build.sh for the release artifact; install SDL3;" \
+	     "or point SDLSTAT_PREFIX at a prefix containing lib/libSDL3.a."; exit 1; }
 	@if [ "$(U2_STRICT_SDL)" = 1 ] && [ "$(SDL_ARTIFACT)" != release ]; then \
 	    echo "sdl: REFUSING under U2_STRICT_SDL=1: this would link $(SDL_IMPL) ($(SDL_LINKAGE)),"; \
-	    echo "sdl:   which is not the pinned static SDL2 the release ships."; \
+	    echo "sdl:   which is not the pinned static SDL3 the release ships."; \
 	    echo "sdl:   Build it with deploy/linuxbuild/build.sh, or unset U2_STRICT_SDL"; \
 	    echo "sdl:   if you only want a development binary."; \
 	    exit 1; \
@@ -200,7 +199,7 @@ $(SDL_BIN): $(SDLOBJS)
 	@echo "u2: built $(SDL_BIN) — target=sdl sdl=$(SDL_IMPL) linkage=$(SDL_LINKAGE) artifact=$(SDL_ARTIFACT)"
 	@if [ "$(SDL_ARTIFACT)" = dev ]; then \
 	    echo "u2: NOTE this is a DEV build, not the shipped artifact. Players get"; \
-	    echo "u2:      u2-sdl-static from deploy/linuxbuild/build.sh (pinned static SDL2)."; \
+	    echo "u2:      u2-sdl-static from deploy/linuxbuild/build.sh (pinned static SDL3)."; \
 	    echo "u2:      './$(SDL_BIN) --version' always repeats this."; \
 	fi
 
@@ -224,13 +223,15 @@ sdl-run: $(SDL_BIN)
 CROSS          ?= x86_64-w64-mingw32-
 WIN_CC         := $(CROSS)gcc
 WIN_PKGCONFIG  ?= pkg-config
-SDLWIN_CFLAGS  ?= $(shell $(WIN_PKGCONFIG) --cflags sdl2 2>/dev/null)
-# Drop SDL's main-rewrite define: this build keeps the console subsystem (stderr
-# diagnostics and the wine smoke test need it), so plain main() is the entry and
-# SDL2main is never pulled from the static archive. The define otherwise trips
-# -Werror=missing-prototypes on every build.
+SDLWIN_CFLAGS  ?= $(shell $(WIN_PKGCONFIG) --cflags sdl3 2>/dev/null)
+# Drop SDL's main-rewrite define if a pkg-config still emits one: this build keeps
+# the console subsystem (stderr diagnostics and the wine smoke test need it), so
+# plain main() is the entry. SDL3 does not add this define, so the filter is a
+# harmless holdover from the SDL2 days rather than a live requirement, and it
+# stays because -Dmain=SDL_main trips -Werror=missing-prototypes if it ever
+# reappears.
 SDLWIN_CFLAGS  := $(filter-out -Dmain=SDL_main,$(SDLWIN_CFLAGS))
-SDLWIN_LIBS    ?= $(shell $(WIN_PKGCONFIG) --static --libs sdl2 2>/dev/null)
+SDLWIN_LIBS    ?= $(shell $(WIN_PKGCONFIG) --static --libs sdl3 2>/dev/null)
 # SDL's pkg-config adds -mwindows, which produces a GUI-subsystem PE. Keep the
 # console subsystem instead: the engine writes its diagnostics to stderr, and a
 # GUI-subsystem binary under wine loses them — which is exactly the evidence a
@@ -253,7 +254,7 @@ $(WIN_BIN): $(WINOBJS)
 
 $(WINOBJ)/%.o: %.c $(GEN)
 	@command -v $(WIN_CC) >/dev/null || { echo "sdl-win: $(WIN_CC) not found; use deploy/winbuild/build.sh"; exit 1; }
-	@test -n "$(SDLWIN_CFLAGS)" || { echo "sdl-win: static mingw SDL2 not found (PKG_CONFIG_LIBDIR must reach libsdl2.a); use deploy/winbuild/build.sh"; exit 1; }
+	@test -n "$(SDLWIN_CFLAGS)" || { echo "sdl-win: static mingw SDL3 not found (PKG_CONFIG_LIBDIR must reach libSDL3.a); use deploy/winbuild/build.sh"; exit 1; }
 	@mkdir -p $(dir $@)
 	$(WIN_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(STAMP_SDLWIN) $(SDLWIN_CFLAGS) -MMD -MP -c $< -o $@
 
@@ -261,18 +262,18 @@ $(WINOBJ)/%.o: %.c $(GEN)
 
 # ---- Linux static-SDL build (make sdl-static) ---------------------------------
 #
-# The player-facing Linux binary: SDL2 linked static, glibc left dynamic (a
-# static glibc is a footgun, not a feature). SDL2 dlopens X11/Wayland/ALSA at
+# The player-facing Linux binary: SDL3 linked static, glibc left dynamic (a
+# static glibc is a footgun, not a feature). SDL3 dlopens X11/Wayland/ALSA at
 # runtime, so what survives the link is a handful of libraries every desktop
 # already has — which is the point: a real player downloads one file and runs
 # it, and the container story stays what it is, a dev trick.
-# SDLSTAT_PREFIX is where libsdl2.a lives (the linuxbuild container builds it
+# SDLSTAT_PREFIX is where libSDL3.a lives (the linuxbuild container builds it
 # from the pinned tarball, same source and flags as the Windows build).
-SDLSTAT_PREFIX ?= /opt/sdl2-linux
+SDLSTAT_PREFIX ?= /opt/sdl3-linux
 SDLSTAT_CC     ?= $(CC)
 SDLSTAT_PKG    ?= env PKG_CONFIG_LIBDIR=$(SDLSTAT_PREFIX)/lib/pkgconfig:$(SDLSTAT_PREFIX)/lib64/pkgconfig pkg-config
-SDLSTAT_CFLAGS ?= $(shell $(SDLSTAT_PKG) --cflags sdl2 2>/dev/null)
-SDLSTAT_LIBS   ?= $(shell $(SDLSTAT_PKG) --static --libs sdl2 2>/dev/null)
+SDLSTAT_CFLAGS ?= $(shell $(SDLSTAT_PKG) --cflags sdl3 2>/dev/null)
+SDLSTAT_LIBS   ?= $(shell $(SDLSTAT_PKG) --static --libs sdl3 2>/dev/null)
 STATOBJ        := $(BUILD)-sdlstatic
 STAT_BIN       := u2-sdl-static
 STATOBJS       := $(patsubst %.c,$(STATOBJ)/%.o,$(SRCS))
@@ -284,8 +285,8 @@ $(STAT_BIN): $(STATOBJS)
 	$(SDLSTAT_CC) -static-libgcc -o $@ $^ $(SDLSTAT_LIBS)
 
 $(STATOBJ)/%.o: %.c $(GEN)
-	@test -n "$(SDLSTAT_CFLAGS)" || { echo "sdl-static: static SDL2 not found at $(SDLSTAT_PREFIX);" \
-	     "use deploy/linuxbuild/build.sh (container) or point SDLSTAT_PREFIX at a libsdl2.a prefix"; exit 1; }
+	@test -n "$(SDLSTAT_CFLAGS)" || { echo "sdl-static: static SDL3 not found at $(SDLSTAT_PREFIX);" \
+	     "use deploy/linuxbuild/build.sh (container) or point SDLSTAT_PREFIX at a libSDL3.a prefix"; exit 1; }
 	@mkdir -p $(dir $@)
 	$(SDLSTAT_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(STAMP_SDLSTATIC) $(SDLSTAT_CFLAGS) -MMD -MP -c $< -o $@
 

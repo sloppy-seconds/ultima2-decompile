@@ -7,14 +7,16 @@
  * 1.193182 MHz time base. The speaker was a square wave, so that is what is
  * generated — not a sine, and not a "beep" approximation.
  *
- * SDL_QueueAudio is used rather than a callback: the tone is finite and known in
- * advance, so queueing pre-generated samples avoids a shared-state callback and
- * the locking it would need.
+ * SDL's audio stream API is used rather than a callback: the tone is finite and
+ * known in advance, so queueing pre-generated samples avoids a shared-state
+ * callback and the locking it would need. SDL3 removed SDL_QueueAudio along with
+ * the whole legacy SDL_OpenAudio path, so this now opens a device-backed stream
+ * and pushes into it; the reasoning for avoiding a callback is unchanged.
  */
 
 #ifdef U2_HAVE_SDL
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,15 +26,17 @@
 #define AMP    9000          /* keep well inside int16 so overlapping tones clip */
 
 typedef struct sdl_audio {
+    SDL_AudioStream   *stream;
+    SDL_AudioDeviceID  dev;
     int      open;
-    int      rate;           /* the rate actually granted by the device */
+    int      rate;           /* the rate we asked the device for */
     long     queued;         /* samples queued so far, for diagnostics */
     unsigned tones;
 } sdl_audio;
 
 static int sdl_audio_init(u2_ctx *ctx)
 {
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         /* Silence is a legitimate outcome: a machine with no sound device must
          * not stop the game running, and the original ran fine with no speaker. */
         fprintf(stderr, "sdl audio: %s (continuing silent)\n", SDL_GetError());
@@ -41,20 +45,26 @@ static int sdl_audio_init(u2_ctx *ctx)
     sdl_audio *a = calloc(1, sizeof *a);
     if (!a) return 0;
 
-    SDL_AudioSpec want, have;
-    SDL_zero(want);
-    want.freq     = 22050;
-    want.format   = AUDIO_S16SYS;
-    want.channels = 1;
-    want.samples  = 1024;
-    if (SDL_OpenAudio(&want, &have) != 0) {
+    /* SDL3's SDL_AudioSpec is only what the data is — format, channels, rate.
+     * `samples` and the callback are gone because the stream owns the buffering,
+     * which is the same reason this file never wanted a callback in the first
+     * place. */
+    const SDL_AudioSpec spec = { .format = SDL_AUDIO_S16, .channels = 1, .freq = 22050 };
+    a->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                          &spec, NULL, NULL);
+    if (!a->stream) {
+        fprintf(stderr, "sdl audio: %s (continuing silent)\n", SDL_GetError());
         free(a);
         return 0;
     }
-    a->open = 1;
-    a->rate = have.freq;
+    a->dev   = SDL_GetAudioStreamDevice(a->stream);
+    a->rate  = spec.freq;
+    a->open  = 1;
     ctx->be_audio = a;
-    SDL_PauseAudio(0);
+    /* A stream opened against a device starts paused; nothing plays until the
+     * device is resumed. Easy to miss and it fails silently as total silence. */
+    if (!SDL_ResumeAudioDevice(a->dev))
+        fprintf(stderr, "sdl audio: %s (continuing silent)\n", SDL_GetError());
     return 0;
 }
 
@@ -78,8 +88,13 @@ static void sdl_audio_tone(u2_ctx *ctx, uint16_t divisor, uint32_t ms)
     for (long i = 0; i < total; i++)
         buf[i] = ((i / period) & 1) ? (int16_t)-AMP : (int16_t)AMP;
 
-    /* Device 1 is the handle SDL_OpenAudio (the legacy API used here) yields. */
-    SDL_QueueAudio(1, buf, (Uint32)(total * (long)sizeof(int16_t)));
+    /* The old code queued against a hardcoded device id of 1, which was the legacy
+     * SDL_OpenAudio handle. The stream is the handle now, so there is nothing to
+     * get wrong. */
+    if (!SDL_PutAudioStreamData(a->stream, buf, (int)(total * (long)sizeof(int16_t)))) {
+        free(buf);
+        return;
+    }
     free(buf);
     a->queued += total;
     a->tones++;
@@ -89,7 +104,9 @@ static void sdl_audio_shutdown(u2_ctx *ctx)
 {
     sdl_audio *a = ctx ? (sdl_audio *)ctx->be_audio : NULL;
     if (!a) return;
-    SDL_CloseAudio();
+    /* Destroying the stream closes the device it opened, so there is no separate
+     * SDL_CloseAudioDevice here to get out of order. */
+    if (a->stream) SDL_DestroyAudioStream(a->stream);
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     free(a);
     ctx->be_audio = NULL;

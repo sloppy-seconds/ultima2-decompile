@@ -1,5 +1,5 @@
 /*
- * input_sdl.c — SDL2 keyboard backend.
+ * input_sdl.c — SDL3 keyboard backend.
  *
  * SDL gives real scancodes, which matters here: the original translates the
  * arrow keys through a scancode table at CS:0x4F09 (file 0x5109) rather than
@@ -9,7 +9,16 @@
 
 #ifdef U2_HAVE_SDL
 
-#include <SDL.h>
+/* sigaction() is POSIX, and -std=c11 hides it unless a feature macro asks for it.
+ * SDL2's sdl2-config used to add -D_GNU_SOURCE to every compile; SDL3's
+ * pkg-config does not, so the file that needs POSIX now declares that itself,
+ * which is also what input_term.c and time_posix.c already do. Must precede every
+ * system header, including SDL's, or it does nothing. */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+#include <SDL3/SDL.h>
 #include <signal.h>     /* mingw provides this (sig_atomic_t, signal()); what it
                          * lacks is sigaction, guarded below. */
 
@@ -87,14 +96,16 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
         return -1;
     }
     while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT) {
+        if (e.type == SDL_EVENT_QUIT) {
             if (ctx) ctx->exit_code = 1;
             return -1;
         }
-        /* Kept as a belt-and-braces path: with SDL_HINT_NO_SIGNAL_HANDLERS set
-         * above we own SIGTERM/SIGINT ourselves, but if the hint is ever
-         * overridden this is how the event would arrive. */
-        if (e.type == SDL_APP_TERMINATING) {
+        /* In SDL3 this event is delivered only to a watch registered with
+         * SDL_AddEventWatch(), so polling for it here no longer sees anything. The
+         * branch is left in place and the comment corrected rather than deleted,
+         * because the real path is our own SIGTERM handler above and a reader
+         * should not have to rediscover why both exist. */
+        if (e.type == SDL_EVENT_TERMINATING) {
             if (ctx) ctx->exit_code = 0;
             return -1;
         }
@@ -102,16 +113,18 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
          * game having anything new to draw, and the game only presents when it
          * does. Without this the window keeps the old frame until the next
          * keypress, which is what made the picture look like it ignored the
-         * window. SIZE_CHANGED rather than RESIZED: it also covers the drawable
-         * changing under a HiDPI scale factor, where no resize was requested. */
-        if (e.type == SDL_WINDOWEVENT &&
-            e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+         * window. SDL3 splits SDL2's SIZE_CHANGED into RESIZED (logical size) and
+         * PIXEL_SIZE_CHANGED (drawable size, which is what moves under a HiDPI
+         * scale factor with no resize at all); we want either. */
+        if (e.type == SDL_EVENT_WINDOW_RESIZED ||
+            e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
             u2_sdl_repaint(ctx);
             continue;
         }
-        if (e.type != SDL_KEYDOWN) continue;
+        if (e.type != SDL_EVENT_KEY_DOWN) continue;
 
-        switch (e.key.keysym.sym) {
+        /* SDL3 flattened keysym.sym onto the event itself. */
+        switch (e.key.key) {
         case SDLK_UP:     out->ch = U2_KEY_UP;    out->scan = SCAN_UP;    return 1;
         case SDLK_DOWN:   out->ch = U2_KEY_DOWN;  out->scan = SCAN_DOWN;  return 1;
         case SDLK_LEFT:   out->ch = U2_KEY_LEFT;  out->scan = SCAN_LEFT;  return 1;
@@ -122,9 +135,9 @@ static int sdl_poll(u2_ctx *ctx, u2_key *out)
         default:
             /* Printable ASCII arrives with its character, as INT 16h would
              * have handed it over in AL. */
-            if (e.key.keysym.sym >= 32 && e.key.keysym.sym < 127) {
-                out->ch  = (uint8_t)e.key.keysym.sym;
-                out->scan = (uint8_t)e.key.keysym.scancode;
+            if (e.key.key >= 32 && e.key.key < 127) {
+                out->ch  = (uint8_t)e.key.key;
+                out->scan = (uint8_t)e.key.scancode;
                 return 1;
             }
             break;
@@ -142,7 +155,15 @@ static int sdl_wait(u2_ctx *ctx, u2_key *out)
     }
 }
 
-static int sdl_init(u2_ctx *ctx) { (void)ctx; return SDL_InitSubSystem(SDL_INIT_VIDEO); }
+static int sdl_init(u2_ctx *ctx)
+{
+    (void)ctx;
+    /* SDL3 returns bool where SDL2 returned 0 for success, and the seam's own
+     * contract is 0 = ok. Left as a bare `return SDL_InitSubSystem(...)` this
+     * would report every successful init as a failure, in a backend whose
+     * failure path is deliberately quiet. */
+    return SDL_InitSubSystem(SDL_INIT_VIDEO) ? 0 : -1;
+}
 static void sdl_shutdown(u2_ctx *ctx) { (void)ctx; }
 
 const u2_input u2_input_sdl = {
