@@ -3089,5 +3089,11 @@ now that `pkg-config` no longer supplies `-D_GNU_SOURCE` the way `sdl2-config` d
 
 `SDL_LOGICAL_PRESENTATION_INTEGER_SCALE` exists and is deliberately unused — see § 9 for why.
 
-**Not verified by a human since the port:** a window on a real desktop, sound on real hardware, and
-the Windows artifact on real Windows. The wine smoke test covers startup, not rendering.
+**Confirmed on real hardware by the owner, 2026-11-03, before v0.0.8:** both release artifacts were
+played end to end — `u2-sdl-static` on a Linux desktop, `u2-sdl.exe` on real Windows rather than
+wine. First time the shipped artifacts were verified on their target platforms instead of inferred
+from a cross-build.
+
+**Still open: sound.** The audio backend moved wholesale to SDL3's stream API and silence passes
+every automated check in the tree, so "it plays" does not establish that the speaker tones fire.
+Left on the record rather than folded into the success above.

@@ -1,8 +1,10 @@
 # SDL2 or SDL3 — an evaluation, and the record of why nobody ever made the choice
 
-**Status: C and B both implemented 2026-11-03 (§ 8, § 9). The engine now builds against SDL3
-only.** What remains open is verification on real hardware: the Windows artifact has not been run
-on Windows, and the Linux player binary has not been run on a desktop by a person since the port.
+**Status: C and B both implemented and released as v0.0.8 on 2026-11-03 (§ 8, § 9). The engine
+now builds against SDL3 only.** Both release artifacts were played on real hardware by the owner
+before the tag — the static Linux binary on a desktop and the Windows binary on real Windows, not
+wine. The one item from the original verification list that has *not* been separately confirmed is
+sound on real hardware; see § 9.
 
 Grades follow the project convention: **measured** = derived from this tree or an installed
 header by a named tool; **observed** = read from a primary source; **inferred** = reasoned, not
@@ -324,5 +326,14 @@ runtime versions agreeing; `--video-drivers` lists `wayland x11 kmsdrm offscreen
 satisfies the release gate; the CP4 headless path still produces the byte-identical 192015-byte
 frame; CP0–CP7 and `check_all` green.
 
-**Not verified, and it needs a person:** a window on a real desktop, sound on real hardware, and the
-Windows artifact on real Windows. The wine smoke test covers startup, not rendering.
+**Verified on real hardware by the owner, 2026-11-03, before v0.0.8 was cut:** both artifacts were
+played end to end — `u2-sdl-static` on a Linux desktop and `u2-sdl.exe` on real Windows rather
+than wine. That is the first time this project's shipped artifacts were confirmed on the platforms
+they target instead of inferred from a cross-build, and it is the evidence the CI deliberately
+cannot produce: the workflow inspects the Windows binary's compiled-in stamp rather than pretending
+to execute it under wine.
+
+**Still not separately confirmed: sound.** The audio backend moved wholesale to SDL3's stream API,
+and silence is indistinguishable from a working-but-quiet tone in every automated check in the tree.
+"I can play it" does not establish that the PC-speaker tones fire, so this stays open on the record
+rather than being swept up by the adjacent success.
