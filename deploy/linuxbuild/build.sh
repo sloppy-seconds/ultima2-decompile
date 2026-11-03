@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # build.sh — build engine/u2-sdl-static: the single-file Linux player binary
-# (static SDL2, dynamic glibc) inside the linuxbuild container.
+# (static SDL3, dynamic glibc) inside the linuxbuild container.
 #
 #   ./build.sh            # build the image if needed, then u2-sdl-static
 #   ./build.sh --rebuild  # force-rebuild the image first
 #
 # Verify after: ldd engine/u2-sdl-static should show only libc/libm/libdl/
-# libpthread (+ a couple of always-present system libs) — no libsdl2.so.
+# libpthread (+ a couple of always-present system libs) — no libSDL3.so.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -35,7 +35,7 @@ fi
 printf '%s\n' "$drivers" | sed 's/^/  /'
 if ! printf '%s\n' "$drivers" | grep -qx -e x11 -e wayland; then
     echo "linuxbuild: FAIL — no display backend (need x11 or wayland)." >&2
-    echo "  SDL2 was configured without the X11/Wayland dev packages; see Containerfile." >&2
+    echo "  SDL3 was configured without the X11/Wayland dev packages; see Containerfile." >&2
     exit 1
 fi
 

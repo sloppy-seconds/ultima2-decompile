@@ -1,12 +1,15 @@
 # winbuild — cross-compile the Windows engine build
 
 `./build.sh` produces `engine/u2-sdl.exe`: a single Windows x86_64 binary with
-SDL2 statically linked, built entirely inside a container so nothing touches
+SDL3 statically linked, built entirely inside a container so nothing touches
 the Bazzite host.
 
-* The image (`Containerfile`) installs mingw-w64 and builds SDL2 from the
-  pinned official release tarball — Fedora 42 dropped `mingw64-sdl2`, and the
-  `sdl2-compat` replacement is shared-only, which defeats the static link.
+* The image (`Containerfile`) installs mingw-w64 and builds SDL3 from the
+  pinned official release tarball. Pinning is the point: a distro package moves
+  under a cache key, and a release artifact has to be reproducible from a version
+  number. (The original reason this image built SDL from source — Fedora 42
+  dropping `mingw64-sdl2` in favour of a shared-only `sdl2-compat` — stopped
+  applying when the engine moved to SDL3.)
 * The Makefile target it runs is `make -C engine sdl-win`; with the toolchain
   installed natively you can run that directly instead.
 * Verify a build: `file engine/u2-sdl.exe` (PE32+) and
@@ -21,7 +24,7 @@ the first CI run found a link failure the container had been hiding: mingw-w64
 then the msvcrt it links against had no such symbols. The clock is now a
 per-platform backend (`src/platform/time_win32.c`, selected by `WIN_SRCS`), and
 as of 2026-11-02 the exe links and imports only stock DLLs — KERNEL32, USER32,
-GDI32, WINMM, msvcrt and friends, no SDL2.dll and no libwinpthread-1.dll.
+GDI32, WINMM, msvcrt and friends, no SDL3.dll and no libwinpthread-1.dll.
 
 What it has since been shown to do: the owner ran `u2-sdl.exe` **under wine on
 Bazzite Linux** (2026-11-02) and it started, created a character, played the

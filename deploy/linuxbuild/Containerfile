@@ -1,8 +1,8 @@
 # u2 linuxbuild — container that produces the static-SDL Linux player binary.
 #
-# Same shape as winbuild: the toolchain and the SDL2 static build live in the
+# Same shape as winbuild: the toolchain and the SDL3 static build live in the
 # image, the host stays untouched (Bazzite is immutable). The output is
-# engine/u2-sdl-static: SDL2 linked static, glibc dynamic on purpose (a static
+# engine/u2-sdl-static: SDL3 linked static, glibc dynamic on purpose (a static
 # glibc is a footgun).
 #
 # The -devel packages below are not optional garnish and this needs saying in the
@@ -10,12 +10,12 @@
 # could not open a window on any desktop. SDL's "dlopen at runtime" only removes
 # the *runtime* dependency; the backend still has to be configured into the build,
 # and SDL's cmake silently compiles out any backend whose headers are missing.
-# With none of these installed the resulting libsdl2.a contains `dummy` and
+# With none of these installed the resulting libSDL3.a contains `dummy` and
 # `offscreen` and nothing else — it links, it passes an ldd check, and it is
 # useless. `./u2-sdl-static --video-drivers` is the check that catches it, and
 # build.sh runs it.
 #
-# The SDL2 version and cmake flags MUST stay in step with winbuild's; both come
+# The SDL3 version and cmake flags MUST stay in step with winbuild's; both come
 # from the same pinned official tarball. (winbuild needs none of this: the win32
 # backend is built in from the mingw sysroot.)
 FROM quay.io/fedora/fedora:42
@@ -29,18 +29,18 @@ RUN dnf -y install \
         alsa-lib-devel pulseaudio-libs-devel \
     && dnf clean all
 
-ARG SDL2_VERSION=2.32.8
-RUN curl -fL --retry 3 -o /tmp/SDL2.tar.gz \
-        "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz" \
-    && mkdir -p /tmp/sdl2 && tar -xzf /tmp/SDL2.tar.gz -C /tmp/sdl2 \
-    && cmake -S "/tmp/sdl2/SDL2-${SDL2_VERSION}" -B /tmp/sdl2/build -G Ninja \
+ARG SDL3_VERSION=3.4.18
+RUN curl -fL --retry 3 -o /tmp/SDL3.tar.gz \
+        "https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/SDL3-${SDL3_VERSION}.tar.gz" \
+    && mkdir -p /tmp/sdl3 && tar -xzf /tmp/SDL3.tar.gz -C /tmp/sdl3 \
+    && cmake -S "/tmp/sdl3/SDL3-${SDL3_VERSION}" -B /tmp/sdl3/build -G Ninja \
          -DCMAKE_BUILD_TYPE=Release \
-         -DCMAKE_INSTALL_PREFIX=/opt/sdl2-linux \
+         -DCMAKE_INSTALL_PREFIX=/opt/sdl3-linux \
          -DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
          -DSDL_TEST_LIBRARY=OFF \
-    && cmake --build /tmp/sdl2/build \
-    && cmake --install /tmp/sdl2/build \
-    && rm -rf /tmp/sdl2 /tmp/SDL2.tar.gz \
+    && cmake --build /tmp/sdl3/build \
+    && cmake --install /tmp/sdl3/build \
+    && rm -rf /tmp/sdl3 /tmp/SDL3.tar.gz \
     && dnf clean all
 
 WORKDIR /src

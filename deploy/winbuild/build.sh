@@ -8,7 +8,7 @@
 # The exe lands in engine/ (bind-mounted), gitignored like every build output.
 # Verify after: file engine/u2-sdl.exe  (PE32+ executable) and
 #   x86_64-w64-mingw32-objdump -p engine/u2-sdl.exe | grep "DLL Name"
-# should list only stock Windows DLLs — no SDL2.dll, no libwinpthread-1.dll.
+# should list only stock Windows DLLs — no SDL3.dll, no libwinpthread-1.dll.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

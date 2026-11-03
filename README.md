@@ -196,8 +196,11 @@ even if you mount the game folder read-only.
 ### Building the engine from source
 
 **Requirements:** a C11 compiler and `python3`. The terminal build has **no
-third-party libraries at all**. `make sdl` additionally needs SDL2 (on
-Fedora/Bazzite the `sdl2-compat` package provides `sdl2-config`).
+third-party libraries at all**. `make sdl` additionally needs **SDL3** — install it,
+or make sure `pkg-config` can see `sdl3.pc` (brew keeps it in its own
+`lib/pkgconfig`). SDL2 is no longer supported: on Fedora and Arch the `sdl2` you are
+offered is `sdl2-compat`, an SDL2 API layer over SDL3, and building against it
+produces a binary that runs but is not what the release ships.
 
 ```bash
 cd engine

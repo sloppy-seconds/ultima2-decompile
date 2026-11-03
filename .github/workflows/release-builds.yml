@@ -3,8 +3,8 @@ name: release-builds
 # Player-facing binaries, built when a release tag (v*) is pushed.
 #
 # This workflow replays, on runners, exactly what deploy/linuxbuild and
-# deploy/winbuild do on the dev box: build SDL2 from the pinned official
-# tarball (static, same flags in all three places — keep SDL2_VERSION below in
+# deploy/winbuild do on the dev box: build SDL3 from the pinned official
+# tarball (static, same flags in all three places — keep SDL3_VERSION below in
 # step with both Containerfiles), then link the engine against it. The
 # containers stay the local path; CI is the reproducible one.
 #
@@ -27,7 +27,7 @@ on:
   workflow_dispatch:
 
 env:
-  SDL2_VERSION: "2.32.8"   # keep in step with deploy/linuxbuild + deploy/winbuild
+  SDL3_VERSION: "3.4.18"   # keep in step with deploy/linuxbuild + deploy/winbuild
 
 jobs:
   build:
@@ -57,37 +57,37 @@ jobs:
           else
             # SDL's cmake compiles out any video/audio backend whose headers are
             # missing, and says nothing when it does. Without these the static
-            # SDL2 contains only dummy and offscreen: a player binary that links
+            # SDL3 contains only dummy and offscreen: a player binary that links
             # cleanly, passes the static-link check, and cannot open a window on
             # any desktop. The gate below is what stops that shipping again.
             sudo apt-get install -y \
               libx11-dev libxext-dev libxfixes-dev libxcursor-dev libxi-dev \
               libxinerama-dev libxrandr-dev libxxf86vm-dev libxss-dev libxcb1-dev \
               libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
-              libgl1-mesa-dev libasound2-dev libpulse-dev
+              libgl1-mesa-dev libasound2-dev libpulse-dev libgbm-dev
           fi
 
-      - name: Cache SDL2 ${{ env.SDL2_VERSION }} (${{ matrix.name }})
+      - name: Cache SDL3 ${{ env.SDL3_VERSION }} (${{ matrix.name }})
         uses: actions/cache@v4
         id: sdlcache
         with:
-          path: sdl2-${{ matrix.name }}
-          key: sdl2-${{ matrix.name }}-${{ env.SDL2_VERSION }}-v2
+          path: sdl3-${{ matrix.name }}
+          key: sdl3-${{ matrix.name }}-${{ env.SDL3_VERSION }}-v1
 
-      - name: Build static SDL2
+      - name: Build static SDL3
         if: steps.sdlcache.outputs.cache-hit != 'true'
         run: |
-          curl -fL --retry 3 -o SDL2.tar.gz \
-            "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz"
-          tar -xzf SDL2.tar.gz
-          cmake -S "SDL2-${SDL2_VERSION}" -B sdl2-build -G Ninja \
+          curl -fL --retry 3 -o SDL3.tar.gz \
+            "https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/SDL3-${SDL3_VERSION}.tar.gz"
+          tar -xzf SDL3.tar.gz
+          cmake -S "SDL3-${SDL3_VERSION}" -B sdl3-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/sdl2-${{ matrix.name }}" \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/sdl3-${{ matrix.name }}" \
             -DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
             -DSDL_TEST_LIBRARY=OFF \
             ${{ matrix.sdl_flags }}
-          cmake --build sdl2-build
-          cmake --install sdl2-build
+          cmake --build sdl3-build
+          cmake --install sdl3-build
 
       - name: Build the engine binary
         run: |
@@ -95,11 +95,11 @@ jobs:
           # release. A report of "v0.0.7 doesn't work" is answerable when the
           # artifact can say which build it is; see docs/sdl2-vs-sdl3.md § 7.
           if [ "${{ matrix.name }}" = windows-cross ]; then
-            PKG_CONFIG_LIBDIR="$GITHUB_WORKSPACE/sdl2-windows-cross/lib/pkgconfig" \
+            PKG_CONFIG_LIBDIR="$GITHUB_WORKSPACE/sdl3-windows-cross/lib/pkgconfig" \
               make -C engine ${{ matrix.make_target }} U2_VERSION="${{ github.ref_name }}"
           else
             make -C engine ${{ matrix.make_target }} \
-              SDLSTAT_PREFIX="$GITHUB_WORKSPACE/sdl2-linux-static" \
+              SDLSTAT_PREFIX="$GITHUB_WORKSPACE/sdl3-linux-static" \
               U2_VERSION="${{ github.ref_name }}"
           fi
 
@@ -115,15 +115,16 @@ jobs:
           else
             ldd engine/u2-sdl-static | tee deps.txt
             if grep -iE "sdl" deps.txt; then
-              echo "FAIL: libsdl2 is dynamically linked"; exit 1
+              echo "FAIL: libsdl3 is dynamically linked"; exit 1
             fi
           fi
 
       # Ask the artifact what it can do, rather than trusting the build that made
       # it. A binary whose only video drivers are dummy/offscreen is unplayable on
       # a desktop and passes every other check here — which is exactly what shipped
-      # once. The cache key above is bumped to v2 because the old cached SDL2 was
-      # configured without these backends.
+      # once, because SDL's cmake compiles out a backend whose headers are missing
+      # and says nothing. The cache key names the major version and starts at v1:
+      # an SDL2 cache entry must never be reachable by an SDL3 build.
       - name: The Linux binary has a real display backend
         if: matrix.name == 'linux-static'
         run: |

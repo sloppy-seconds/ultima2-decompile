@@ -1,34 +1,39 @@
 # u2 winbuild — cross-toolchain container for `make sdl-win`.
 #
 # Bazzite is immutable; the mingw toolchain belongs in a container, not an
-# rpm-ostree layer. Fedora 42 dropped mingw64-sdl2 (SDL3 + sdl2-compat replaced
-# it, and the compat package is shared-only — a .dll.a, no static lib), so this
-# image builds SDL2 from the official release tarball: static, minimal, and
-# version-pinned. The engine links libsdl2.a and gets a single .exe whose only
-# DLL imports are stock Windows ones.
+# rpm-ostree layer.
+#
+# SDL3 is built from the official release tarball rather than taken from a distro
+# package, for two reasons. The original one no longer applies: this image used to
+# explain that Fedora 42 dropped mingw64-sdl2 and the sdl2-compat replacement is
+# shared-only, which defeated the static link — true, and now irrelevant since the
+# engine moved to SDL3 (docs/sdl2-vs-sdl3.md § 9). What remains is that a release
+# artifact has to be reproducible from a version number, and a distro package is a
+# moving target that changes under a cache key. The engine links libSDL3.a and gets
+# a single .exe whose only DLL imports are stock Windows ones.
 FROM quay.io/fedora/fedora:42
 RUN dnf -y install \
         make gcc python3 cmake ninja-build curl tar \
         mingw64-gcc mingw64-winpthreads-static \
     && dnf clean all
 
-ARG SDL2_VERSION=2.32.8
-RUN curl -fL --retry 3 -o /tmp/SDL2.tar.gz \
-        "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz" \
-    && mkdir -p /tmp/sdl2 && tar -xzf /tmp/SDL2.tar.gz -C /tmp/sdl2 \
-    && cmake -S "/tmp/sdl2/SDL2-${SDL2_VERSION}" -B /tmp/sdl2/build -G Ninja \
+ARG SDL3_VERSION=3.4.18
+RUN curl -fL --retry 3 -o /tmp/SDL3.tar.gz \
+        "https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/SDL3-${SDL3_VERSION}.tar.gz" \
+    && mkdir -p /tmp/sdl3 && tar -xzf /tmp/SDL3.tar.gz -C /tmp/sdl3 \
+    && cmake -S "/tmp/sdl3/SDL3-${SDL3_VERSION}" -B /tmp/sdl3/build -G Ninja \
          -DCMAKE_BUILD_TYPE=Release \
          -DCMAKE_SYSTEM_NAME=Windows \
          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
-         -DCMAKE_INSTALL_PREFIX=/opt/sdl2 \
+         -DCMAKE_INSTALL_PREFIX=/opt/sdl3 \
          -DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
          -DSDL_TEST_LIBRARY=OFF \
-    && cmake --build /tmp/sdl2/build \
-    && cmake --install /tmp/sdl2/build \
-    && rm -rf /tmp/sdl2 /tmp/SDL2.tar.gz \
+    && cmake --build /tmp/sdl3/build \
+    && cmake --install /tmp/sdl3/build \
+    && rm -rf /tmp/sdl3 /tmp/SDL3.tar.gz \
     && dnf clean all
 
-# Isolate pkg-config to the mingw world: the cross SDL2 only, no host SDL.
-ENV PKG_CONFIG_LIBDIR=/opt/sdl2/lib/pkgconfig
+# Isolate pkg-config to the mingw world: the cross SDL3 only, no host SDL.
+ENV PKG_CONFIG_LIBDIR=/opt/sdl3/lib/pkgconfig
 
 WORKDIR /src
