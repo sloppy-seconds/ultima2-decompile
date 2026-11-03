@@ -2,8 +2,8 @@
 # build.sh — build engine/u2-sdl-static: the single-file Linux player binary
 # (static SDL3, dynamic glibc) inside the linuxbuild container.
 #
-#   ./build.sh            # build the image if needed, then u2-sdl-static
-#   ./build.sh --rebuild  # force-rebuild the image first
+#   ./build.sh            # build the image if the Containerfile changed, then build
+#   ./build.sh --rebuild  # force a no-cache image rebuild first
 #
 # Verify after: ldd engine/u2-sdl-static should show only libc/libm/libdl/
 # libpthread (+ a couple of always-present system libs) — no libSDL3.so.
@@ -13,11 +13,19 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 IMAGE=u2-linuxbuild
 
+# shellcheck source=../image_fresh.sh
+. "$HERE/../image_fresh.sh"
+
 [ "${1:-}" = "--rebuild" ] && BUILD_FLAG=(--no-cache) || BUILD_FLAG=()
 
-if [ ${#BUILD_FLAG[@]} -gt 0 ] || ! podman image exists "$IMAGE"; then
-    echo "linuxbuild: building image $IMAGE (one-off, cached after)"
-    podman build "${BUILD_FLAG[@]}" -t "$IMAGE" -f "$HERE/Containerfile" "$HERE"
+# Freshness is the Containerfile's content hash, stamped on the image at build
+# time, not "does an image exist". The old test meant an edited Containerfile was
+# silently ignored in favour of a stale image, which is how both SDL3 container
+# builds reported "static SDL3 not found" while actually building SDL2.
+if [ ${#BUILD_FLAG[@]} -gt 0 ]; then
+    u2_image_build "$IMAGE" "$HERE/Containerfile" --no-cache
+else
+    u2_image_build "$IMAGE" "$HERE/Containerfile"
 fi
 
 podman run --rm -v "$REPO":/src:Z "$IMAGE" \

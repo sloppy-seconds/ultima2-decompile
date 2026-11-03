@@ -14,8 +14,14 @@
 FROM quay.io/fedora/fedora:42
 RUN dnf -y install \
         make gcc python3 cmake ninja-build curl tar \
-        mingw64-gcc mingw64-winpthreads-static \
+        mingw64-gcc mingw64-gcc-c++ mingw64-winpthreads-static \
     && dnf clean all
+
+# mingw64-gcc-c++ is required by SDL3 and not by SDL2: SDL3's CMakeLists calls
+# enable_language(CXX) unconditionally enough for its own build to demand a C++
+# compiler, and the failure is the unhelpful "No CMAKE_CXX_COMPILER could be found"
+# rather than "install mingw64-gcc-c++". The CI workflow carries the equivalent
+# (g++ via mingw-w64).
 
 ARG SDL3_VERSION=3.4.18
 RUN curl -fL --retry 3 -o /tmp/SDL3.tar.gz \
