@@ -152,6 +152,25 @@ int main(int argc, char **argv)
      * stopped. Routing this through u2_death would be the wrong mechanic wearing the
      * right words, and a test that asserted death would enshrine the mistake. */
 
+    /* --- the sun and the orbit-determination composition (asm/7030 entry L_007230) --- */
+    {
+        const uint8_t sun[3] = {4, 4, 4};
+        const uint8_t not_sun[3] = {4, 4, 5};
+        CHECK(u2_space_is_sun(sun), "4/4/4 is the sun (the literal test before the table)");
+        CHECK(!u2_space_is_sun(not_sun), "4/4/5 is not the sun");
+        /* The sun prints its message then falls through to the table match, and 4/4/4
+         * equals no world, so the orbit determination lands it in deep space: the sun is
+         * a message on the way to deep space, not a world of its own. */
+        CHECK(u2_space_world_at(4, 4, 4) == U2_WORLD_DEEP_SPACE,
+              "the sun triple resolves to deep space, not a world");
+        /* The chain the space loop runs: a typed triple that equals a world orbits it,
+         * and the dive sector follows the world byte. */
+        CHECK(u2_space_dive_sector(u2_space_world_at(9, 9, 9)) == 90,
+              "typing 9/9/9 orbits X and dives into sector 90");
+        CHECK(u2_space_dive_sector(u2_space_world_at(6, 6, 6)) == 40,
+              "Earth's triple orbits Earth and dives into sector 40");
+    }
+
     /* --- the descent: predicted from bytes, then observed to the cell --- */
     uint8_t x = 0, y = 0;
     while (y < 62)

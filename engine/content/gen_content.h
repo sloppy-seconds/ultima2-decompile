@@ -362,6 +362,68 @@
 #define U2_S_LAND_PLANE "LAND PLANE."
 /* exe@0x3D75 */
 #define U2_S_LAND_NOT_HERE "LAND--NOT HERE!!!!!"
+/* exe@0x6BF0 */
+#define U2_S_SPACE_FUEL "  FUEL="
+/* exe@0x6C0A */
+#define U2_S_SPACE_XENO "  XENO="
+/* exe@0x6C24 */
+#define U2_S_SPACE_YAKO "  YAKO="
+/* exe@0x6C3E */
+#define U2_S_SPACE_ZABO "  ZABO="
+/* exe@0x6CDB */
+#define U2_S_SPACE_LEFT "LEFT"
+/* exe@0x6CF3 */
+#define U2_S_SPACE_RIGHT "RIGHT"
+/* exe@0x6D0D */
+#define U2_S_SPACE_CLIMB "CLIMB"
+/* exe@0x6D27 */
+#define U2_S_SPACE_DIVE "DIVE"
+/* exe@0x6C5F */
+#define U2_S_SPACE_EXPLODED "YOU HAVE EXPLODED!"
+/* exe@0x7000 */
+#define U2_S_HYPERWARP_ENGAGED "HYPERWARP ENGAGED!"
+/* exe@0x70CF */
+#define U2_S_HYPERWARP_NO_FUEL "NO FUEL!"
+/* exe@0x7096 */
+#define U2_S_HYPERWARP_OFF_COURSE "SHIP OFF COURSE!"
+/* exe@0x70F5 */
+#define U2_S_HYPERWARP_TO "HYPERWARP TO:"
+/* exe@0x7103 */
+#define U2_S_HYPERWARP_XENO "XENO="
+/* exe@0x7112 */
+#define U2_S_HYPERWARP_YAKO " YAKO="
+/* exe@0x7122 */
+#define U2_S_HYPERWARP_ZABO " ZABO="
+/* exe@0x7133 */
+#define U2_S_HYPERWARP_PREPARE "PREPARE FOR HYPERWARP!"
+/* exe@0x7291 */
+#define U2_S_ORBIT_DEEP_SPACE "YOU ARE IN DEEP SPACE."
+/* exe@0x72B9 */
+#define U2_S_ORBIT_ORBITING "YOU ARE ORBITING "
+/* exe@0x724D */
+#define U2_S_ORBIT_SUN "U HIT THE SUN!"
+/* exe@0x72F8 */
+#define U2_S_WORLD_EARTH "EARTH."
+/* exe@0x7306 */
+#define U2_S_WORLD_MERCURY "MERCURY."
+/* exe@0x7316 */
+#define U2_S_WORLD_VENUS "VENUS."
+/* exe@0x7324 */
+#define U2_S_WORLD_MARS "MARS."
+/* exe@0x7331 */
+#define U2_S_WORLD_JUPITER "JUPITER."
+/* exe@0x7341 */
+#define U2_S_WORLD_SATURN "SATURN."
+/* exe@0x7350 */
+#define U2_S_WORLD_URANUS "URANUS."
+/* exe@0x735F */
+#define U2_S_WORLD_NEPTUNE "NEPTUNE."
+/* exe@0x736F */
+#define U2_S_WORLD_PLUTO "PLUTO."
+/* exe@0x7395 */
+#define U2_S_DIVE_REQUESTED "LANDING REQUESTED!"
+/* exe@0x73B6 */
+#define U2_S_DIVE_DENIED "REQUEST DENIED!"
 /* exe@0x46D7 */
 #define U2_S_XIT "X-IT"
 /* exe@0x46E6 */

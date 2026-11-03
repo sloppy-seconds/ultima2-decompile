@@ -43,6 +43,16 @@ extern const u2_space_world u2_space_worlds[U2_WORLD_COUNT];
  * Observed: 9/9/9 -> X, and 7/1/1 -> deep space. */
 uint8_t u2_space_world_at(uint8_t xeno, uint8_t yako, uint8_t zabo);
 
+/* asm/7030's orbit determination (entry L_007230) tests one coordinate triple
+ * against a literal before it consults the world table: if XENO==YAKO==ZABO==4 it
+ * prints "U HIT THE SUN!" and then falls through to the table match anyway (4/4/4
+ * equals no world, so the fall-through lands you in deep space). The sun is called
+ * out separately because it is a distinct message on the path, not a world. The
+ * bytes AFTER the sun message are misdisassembled (the string tail runs into the
+ * next instruction), so whether the sun is merely a message or also a halt is NOT
+ * decoded; this returns the fact that the triple is the sun and nothing more. */
+int u2_space_is_sun(const uint8_t dest[3]);
+
 /* asm/6DFD_hyperwarp_flow at L_007086.
  *
  *   mov 0xe5,%al ; clc ; rcr $1,%al ; jae skip ; clc ; rcr $1,%al ; jae skip

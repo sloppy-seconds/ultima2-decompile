@@ -426,6 +426,45 @@ MANIFEST = [
     ("U2_S_LAUNCH_PLANE_REF_B",    "38B0_cmd_L.asm",            ("run", 0x3C2A, 23, "MISSING A BRASS BUTTON!")),
     ("U2_S_LAND_PLANE",            "38B0_cmd_L.asm",            ("run", 0x3D5D, 11, "LAND PLANE.")),
     ("U2_S_LAND_NOT_HERE",         "38B0_cmd_L.asm",            ("run", 0x3D75, 19, "LAND--NOT HERE!!!!!")),
+    # The in-space rocket layer (item #1 of docs/handoff-2026-11-03.md). asm/6999 is the
+    # space command loop, asm/6DFD the hyperwarp arm, asm/7030 the orbit determination and
+    # the dive. Every offset below was measured by searching original/ultimaii.exe for the
+    # literal bytes (not derived from label arithmetic), and each is unique in the binary
+    # except the four noted: LEFT/RIGHT also occur in the cmd_V helm text and XENO=/YAKO=/
+    # ZABO= also occur in the readout with two leading spaces -- the space-loop copies are
+    # the ones at 0x6cdb/0x6cf3 and 0x7103/0x7112/0x7122. Leading/trailing 0x8d newline
+    # glyphs are excluded from the offset and length; the engine emits the newline itself.
+    ("U2_S_SPACE_FUEL",            "6999_space_status.asm",     ("run", 0x6BF0,  7, "  FUEL=")),
+    ("U2_S_SPACE_XENO",            "6999_space_status.asm",     ("run", 0x6C0A,  7, "  XENO=")),
+    ("U2_S_SPACE_YAKO",            "6999_space_status.asm",     ("run", 0x6C24,  7, "  YAKO=")),
+    ("U2_S_SPACE_ZABO",            "6999_space_status.asm",     ("run", 0x6C3E,  7, "  ZABO=")),
+    ("U2_S_SPACE_LEFT",            "6999_space_status.asm",     ("run", 0x6CDB,  4, "LEFT")),
+    ("U2_S_SPACE_RIGHT",           "6999_space_status.asm",     ("run", 0x6CF3,  5, "RIGHT")),
+    ("U2_S_SPACE_CLIMB",           "6999_space_status.asm",     ("run", 0x6D0D,  5, "CLIMB")),
+    ("U2_S_SPACE_DIVE",            "6999_space_status.asm",     ("run", 0x6D27,  4, "DIVE")),
+    ("U2_S_SPACE_EXPLODED",        "6999_space_status.asm",     ("run", 0x6C5F, 18, "YOU HAVE EXPLODED!")),
+    ("U2_S_HYPERWARP_ENGAGED",     "6DFD_hyperwarp_flow.asm",   ("run", 0x7000, 18, "HYPERWARP ENGAGED!")),
+    ("U2_S_HYPERWARP_NO_FUEL",     "6DFD_hyperwarp_flow.asm",   ("run", 0x70CF,  8, "NO FUEL!")),
+    ("U2_S_HYPERWARP_OFF_COURSE",  "6DFD_hyperwarp_flow.asm",   ("run", 0x7096, 16, "SHIP OFF COURSE!")),
+    ("U2_S_HYPERWARP_TO",          "6DFD_hyperwarp_flow.asm",   ("run", 0x70F5, 13, "HYPERWARP TO:")),
+    ("U2_S_HYPERWARP_XENO",        "6DFD_hyperwarp_flow.asm",   ("run", 0x7103,  5, "XENO=")),
+    ("U2_S_HYPERWARP_YAKO",        "6DFD_hyperwarp_flow.asm",   ("run", 0x7112,  6, " YAKO=")),
+    ("U2_S_HYPERWARP_ZABO",        "6DFD_hyperwarp_flow.asm",   ("run", 0x7122,  6, " ZABO=")),
+    ("U2_S_HYPERWARP_PREPARE",     "6DFD_hyperwarp_flow.asm",   ("run", 0x7133, 22, "PREPARE FOR HYPERWARP!")),
+    ("U2_S_ORBIT_DEEP_SPACE",      "7030_space_collision.asm",  ("run", 0x7291, 22, "YOU ARE IN DEEP SPACE.")),
+    ("U2_S_ORBIT_ORBITING",        "7030_space_collision.asm",  ("run", 0x72B9, 17, "YOU ARE ORBITING ")),
+    ("U2_S_ORBIT_SUN",             "7030_space_collision.asm",  ("run", 0x724D, 14, "U HIT THE SUN!")),
+    ("U2_S_WORLD_EARTH",           "7030_space_collision.asm",  ("run", 0x72F8,  6, "EARTH.")),
+    ("U2_S_WORLD_MERCURY",         "7030_space_collision.asm",  ("run", 0x7306,  8, "MERCURY.")),
+    ("U2_S_WORLD_VENUS",           "7030_space_collision.asm",  ("run", 0x7316,  6, "VENUS.")),
+    ("U2_S_WORLD_MARS",            "7030_space_collision.asm",  ("run", 0x7324,  5, "MARS.")),
+    ("U2_S_WORLD_JUPITER",         "7030_space_collision.asm",  ("run", 0x7331,  8, "JUPITER.")),
+    ("U2_S_WORLD_SATURN",          "7030_space_collision.asm",  ("run", 0x7341,  7, "SATURN.")),
+    ("U2_S_WORLD_URANUS",          "7030_space_collision.asm",  ("run", 0x7350,  7, "URANUS.")),
+    ("U2_S_WORLD_NEPTUNE",         "7030_space_collision.asm",  ("run", 0x735F,  8, "NEPTUNE.")),
+    ("U2_S_WORLD_PLUTO",           "7030_space_collision.asm",  ("run", 0x736F,  6, "PLUTO.")),
+    ("U2_S_DIVE_REQUESTED",        "7030_space_collision.asm",  ("run", 0x7395, 18, "LANDING REQUESTED!")),
+    ("U2_S_DIVE_DENIED",           "7030_space_collision.asm",  ("run", 0x73B6, 15, "REQUEST DENIED!")),
     # asm/44D4 (X-IT, the dismount). " WHAT?" here is the on-foot refusal, a different site
     # from the identical text in cmd_E and cmd_B; the extractor keeps one entry per site so a
     # missing string names the handler that lost it.

@@ -29,6 +29,11 @@ uint8_t u2_space_world_at(uint8_t xeno, uint8_t yako, uint8_t zabo)
     return U2_WORLD_DEEP_SPACE;
 }
 
+int u2_space_is_sun(const uint8_t dest[3])
+{
+    return dest[0] == 4 && dest[1] == 4 && dest[2] == 4;
+}
+
 u2_hyperwarp_result u2_space_hyperwarp(uint8_t fuel_count, const uint8_t rng[3],
                                        uint8_t dest[3])
 {

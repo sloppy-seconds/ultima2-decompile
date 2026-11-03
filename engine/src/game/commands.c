@@ -936,37 +936,209 @@ static u2_cmd_result launch_plane(u2_ctx *ctx, u2_overworld *ow)
     return U2_CMD_DONE;
 }
 
+/* asm/6999's readout, printed once on entering orbit. The original writes the four
+ * labels via str_out and draws the digit values graphically at fixed cells; the
+ * engine is a text renderer, so it appends the decimal value after each label.
+ * FUEL is the TRI-LITHIUM count (packed BCD, DS:E5) AFTER the launch spend; the
+ * XENO/YAKO/ZABO triple is a property of the world byte, read from the tables at
+ * file 0x7212 -- an arrow key moves the ship sprite and leaves all three alone
+ * (measured, asm/6999 header), so the readout does not change on an arrow. */
+static void space_readout(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+    const u2_space_world *w = st->world < U2_WORLD_COUNT
+                            ? &u2_space_worlds[st->world]
+                            : &u2_space_worlds[U2_WORLD_EARTH];
+    char buf[48];
+    snprintf(buf, sizeof buf, "%s%u", U2_S_SPACE_FUEL,
+             (unsigned)u2_bcd_dec1(st->items_held[U2_ITEM_TRI_LITHIUM]));
+    seam_str_out(ctx, buf);
+    snprintf(buf, sizeof buf, "%s%u", U2_S_SPACE_XENO, w->xeno); seam_str_out(ctx, buf);
+    snprintf(buf, sizeof buf, "%s%u", U2_S_SPACE_YAKO, w->yako); seam_str_out(ctx, buf);
+    snprintf(buf, sizeof buf, "%s%u", U2_S_SPACE_ZABO, w->zabo); seam_str_out(ctx, buf);
+}
+
+/* asm/7030's orbit determination (entry L_007230), reached from the hyperwarp arm.
+ * It is the only writer of the world byte. 4/4/4 prints the sun message and then
+ * falls through to the table match (which finds no world, so deep space); otherwise
+ * the typed triple must EQUAL a world's table entry to orbit it -- no tolerance, no
+ * radius -- else deep space (0x0A). */
+static void space_orbit_determine(u2_ctx *ctx, const uint8_t dest[3])
+{
+    u2_state *st = &ctx->state;
+    if (u2_space_is_sun(dest))
+        seam_str_out(ctx, U2_S_ORBIT_SUN);
+    uint8_t world = u2_space_world_at(dest[0], dest[1], dest[2]);
+    st->world = world;
+    if (world == U2_WORLD_DEEP_SPACE) {
+        seam_str_out(ctx, U2_S_ORBIT_DEEP_SPACE);
+        return;
+    }
+    seam_str_out(ctx, U2_S_ORBIT_ORBITING);
+    /* Worlds 0..8 print their extracted "NAME." literal. Index 9's name routine sits
+     * past 0x729B and has never executed, so "X." is what a frame showed, not a decode
+     * -- the same grade as u2_space_worlds[9].name, and flagged for the same reason. */
+    static const char *const names[U2_WORLD_COUNT] = {
+        U2_S_WORLD_EARTH, U2_S_WORLD_MERCURY, U2_S_WORLD_VENUS, U2_S_WORLD_MARS,
+        U2_S_WORLD_JUPITER, U2_S_WORLD_SATURN, U2_S_WORLD_URANUS, U2_S_WORLD_NEPTUNE,
+        U2_S_WORLD_PLUTO, "X."
+    };
+    seam_str_out(ctx, names[world]);
+}
+
+/* asm/6DFD's 'H' arm (L_0070c5). Spend one TRI-LITHIUM, read a typed XENO/YAKO/ZABO
+ * triple (each a digit 0-9; L_00717f loops until one arrives), then the engage
+ * animation and the off-course gate. Off-course fires iff (post-spend fuel & 3)==3
+ * and replaces the typed triple with rand & 7 -- so world 9, whose triple is the only
+ * one containing a 9, is unreachable by misfortune. Returns 0 only if input ran out
+ * mid-entry (the original blocks); 1 means the warp resolved and the loop should
+ * continue. */
+static int space_hyperwarp(u2_ctx *ctx)
+{
+    u2_state *st = &ctx->state;
+    const uint8_t pre = u2_bcd_dec1(st->items_held[U2_ITEM_TRI_LITHIUM]);
+    if (pre == 0) {                       /* asm/6DFD L_0070c8: no fuel, nothing spent */
+        seam_str_out(ctx, U2_S_HYPERWARP_NO_FUEL);
+        return 1;
+    }
+    st->items_held[U2_ITEM_TRI_LITHIUM] = u2_bcd_dec1(st->items_held[U2_ITEM_TRI_LITHIUM]);
+
+    seam_str_out(ctx, U2_S_HYPERWARP_TO);
+    static const char *const prompts[3] = {
+        U2_S_HYPERWARP_XENO, U2_S_HYPERWARP_YAKO, U2_S_HYPERWARP_ZABO
+    };
+    uint8_t dest[3] = {0, 0, 0};
+    for (int i = 0; i < 3; ++i) {
+        seam_str_out(ctx, prompts[i]);
+        for (;;) {
+            u2_key k;
+            const int r = seam_key_poll(ctx, &k);
+            if (r < 0) return 0;                       /* input exhausted: original blocks */
+            if (r && k.ch >= '0' && k.ch <= '9') { dest[i] = (uint8_t)(k.ch - '0'); break; }
+        }
+    }
+    seam_str_out(ctx, U2_S_HYPERWARP_PREPARE);
+    seam_str_out(ctx, U2_S_HYPERWARP_ENGAGED);
+
+    const uint8_t rng[3] = { seam_rand_byte(ctx), seam_rand_byte(ctx), seam_rand_byte(ctx) };
+    /* u2_space_hyperwarp tests the POST-decrement count, so it is handed the PRE value
+     * and subtracts one internally -- that is what makes fuel 8->7 fire and 7->6 not. */
+    if (u2_space_hyperwarp(pre, rng, dest) == U2_HYPERWARP_OFF_COURSE)
+        seam_str_out(ctx, U2_S_HYPERWARP_OFF_COURSE);
+    space_orbit_determine(ctx, dest);
+    return 1;
+}
+
+/* asm/38B0's descent, reached from the dive. The march is a function of the trajectory
+ * alone: y += 2 every step, x += 1 whenever the new y is a multiple of 8 (asm/3B94), so
+ * it visits the same 32 cells in every sector. It runs until a key arrives, and the tile
+ * it stopped on is the verdict: 0x08 grass lives, anything else jumps to the death tail
+ * at runtime 0x0E62. On a survived dive Earth clears the parked flag (its pads are
+ * authored into mapx41) and off-Earth records the landing cell (nothing authored that
+ * pad, so the save record is the only thing that puts the rocket back). */
+static void rocket_descent(u2_ctx *ctx, u2_overworld *ow)
+{
+    u2_state *st = &ctx->state;
+    ow->x = 0;
+    ow->y = 0;
+    st->view_mode = 0xFF;
+    seam_str_out(ctx, U2_S_PRESS_ANY_KEY);
+
+    for (;;) {
+        u2_space_descent_step((uint8_t *)&ow->x, (uint8_t *)&ow->y);
+        u2_overworld_draw(ctx, ow);
+        u2_key k;
+        const int r = seam_key_poll(ctx, &k);
+        if (r < 0) return;                             /* input exhausted: original blocks */
+        if (r) {
+            if (!u2_space_dive_survives(u2_world_tile_at(&ow->world, ow->x, ow->y))) {
+                u2_death(ctx);
+            } else if (st->world == 0) {
+                st->rocket_parked = 0;
+            } else {
+                st->rocket_parked_x = (uint8_t)ow->x;
+                st->rocket_parked_y = (uint8_t)ow->y;
+                st->rocket_parked   = 1;
+            }
+            return;
+        }
+    }
+}
+
+/* asm/6999's in-space command loop (head L_006c79). The original has NO `ret` in this
+ * routine and leaves only by jumping out: 'H' into the hyperwarp flow, 'L' into the
+ * dive. The engine mirrors that -- the loop returns when 'L' dives (or when input runs
+ * out, which in the original is an infinite block). Arrows move the ship sprite on
+ * screen only and change no coordinate, so the engine prints the direction word and
+ * loops; that is the whole observable effect of an arrow. */
+static void space_loop(u2_ctx *ctx, u2_overworld *ow)
+{
+    u2_state *st = &ctx->state;
+    for (;;) {
+        seam_str_out(ctx, U2_S_CMD_PROMPT);
+        u2_key k;
+        const int r = seam_key_poll(ctx, &k);
+        if (r < 0) return;                             /* input exhausted: original blocks */
+        if (!r) continue;
+        switch (k.ch) {
+        case U2_KEY_LEFT:  seam_str_out(ctx, U2_S_SPACE_LEFT);  break;
+        case U2_KEY_RIGHT: seam_str_out(ctx, U2_S_SPACE_RIGHT); break;
+        case U2_KEY_UP:    seam_str_out(ctx, U2_S_SPACE_CLIMB); break;
+        case U2_KEY_DOWN:  seam_str_out(ctx, U2_S_SPACE_DIVE);  break;
+        case 'H': case 'h':
+            if (!space_hyperwarp(ctx)) return;
+            break;
+        case 'L': case 'l': {
+            /* asm/7030's dive arm (L_007385): "LANDING REQUESTED!", refused only from
+             * deep space (which jumps back to the loop head), else the landing sector is
+             * computed -- Earth -> 40, world N -> N0, ones digit forced to 0, so a rocket
+             * always arrives in a wilderness sector -- and the descent runs. */
+            seam_str_out(ctx, U2_S_DIVE_REQUESTED);
+            if (!u2_space_dive_allowed(st->world)) {
+                seam_str_out(ctx, U2_S_DIVE_DENIED);
+                break;                                  /* deep space: back to the loop */
+            }
+            const int sector = u2_space_dive_sector(st->world);
+            st->sector_first  = (uint8_t)(sector / 10);
+            st->sector_second = (uint8_t)(sector % 10);
+            rocket_descent(ctx, ow);
+            return;
+        }
+        default:
+            break;                                      /* asm/6999: no match, re-poll */
+        }
+    }
+}
+
 /* asm/38B0's rocket branch, runtime 0x3AD2.
  *
- * "LAUNCH--ROCKET", then the DS:E5 (TRI-LITHIUM) gate — without it, "A METALLIC VOICE
+ * "LAUNCH--ROCKET", then the DS:E5 (TRI-LITHIUM) gate -- without it, "A METALLIC VOICE
  * SAYS:" / "SHIP INCAPABLE OF LAUNCH!". Note the spelling differs from cmd_B's metallic
- * voice on purpose: the binary has "A METALIC VOICE COMMANDS:" in asm/3048 and "A METALLIC
- * VOICE SAYS:" here, and they are two strings, not one that drifted.
+ * voice on purpose: the binary has "A METALIC VOICE COMMANDS:" in asm/3048 and "A
+ * METALLIC VOICE SAYS:" here, and they are two strings, not one that drifted.
  *
- * Launched, the rocket is nothing like the plane. It prints "PREPARE FOR LAUNCH!", puts the
- * player at (0,0), sets the view mode byte DS:12 to 0xFF, prints "(PRESS ANY KEY)" and then
- * flies SOUTH TWO CELLS PER ITERATION on its own, stepping one cell east every time the y
- * coordinate lands on a multiple of 8 (asm/3B94: `adc $0x2,%al` then `and $7,%al; jne`). No
- * heading is steerable; the only input is the key that stops it. Where it stops is the
- * verdict: tile 0x08 grass and it survives, anything else and the handler jumps to
- * runtime 0x0E62, which is the death tail. So a rocket is a one-way trip you aim by
- * timing, and the engine reproduces exactly that.
+ * Launched, the rocket prints "PREPARE FOR LAUNCH!", records the pad cell and SAVES
+ * (see below), then enters the in-space command loop (asm/6999): a readout, a "CMD: "
+ * prompt, and arrows / H / L. The southward descent belongs to the DIVE (the second L),
+ * not to the launch -- asm/6999 has no `ret` and its 'L' arm returns through its own
+ * stack frame to asm/38B0's descent. This is the correction that closed G62: the state
+ * is which loop owns input, and it lives on the stack, not in a discriminator byte.
  *
- * Not modelled, and deliberately so rather than guessed:
- *   * THE DESCENT IS ATTACHED TO THE WRONG EVENT. Live play says launching goes to orbit
- *     and a SECOND L dives, and the southward march belongs to the dive (see the
- *     CORRECTION block in asm/38B0_cmd_L.asm). It is left here anyway because the engine
- *     has no way to tell the two states apart: in the capture, on the pad and in orbit
- *     both read DS:13 = 0x28 and DS:6D = 0x00, and no byte that distinguishes them has
- *     been found. Inventing a flag would be claiming a mechanism. Tracked as G62 in
- *     docs/needs-gameplay.md; until it is answered this handler is a faithful half.
- *   * the return-point triple DS:69/DS:6A/DS:6B and the save call at asm/24FD. Those bytes
- *     are not in state.h, DS:6D (the guard on the whole block) is the world byte — Earth 0,
- *     planets 1..9, deep space 0x0A — and the pair belongs to the planet subsystem CP7 has
- *     not started. Writing an invented equivalent would be worse than leaving the gap.
- *   * the two 256-byte table clears at DS:272/DS:372 and the calls at asm/6B99 / asm/2490.
- *     asm/437E (cmd_V) clears the same two tables and the source of the continent art it
- *     goes with is unidentified, per that handler's own note.
+ * Two behaviours in asm/6999's entry are deliberately NOT modelled, because the capture
+ * record contradicts the straight-line reading of the bytes and inventing a placement
+ * would be claiming a mechanism:
+ *   * THE ARMOUR GATE (L_006c54, `cmp $0x5` on DS:62). The bytes put it on the launch
+ *     path, but the g60 capture observed a PLATE character launching from Earth orbit,
+ *     printing "HYPERWARP ENGAGED!" and going on ticking -- the handoff records the
+ *     check as firing "from the status path, not the launch." The status path is not
+ *     separately identified in the corpus, so the gate is left as the tested pure
+ *     function u2_space_armour_ok (space.h) rather than wired to a guessed site. The
+ *     explode arm is a HANG, not a death, and space_check.c carries that non-assertion.
+ *   * THE LAUNCH-TIME OFF-COURSE ROLL. asm/6999's entry calls L_006ffd, which contains
+ *     the off-course gate and the orbit determination, so on the bytes a launch could
+ *     dump you off-course. No capture has shown the world changing on launch, so the
+ *     engine prints "HYPERWARP ENGAGED!" (observed) but does not roll on launch. The
+ *     gate is exercised on 'H', where it was observed on both arms.
  */
 static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
 {
@@ -985,21 +1157,13 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
     seam_str_out(ctx, U2_S_LAUNCH_ROCKET_GO);
 
     /* asm/38B0 at L_003b52: DS:6B := y, DS:6A := x, DS:69 := 1, then `call L_0024fd`.
-     * Launching a rocket SAVES THE GAME, silently, and it does so BEFORE the position is
-     * reset, so the record holds the pad cell. The guard on that block is [DS:6D]==0 AND
-     * [DS:4A]==0 — Earth and a wilderness sector — which is why launching from a site
-     * sector leaves the disk alone; measured as a controlled pair on 2026-11-03, launch
-     * from sector 40 rewrote `player` and launch from sector 41 did not.
-     *
-     * The consequence is the reason this is worth being faithful about: the save lands
-     * before the trip is known to be survivable, so an off-course dump into deep space
-     * with no fuel left is written to disk and kept. Enhanced mode may later choose to
-     * soften that or to offer slots; until it does, this matches the original.
-     *
-     * DS:69/6A/6B are the parked-rocket triple and are modelled in state.h: the save
-     * here is what makes a rocket left on a planet survive a restart. The triple is
-     * written INSIDE the same guard, in the original's order (6B := y, 6A := x, 69 := 1,
-     * then the save), so the record carries the pad cell the rocket is lifting off. */
+     * Launching a rocket SAVES THE GAME, silently, and it does so BEFORE the trip is
+     * known to be survivable, so the record holds the pad cell. The guard on that block
+     * is [DS:6D]==0 AND [DS:4A]==0 -- Earth and a wilderness sector -- which is why
+     * launching from a site sector leaves the disk alone; measured as a controlled pair
+     * on 2026-11-03, launch from sector 40 rewrote `player` and launch from sector 41
+     * did not. DS:69/6A/6B are the parked-rocket triple, modelled in state.h: the save
+     * here is what makes a rocket left on a planet survive a restart. */
     if (ctx->state.world == 0 && ow->sector_lo == 0) {
         ctx->state.rocket_parked_y = (uint8_t)ow->y;
         ctx->state.rocket_parked_x = (uint8_t)ow->x;
@@ -1007,57 +1171,16 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
         (void)u2_overworld_autosave(ctx, ow);
     }
 
-    /* asm/3B74..0x3B7E: position to (0,0) and DS:12 to the world-map view mode. The
-     * sector reload at asm/2490 that runs just before this is not modelled — it re-reads
-     * MAPXFF, and the engine's sector store is owned by the world module, not by a command
-     * handler. Note also that "(PRESS ANY KEY)" carries NO leading 0x8d glyph, so in the
-     * original it continues the line "PREPARE FOR LAUNCH!" rather than starting one; the
-     * engine does not add a newline the bytes do not have. */
-    ow->x = 0;
-    ow->y = 0;
-    ctx->state.view_mode = 0xFF;
+    /* asm/6999 entry: spend one TRI-LITHIUM, print the readout, run the launch
+     * animation (which prints "HYPERWARP ENGAGED!"), then the command loop. The
+     * position reset to (0,0) and the world-map view mode happen in the descent, which
+     * is where asm/38B0 sets them -- after the space loop returns on the dive. */
+    ctx->state.items_held[U2_ITEM_TRI_LITHIUM] =
+        u2_bcd_dec1(ctx->state.items_held[U2_ITEM_TRI_LITHIUM]);
+    space_readout(ctx);
+    seam_str_out(ctx, U2_S_HYPERWARP_ENGAGED);
 
-    seam_str_out(ctx, U2_S_PRESS_ANY_KEY);
-
-    for (;;) {
-        /* asm/3B94: y += 2 always; x += 1 whenever the new y is a multiple of 8.
-         * The rule lives in game/space.c so the gate in tests/space_check.c drives
-         * the same arithmetic this loop runs, rather than a copy of it. */
-        u2_space_descent_step((uint8_t *)&ow->x, (uint8_t *)&ow->y);
-
-        u2_overworld_draw(ctx, ow);
-
-        u2_key k;
-        const int r = seam_key_poll(ctx, &k);
-        if (r < 0) break;                       /* input exhausted: the original blocks here */
-        if (r) {
-            /* asm/3BCE: the tile it stopped on decides everything. */
-            if (!u2_space_dive_survives(u2_world_tile_at(&ow->world, ow->x, ow->y))) {
-                u2_death(ctx);
-            } else {
-                /* asm/38B0 L_003bd7, the survived-dive branch: `mov 0x6d,%al ;
-                 * or %al,%al ; jne`. On EARTH the parked flag is CLEARED, because Earth's
-                 * pads are authored into the map — mapx41 at (33,3), (38,3) and (43,3) is
-                 * 0x50 — so there is nothing to re-stage. Off Earth the landing cell is
-                 * recorded and the flag set, because nothing authored that pad and the
-                 * rocket has to still be there when the player comes back.
-                 *
-                 * Not re-stamping the tile into the grid here is deliberate: the rocket
-                 * has just left that cell, and the engine's grid already stopped drawing
-                 * it when the launch reset the position. asm/38B0 writes only the triple
-                 * on this path, and so does this. */
-                if (ctx->state.world == 0) {
-                    ctx->state.rocket_parked = 0;
-                } else {
-                    ctx->state.rocket_parked_x = (uint8_t)ow->x;
-                    ctx->state.rocket_parked_y = (uint8_t)ow->y;
-                    ctx->state.rocket_parked   = 1;
-                }
-            }
-            cmd_done(ctx);
-            return U2_CMD_DONE;
-        }
-    }
+    space_loop(ctx, ow);
 
     cmd_done(ctx);
     return U2_CMD_DONE;
