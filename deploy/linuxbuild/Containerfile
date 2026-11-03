@@ -18,11 +18,20 @@
 # The SDL3 version and cmake flags MUST stay in step with winbuild's; both come
 # from the same pinned official tarball. (winbuild needs none of this: the win32
 # backend is built in from the mingw sysroot.)
+#
+# libXtst-devel is new with SDL3 and is why this image failed the first time it was
+# pointed at the new major version: SDL3 enables SDL_X11_XTEST by default and SDL2
+# never required it, so cmake stops with "Couldn't find dependency package for
+# XTEST" instead of quietly compiling the backend out. The alternative it offers,
+# -DSDL_X11_XTEST=OFF, is the wrong fix here: XTEST is what SDL uses for global
+# mouse warping and relative-mode input, so switching it off would ship a player
+# binary with a hole in it to avoid installing one package.
 FROM quay.io/fedora/fedora:42
 RUN dnf -y install \
         make gcc python3 cmake ninja-build curl tar \
         libX11-devel libXext-devel libXfixes-devel libXcursor-devel \
         libXi-devel libXinerama-devel libXrandr-devel libXScrnSaver-devel \
+        libXtst-devel \
         libxcb-devel libxkbcommon-devel \
         wayland-devel wayland-protocols-devel libdecor-devel \
         mesa-libGL-devel mesa-libEGL-devel libdrm-devel \

@@ -64,7 +64,7 @@ jobs:
               libx11-dev libxext-dev libxfixes-dev libxcursor-dev libxi-dev \
               libxinerama-dev libxrandr-dev libxxf86vm-dev libxss-dev libxcb1-dev \
               libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
-              libgl1-mesa-dev libasound2-dev libpulse-dev libgbm-dev
+              libgl1-mesa-dev libasound2-dev libpulse-dev libgbm-dev libxtst-dev
           fi
 
       - name: Cache SDL3 ${{ env.SDL3_VERSION }} (${{ matrix.name }})
