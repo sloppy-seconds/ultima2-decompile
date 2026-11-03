@@ -3140,3 +3140,84 @@ the SDL3 stream-audio port was silently silent. It is not a full confirmation: w
 not been enumerated, and the Windows artifact is unconfirmed on real Windows. The reason this stays
 on the record rather than being ticked off is that silence passes every automated check in the tree,
 so the only evidence available is a person listening.
+
+### CP7 addendum: the asm/6078 lead is refuted, and what is left is a contradiction (2026-11-04)
+
+The side-by-side at the matched state (sector 35, (5,5), east, lit — both sides verified from
+live memory, original `DS:00..03 = 05 05 01 00`, engine `--dump-state` `pos 05 05`, `sector 03 05`)
+closed the outer rectangle on both sides but still disagreed inside it. The lead recorded there
+was that `asm/6078` builds the three depth columns differently from the engine's `dg_scan_build`,
+or that `asm/6144` increments `[DS:482]` somewhere the engine does not. **Both halves are now
+refuted, and the residual is worse than a wrong formula: the original's own columns and the
+original's own frame do not agree with each other.**
+
+**The columns, read live.** `tools/spice86_type.py --peek` against a fresh run driven the player's
+own route (sector 30, mouth cell (25,5), `E`, then `I`), sampled with a tight poller at ~1100
+request-pairs/s so the values are the ones the last render left behind:
+
+```
+pos=05 05 01 00   floor=00
+[DS:48F] left    80 80 c0 80 00 80 80 80
+[DS:497] centre  10 00 00 00 00 00 00 c0
+[DS:49F] right   80 80 80 80 00 80 c0 80
+```
+
+`dg_scan_build`'s formula, applied to `mapx35` page 0 with `asm/68C0`'s exact addressing
+(`x,y` masked `&0x3f`, offset `(y*16 + x) & 0xFF`, page base `[DS:472] = 0x1800` plus `floor*256`)
+produces **the same three rows, byte for byte**. The engine's scan is not the bug. The live grid at
+`DS:1800` is also byte-identical to `mapx35` page 0, so the inputs are the same bytes.
+
+An earlier capture, `captures/spice86/dungeon-35-live/live-ds.bin`, has columns that walk *west*
+from (5,5) while its `DS:02/03` reads `01 00`. That is not a second rule, it is that capture being
+what the docs already said it was: a save loaded straight into sector 35, whose arrays belong to a
+different render than the state bytes harvested with them. Brute-forcing every start cell and
+direction against those arrays gives a unique answer (`W from (5,5)` for the centre, `W from (5,6)`
+left, `W from (5,4)` right), which is exactly what a stale west-facing render would leave. Do not
+use that capture for renderer work.
+
+**The increment, read from the bytes.** `asm/6144` increments `[DS:482]` in two places: `0x6385`
+in the rock-ahead path, after `asm/648D`, and `0x63FE` at the end of the open path. The second
+`call asm/6425` is at `0x635F`, *before* either increment, so it draws at the depth it was already
+at. The engine's `dg_draw` does the same. No difference.
+
+**The contradiction.** With those columns the engine draws rock-side shapes at depth 0
+(`dg_6377`/`dg_63ce`, whose first line is `(XL[d],YT[d]) -> (XL1[d],YT1[d])`, a receding diagonal)
+and no depth-1 frame, because `centre[1] = 0x00` is open. The original's frame does the opposite,
+and this is measured, not eyeballed — the window contains exactly one colour, `(170,170,170)`, so
+there is no dim line hiding from a threshold:
+
+| line | original | engine |
+| --- | --- | --- |
+| `asm/6377` d0 top, (16,16)->(80,48) | 2/60 (absent) | drawn |
+| `asm/63ce` d0 top, (271,16)->(207,48) | 2/60 (absent) | drawn |
+| middle of y=48, x 80..207 | 61/60 (present) | absent |
+| middle of y=111, x 80..207 | 61/60 (present) | absent |
+| ladder segment y=24 (ceiling) | 0/60 | drawn |
+| ladder segment y=135 (floor) | 61/60 | absent |
+
+The middle horizontals at y=48 and y=111 spanning x 80..207 are `XL1[0]..XR1[0]` at `YT1[0]`/`YB1[0]`,
+which is the depth-1 frame, and the only thing that draws a frame is `asm/6425`. So the original
+drew a depth-1 frame, which per `asm/6144` requires a rock centre at depth 1 — and its own live
+`centre[1]` is `0x00`. And it drew the open-side shapes while its own live side arrays say rock.
+The ladder is a vertical mirror of the engine's, with identical x extents, which points at
+`asm/6594`/`asm/660C` being assigned to the opposite bits or transcribed mirrored.
+
+**What that means, stated without padding.** Either the arrays `asm/6144` branches on are not the
+arrays `asm/6078` fills the way the header labels them, or the columns a render uses are not the
+columns that survive to be polled. Both are questions about a moment, and polling cannot answer a
+question about a moment. The instrument for it is a breakpoint at `asm/6144`'s entry
+(`L_006344`) dumping `[DS:48F..4A6]` at the instant of the dispatch, and **`tools/bp_read.py` cannot
+arm on the current Spice86 build**: `--selftest` fails its positive control, arming on the address
+the CPU is already executing —
+
+```
+selftest: CPU is at 17D:715
+  positive control armed on the live address: False
+  SELFTEST FAIL: trap did not arm and stop on an executing address
+```
+
+— so `breakCsIp` is refused even in the case that must work. Until that is fixed, or an equivalent
+stop mechanism is found, the renderer's remaining difference cannot be attributed and no engine
+change is justified by it. Fixing `bp_read.py` against this Spice86 is the next step, and it is a
+tool fix, not a renderer fix.
+
