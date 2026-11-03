@@ -18,10 +18,12 @@ RUN dnf -y install \
     && dnf clean all
 
 # mingw64-gcc-c++ is required by SDL3 and not by SDL2: SDL3's CMakeLists calls
-# enable_language(CXX) unconditionally enough for its own build to demand a C++
-# compiler, and the failure is the unhelpful "No CMAKE_CXX_COMPILER could be found"
-# rather than "install mingw64-gcc-c++". The CI workflow carries the equivalent
-# (g++ via mingw-w64).
+# enable_language(CXX), and the failure is the unhelpful "No CMAKE_CXX_COMPILER
+# could be found" rather than "install mingw64-gcc-c++". The compiler is also
+# pinned explicitly below rather than left to CMake's search: on a host that has
+# its own g++, CMake happily picks /usr/bin/c++ for a cross build and produces a
+# broken CMakeCache. That is exactly what the CI runner did, and it only worked
+# here by accident because this image has no host C++ compiler to find.
 
 ARG SDL3_VERSION=3.4.18
 RUN curl -fL --retry 3 -o /tmp/SDL3.tar.gz \
@@ -31,6 +33,7 @@ RUN curl -fL --retry 3 -o /tmp/SDL3.tar.gz \
          -DCMAKE_BUILD_TYPE=Release \
          -DCMAKE_SYSTEM_NAME=Windows \
          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+         -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
          -DCMAKE_INSTALL_PREFIX=/opt/sdl3 \
          -DBUILD_SHARED_LIBS=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
          -DSDL_TEST_LIBRARY=OFF \
