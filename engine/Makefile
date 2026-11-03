@@ -14,6 +14,33 @@ OPT      ?= -O2
 CPPFLAGS += -Isrc -Icontent
 CFLAGS   += $(STD) $(WARN) $(OPT)
 
+# ---- build stamp ------------------------------------------------------------
+#
+# Every binary has to be able to answer "which build am I holding", because the
+# whole SDL story in docs/sdl2-vs-sdl3.md is that a dev binary and a shipped
+# binary can be built against different implementations of the same API and both
+# run. Until --version could say so, that question was only answerable by reading
+# the Makefile and guessing what the host had. The stamp is compile-time truth;
+# --version also prints the runtime SDL version, and the two disagreeing is
+# itself the signal.
+#
+# U2_VERSION is a variable rather than a constant because the release workflow can
+# pass the tag it is building, and a binary that names its own tag is worth more
+# than one that says "unreleased".
+U2_VERSION ?= 0.1.0-unreleased
+
+# STAMP <target> <sdl impl> <linkage> <compile-time sdl version> <artifact>
+STAMP = -DU2_VERSION='"$(U2_VERSION)"' \
+        -DU2_BUILD_TARGET='"$(1)"' \
+        -DU2_SDL_IMPL='"$(2)"' \
+        -DU2_SDL_LINKAGE='"$(3)"' \
+        -DU2_SDL_VERSION='"$(4)"' \
+        -DU2_ARTIFACT='"$(5)"'
+
+STAMP_TERMINAL  = $(call STAMP,terminal,none,none,,dev)
+STAMP_SDLSTATIC = $(call STAMP,sdl-static,sdl2,static,,release)
+STAMP_SDLWIN    = $(call STAMP,sdl-win,sdl2,static,,release)
+
 BIN      := u2
 BUILD    := build
 CONTENT  := content
@@ -31,7 +58,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-run sdl-win sdl-static play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-probe-check sdl-run sdl-win sdl-static play help fresh
 
 all: $(BIN)
 
@@ -63,7 +90,7 @@ $(BIN): $(OBJS)
 
 $(BUILD)/%.o: %.c $(GEN)
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STAMP_TERMINAL) -MMD -MP -c $< -o $@
 
 # Interactive terminal play.
 run: $(BIN)
@@ -119,21 +146,67 @@ test-cp7:
 # it never enters the default build: the objects are compiled a second time into
 # a separate directory with -DU2_HAVE_SDL, and src/platform/*_sdl.c are empty
 # without that define. `make` alone still needs nothing but a C compiler.
-SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
-SDL_LIBS   := $(shell sdl2-config --libs 2>/dev/null)
+#
+# Which SDL `make sdl` links is decided by tools/sdl_probe.sh, not by hoping
+# sdl2-config points at something sensible, because on Bazzite and Arch it points
+# at sdl2-compat: the SDL2 API implemented over SDL3. That build compiles and
+# runs and is not what the release ships, which is the exact class of defect that
+# looks like success. The probe prefers a static prefix (the release shape) and
+# otherwise reports what the host really is.
+# Lazy on purpose: `make test` and `make clean` must not pay for a probe they
+# never use, and a recursive assignment is only expanded if an SDL target asks.
+SDL_PROBE    = $(shell sh tools/sdl_probe.sh --quiet 2>/dev/null)
+SDL_MODE     = $(patsubst mode=%,%,$(filter mode=%,$(SDL_PROBE)))
+SDL_IMPL     = $(patsubst impl=%,%,$(filter impl=%,$(SDL_PROBE)))
+SDL_LINKAGE  = $(patsubst linkage=%,%,$(filter linkage=%,$(SDL_PROBE)))
+SDL_HOSTVER  = $(patsubst version=%,%,$(filter version=%,$(SDL_PROBE)))
+SDL_ARTIFACT = $(patsubst artifact=%,%,$(filter artifact=%,$(SDL_PROBE)))
+
+ifeq ($(SDL_MODE),static)
+SDL_CFLAGS  = $(SDLSTAT_CFLAGS)
+SDL_LIBS    = $(SDLSTAT_LIBS)
+else
+SDL_CFLAGS  = $(shell sdl2-config --cflags 2>/dev/null)
+SDL_LIBS    = $(shell sdl2-config --libs 2>/dev/null)
+endif
+
+STAMP_SDL = $(call STAMP,sdl,$(SDL_IMPL),$(SDL_LINKAGE),$(SDL_HOSTVER),$(SDL_ARTIFACT))
+
 SDLOBJ     := $(BUILD)-sdl
 SDL_BIN    := u2-sdl
 
-sdl: $(SDL_BIN)
+sdl: sdl-probe-check $(SDL_BIN)
+
+# The refusals live here, not in the object rule, because an object rule is skipped
+# whenever the objects happen to be up to date -- so a guard placed there fires on
+# a clean tree and silently stops firing on a dirty one. That is exactly how the
+# first draft of this behaved: `make sdl U2_STRICT_SDL=1` printed the dev-build
+# note and exited 0 with everything already compiled. A phony prerequisite always
+# runs.
+sdl-probe-check:
+	@test -n "$(SDL_CFLAGS)" || { echo "sdl: no usable SDL2 found (probe said mode=$(SDL_MODE))." \
+	     "Options: deploy/linuxbuild/build.sh for the release artifact; install SDL2;" \
+	     "or point SDLSTAT_PREFIX at a prefix containing lib/libSDL2.a."; exit 1; }
+	@if [ "$(U2_STRICT_SDL)" = 1 ] && [ "$(SDL_ARTIFACT)" != release ]; then \
+	    echo "sdl: REFUSING under U2_STRICT_SDL=1: this would link $(SDL_IMPL) ($(SDL_LINKAGE)),"; \
+	    echo "sdl:   which is not the pinned static SDL2 the release ships."; \
+	    echo "sdl:   Build it with deploy/linuxbuild/build.sh, or unset U2_STRICT_SDL"; \
+	    echo "sdl:   if you only want a development binary."; \
+	    exit 1; \
+	fi
 
 $(SDL_BIN): $(SDLOBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(SDL_LIBS)
+	@echo "u2: built $(SDL_BIN) — target=sdl sdl=$(SDL_IMPL) linkage=$(SDL_LINKAGE) artifact=$(SDL_ARTIFACT)"
+	@if [ "$(SDL_ARTIFACT)" = dev ]; then \
+	    echo "u2: NOTE this is a DEV build, not the shipped artifact. Players get"; \
+	    echo "u2:      u2-sdl-static from deploy/linuxbuild/build.sh (pinned static SDL2)."; \
+	    echo "u2:      './$(SDL_BIN) --version' always repeats this."; \
+	fi
 
 $(SDLOBJ)/%.o: %.c $(GEN)
-	@test -n "$(SDL_CFLAGS)" || { echo "sdl: SDL2 not found. On Bazzite the low-friction" \
-	     "install is 'brew install sdl2' (no reboot, no OS layering)."; exit 1; }
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDL_CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(STAMP_SDL) $(SDL_CFLAGS) -MMD -MP -c $< -o $@
 
 sdl-run: $(SDL_BIN)
 	./$(SDL_BIN) --sdl --play-map --data-dir ../original --save-dir saves
@@ -182,7 +255,7 @@ $(WINOBJ)/%.o: %.c $(GEN)
 	@command -v $(WIN_CC) >/dev/null || { echo "sdl-win: $(WIN_CC) not found; use deploy/winbuild/build.sh"; exit 1; }
 	@test -n "$(SDLWIN_CFLAGS)" || { echo "sdl-win: static mingw SDL2 not found (PKG_CONFIG_LIBDIR must reach libsdl2.a); use deploy/winbuild/build.sh"; exit 1; }
 	@mkdir -p $(dir $@)
-	$(WIN_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDLWIN_CFLAGS) -MMD -MP -c $< -o $@
+	$(WIN_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(STAMP_SDLWIN) $(SDLWIN_CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(WIN_DEPS)
 
@@ -214,7 +287,7 @@ $(STATOBJ)/%.o: %.c $(GEN)
 	@test -n "$(SDLSTAT_CFLAGS)" || { echo "sdl-static: static SDL2 not found at $(SDLSTAT_PREFIX);" \
 	     "use deploy/linuxbuild/build.sh (container) or point SDLSTAT_PREFIX at a libsdl2.a prefix"; exit 1; }
 	@mkdir -p $(dir $@)
-	$(SDLSTAT_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(SDLSTAT_CFLAGS) -MMD -MP -c $< -o $@
+	$(SDLSTAT_CC) $(CPPFLAGS) $(CFLAGS) -DU2_HAVE_SDL $(STAMP_SDLSTATIC) $(SDLSTAT_CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(STAT_DEPS)
 

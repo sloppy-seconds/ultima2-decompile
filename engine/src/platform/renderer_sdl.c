@@ -53,13 +53,26 @@ static sdl_video *sv(u2_ctx *ctx) { return (sdl_video *)ctx->be_render; }
 
 /* One driver name per line, for --video-drivers. Does not initialise video, so it
  * works on a machine with no display at all — which is exactly where the release
- * gate needs to run it. */
-int u2_sdl_list_video_drivers(void)
+ * gate needs to run it. */int u2_sdl_list_video_drivers(void)
 {
     const int n = SDL_GetNumVideoDrivers();
     for (int i = 0; i < n; i++)
         printf("%s\n", SDL_GetVideoDriver(i));
     return n;
+}
+
+/* The version of the SDL actually linked, asked at runtime rather than stamped at
+ * compile time, because the two can disagree: sdl2-compat reports an SDL2 version
+ * number while being SDL3 underneath, and that gap is the thing
+ * docs/sdl2-vs-sdl3.md is about. No SDL_Init here, so it is safe to call before
+ * any subsystem exists. */
+void u2_sdl_runtime_info(char *out, size_t n)
+{
+    if (!out || n == 0) return;
+    out[0] = '\0';
+    SDL_version v;
+    SDL_GetVersion(&v);
+    snprintf(out, n, "%u.%u.%u", (unsigned)v.major, (unsigned)v.minor, (unsigned)v.patch);
 }
 
 /* Why a window could not be created is usually a one-word answer ("No available

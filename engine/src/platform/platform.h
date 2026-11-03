@@ -27,6 +27,7 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>   /* size_t, for u2_sdl_runtime_info */
 
 /*
  * The text grid is 40 columns x 25 rows, not 80x25: the row-clear loop prints
@@ -145,6 +146,11 @@ int u2_sdl_list_video_drivers(void);
  * event pump has to ask for it. Defined in renderer_sdl.c; a no-op before the
  * first frame. */
 void u2_sdl_repaint(u2_ctx *ctx);
+/* Write the version of the SDL implementation actually linked (e.g. "2.32.74")
+ * into out. Called by core/version.c so a binary can report what it is holding:
+ * a stamp that says sdl2 with a runtime that disagrees means a compatibility
+ * layer, which is the failure docs/sdl2-vs-sdl3.md is about. */
+void u2_sdl_runtime_info(char *out, size_t n);
 #endif
 
 #endif /* U2_PLATFORM_H */

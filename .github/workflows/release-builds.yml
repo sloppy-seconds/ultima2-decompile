@@ -91,12 +91,16 @@ jobs:
 
       - name: Build the engine binary
         run: |
+          # The tag goes into the binary, so a downloaded file can name its own
+          # release. A report of "v0.0.7 doesn't work" is answerable when the
+          # artifact can say which build it is; see docs/sdl2-vs-sdl3.md § 7.
           if [ "${{ matrix.name }}" = windows-cross ]; then
             PKG_CONFIG_LIBDIR="$GITHUB_WORKSPACE/sdl2-windows-cross/lib/pkgconfig" \
-              make -C engine ${{ matrix.make_target }}
+              make -C engine ${{ matrix.make_target }} U2_VERSION="${{ github.ref_name }}"
           else
             make -C engine ${{ matrix.make_target }} \
-              SDLSTAT_PREFIX="$GITHUB_WORKSPACE/sdl2-linux-static"
+              SDLSTAT_PREFIX="$GITHUB_WORKSPACE/sdl2-linux-static" \
+              U2_VERSION="${{ github.ref_name }}"
           fi
 
       - name: Prove the link is really static
@@ -127,6 +131,25 @@ jobs:
           if ! grep -qx -e x11 -e wayland video-drivers.txt; then
             echo "FAIL: no x11 or wayland compiled in — this binary cannot open a window"; exit 1
           fi
+
+      # The artifact must be able to say it is the artifact. If the stamp ever stops
+      # reaching the compiler, or a dev-shaped build leaks into a release, this is
+      # where it is caught — not in a bug report about a binary nobody can identify.
+      - name: The binary identifies itself as the release build
+        run: |
+          set -e
+          bin="engine/${{ matrix.artifact }}"
+          [ "${{ matrix.name }}" = windows-cross ] && bin="wine $bin"
+          info=$(eval "$bin --version") || { echo "FAIL: --version did not work on ${{ matrix.artifact }}"; exit 1; }
+          echo "$info"
+          case "$info" in
+            *"artifact=release"*) : ;;
+            *) echo "FAIL: artifact does not claim artifact=release"; exit 1 ;;
+          esac
+          case "$info" in
+            *"${{ github.ref_name }}"*) : ;;
+            *) echo "FAIL: binary does not name the tag it was built from (${{ github.ref_name }})"; exit 1 ;;
+          esac
 
       - uses: actions/upload-artifact@v4
         with:

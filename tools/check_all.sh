@@ -99,6 +99,11 @@ opt_run "cmd_provenance_derived" captures/spice86 -- python3 tools/cmd_handlers.
 # refuses rather than passing on a tree it cannot see.
 run "cmd_marker_gate selftest" tools/cmd_marker_gate.py -- python3 tools/cmd_marker_gate.py --selftest
 run "cmd_marker_gate" engine/src docs/phase4-state.md -- python3 tools/cmd_marker_gate.py
+# Which SDL a build links is decided by this probe, and a wrong verdict is a build
+# that compiles, runs, and is not the artifact the release ships. The selftest runs
+# against fixtures, so it works on a machine with no SDL installed at all — which is
+# the CI runner, and the place the probe is most likely to be wrong unnoticed.
+run "sdl_probe selftest" engine/tools/sdl_probe.sh -- bash engine/tests/sdl_probe_selftest.sh
 run "fragment_splits" disasm/function-map.tsv -- python3 tools/fragment_splits.py --selftest
 run "xref_provenance" asm -- python3 tools/xref_provenance.py --strict
 # Only meaningful when the binaries exist, so they are the required paths and a tree that

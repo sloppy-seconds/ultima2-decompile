@@ -192,6 +192,32 @@ else
     ok "--renderer rejects a value it does not implement"
 fi
 
+### --- --version: a binary has to say what it is -------------------------------
+# docs/sdl2-vs-sdl3.md § 7: a dev build and a shipped build can be built against
+# different implementations of the same SDL2 API, both run, and nothing else about
+# them distinguishes them. Every argument in that document would have been a
+# one-line answer with this flag present, so the flag is the thing being gated.
+# "unstamped" is checked for by name: if the Makefile ever stops passing the -D
+# flags, the fallbacks in core/version.c keep it compiling and the binary quietly
+# becomes unidentifiable, which is the silent version of this failure.
+if ver=$(./u2 --version 2>&1); then
+    case "$ver" in
+        *unstamped*) bad "--version says 'unstamped': the Makefile stopped passing the build stamp ($ver)" ;;
+        *) ok "--version is stamped (not the unstamped fallback)" ;;
+    esac
+    printf '%s\n' "$ver" | grep -q 'build=terminal' \
+        && ok "--version names the build target" \
+        || bad "--version does not name the build target: $ver"
+    printf '%s\n' "$ver" | grep -q 'sdl=none' \
+        && ok "--version says this cc-only build has no SDL" \
+        || bad "--version claims SDL in a build compiled without it: $ver"
+    printf '%s\n' "$ver" | grep -q 'artifact=' \
+        && ok "--version declares whether it is the shipped artifact" \
+        || bad "--version omits the artifact field: $ver"
+else
+    bad "--version exited non-zero; a binary that cannot identify itself is the defect this flag exists to fix"
+fi
+
 # A key script is read only by the headless input backend. Silently dropping it is
 # how a scripted run ends up waiting for a human, so it is refused out loud.
 if timeout -s KILL 10 ./u2 --script "$SCRIPT" >/dev/null 2>"${WORK:-/var/tmp}/cp0-script.err"; then

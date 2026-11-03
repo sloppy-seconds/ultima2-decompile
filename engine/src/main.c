@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "core/ctx.h"
+#include "core/version.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "core/state.h"
@@ -46,6 +47,8 @@ static void usage(const char *argv0)
         "                  binary opens a window with no flags at all. Asking for a\n"
         "                  renderer the binary cannot provide is an error.\n"
         "  --sdl           alias for --renderer=sdl\n"
+        "  --version       print which build this is: SDL implementation, linkage,\n"
+        "                  and whether it is the shipped artifact or a dev build\n"
         "  --video-drivers list the video drivers compiled into this binary and\n"
         "                  exit. If the list has no x11 or wayland, the binary\n"
         "                  cannot open a window on any desktop.\n"
@@ -317,6 +320,15 @@ int main(int argc, char **argv)
             trace_arg = "-";
         } else if (strncmp(a, "--trace=", 8) == 0) {
             trace_arg = a + 8;
+        } else if (strcmp(a, "--version") == 0) {
+            /* Which build is this. The reason it is a flag rather than a comment:
+             * a dev binary and a shipped binary can be built against different
+             * implementations of the same SDL2 API, both run, and nothing else
+             * about them says so. See docs/sdl2-vs-sdl3.md. */
+            char info[192];
+            u2_build_info(info, sizeof info);
+            printf("%s\n", info);
+            return 0;
         } else if (strcmp(a, "--video-drivers") == 0) {
             /* Diagnostic, and the release gate: a player binary with only dummy
              * and offscreen can never show a window, and nothing else about it

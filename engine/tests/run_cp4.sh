@@ -414,16 +414,28 @@ else
     printf '  SKIP  no player content present (pass --data-dir to test against it)\n'
 fi
 
-# --- the SDL path proves itself headlessly, when u2-sdl is built ----------
+# --- the SDL path proves itself headlessly, when an SDL build exists ------
 # Standing directive: the cell -> font -> upload chain must be testable without
 # a display. SDL_VIDEODRIVER=dummy gives exactly that. It used to hang after
 # writing the frame (T6: --dump-screen set dump_screen_done, the poll turned
 # that into input_exhausted, and wait_choice only tested exit_code), so this
 # test is also the regression guard for that. Skipped when the SDL build was
 # not requested, because SDL2 is an owner-install dependency.
-if [ -x ./u2-sdl ]; then
+#
+# It prefers u2-sdl-static over u2-sdl on purpose. The dev binary is linked against
+# whatever the host calls sdl2, which on this machine is sdl2-compat over SDL3, so
+# testing only u2-sdl means the one gate that touches the SDL backend exercises an
+# implementation we do not ship. Which one was used is printed, because a gate that
+# quietly tests the wrong artifact is the failure mode docs/sdl2-vs-sdl3.md § 7
+# names.
+SDL_BIN=""
+if   [ -x ./u2-sdl-static ]; then SDL_BIN=./u2-sdl-static
+elif [ -x ./u2-sdl ];        then SDL_BIN=./u2-sdl
+fi
+if [ -n "$SDL_BIN" ]; then
+    printf '  info  SDL gate is driving %s\n' "$SDL_BIN"
     rm -f "$WORK/sdl.ppm"
-    SDL_VIDEODRIVER=dummy timeout -s KILL 20 ./u2-sdl --sdl --dump-screen "$WORK/sdl.ppm" \
+    SDL_VIDEODRIVER=dummy timeout -s KILL 20 "$SDL_BIN" --sdl --dump-screen "$WORK/sdl.ppm" \
         >/dev/null 2>&1
     sdl_rc=$?
     if [ "$sdl_rc" -ne 0 ]; then
@@ -457,7 +469,7 @@ PY
     # --sdl exists. --dump-screen is implemented only by the SDL renderer, so a
     # frame here is proof the default resolved to sdl and not to the text grid.
     rm -f "$WORK/sdl-default.ppm"
-    SDL_VIDEODRIVER=dummy timeout -s KILL 20 ./u2-sdl --dump-screen "$WORK/sdl-default.ppm" \
+    SDL_VIDEODRIVER=dummy timeout -s KILL 20 "$SDL_BIN" --dump-screen "$WORK/sdl-default.ppm" \
         >/dev/null 2>&1
     def_size=$( [ -s "$WORK/sdl-default.ppm" ] && wc -c < "$WORK/sdl-default.ppm" | tr -d ' ' )
     if [ "$def_size" = "192015" ]; then
@@ -466,7 +478,7 @@ PY
         bad "SDL build did not default to the SDL renderer (flagless --dump-screen gave '${def_size:-nothing}')"
     fi
 else
-    printf '  SKIP  u2-sdl not built (make sdl) — headless SDL path not exercised\n'
+    printf '  SKIP  no u2-sdl or u2-sdl-static built — headless SDL path not exercised\n'
 fi
 
 # --- the screenshot differential, when the evidence is on disk ------------
