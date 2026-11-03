@@ -61,7 +61,7 @@ int u2_space_dive_allowed(uint8_t world)
     return world != U2_WORLD_DEEP_SPACE;
 }
 
-int u2_space_armour_survives(uint8_t worn_armour)
+int u2_space_armour_ok(uint8_t worn_armour)
 {
     return worn_armour >= 5; /* REFLECT or POWER */
 }

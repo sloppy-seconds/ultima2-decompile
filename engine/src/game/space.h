@@ -78,10 +78,18 @@ int u2_space_dive_allowed(uint8_t world);
  * armour pool is SKIN CLOTH LEATHER CHAIN PLATE REFLECT POWER NONE, so the gate is
  * REFLECT (5) or POWER (6).
  *
- * UNPROVEN in one direction: every observation wore POWER, so only the surviving arm
- * has been seen. The explode arm is static inference and the caller must say so if
- * it prints the message. */
-int u2_space_armour_survives(uint8_t worn_armour);
+ * OBSERVED 2026-11-03 with PLATE seeded, and the consequence is NOT a death. The
+ * failing arm prints "YOU HAVE EXPLODED!", calls L_007489, and then executes
+ * `jmp L_006c77` -- a self-jump. The game halts. Measured: HP, FOOD and GOLD all
+ * stayed put and the passive food tick stopped, and DS:51..59 were NOT zeroed, which
+ * is the exact opposite of the death tail's signature. So a caller must not route
+ * this through u2_death; it is an unrecoverable stop, and the engine should say so
+ * out loud rather than pretend the character died.
+ *
+ * Also observed: this is not reached by launching from Earth orbit. A PLATE character
+ * launched, got "HYPERWARP ENGAGED!" and kept ticking. The check lives in the status
+ * path. */
+int u2_space_armour_ok(uint8_t worn_armour);
 
 /* asm/38B0's descent, and the strongest confirmation in this project: this rule was
  * written from bytes alone, and then predicted both live landings to the cell.

@@ -140,9 +140,17 @@ int main(int argc, char **argv)
           "deep space answers REQUEST DENIED (the cmp $0xa test)");
 
     /* --- armour --- */
-    CHECK(u2_space_armour_survives(6) && u2_space_armour_survives(5),
-          "POWER and REFLECT survive space (cmp $0x5 on DS:62)");
-    CHECK(!u2_space_armour_survives(4), "PLATE does not, which is the unobserved arm");
+    CHECK(u2_space_armour_ok(6) && u2_space_armour_ok(5),
+          "POWER and REFLECT are good enough for space (cmp $0x5 on DS:62)");
+    CHECK(!u2_space_armour_ok(4),
+          "PLATE is not — observed 2026-11-03, and the consequence is a HALT");
+    CHECK(!u2_space_armour_ok(0) && !u2_space_armour_ok(4),
+          "SKIN and PLATE both fail the same gate");
+    /* Deliberately NOT asserted: that a failed gate kills the character. It does not.
+     * The failing arm prints "YOU HAVE EXPLODED!" and spins on `jmp L_006c77`, and a
+     * live PLATE run left HP 9999, GOLD 9999 and DS:51..59 unzeroed with the food tick
+     * stopped. Routing this through u2_death would be the wrong mechanic wearing the
+     * right words, and a test that asserted death would enshrine the mistake. */
 
     /* --- the descent: predicted from bytes, then observed to the cell --- */
     uint8_t x = 0, y = 0;

@@ -37,12 +37,24 @@
 #           to EQUAL a world's triple to orbit it. Consequence worth knowing: the
 #           off-course roll is rand & 7, so it can never produce a 9, so world 9 ('X')
 #           is unreachable by misfortune -- you have to type 9/9/9 deliberately.
-# ARMOUR GATE at L_006c57: `mov 0x62,%al ; cmp $0x5,%al ; jae L_006c79`, and only the
-#           not-taken arm reaches 'YOU HAVE EXPLODED!'. The armour pool is SKIN CLOTH
-#           LEATHER CHAIN PLATE REFLECT POWER NONE, so the gate is armour >= 5: REFLECT
-#           or POWER. The owner recalled needing POWER or REFLECT and the bytes agree,
-#           adding that REFLECT suffices. The observed character wore POWER (6), so the
-#           explode arm is INFERRED; PLATE or worse has never been tried.
+# ARMOUR GATE at L_006c57: `mov 0x62,%al ; cmp $0x5,%al ; jae L_006c79`. The armour pool
+#           is SKIN CLOTH LEATHER CHAIN PLATE REFLECT POWER NONE, so the gate is armour
+#           >= 5: REFLECT or POWER. The owner recalled needing POWER or REFLECT and the
+#           bytes agree, and added that REFLECT suffices.
+# IT IS NOT A DEATH, AND THIS WAS FIRST GOT WRONG. Observed 2026-11-03 with PLATE (4)
+#           seeded via `tools/u2_edit.py set FILE armour 4`: the message prints and then
+#           the routine does `call L_007489` followed by `jmp L_006c77`, a self-jump. The
+#           game HALTS. Measured proof, not interpretation: HP stayed 9999, FOOD stayed
+#           999961 across a 6-second window so the passive tick had stopped, GOLD stayed
+#           9999, and DS:51..59 were NOT zeroed -- which is precisely what distinguishes
+#           this from the death tail at runtime 0x0E62, whose whole signature is zeroing
+#           those nine bytes and printing '<NAME> IS DEAD!'. Frame:
+#           captures/spice86/g60-plate-halt/explode.png. So space without REFLECT armour
+#           is an unrecoverable freeze, not a death, and an engine that implements it as
+#           u2_death is wrong in a way a screenshot alone would not have shown.
+#           Also observed in the same session: the check is NOT reached at launch from
+#           Earth orbit -- the launch with PLATE printed HYPERWARP ENGAGED! and left the
+#           character alive and ticking. It fires from the status path, not the launch.
 # func 6999..6B3C  len 01A4 B  evidence: call+reko
 # strings: "  FUEL="; "  XENO="; "  YAKO="; "  ZABO=" (+5 more)
 # calls: L_000911, L_004c3e, L_00514d, L_0051df (str_out), L_0053eb, L_006c77, L_006c79, L_006c86 (+12 more)
