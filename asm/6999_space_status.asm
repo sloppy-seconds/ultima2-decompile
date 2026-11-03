@@ -5,14 +5,36 @@
 #           the byte it prints a fuel label beside is items_held[15], TRI-LITHIUM, and space
 #           travel spends one per event. asm/6DFD_hyperwarp_flow does the same on a warp. The
 #           owner's recollection ('each launch or space warp consumes your Tri-Lithium') is the
-#           third independent witness alongside the label and the subtract. Static grade: no
-#           capture has reached space. docs/save-format.md § 5.
+#           third independent witness alongside the label and the subtract.
+# OBSERVED 2026-11-03 in captures/spice86/g39-rocket-flight: this entry ran, the fuel
+#           subtract ran, and the spend is on film (DS:E5 1->0 and 9->8, with
+#           'HYPERWARP ENGAGED!' and FUEL= on screen). docs/save-format.md § 5 said
+#           "static -- never observed", and this header said the same; both are now false.
+# THE READOUT IS NOT A POSITION. XENO/YAKO/ZABO are written here from three tables
+#           indexed by the world byte, into DS:4CA/4CB/4CC:
+#               mov 0x6d,%bl ; mov %bx,%di
+#               mov %cs:0x7012(%di),%al ; mov %al,0x4ca
+#               mov %cs:0x701c(%di),%al ; mov %al,0x4cb
+#               mov %cs:0x7026(%di),%al ; mov %al,0x4cc
+#           So the readout is a property of the world you are orbiting, not of where the
+#           ship is. Measured: an arrow key moved the sprite and left all three bytes
+#           alone (6/6/6 before and after a RIGHT). DS:4CA..4CC sit outside the save
+#           record (DS:36..135) and are never persisted, which is why state.h has no
+#           name for them and why a DS dump of the save block cannot find them.
+# ARMOUR GATE at L_006c57: `mov 0x62,%al ; cmp $0x5,%al ; jae L_006c79`, and only the
+#           not-taken arm reaches 'YOU HAVE EXPLODED!'. The armour pool is SKIN CLOTH
+#           LEATHER CHAIN PLATE REFLECT POWER NONE, so the gate is armour >= 5: REFLECT
+#           or POWER. The owner recalled needing POWER or REFLECT and the bytes agree,
+#           adding that REFLECT suffices. The observed character wore POWER (6), so the
+#           explode arm is INFERRED; PLATE or worse has never been tried.
 # func 6999..6B3C  len 01A4 B  evidence: call+reko
 # strings: "  FUEL="; "  XENO="; "  YAKO="; "  ZABO=" (+5 more)
 # calls: L_000911, L_004c3e, L_00514d, L_0051df (str_out), L_0053eb, L_006c77, L_006c79, L_006c86 (+12 more)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+# provenance: observed 2026-11-03 -- captures/spice86/g39-rocket-flight/
+#           spice86dumpExecutionFlow.json, segment 017D, entry and fuel subtract both
+#           present in ExecutedInstructions; frames 11-launch.png and 21-space.png.
+# confidence: high for the readout, the tables and the fuel subtract; the explode arm
+#           is inferred (only the surviving arm has been observed)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 space_status:
 L_006b99:

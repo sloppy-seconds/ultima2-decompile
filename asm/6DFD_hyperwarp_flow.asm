@@ -1,11 +1,30 @@
 # hyperwarp_flow — hyperwarp engage + off-course handling
-# name-evidence: strings 'HYPERWARP ENGAGED!' / 'SHIP OFF COURSE!'
+# OFF-COURSE GATE at L_007086, decoded and then confirmed twice by live play:
+#       mov 0xe5,%al            TRI-LITHIUM count, packed BCD
+#       clc ; rcr $1,%al ; jae  low bit clear -> skip off-course
+#       clc ; rcr $1,%al ; jae  next bit clear -> skip off-course
+#       'SHIP OFF COURSE!'
+#       call L_006f68 ; and $0x7,%al ; mov %al,0x4ca   (and again for 4cb, 4cc)
+#   So off-course fires iff (fuel & 3) == 3, evaluated on the POST-decrement count
+#   (run 1: 8 -> 7, 7&3==3, dumped; run 2: 7 -> 6, 6&3==2, arrived where typed).
+#   The coordinates are then rand & 7, i.e. 0..7, and asm/7030 sets DS:6D to 0x0A.
+#   The owner's recollection was 'randomly it will dump you in deep space'. The
+#   randomness is real but is only the COORDINATES; whether it happens at all is
+#   arithmetic on the fuel stack, which is why it feels like luck in play.
+#   A typed destination is written into DS:4CA/4CB/4CC BEFORE this gate, so on-course
+#   keeps what you typed (9/9/9 honoured exactly) and off-course overwrites it.
+#   Note the typed range is not bounded by the random range: 9 is accepted, and the
+#   coordinate readout can therefore exceed 7.
 # func 6DFD..6FA2  len 01A6 B  evidence: call+reko
 # strings: "HYPERWARP ENGAGED!"; "SHIP OFF COURSE!"; "NO FUEL!"; "HYPERWARP TO:" (+2 more)
 # calls: L_000911, L_00514d, L_0051df (str_out), L_0055f4, L_006c79, L_006d3d, L_006ec4, L_006f5b (+6 more)
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+# provenance: observed 2026-11-03 -- captures/spice86/g39-rocket-flight/
+#           spice86dumpExecutionFlow.json (segment 017D): this entry, the off-course
+#           gate at 0x7086, the 'SHIP OFF COURSE!' print at 0x7093 and the random source
+#           L_006f68 all appear in ExecutedInstructions. Frames 23-hyperspace.png
+#           (armed), 24-arrive.png (deep space, 7/1/1), 26-h999-after.png (on course,
+#           9/9/9, 'YOU ARE ORBITING X.').
+# confidence: high for both arms of the gate, each observed on a different fuel count
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 hyperwarp_flow:
 L_006ffd:

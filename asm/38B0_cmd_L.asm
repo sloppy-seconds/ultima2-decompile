@@ -5,7 +5,7 @@
 #           HERE!!!!!"). Largest handler; many local branches.
 # func 38B0..3B91  len 02E2 B  evidence: seed+reko (jump table cs:0730 entry L)
 # provenance: live:airport32 (+2 other harvests), static
-#           entry executed in 3 of 209 harvests; derived by tools/provenance_from_traces.py
+#           entry executed in 4 of 210 harvests; derived by tools/provenance_from_traces.py
 # confidence: medium (flow + messages proven by bytes; NPC/quest semantics inferred)
 # notes: re-decoded with tools/decode_str.py (str_out-aware); gas re-encode diffs
 #        kept as .byte (disp8/disp16 and reg-op form choices)
@@ -50,9 +50,18 @@
 #   ' FRIGATE' in shipcap3. The DS census over every harvest memory dump agrees: [DS:13] is
 #   0x24 in shipcap3 and 0x26 in flight-32-live and flight-launched-live, 0x78 in 150
 #   dumps, 0x22 once (the stepcost forced poke) and NEVER 0x28. So the plane branch is
-#   observed end to end, the ship arm is observed, and the ROCKET has never been entered in
-#   any capture — its launch flight, its auto-flight-south and its crash-on-non-grass rule
-#   are bytes only, graded inferred-from-bytes, and the engine marks them as such.
+#   observed end to end and the ship arm is observed. THE ROCKET WAS ENTERED ON
+#   2026-11-03 (captures/spice86/g39-rocket-flight), and every rocket rule in this
+#   header is now OBSERVED rather than inferred-from-bytes: DS:13 = 0x28 twice with a
+#   frame each time, the launch flight, the auto-flight-south, and the crash-on-non-grass
+#   rule. The auto-flight-south rule written above from bytes alone predicted BOTH
+#   landings to the cell -- (7,62) in run 1 and (5,44) in run 2 -- from y += 2 with
+#   x += 1 on multiples of 8 starting at (0,6). That is the strongest confirmation in
+#   this project so far of a static decode by live play.
+#   Still inferred after that session: the crash arm's survival case. Both observed
+#   landings were on a lethal tile (0x00 water, then 0x0c forest) and both ran the death
+#   tail at runtime 0x0E62; landing on 0x08 grass is predicted safe and has NOT been
+#   tested. And the plane's airborne flag (W6) remains open.
 #   Also measured, from the same dumps: shipcap3 boarded the frigate and its DS:E2 still
 #   reads 01 afterwards, so boarding CHECKS the gating item and does not spend it. One
 #   sample, and it assumes the starting count was 1.

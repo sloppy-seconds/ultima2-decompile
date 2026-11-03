@@ -16,17 +16,49 @@
 #           as the TIME-PERIOD index (0 LEGENDS, 1 9,000,000 B.C., 2 1423 B.C., 3 1990 A.D.,
 #           4+ 2112 A.D.). So DS:49 is documented as both a world and an era, and the mapx set
 #           (tens 0..9, each group with exactly one wilderness X0 plus its sites) fits the
-#           world reading better than the era reading. Neither has been observed moving.
-#           Settled by watching DS:49 across a time-travel event and, separately, a planet
-#           landing — see G45 for the recipe.
+#           Neither had been observed moving until 2026-11-03. OBSERVED: a planet
+#           landing DOES move it. Landing on world 9 wrote DS:49 = 0x09 (sector 90);
+#           landing on Earth wrote DS:49 = 0x04 (sector 40). So on the landing path the
+#           tens digit is the world for worlds 1..9 and is hardcoded to 4 for Earth --
+#           which is why Earth's rocket landing zone is sector 40 and not 00, and why
+#           the two readings of DS:49 coexist: the byte is the world on arrival from
+#           space, and era-indexed by asm/3546 on Earth where the two agree at 4.
+#           Still open for G45: a time-door crossing has not been re-watched since.
+# WORLD NAMES, from this routine's dispatch on DS:6D (cmp $0x0 .. cmp $0x8):
+#           0 EARTH   1 MERCURY  2 VENUS   3 MARS    4 JUPITER
+#           5 SATURN  6 URANUS   7 NEPTUNE 8 PLUTO   9 'X'
+#           0x0A is deep space and has no name of its own; it prints 'YOU ARE IN DEEP
+#           SPACE.' instead. The name for 9 is NOT a literal in this file: the chain
+#           falls through to `jmp L_00737a`, which is past this routine's declared end
+#           (0x7241) and past the highest offset ever executed (0x729B), so the world-9
+#           name is still an open decode even though 'X' was seen on screen.
+# LANDING SECTOR, computed not random:
+#           world == 0:  mov $0x0,%al ; mov %al,0x4a
+#                        mov $0x4,%al ; mov %al,0x49      -> sector 40
+#           world != 0:  mov $0x0,%al ; mov %al,0x4a
+#                        mov 0x6d,%al ; mov %al,0x49      -> sector world*10 + 0
+#           'REQUEST DENIED!' fires on exactly one condition, `cmp $0xa,%al` against
+#           DS:6D: you cannot land from deep space. Any orbiting world can be landed on.
+#           The ones digit is always forced to 0, so a rocket always arrives in the
+#           WILDERNESS sector of its world, never in a site.
 #           asm/3DFA refuses the save when this byte is non-zero, with the message
 #           'ONLY ON EARTH!'. asm/6999_space_status reads it as an index.
 # func 7030..7241  len 0212 B  evidence: call+reko
 # strings: "U HIT THE SUN!"; "t&"; "Oy"; "YOU ARE IN DEEP SPACE." (+14 more)
 # calls: L_000911, L_0051df (str_out), L_006ec4, L_00737a, L_007384, L_007489
-# provenance: static
-#           entry never appears in ExecutedInstructions of any of the 60 harvests; derived by tools/provenance_from_traces.py
-# confidence: low (bytes proven by check_func.py)
+# provenance: observed 2026-11-03 -- captures/spice86/g39-rocket-flight/
+#           spice86dumpExecutionFlow.json (segment 017D), entry present in
+#           ExecutedInstructions. Both DS:6D writes are on record: 0x0A with
+#           'YOU ARE IN DEEP SPACE.' (24-arrive.png) and 0x09 with 'YOU ARE ORBITING X.'
+#           (26-h999-after.png), each read back from live DS in the same second.
+#           TRACE WINDOW CAVEAT: the dump was taken at 15:36:51 and the dive landed at
+#           ~15:43, so the ORBIT and HYPERWARP arms are traced and the LANDING path is
+#           not. The landing sector arithmetic and the 'REQUEST DENIED!' test are graded
+#           observed from live DS readback (DS:49 = 0x09, sector 90) plus frames, not
+#           from ExecutedInstructions. Do not cite this trace for the landing path.
+# confidence: high for the world byte, the name list 0..8, the deep-space refusal and
+#           the landing sector arithmetic; low for the world-9 name routine, which has
+#           never executed.
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 space_collision:
 L_007230:
