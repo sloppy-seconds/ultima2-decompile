@@ -44,6 +44,33 @@
 #   stopped on decides everything — tile 0x08 grass and it lives, anything else jumps to
 #   runtime 0x0E62, which is the death tail. So a rocket is aimed by timing, not steering.
 #
+# THE PARKED-ROCKET TRIPLE, DS:69 / DS:6A / DS:6B. Decoded 2026-11-03 by sweeping every
+#   reader and writer in the tree; these three bytes are inside the save record (DS:36..135)
+#   and that is the whole point of them.
+#     DS:69  flag: a rocket is standing at DS:6A/DS:6B and must be re-staged
+#     DS:6A  that cell's x
+#     DS:6B  that cell's y
+#   WRITERS, both in this routine:
+#     L_003b52  launch: DS:6B := y, DS:6A := x, DS:69 := 1, then `call L_0024fd`. Observed
+#               live as DS:69/6A/6B = 01 01 0a after launching from (1,10) in sector 40.
+#     L_003bd7  a SURVIVED dive: `mov 0x6d,%al ; or %al,%al ; jne` -- on EARTH it clears
+#               DS:69 to 0; off Earth it records the landing cell and sets DS:69 to 1.
+#   READERS, three, all doing the identical stamp:
+#     asm/080D  the 'P' load path. Sets position from DS:5A/5B, then `mov 0x69,%al ;
+#               or %al,%al ; je` and on the not-taken arm falls into asm/0839.
+#     asm/0839  DS:23 := DS:6A ; DS:24 := DS:6B ; call L_0052b3 ; mov $0x50,%al ; stamp.
+#     asm/245A  byte-for-byte the same stamp, second entry point.
+#     asm/3823  the site-exit block, and it too branches on DS:6D before restaging.
+#   0x50 IS THE ROCKET TILE: mapx41 at the three authored pads (33,3) (38,3) (43,3) is
+#   0x50, and the live grid cell DS:18E6 went 0x50 -> 0x08 the moment the rocket lifted off
+#   (captures/spice86/g39-rocket-flight). The engine already models the pairing: see
+#   engine/src/game/overworld.c, "0x28->0x50 rocket".
+#   WHY THIS EXPLAINS THE AUTO-SAVE: a rocket left on a planet has no authored pad, so the
+#   only thing that puts it back is the save record. The launch saves because the parked
+#   state has to survive a restart -- the save is not incidental to launching, it is the
+#   persistence mechanism. Earth needs none of that, which is exactly why the dive clears
+#   the flag there instead of setting it.
+#
 # GRADES. Bytes for every branch above. OBSERVED (tools/cfg_printed.py over the harvests,
 #   which requires the call instruction itself to have executed): 'LAUNCH--PLANE' and 'LAND
 #   PLANE.' in flight-launched-live and airport32, 'LAND--NOT HERE!!!!!' in airport32, and
