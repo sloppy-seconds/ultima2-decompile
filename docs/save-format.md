@@ -329,13 +329,13 @@ would have shown otherwise had silently refused. The full picture, measured with
 
 | action | what lands on disk |
 | --- | --- |
-| crossing a site edge (leave or enter a town) | `mapx`/`monx` byte-identical to pristine — **but that measurement compared the sector files only; see "Open: the site-entry save" below, which may make this row wrong** |
+| crossing a site edge (leave or enter a town) | `mapx`/`monx` byte-identical to pristine. **`player` IS written on entry** — see "the site-entry save" below; the original measurement compared the sector files only |
 | `Q` outdoors, gate satisfied | `player`, **and `mapxNN` and `monxNN` of the sector you are standing in** |
 | `Q` inside a town | refused: `ONLY OUTDOORS!`, nothing written |
 | `Q` outdoors with `DS:6D != 0` | refused: `ONLY ON EARTH!`, nothing written |
 | **death, any cause** | **nothing.** The zeroing is memory-only |
 | **rocket launch from a wilderness sector** | `player` **only** — not `mapxNN`, not `monxNN` |
-| **entering a site** (town, tower, dungeon, castle, village) | **probably `player` too — see the open question below, this doc currently says otherwise** |
+| **entering a site** (town, tower, dungeon, castle, village) | **`player`, proven 2026-11-03** — and it records the sector you came **from**, not the one you entered |
 
 ### The rocket launch saves, silently, and bypasses the save guards
 
@@ -383,8 +383,9 @@ transition save. Where to look is named below.
 
 ### Open: the site-entry save, which this doc currently contradicts
 
-`asm/341E` (village), `asm/343F` (`-TOWN`, `-TOWER`), `asm/34B5`/`asm/34CF` (`-CASTLE`)
-and `asm/34E4` (`-DUNGEON`) all share one shape — record the return cell, then save:
+**RESOLVED 2026-11-03, same session, and the answer is yes.** `asm/341E` (village),
+`asm/343F` (`-TOWN`, `-TOWER`), `asm/34B5`/`asm/34CF` (`-CASTLE`) and `asm/34E4`
+(`-DUNGEON`) all share one shape — record the return cell, then save:
 
 ```asm
 mov %al,0x5a    ; DS:5A = entry_x
@@ -392,13 +393,23 @@ mov %al,0x5b    ; DS:5B = entry_y
 call L_0024fd   ; the save body
 ```
 
-If that reaches disk, then **every site entry silently saves the game**, and the first row
-of the table above ("crossing a site edge writes nothing") is wrong. That row came from
-`captures/spice86/save-wilderness`, which measured `mapx`/`monx` byte-identity and may
-never have compared `player` against its seed. The test is cheap and is the same A/B used
-above: seed in a wilderness sector, walk into a town gate, diff `player` against the seed.
-Not yet run. Recorded rather than asserted, because the row it would correct is a measured
-row and it deserves a measurement, not an inference from a `call` site.
+Measured: seeded `REDTHEPIRATE` into sector 30 at `(34,20)` — the wilderness mouth that
+leads to Port Boniface — pressed `E`, arrived in sector 31 at `(31,62)`, and the run's
+`player` file then differed from the seed by 5 bytes, food `999999` -> `999989`. So the
+site entry wrote the record. **The row above saying a site edge writes nothing was wrong
+about `player`; it was only ever a `mapx`/`monx` measurement.**
+
+The detail worth keeping: the sector stored in that file is **30, the sector the character
+came from**, not 31 where they now stand. The routine records the return cell and saves the
+*outdoor* state before switching, which is the mechanism behind dying inside a town and
+waking up outside it. It also means the auto-save on entry is not merely a checkpoint — it
+is a checkpoint pinned to the outside world, deliberately.
+
+Still open: whether a **time-period transition** forces a save, as the owner states. Not
+found; the five unexplained save-body callers turned out to be these site entries, and
+`docs/moongates.md` evidences no transition save. The rotation routine is still undiscovered
+(`asm/2708`–`2775` was refuted), so this needs either that decode or a live crossing with a
+`player` diff either side. See `docs/needs-gameplay.md` G64.
 
 ### Death does not touch the file (measured 2026-11-03)
 
