@@ -1472,6 +1472,24 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
      * because the load also needs the floor reset, the authored creatures stamped and the
      * spawner run — the same work the enter path does, for the same reason.
      */
+    /* asm/080D, the 'P' load path, ends with `mov 0x69,%al ; or %al,%al ; je` and on the
+     * not-taken arm falls into asm/0839, which stamps U2_TILE_ROCKET at the cell in
+     * DS:6A/DS:6B. So a save that left a rocket standing on a planet re-creates it on
+     * load — which is the whole reason the triple lives inside the save record.
+     *
+     * terrain_put, not tile_put: this is a permanent edit of the world, not something
+     * standing in it, and the creature restamp rebuilds the grid from map_base every
+     * turn. A write that landed only in `map` would be erased the next time anything
+     * moved, and the rocket would flicker out. Same reason boarding uses it.
+     *
+     * Guarded on the world byte because that is what the original's dive does when
+     * deciding whether to set the flag at all: Earth's pads are authored, so a parked
+     * flag on Earth would stamp a second rocket onto a map that already has them. */
+    if (ctx->state.rocket_parked && ctx->state.world != 0) {
+        u2_world_terrain_put(&ow->world, ctx->state.rocket_parked_x,
+                             ctx->state.rocket_parked_y, U2_TILE_ROCKET);
+    }
+
     if (u2_site_is_dungeon(ctx)) u2_dungeon_enter(ctx, ow);
     return 0;
 }

@@ -276,7 +276,39 @@ typedef struct u2_state {
                                         * adds 2, asm/435E subtracts 1. */
     /* 0x66 */ uint8_t tools;          /* packed decimal, ceiling 99. asm/2CF6
                                         * adds 1, asm/277B subtracts 1. */
-    /* 0x67 */ uint8_t reserved_67[6];
+    /* 0x67 */ uint8_t reserved_67[2];   /* DS:67, DS:68: no reader or writer found in
+                                        * the whole-tree sweep that named DS:69..6B. Left
+                                        * unnamed on purpose rather than guessed at. */
+    /* 0x69 */ uint8_t rocket_parked;    /* flag: a rocket is standing at
+                                        * rocket_parked_x/rocket_parked_y and must be
+                                        * re-staged onto the map.
+                                        *
+                                        * It is inside the save record (DS:36..135) and
+                                        * that is the entire reason for it. A rocket left
+                                        * on a planet has no authored pad, so the only
+                                        * thing that puts it back after a restart is the
+                                        * record — which is also why launching a rocket
+                                        * silently saves (asm/38B0 L_003b52 sets this and
+                                        * then calls the save body, with no message).
+                                        *
+                                        * Writers: asm/38B0 L_003b52 on launch (:= 1) and
+                                        * the survived-dive branch at L_003bd7, which
+                                        * CLEARS it on Earth (L_003bde) and sets it off
+                                        * Earth (L_003be6). Earth clears because its pads
+                                        * are baked into the map: mapx41 at (33,3),
+                                        * (38,3) and (43,3) is 0x50.
+                                        * Readers: asm/080D on the 'P' load path
+                                        * (`mov 0x69,%al ; or %al,%al ; je`), falling into
+                                        * asm/0839, which stamps U2_TILE_ROCKET at the
+                                        * recorded cell. asm/245a is a second copy of that
+                                        * stamp and asm/3823 re-stages on site exit.
+                                        *
+                                        * Observed live 2026-11-03: 01 01 0a after
+                                        * launching from (1,10) in sector 40, and 00 00 00
+                                        * on a character that had never been in space. */
+    /* 0x6A */ uint8_t rocket_parked_x;  /* the parked rocket's cell column */
+    /* 0x6B */ uint8_t rocket_parked_y;  /* and row */
+    /* 0x6C */ uint8_t reserved_6C;      /* no reader or writer found */
     /* 0x6D */ uint8_t world;          /* WHICH WORLD the player is on. 0 = Earth,
                                         * 1..9 = the planets, 0x0A = deep space. Written by
                                         * asm/7030 (`mov $0xa,%al` beside 'YOU ARE IN DEEP
@@ -524,6 +556,9 @@ _Static_assert(U2_OFF(readied_weapon) == 0x061, "readied_weapon moved");
 _Static_assert(U2_OFF(spawn_selector) == 0x060, "spawn_selector moved");
 _Static_assert(U2_OFF(worn_armour)    == 0x062, "worn_armour moved");
 _Static_assert(U2_OFF(torches)        == 0x064, "torches moved");
+_Static_assert(U2_OFF(rocket_parked)   == 0x069, "rocket_parked moved");
+_Static_assert(U2_OFF(rocket_parked_x) == 0x06A, "rocket_parked_x moved");
+_Static_assert(U2_OFF(rocket_parked_y) == 0x06B, "rocket_parked_y moved");
 _Static_assert(U2_OFF(keys)           == 0x065, "keys moved");
 _Static_assert(U2_OFF(tools)          == 0x066, "tools moved");
 _Static_assert(U2_OFF(world)         == 0x06D, "world moved");

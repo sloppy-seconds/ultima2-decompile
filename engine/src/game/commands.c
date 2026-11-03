@@ -996,11 +996,16 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
      * with no fuel left is written to disk and kept. Enhanced mode may later choose to
      * soften that or to offer slots; until it does, this matches the original.
      *
-     * DS:69/6A/6B themselves are not modelled — they are inside the save record but
-     * state.h has no fields for them, and inventing a mirror without knowing what reads
-     * them would be a claim, not a save. */
-    if (ctx->state.world == 0 && ow->sector_lo == 0)
+     * DS:69/6A/6B are the parked-rocket triple and are modelled in state.h: the save
+     * here is what makes a rocket left on a planet survive a restart. The triple is
+     * written INSIDE the same guard, in the original's order (6B := y, 6A := x, 69 := 1,
+     * then the save), so the record carries the pad cell the rocket is lifting off. */
+    if (ctx->state.world == 0 && ow->sector_lo == 0) {
+        ctx->state.rocket_parked_y = (uint8_t)ow->y;
+        ctx->state.rocket_parked_x = (uint8_t)ow->x;
+        ctx->state.rocket_parked   = 1;
         (void)u2_overworld_autosave(ctx, ow);
+    }
 
     /* asm/3B74..0x3B7E: position to (0,0) and DS:12 to the world-map view mode. The
      * sector reload at asm/2490 that runs just before this is not modelled — it re-reads
@@ -1029,6 +1034,25 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
             /* asm/3BCE: the tile it stopped on decides everything. */
             if (!u2_space_dive_survives(u2_world_tile_at(&ow->world, ow->x, ow->y))) {
                 u2_death(ctx);
+            } else {
+                /* asm/38B0 L_003bd7, the survived-dive branch: `mov 0x6d,%al ;
+                 * or %al,%al ; jne`. On EARTH the parked flag is CLEARED, because Earth's
+                 * pads are authored into the map — mapx41 at (33,3), (38,3) and (43,3) is
+                 * 0x50 — so there is nothing to re-stage. Off Earth the landing cell is
+                 * recorded and the flag set, because nothing authored that pad and the
+                 * rocket has to still be there when the player comes back.
+                 *
+                 * Not re-stamping the tile into the grid here is deliberate: the rocket
+                 * has just left that cell, and the engine's grid already stopped drawing
+                 * it when the launch reset the position. asm/38B0 writes only the triple
+                 * on this path, and so does this. */
+                if (ctx->state.world == 0) {
+                    ctx->state.rocket_parked = 0;
+                } else {
+                    ctx->state.rocket_parked_x = (uint8_t)ow->x;
+                    ctx->state.rocket_parked_y = (uint8_t)ow->y;
+                    ctx->state.rocket_parked   = 1;
+                }
             }
             cmd_done(ctx);
             return U2_CMD_DONE;

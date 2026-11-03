@@ -270,6 +270,47 @@ int main(int argc, char **argv)
          * purpose rather than padding the count with a check that cannot fail. */
     }
 
+    /* --- the parked-rocket triple round-trips through the record ---------
+     *
+     * DS:69/6A/6B are the parked-rocket record and they live INSIDE the saved block,
+     * which is the only reason a rocket left on a planet survives a restart. The
+     * property that matters is not "the value comes back" — the struct is the record,
+     * so that is nearly free. It is that the three bytes land at the disk offsets the
+     * original uses, because that is what tools/save_cross_load.py depends on and
+     * nothing else would notice a drift. */
+    {
+        unsigned char rec[256];
+        FILE *rf;
+        int got;
+
+        a.state.rocket_parked   = 1;
+        a.state.rocket_parked_x = 0x21;
+        a.state.rocket_parked_y = 0x43;
+        ok(u2_save_store(&a) == U2_SAVE_OK, "store with a rocket parked");
+        rf = fopen(saves_path, "rb");
+        got = rf && fread(rec, 1, 256, rf) == 256;
+        if (rf) fclose(rf);
+        /* Record offset = DS offset - 0x36, so DS:69/6A/6B are 0x33/0x34/0x35. */
+        ok(got && rec[0x33] == 1 && rec[0x34] == 0x21 && rec[0x35] == 0x43,
+           "the triple sits at record offsets 0x33/0x34/0x35 (DS:69/6A/6B)");
+
+        memset(&a.state, 0, sizeof a.state);
+        a.state.rocket_parked = 0;
+        ok(u2_save_load(&a) == U2_SAVE_OK, "load it back");
+        ok(a.state.rocket_parked == 1 && a.state.rocket_parked_x == 0x21 &&
+           a.state.rocket_parked_y == 0x43,
+           "and the parked rocket survives a restart, which is what it is for");
+
+        /* The Earth asymmetry, asserted as data: the original CLEARS the flag on a
+         * survived Earth dive because Earth's pads are authored into mapx41. A record
+         * with the flag clear must load as clear, or the engine would stamp a second
+         * rocket onto a map that already has three. */
+        a.state.rocket_parked = 0;
+        ok(u2_save_store(&a) == U2_SAVE_OK && u2_save_load(&a) == U2_SAVE_OK &&
+           a.state.rocket_parked == 0,
+           "a cleared flag stays cleared, so Earth does not get a phantom rocket");
+    }
+
     printf("save_q_check: %s\n", fails ? "FAIL" : "PASS");
     return fails ? 1 : 0;
 }
