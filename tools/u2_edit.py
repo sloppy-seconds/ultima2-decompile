@@ -314,9 +314,10 @@ def main():
         put(d, 'entry_y', int(a.args[1]))
         print('entry -> (%s, %s)' % tuple(a.args))
     elif a.cmd == 'set':
-        if len(a.args) != 2:
-            sys.exit('set needs FIELD VALUE')
-        f, v = a.args
+        if len(a.args) != 2 and not (len(a.args) >= 3 and a.args[0] == 'item'):
+            sys.exit('set needs FIELD VALUE  (or: set item NAME... COUNT)')
+        f = a.args[0]
+        v = a.args[1] if len(a.args) == 2 else None
         if f == 'spells':
             # Stock every spell slot the caster can actually ready (1..9; slot 0 is NONE).
             n = int(v)
@@ -326,8 +327,25 @@ def main():
                 d[SPELL_BASE + i - BASE] = ((n // 10) << 4) | (n % 10)
             print('spells 1..%d -> %d each' % (SPELL_SLOTS - 1, n))
         elif f == 'items':
-            sys.exit("there is no single 'items' field; the 16 slots live at DS:D6+i "
-                     "(see ITEMS in this file), or run `maxout`")
+            sys.exit("there is no single 'items' field; use `set item NAME... COUNT` "
+                     "(see ITEMS in this file), or run `maxout` for one of everything")
+        elif f == 'item':
+            # `set item TRI-LITHIUM 9`. The name may contain spaces, so the count is
+            # the last argument and everything between is the name.
+            if len(a.args) < 3:
+                sys.exit('set item NAME... COUNT  e.g. `set item TRI-LITHIUM 9`')
+            count = int(a.args[-1])
+            name = ' '.join(a.args[1:-1]).upper()
+            if name not in ITEMS:
+                sys.exit('no item %r; known: %s' % (name, ', '.join(ITEMS)))
+            if not 0 <= count <= 99:
+                sys.exit('item count must be 0..99 — slots are packed decimal')
+            # Packed BCD, not a raw integer. Proven by the consumer itself:
+            # asm/6999_space_status decrements the fuel slot with
+            # `stc ; cmc ; sbb $1,%al ; das ; cmc`, and `das` is a decimal adjust.
+            # Writing 10 as 0x0A would print as garbage and subtract wrongly.
+            d[ITEM_BASE + ITEMS.index(name) - BASE] = ((count // 10) << 4) | (count % 10)
+            print('item %s -> %d' % (name, count))
         elif f not in FIELDS:
             sys.exit('unknown field %r; known: %s, spells' % (f, ', '.join(sorted(FIELDS))))
         else:
@@ -346,6 +364,14 @@ def main():
             if chk[SPELL_BASE + 1 - BASE] != want:
                 sys.exit('write did not land: spell slot 1 reads back 0x%02x' %
                          chk[SPELL_BASE + 1 - BASE])
+            print('wrote %s' % out)
+            return
+        if a.args[0] == 'item':
+            name = ' '.join(a.args[1:-1]).upper()
+            want = ((int(a.args[-1]) // 10) << 4) | (int(a.args[-1]) % 10)
+            off = ITEM_BASE + ITEMS.index(name) - BASE
+            if chk[off] != want:
+                sys.exit('write did not land: %s slot reads back 0x%02x' % (name, chk[off]))
             print('wrote %s' % out)
             return
         got = get(chk, a.args[0])
