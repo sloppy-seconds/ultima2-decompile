@@ -1,0 +1,24 @@
+Substitute tile art — original work by this project, Apache-2.0
+===============================================================
+
+Where:      engine/assets/tiles/cleanroom/tiles/ (64 SVGs), compiled into the
+            engine as engine/src/core/tiles_cleanroom.h
+Licence:    Apache-2.0, owned by this project. See the Apache-2.0 notice in this
+            output, or `LICENSE` in the source repository.
+
+This is recorded here although it is not third-party work, because it is the one
+asset whose authorship could reasonably be questioned by someone reading a
+reconstruction of a commercial game, and the answer is a procedure rather than an
+assertion.
+
+It was made under a cleanroom wall: a spec author who had examined the original
+binary wrote intent-only requirements — what a tile must communicate, never pixel
+coordinates, measured densities or component sizes. A separate implementer drew
+the art from that specification alone, in a tree containing no game art. The
+result communicates the same things as the original CGA tiles. It is not a copy
+of them.
+
+Full procedure, verification chain, build history and the recorded failures:
+`docs/cleanroom-procedure.md`. The legal record that travels with the assets:
+`engine/assets/tiles/cleanroom/PROVENANCE.md`. The specification they were drawn
+from: `docs/tile-art-spec.md`.

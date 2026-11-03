@@ -21,6 +21,7 @@
 #include <string.h>
 #include "core/ctx.h"
 #include "core/version.h"
+#include "core/licenses.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "core/state.h"
@@ -49,6 +50,8 @@ static void usage(const char *argv0)
         "  --sdl           alias for --renderer=sdl\n"
         "  --version       print which build this is: SDL implementation, linkage,\n"
         "                  and whether it is the shipped artifact or a dev build\n"
+        "  --licenses      print the full licensing and attribution record, then\n"
+        "                  exit. The release ships one file, so this travels with it\n"
         "  --video-drivers list the video drivers compiled into this binary and\n"
         "                  exit. If the list has no x11 or wayland, the binary\n"
         "                  cannot open a window on any desktop.\n"
@@ -328,6 +331,13 @@ int main(int argc, char **argv)
             char info[192];
             u2_build_info(info, sizeof info);
             printf("%s\n", info);
+            return 0;
+        } else if (strcmp(a, "--licenses") == 0) {
+            /* The release is one file with no accompanying documents, so the
+             * obligations and provenance have to travel inside it. Printed to
+             * stdout and then a clean exit, because someone asked for a document,
+             * not a game. */
+            u2_licenses_print(stdout);
             return 0;
         } else if (strcmp(a, "--video-drivers") == 0) {
             /* Diagnostic, and the release gate: a player binary with only dummy

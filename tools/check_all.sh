@@ -88,6 +88,10 @@ echo "== gates over tracked inputs (CI-runnable) =="
 # gate that cannot go red has not been proven. Controls first, then the gate.
 run "content_header selftest" engine/content/gen_content.h -- python3 engine/tests/content_header_selftest.py
 run "content_header gate" engine/content/gen_content.h -- python3 engine/tools/extract/extractor.py --source asm --verify -o engine/content/gen_content.h
+# The licence record compiled into the binaries. Committed generated output with no
+# build rule, so the only thing keeping it honest is this: if a notice file changes
+# and the header is not regenerated, the shipped binary prints a stale licence.
+run "licenses_data fresh" engine/src/core/licenses_data.h -- python3 engine/tools/gen_licenses.py --verify
 run "cmd_handlers" asm disasm/jump-table.txt -- python3 tools/cmd_handlers.py --check
 # The derived half. captures/spice86/ is gitignored, so this is optional by declaration and
 # SKIPs in CI rather than pretending to have checked. It is the gate that makes `exec` generated

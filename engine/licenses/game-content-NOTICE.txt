@@ -1,0 +1,31 @@
+About the game itself — what this binary does and does not contain
+=================================================================
+
+Ultima II is a commercial game, copyright Origin Systems. This project is a
+reconstruction of its engine, and the distinction matters for what a shipped
+binary actually carries:
+
+NOT embedded, and never distributed by this project
+  * The game's art and sound. Tiles are original substitute art drawn under a
+    cleanroom procedure (see the tile-art notice in this output). The PC-speaker
+    tones are generated from the PIT divisor the original latched, not sampled.
+  * The world data: sector maps, monster placements, NPC dialogue, pictures.
+    These are read at runtime from a directory the player supplies with
+    --data-dir, and they are never committed to the repository or shipped in a
+    binary.
+  * The original executable.
+
+Embedded in this binary
+  * Short functional text strings the engine must print — menu labels, prompts,
+    item and spell names — extracted from the game executable by
+    engine/tools/extract/extractor.py. There is no cleanroom path for these: if
+    the engine prints anything other than what the original printed, it is
+    behaviourally wrong. They are generated into a committed header,
+    engine/content/gen_content.h, and the extractor is that file's only writer.
+  * Our own reconstruction of the original program's behaviour, as C.
+
+The project's full licensing and provenance rules are in `AGENTS.md` § 0 and
+`THIRD-PARTY-LICENSES` in the source repository:
+https://github.com/sloppy-seconds/ultima2-rebuild
+
+This notice is provenance, not legal advice.

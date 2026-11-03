@@ -58,7 +58,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check sdl sdl-probe-check sdl-run sdl-win sdl-static play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check licenses licenses-check sdl sdl-probe-check sdl-run sdl-win sdl-static play help fresh
 
 all: $(BIN)
 
@@ -84,6 +84,18 @@ content:
 content-check:
 	@test -f $(GEN) || { echo "$(GEN) is missing and is committed content"; exit 1; }
 	python3 tools/extract/extractor.py --source asm --verify -o $(GEN)
+
+# The licence record, same discipline as the content header: the generated file is
+# committed, there is deliberately no build rule that regenerates it during a
+# normal build, and `licenses-check` proves the committed copy still matches its
+# sources. A silently short licence list looks exactly like a complete one, which
+# is the only kind of licensing failure that would be easy to miss.
+licenses:
+	python3 tools/gen_licenses.py
+
+licenses-check:
+	@test -f src/core/licenses_data.h || { echo "src/core/licenses_data.h is missing and is committed output"; exit 1; }
+	@python3 tools/gen_licenses.py --verify
 
 $(BIN): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^

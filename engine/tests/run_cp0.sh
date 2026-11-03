@@ -218,6 +218,55 @@ else
     bad "--version exited non-zero; a binary that cannot identify itself is the defect this flag exists to fix"
 fi
 
+### --- --licenses: the attribution record travels inside the binary ------------
+# The release is one file with no accompanying documents, so the licence record has
+# to be printed by the thing itself. A list that silently lost an entry would look
+# exactly like a complete list, which is the only failure mode of this feature worth
+# gating for, so the checks are about presence and byte-fidelity rather than style.
+if lic=$(./u2 --licenses 2>&1); then
+    printf '%s\n' "$lic" | grep -q "Apache License 2.0" \
+        && ok "--licenses carries our own Apache-2.0 notice" \
+        || bad "--licenses omits the project's own licence"
+    printf '%s\n' "$lic" | grep -q "Sam Lantinga" \
+        && ok "--licenses names the SDL3 copyright holder" \
+        || bad "--licenses omits SDL3"
+    printf '%s\n' "$lic" | grep -q "font8x8" \
+        && ok "--licenses records the font's provenance" \
+        || bad "--licenses omits font8x8"
+    printf '%s\n' "$lic" | grep -q "cleanroom" \
+        && ok "--licenses records how the substitute art was made" \
+        || bad "--licenses omits the tile-art provenance"
+
+    # Byte-fidelity, not a keyword grep: a notice that paraphrases SDL's licence is
+    # worse than none, because it reads as compliance. The printed text must equal
+    # the committed source file.
+    if printf '%s\n' "$lic" | grep -Fq "This notice may not be removed or altered from any source distribution."; then
+        ok "--licenses reproduces the zlib clause verbatim"
+    else
+        bad "--licenses does not reproduce the zlib text verbatim"
+    fi
+
+    nsec=$(printf '%s\n' "$lic" | grep -c "^  source in the repository:")
+    want=$(python3 -c "import pathlib,sys; sys.path.insert(0,'tools');
+import gen_licenses as g; print(len(g.ENTRIES))" 2>/dev/null)
+    if [ -n "$want" ] && [ "$nsec" = "$want" ]; then
+        ok "--licenses prints all $nsec entries (none silently dropped)"
+    else
+        bad "--licenses printed $nsec entries, expected ${want:-unknown}"
+    fi
+else
+    bad "--licenses exited non-zero"
+fi
+
+# The generated header must still match its sources. Committed output with no build
+# rule, same discipline as the content header: a build step that could regenerate
+# this on a machine missing an input would ship a shorter list quietly.
+if drift=$(python3 tools/gen_licenses.py --verify 2>&1); then
+    ok "licenses_data.h matches its committed sources"
+else
+    bad "licenses_data.h is stale: $drift"
+fi
+
 # A key script is read only by the headless input backend. Silently dropping it is
 # how a scripted run ends up waiting for a human, so it is refused out loud.
 if timeout -s KILL 10 ./u2 --script "$SCRIPT" >/dev/null 2>"${WORK:-/var/tmp}/cp0-script.err"; then

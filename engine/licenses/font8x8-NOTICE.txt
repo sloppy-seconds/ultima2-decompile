@@ -1,0 +1,23 @@
+font8x8 — 8x8 monochrome bitmap font
+Copyright and dedication as stated by the work itself
+====================================================
+
+Author:   Daniel Hepper <daniel@hepper.net>
+          derived from an earlier header by Marcel Sondaar, citing
+          "International Business Machines (public domain VGA fonts)"
+Source:   https://github.com/dhepper/font8x8 , file `font8x8_basic.h`
+Licence:  Public Domain, per the file's own header.
+
+Public domain dedication is not a licence with conditions to satisfy, so there is
+no text to reproduce here beyond the notice above. Attribution is given anyway,
+because the reason this exists in a shipped binary is provenance rather than
+obligation: someone holding only the executable can still find out where every
+part of it came from.
+
+In this project the font renders engine text (status band, menu, character
+creation) in the framebuffer. The array declaration was changed to
+`static const unsigned char` so the header can be included by one translation
+unit without external linkage; the glyph bytes are untouched.
+
+Full record, including the alternatives that were considered and rejected and why:
+`THIRD-PARTY-LICENSES` and `docs/phase4-kickoff-cp4b.md`.
