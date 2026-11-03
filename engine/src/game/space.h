@@ -83,8 +83,13 @@ int u2_space_dive_allowed(uint8_t world);
  * `jmp L_006c77` -- a self-jump. The game halts. Measured: HP, FOOD and GOLD all
  * stayed put and the passive food tick stopped, and DS:51..59 were NOT zeroed, which
  * is the exact opposite of the death tail's signature. So a caller must not route
- * this through u2_death; it is an unrecoverable stop, and the engine should say so
- * out loud rather than pretend the character died.
+ * this through u2_death: it is a HANG, the character's ledger is untouched, and the
+ * engine should say so out loud rather than pretend the character died.
+ *
+ * Do not oversell the difference either. Neither this nor death writes the save file
+ * (docs/save-format.md § 10), so neither can cost a character permanently; what each
+ * costs is the session. Claiming more than that is how the wrong mechanic gets
+ * re-asserted with better vocabulary.
  *
  * Also observed: this is not reached by launching from Earth orbit. A PLATE character
  * launched, got "HYPERWARP ENGAGED!" and kept ticking. The check lives in the status

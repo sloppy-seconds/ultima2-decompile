@@ -333,6 +333,34 @@ would have shown otherwise had silently refused. The full picture, measured with
 | `Q` outdoors, gate satisfied | `player`, **and `mapxNN` and `monxNN` of the sector you are standing in** |
 | `Q` inside a town | refused: `ONLY OUTDOORS!`, nothing written |
 | `Q` outdoors with `DS:6D != 0` | refused: `ONLY ON EARTH!`, nothing written |
+| **death, any cause** | **nothing.** The zeroing is memory-only |
+| **rocket launch from a wilderness sector** | `player`, written by the save body itself, no `Q` pressed |
+
+### Death does not touch the file (measured 2026-11-03)
+
+This needed saying because it was asserted wrongly in session first: "death zeroes the stats
+and that zeroed record is what a later save persists". The second half was an inference and
+it is false. Two independent measurements:
+
+* **Bytes.** The death tail `asm/0C62..0C99` calls only `L_0052f9` (the H.P. repaint). It does
+  not call the save body `L_0024fd`, and neither does any of its four fragments.
+* **Disk.** Three runs ended with the character dead — a rocket into water, a rocket into
+  forest, and a third session. Every one of their `player` files still reads `hp 9999`,
+  `food 999999`, `gold 9999`, `exp 9999`, POWER armour: the untouched seed values, while the
+  live memory at the same moment read all zeros.
+
+So death is a **memory-only** event. Restart the program, load, and the character is whole.
+What death actually costs you is the session: you keep playing a zero-stat wreck until you do.
+The paired correction is that the rocket's `YOU HAVE EXPLODED!` arm (below REFLECT armour,
+`asm/6999_space_status`) neither zeroes anything nor returns a prompt — it spins on a
+self-jump — but it is no more destructive of the save than death is. Neither can lose a
+character permanently, which is worth knowing before anyone writes a walkthrough that says so.
+
+The launch-from-wilderness row is the mirror image: `asm/38B0` calls the save body when
+`[DS:6D] == 0` and `[DS:4A] == 0`, so launching a rocket from an Earth wilderness sector
+silently writes the game. Observed directly — the run that launched from sector 40 has
+`food 999941` on disk where the seed said `999999`, and the runs that ended in death or in a
+launch from a site sector still read the seed value.
 
 So the save is real and it does persist the world — but only the **outdoor** sector, and only
 when its gate passes. The owner's reading of why, offered before the measurement and borne out

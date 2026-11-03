@@ -19,6 +19,15 @@
 # provenance: static, plus the live frame named above. Recorded by hand on
 #   2026-10-27 alongside engine/src/game/overworld.c:u2_death, which implements
 #   this span; not derived by tools/provenance_from_traces.py.
+# MEMORY-ONLY: this span zeroes DS:51..59 in the data segment and does NOT write the
+#   save file. It calls only L_0052f9 (the H.P. repaint); the save body is L_0024fd and
+#   nothing in this span or its three sibling fragments calls it. Confirmed on disk
+#   2026-11-03: three runs ended with the character dead and every one of their `player`
+#   files still held the untouched seed record (hp 9999, food 999999, gold 9999, exp 9999)
+#   while live memory at the same instant read all zeros. So death costs the session, not
+#   the character -- restart and load, and the character is whole. This was asserted the
+#   other way in session first, on the inference that a zeroed record must get saved.
+#   See docs/save-format.md § 10, which carries the table of what does write the file.
 # confidence: high for the zeroing and the announcement (bytes plus a screen);
 #   the four-way fragment cut is mechanical, not semantic
 # label: kept as sub_0c62 on purpose — labels are body and CP0 md5s them

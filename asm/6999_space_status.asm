@@ -50,8 +50,10 @@
 #           this from the death tail at runtime 0x0E62, whose whole signature is zeroing
 #           those nine bytes and printing '<NAME> IS DEAD!'. Frame:
 #           captures/spice86/g60-plate-halt/explode.png. So space without REFLECT armour
-#           is an unrecoverable freeze, not a death, and an engine that implements it as
-#           u2_death is wrong in a way a screenshot alone would not have shown.
+#           is a HANG rather than a death, and an engine that implements it as u2_death
+#           is wrong in a way a screenshot alone would not have shown. But do not oversell
+#           the difference: neither this nor death writes the save file, so neither can
+#           cost a character permanently. See docs/save-format.md § 10.
 #           Also observed in the same session: the check is NOT reached at launch from
 #           Earth orbit -- the launch with PLATE printed HYPERWARP ENGAGED! and left the
 #           character alive and ticking. It fires from the status path, not the launch.
