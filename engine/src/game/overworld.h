@@ -122,6 +122,26 @@ extern const u2_save_policy U2_SAVE_POLICY_ENHANCED;
  */
 int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol);
 
+/*
+ * The save the original performs on its own initiative, with no prompt echoed and no
+ * CMD-window message. Two triggers are proven and they are not gated like Q:
+ *
+ *   entering a site   asm/341E, asm/343F (-TOWN, -TOWER), asm/34B5/asm/34CF (-CASTLE)
+ *                     and asm/34E4 (-DUNGEON) all record the return cell and then call
+ *                     the save body. Callers must invoke this BEFORE switching the
+ *                     sector digit, because the original's file records the sector the
+ *                     player came FROM — that is what makes dying in a town put you
+ *                     back outside.
+ *   rocket launch     asm/38B0, behind [DS:6D]==0 AND [DS:4A]==0. That guard belongs to
+ *                     the caller, not here: this function performs the writes and
+ *                     nothing else, so a caller that calls it unconditionally is
+ *                     claiming a trigger the bytes do not show.
+ *
+ * Both are silent in the original, and this stays silent to match. Returns 0 on a
+ * successful write, non-zero if the record could not be stored.
+ */
+int u2_overworld_autosave(u2_ctx *ctx, u2_overworld *ow);
+
 /* Recomposite the frame from the current position: map window (pixel rows
  * 0..159) then the text rows 20..24 of the vram grid — status block, CMD
  * prompt and message history, one composited framebuffer. */

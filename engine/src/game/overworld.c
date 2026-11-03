@@ -336,6 +336,19 @@ static void site_enter(u2_ctx *ctx, u2_overworld *ow, int digit,
     ctx->state.entry_x = (uint8_t)ow->x;
     ctx->state.entry_y = (uint8_t)ow->y;
 
+    /* The original saves here, silently, before the sector changes. asm/343F at
+     * L_003650 is the clearest of five sites that share the shape — record the return
+     * cell, then `call L_0024fd` — and the others are asm/341E (village), asm/34B5 and
+     * asm/34CF (-CASTLE) and asm/34E4 (-DUNGEON). Measured 2026-11-03: entering Port
+     * Boniface from sector 30 rewrote `player`, and the sector stored in the file was
+     * 30, the one the character came FROM, not 31 where they arrived. So the ordering
+     * below is load-bearing: autosave BEFORE the sector digit is swapped, or the
+     * engine checkpoints the indoor state and dying in a town stops putting the player
+     * back outside. Unlike Q there is no location guard on this path, because the bytes
+     * have none — so it fires off-Earth too, which is what makes a bad planetary trip
+     * permanent rather than merely inconvenient. */
+    (void)u2_overworld_autosave(ctx, ow);
+
     /* Sync the creature table into the world buffer so a later save sees current state.
      * Do NOT write the sector: the original writes no sector file on a transition. The
      * comment here used to read "asm/22FD stores the sector being left" and flushed both
@@ -573,6 +586,49 @@ static int food_spend(u2_ctx *ctx, unsigned bcd_sub)
     return borrow;
 }
 
+/* The write half of the save, shared by Q and by the silent auto-saves.
+ *
+ * This is the original's save body at file 0x24FD: the entry pair takes the live
+ * position (0x2520..0x2529) so the next 'P' restores exactly where the player stood,
+ * then the sector and the record go to disk. Kept separate from u2_overworld_save so
+ * the auto-save paths reach the writes WITHOUT inheriting Q's prompt echo or its three
+ * location guards — the original's auto-saves print nothing and are not gated the way
+ * Q is. The monsters write (256 B from DS:137) is still not lifted here; see the note
+ * in overworld.h.
+ */
+static int save_body(u2_ctx *ctx, u2_overworld *ow)
+{
+    ctx->state.entry_x       = (uint8_t)ow->x;
+    ctx->state.entry_y       = (uint8_t)ow->y;
+    ctx->state.sector_first  = (uint8_t)ow->sector_hi;
+    ctx->state.sector_second = (uint8_t)ow->sector_lo;
+
+    /* The original rewrites the sector unconditionally; the engine's contract
+     * is to store only dirty sectors (world.h), and nothing dirties tiles
+     * until combat and town visits exist. The creature block is the other half of
+     * that write — asm/2305 names MONXFF as well as MAPXFF — so a kill has to
+     * reach the file here and not only on a sector transition. */
+    if (ow->world.map_dirty)
+        u2_world_store(ctx, &ow->world, 1);
+    if (ow->world.mon_dirty)
+        u2_world_store(ctx, &ow->world, 0);
+
+    if (u2_save_store(ctx) != U2_SAVE_OK)
+        return 1;
+    return 0;
+}
+
+int u2_overworld_autosave(u2_ctx *ctx, u2_overworld *ow)
+{
+    /* Deliberately silent. The original prints nothing when it saves on its own
+     * initiative: asm/38B0 goes `mov %al,0x69 ; call L_0024fd` with no str_out
+     * between, and asm/343F goes `mov %al,0x5a ; mov %al,0x5b ; call L_0024fd`
+     * likewise. The owner rule is that a silent mutation must cite the routine that
+     * proves the silence, and those are it. If enhanced mode ever gains multi-slot or
+     * a visible checkpoint, that surfaces here rather than in the callers. */
+    return save_body(ctx, ow);
+}
+
 int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 {
     echo_cmd(ctx, U2_S_Q_PROMPT);
@@ -601,27 +657,7 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 
     echo_cmd(ctx, U2_S_Q_MOMENT);
 
-    /* The save body, file 0x24FD: the entry pair takes the live position
-     * (0x2520..0x2529) so the next 'P' restores exactly where the player
-     * stood, then the sector and the record go to disk. */
-    ctx->state.entry_x       = (uint8_t)ow->x;
-    ctx->state.entry_y       = (uint8_t)ow->y;
-    ctx->state.sector_first  = (uint8_t)ow->sector_hi;
-    ctx->state.sector_second = (uint8_t)ow->sector_lo;
-
-    /* The original rewrites the sector unconditionally; the engine's contract
-     * is to store only dirty sectors (world.h), and nothing dirties tiles
-     * until combat and town visits exist. The creature block is the other half of
-     * that write — asm/2305 names MONXFF as well as MAPXFF — so a kill has to
-     * reach the file here and not only on a sector transition. */
-    if (ow->world.map_dirty)
-        u2_world_store(ctx, &ow->world, 1);
-    if (ow->world.mon_dirty)
-        u2_world_store(ctx, &ow->world, 0);
-
-    if (u2_save_store(ctx) != U2_SAVE_OK)
-        return 1;
-    return 0;
+    return save_body(ctx, ow);
 }
 
 /* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low

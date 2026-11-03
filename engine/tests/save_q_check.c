@@ -202,6 +202,74 @@ int main(int argc, char **argv)
      * spawn; asserting them here is the P contract without needing the
      * tile art (which only a real executable can supply). */
 
+    /* --- the silent auto-save -------------------------------------------
+     *
+     * Placed after the reload assertions on purpose: these writes clobber the
+     * record, and the P contract above must be judged against the Q save, not this.
+     *
+     * Two triggers are proven in the original: entering a site (asm/341E, asm/343F,
+     * asm/34B5/34CF, asm/34E4) and launching a rocket from an Earth wilderness sector
+     * (asm/38B0). Both call the save body directly, neither prints anything, and the
+     * site-entry path carries none of Q's three location guards. Measured 2026-11-03:
+     * entering Port Boniface from sector 30 rewrote `player`, and the sector stored was
+     * the one the character came FROM. */
+    {
+        unsigned char rec[256];
+        FILE *rf;
+        int got;
+
+        /* The record right now holds the Q save: sector 20, entry (30,40). Every
+         * assertion below uses a value that differs from that, or the test would pass
+         * vacuously on a save_body that wrote nothing at all. */
+
+        /* A state Q refuses three ways over: indoors, off-Earth, in a vehicle.
+         * The auto-save is not gated, so it must still write. */
+        u2_overworld bad = ow;
+        bad.sector_lo = 2;
+        bad.x = 34;
+        bad.y = 20;
+        a.state.world = 0x0A;                 /* deep space */
+        a.state.player_stamp = 0x28;          /* rocket */
+        ok(u2_overworld_save(&a, &bad, &U2_SAVE_POLICY_ORIGINAL) == 1,
+           "Q still refuses that state (its guards are unchanged)");
+
+        u2_vram_init(&a.vram);
+        ok(u2_overworld_autosave(&a, &bad) == 0, "the auto-save is not gated like Q");
+        ok(!vram_contains(&a, U2_S_Q_MOMENT) && !vram_contains(&a, U2_S_Q_PROMPT),
+           "the auto-save prints nothing (asm/38B0 has no str_out before the call)");
+
+        rf = fopen(saves_path, "rb");
+        got = rf && fread(rec, 1, 256, rf) == 256;
+        if (rf) fclose(rf);
+        ok(got && rec[0x14] == 2,
+           "the auto-save wrote the sector it was handed, which Q refused to save");
+        ok(got && rec[0x24] == 34 && rec[0x25] == 20,
+           "and the return cell, so the caller's state is what gets checkpointed");
+
+        a.state.world = 0;
+        a.state.player_stamp = 0x78;
+
+        /* Ordering, the load-bearing part. site_enter() calls this BEFORE swapping the
+         * sector digit, so the record holds the outdoor sector. Get it the other way and
+         * dying inside a town stops returning the player outside. The assertion above is
+         * what pins the mechanism: whatever sector the caller is in at the call is what
+         * lands on disk, so calling after the swap would store the site instead. */
+        u2_overworld out = ow;
+        out.sector_lo = 0;
+        out.x = 12;
+        out.y = 13;
+        ok(u2_overworld_autosave(&a, &out) == 0, "auto-save on site entry writes");
+        rf = fopen(saves_path, "rb");
+        got = rf && fread(rec, 1, 256, rf) == 256;
+        if (rf) fclose(rf);
+        ok(got && rec[0x24] == 12 && rec[0x25] == 13,
+           "and the caller's cell, so the outdoor state is what gets checkpointed");
+        /* The sector mechanism is proven by the discriminating assertion above (a
+         * handed-down 2 lands on disk where the previous record held 0). Asserting 0
+         * here too would pass against a mutant that hardcodes 0, so it is left out on
+         * purpose rather than padding the count with a check that cannot fail. */
+    }
+
     printf("save_q_check: %s\n", fails ? "FAIL" : "PASS");
     return fails ? 1 : 0;
 }

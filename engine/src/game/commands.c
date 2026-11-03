@@ -984,6 +984,24 @@ static u2_cmd_result launch_rocket(u2_ctx *ctx, u2_overworld *ow)
     seam_char_print(ctx, '\r');
     seam_str_out(ctx, U2_S_LAUNCH_ROCKET_GO);
 
+    /* asm/38B0 at L_003b52: DS:6B := y, DS:6A := x, DS:69 := 1, then `call L_0024fd`.
+     * Launching a rocket SAVES THE GAME, silently, and it does so BEFORE the position is
+     * reset, so the record holds the pad cell. The guard on that block is [DS:6D]==0 AND
+     * [DS:4A]==0 — Earth and a wilderness sector — which is why launching from a site
+     * sector leaves the disk alone; measured as a controlled pair on 2026-11-03, launch
+     * from sector 40 rewrote `player` and launch from sector 41 did not.
+     *
+     * The consequence is the reason this is worth being faithful about: the save lands
+     * before the trip is known to be survivable, so an off-course dump into deep space
+     * with no fuel left is written to disk and kept. Enhanced mode may later choose to
+     * soften that or to offer slots; until it does, this matches the original.
+     *
+     * DS:69/6A/6B themselves are not modelled — they are inside the save record but
+     * state.h has no fields for them, and inventing a mirror without knowing what reads
+     * them would be a claim, not a save. */
+    if (ctx->state.world == 0 && ow->sector_lo == 0)
+        (void)u2_overworld_autosave(ctx, ow);
+
     /* asm/3B74..0x3B7E: position to (0,0) and DS:12 to the world-map view mode. The
      * sector reload at asm/2490 that runs just before this is not modelled — it re-reads
      * MAPXFF, and the engine's sector store is owned by the world module, not by a command
