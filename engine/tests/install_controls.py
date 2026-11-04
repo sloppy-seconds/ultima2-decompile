@@ -52,8 +52,8 @@ CONFIG_CONTROLS = [
      ["src/core/config.c", "src/core/ini.c"]),
 ]
 
-INSTALL_SRCS = ["src/core/install.c", "src/core/themes.c", "src/core/copy.c",
-                "src/core/roots.c", "src/core/sha256.c",
+INSTALL_SRCS = ["src/core/install.c", "src/core/themes.c", "src/core/fmtowns.c",
+                "src/core/copy.c", "src/core/roots.c", "src/core/sha256.c",
                 "src/core/world.c", "src/core/config.c", "src/core/ini.c"]
 
 INSTALL_CONTROLS = [
@@ -117,7 +117,7 @@ INSTALL_CONTROLS = [
 ]
 
 CC = ["cc", "-std=c11", "-Wall", "-Wextra", "-Wno-unused-parameter",
-      "-Wno-unused-function", "-Isrc"]
+      "-Wno-unused-function", "-Isrc", "-Icontent"]
 
 
 def run_control(name, source, old, new, label, test, extra_srcs, count=1):

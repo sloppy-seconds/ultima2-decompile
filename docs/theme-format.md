@@ -183,11 +183,17 @@ the only one. The Python tool that used to do it (`tools/build_themes.py`) was
 deleted rather than kept beside the C one, because two builders of one format is
 two definitions of it, and this file is the definition they would have drifted
 from. v1 themes are copied whole-directory, byte-identical, from the upgrade pack
-and the Galaxy `updated/` directory; the FM Towns v2 derivation is the part that
-went with the Python tool and has not been ported — it needs the disc, an ISO
-reader and `disasm/fmtowns-crosswalk.tsv`, and it is deferred by
-`docs/install-design.md` § 11 rather than abandoned. `u2_themes_check` still
-verifies a `themes/fmtowns` tree that something else produced.
+and the Galaxy `updated/` directory.
+
+The FM Towns v2 theme is derived by `u2 --install --fmtowns-media-dir DIR` from the
+player's own disc image (`core/fmtowns.c`): an ISO-9660 reader over raw 2352-byte
+sectors, the GRAPH bank nibble-unpack, and the DOS art-index mapping compiled into
+the binary from `disasm/fmtowns-crosswalk.tsv` as `engine/content/fmtowns_map.h`.
+The mapping has to be compiled in because a player has the disc and not the
+repository. `tools/fmtowns_theme.py` remains as the developer's version of the same
+derivation — it is what you use to look at more FM Towns media and extend the theme
+— and the two are checked against each other byte for byte rather than allowed to
+agree by assertion.
 
 | gate | what it proves |
 | --- | --- |
@@ -195,9 +201,11 @@ verifies a `themes/fmtowns` tree that something else produced.
 | `engine/tests/install_check.c` | 70 checks over the whole install, themes included: the default reshape, a named theme copied whole, the root picture hoist, dedup by picture base, and refusals for a source with no atlas and for a short atlas |
 | `engine/tests/install_controls.py` | 13 controls, including the named one: a theme built with `EGACOLOR` omitted must be caught |
 | `engine/tests/theme_v2_check.c` | 39 checks: geometry, identity, the map indirection, the palette, the frame scale, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
+| `engine/tests/fmtowns_check.c` | the C derivation: a synthetic ISO exercises the sector reader, the pool order, the palette and the refusals with no media at all, and when the disc is present the four output files must be byte-identical to `tools/fmtowns_theme.py`'s |
 | `python3 tools/fmtowns_xwalk.py --check` | the crosswalk the v2 theme is derived from is complete and its letter rows follow the structural rule |
+| `python3 engine/tools/fmtowns_map2h.py --verify` | the mapping compiled into the binary still matches `disasm/fmtowns-crosswalk.tsv` exactly |
 
-The first four run in CP4, which `make test` runs and `tools/check_all.sh` runs
-below; the fifth is wired there too.
+The first five run in CP4, which `make test` runs and `tools/check_all.sh` runs
+below; the other two are wired into `check_all.sh`.
 `themes/` is gitignored: it holds art extracted from the player's own media, the
 same posture as `original/`, `tmp/tiles` and `bestiary/cache/`.

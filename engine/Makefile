@@ -58,7 +58,7 @@ DEPS     := $(OBJS:.o=.d)
 SDLOBJS  := $(patsubst %.c,$(BUILD)-sdl/%.o,$(SRCS))
 SDL_DEPS := $(SDLOBJS:.o=.d)
 
-.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check licenses licenses-check sdl sdl-probe-check sdl-run sdl-win sdl-static play help fresh
+.PHONY: all run headless test test-cp0 test-cp1 test-cp2 test-cp3 test-cp4 test-cp5 test-cp6 test-cp7 clean content content-check licenses licenses-check fmtowns-map fmtowns-map-check sdl sdl-probe-check sdl-run sdl-win sdl-static play help fresh
 
 all: $(BIN)
 
@@ -84,6 +84,20 @@ content:
 content-check:
 	@test -f $(GEN) || { echo "$(GEN) is missing and is committed content"; exit 1; }
 	python3 tools/extract/extractor.py --source asm --verify -o $(GEN)
+
+# The FM Towns art-index mapping the binary carries. Same discipline as the two
+# above — committed, no build rule that quietly regenerates it — but unlike the
+# text header its source is committed too, so the check is exact rather than
+# best-effort and it can run anywhere.
+FMTOWNS_MAP := $(CONTENT)/fmtowns_map.h
+
+fmtowns-map:
+	@mkdir -p $(CONTENT)
+	python3 tools/fmtowns_map2h.py -o $(FMTOWNS_MAP)
+
+fmtowns-map-check:
+	@test -f $(FMTOWNS_MAP) || { echo "$(FMTOWNS_MAP) is missing and is committed content"; exit 1; }
+	python3 tools/fmtowns_map2h.py --verify -o $(FMTOWNS_MAP)
 
 # The licence record, same discipline as the content header: the generated file is
 # committed, there is deliberately no build rule that regenerates it during a

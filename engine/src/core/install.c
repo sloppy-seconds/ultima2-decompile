@@ -19,6 +19,7 @@
 
 #include "core/compat.h"
 #include "core/copy.h"
+#include "core/fmtowns.h"
 #include "core/sha256.h"
 
 #define MAX_ROWS     1024
@@ -441,6 +442,36 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
             trq.sources[i] = rq->themes_dir[i];
         char terr[512];
         if (u2_themes_build(&trq, out, terr, sizeof terr) != 0) {
+            snprintf(err, errsz, "%.511s", terr);
+            free(rows);
+            return U2_INSTALL_ERROR;
+        }
+        have_themes = 1;
+    }
+
+    /* The FM Towns theme is derived, not copied: the art comes off the player's own
+     * disc and the mapping is compiled into the binary, so this works on a machine
+     * that has the disc and nothing else. It lands inside themes/ and is recorded in
+     * the same manifest, so --check covers it exactly as it covers a copied theme --
+     * including when --themes-dir was not given at all. */
+    if (rq->fmtowns_media && *rq->fmtowns_media) {
+        char tdir[1024], fm[1300];
+        snprintf(tdir, sizeof tdir, "%.1000s/%s", rq->to, U2_INSTALL_THEMES);
+        snprintf(fm, sizeof fm, "%.1200s/%s", tdir, U2_FMTOWNS_THEME);
+        if (u2_mkdir_p(tdir) != 0) {
+            snprintf(err, errsz, "cannot create %s", tdir);
+            free(rows);
+            return U2_INSTALL_ERROR;
+        }
+        char ferr[512];
+        if (u2_fmtowns_build(rq->fmtowns_media, fm, out, ferr, sizeof ferr) != 0) {
+            snprintf(err, errsz, "%.511s", ferr);
+            free(rows);
+            return U2_INSTALL_ERROR;
+        }
+        char terr[512];
+        if (u2_themes_record(tdir, U2_FMTOWNS_THEME, rq->fmtowns_media,
+                             terr, sizeof terr) != 0) {
             snprintf(err, errsz, "%.511s", terr);
             free(rows);
             return U2_INSTALL_ERROR;

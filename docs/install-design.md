@@ -18,9 +18,10 @@ dev-checkout fallbacks out of a release artifact. Gates: `world_check` (78 check
 `config_check` (35), `install_check` (70), and `install_controls.py` (13
 properties, each proved able to go red). All of it runs headless in CP4.
 
-**Not built:** the FM Towns source (deferred, § 11 — and the v2-from-disc derivation
-that produced it lived in the Python builder, which has been deleted, so re-
-deriving `themes/fmtowns` is now a porting task), and self-update (ruled out, § 9).
+**Not built:** self-update (ruled out, § 9). The FM Towns derivation that § 11
+deferred has since been ported: `--install --fmtowns-media-dir` derives
+`themes/fmtowns` from the player's own disc, with the DOS-to-FM tile mapping
+compiled into the binary as `engine/content/fmtowns_map.h`.
 
 **The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
 § 11, along with the two that came out of them (D6, D7) and the follow-up ruling
@@ -262,7 +263,7 @@ where keying on `EGATHEME.*` produced a tree with no themes in it.
 | Galaxy patch | a directory holding `MAPG*`/`MONG*`/`TLKG*` | often named `updated/`, but the name is not the evidence |
 | **a tree where the patch already ran** | `mapg*` sitting beside `monx*` at the root | this is an *input*, not a mess to clean up — see § 8 |
 | fan art package | a directory containing a tile atlas, at any name or depth | *measured* — `references/up/Files/U2Upgrade` and `references/u2upgrade` differ in exactly three files (`U2.CFG`, `u2up.exe`, `u2upw.exe`); all art is byte-identical, so either is a valid source and the version drift is in the patcher's own binaries |
-| FM Towns disc | the `.img` with `GRAPH/*.TIF` inside | optional; produces a derived v2 theme, and needs the crosswalk, so it is a developer-box feature before it is a player feature |
+| FM Towns disc | the `.img` with `GRAPH/*.TIF` inside | `--fmtowns-media-dir`; produces a derived v2 theme. The mapping it needs is compiled into the binary, so this is a player feature, not a developer-box one |
 | themes | reshaped into the layout `docs/theme-format.md` specifies | the vendor's directory names and depth are not our layout |
 
 The patcher is **linked, never bundled**:
@@ -410,7 +411,7 @@ this document's problem:
 | item | where it lands |
 | --- | --- |
 | asking the player for the art package | § 5, `--themes-dir`, repeatable — **built** |
-| the FM Towns disc as an optional source | § 5, `--media-dir` — **deferred**, and the v2 derivation left with the deleted Python tool; `docs/fmtowns-graphics.md` and `disasm/fmtowns-crosswalk.tsv` remain the record of how it is done |
+| the FM Towns disc as an optional source | § 5, `--fmtowns-media-dir` — **built** in `core/fmtowns.c`. The art is read from the player's disc and the mapping is compiled in (`engine/content/fmtowns_map.h`, generated from `disasm/fmtowns-crosswalk.tsv`), because a player has the disc and not the repository. |
 | `themes/` being built rather than hand-copied | § 3, `core/themes.c` — **built** |
 | the dev-checkout fallbacks going away in a release build | § 4 — **done**: `core/artifact.h` gates the `references/u2upgrade` candidates in both `tiles_ega.c` and `pic_ega.c`, so a release-stamped binary searches only paths it was told |
 
@@ -443,7 +444,7 @@ Ruled 2026-11-04, in the order they were asked:
 | 1 | Layout | **B** — `data/original/` + `data/updated/`, with `./` + `./updated/` still working for the drop-in case (§ 3) |
 | 2 | Config file | **`config.ini`**, global, same grammar as `THEME.INI`; `THEME.INI` stays per-theme; a `[themes]` section carries the settings (§ 4) |
 | 3 | Which builds | **both**, and `--install` is purely terminal with no SDL, so it runs headless and in CI; the code lives in `engine/src/core/` (§ 4) |
-| 4 | FM Towns disc | **follow up later** — not in the first version, though § 5 still recognises it as a source |
+| 4 | FM Towns disc | deferred at the time; **since built** as `--fmtowns-media-dir` (see § 10) — the derivation was ported to C rather than left in the deleted Python tool |
 | 5 | Self-update | **out** (§ 9) |
 | D6 | Sector write-back | **stays in the content dir for now**, re-addressed with the save-game mechanisms; the gate must tolerate play drift (§ 3) |
 | D7 | `--to` target | **empty or nonexistent only** (§ 8), with D7a below governing re-runs |

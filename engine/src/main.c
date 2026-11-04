@@ -157,6 +157,11 @@ static void usage(const char *argv0)
         "                    complete, so the upgrade pack (atlases and themes) and\n"
         "                    the Galaxy directory (the full PIC*-E picture set) are\n"
         "                    usually both needed. First source wins per file.\n"
+        "  --fmtowns-media-dir DIR\n"
+        "                    a FM Towns disc image, or a directory holding one.\n"
+        "                    Derives themes/fmtowns from the art on your own disc;\n"
+        "                    the DOS-to-FM tile mapping is compiled into the binary,\n"
+        "                    so nothing but the disc is needed.\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
         "  Ctrl-T  cycle the EGA tile theme (only with --ega; walks the themes\n"
@@ -266,6 +271,7 @@ int main(int argc, char **argv)
     const char *install_upd = NULL;
     const char *install_themes[U2_THEMES_MAX_SOURCES] = { 0 };
     int n_install_themes = 0;
+    const char *install_fmtowns = NULL;
     u2_config cfg;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
@@ -329,6 +335,8 @@ int main(int argc, char **argv)
              * outranks the file and the file may only fill what the flags left
              * unset. docs/install-design.md § 4. */
             config_path = argv[++i];
+        } else if (strcmp(a, "--fmtowns-media-dir") == 0 && i + 1 < argc) {
+            install_fmtowns = argv[++i];
         } else if (strcmp(a, "--install") == 0) {
             install_mode = 1;
         } else if (strcmp(a, "--check") == 0) {
@@ -459,6 +467,7 @@ int main(int argc, char **argv)
         rq.original_dir = install_orig;
         rq.updated_dir = install_upd;
         rq.n_themes_dir = n_install_themes;
+        rq.fmtowns_media = install_fmtowns;
         for (int k = 0; k < n_install_themes; k++)
             rq.themes_dir[k] = install_themes[k];
         const u2_install_result r = install_check_only

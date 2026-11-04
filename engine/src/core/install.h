@@ -61,6 +61,11 @@ typedef struct {
      * destination, and the shadow is reported. */
     const char *themes_dir[U2_THEMES_MAX_SOURCES];
     int n_themes_dir;
+    /* The FM Towns disc image, or a directory holding one. When set, themes/fmtowns
+     * is derived from it in the same run (core/fmtowns.c): the art comes from the
+     * player's disc and the mapping is compiled into the binary, so neither the
+     * repository nor Python is needed to produce it. */
+    const char *fmtowns_media;
 } u2_install_request;
 
 /* Install, or complete an install that already carries our manifest. With

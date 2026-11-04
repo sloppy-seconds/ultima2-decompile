@@ -120,6 +120,11 @@ run "image_fresh selftest" deploy/image_fresh.sh -- bash deploy/image_fresh_self
 # Its gate is the engine's: install_check (70 checks) and install_controls (13
 # properties, each proved able to go red) run under `make test`, which this script
 # runs below and CI runs in engine-tests.yml.
+# The FM Towns mapping the shipped binary carries is generated from a committed TSV,
+# so unlike the text header it can always be re-derived and the check is exact rather
+# than best-effort. If this goes red, someone edited disasm/fmtowns-crosswalk.tsv or
+# the header by hand; regenerate the header, never patch it.
+run "fmtowns map header" disasm/fmtowns-crosswalk.tsv -- python3 engine/tools/fmtowns_map2h.py --verify -o engine/content/fmtowns_map.h
 # The release workflow's shell is only parsed by the runner, minutes after a tag is
 # pushed, and two v0.0.8 attempts died on things a local `bash -n` catches instantly
 # (a missing `fi`, and an unquoted substitution). This renders every run: block with

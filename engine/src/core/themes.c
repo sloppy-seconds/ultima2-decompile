@@ -563,6 +563,150 @@ int u2_themes_build(const u2_themes_request *rq, FILE *report, char *err, size_t
     return 0;
 }
 
+/* ----------------------------------------------------------------- manifest */
+
+typedef struct {
+    char dst[512];
+    char kind[24];
+    char src[1024];
+    long size;
+    char sha[U2_HASH_LEN + 1];
+} mrow;
+
+/* Read the manifest, keeping the leading comment lines so a rewrite does not
+ * silently drop the provenance of the sources that produced the tree. */
+static int manifest_load(const char *themes_dir, char comments[16][200], int *nc,
+                         mrow *rows, int max)
+{
+    char path[1200];
+    snprintf(path, sizeof path, "%.1180s/%s", themes_dir, U2_THEMES_MANIFEST);
+    FILE *f = fopen(path, "rb");
+    *nc = 0;
+    if (!f)
+        return 0;                       /* absent is fine; we are creating it */
+    char line[1500];
+    int n = 0;
+    while (fgets(line, sizeof line, f)) {
+        if (line[0] == '#') {
+            if (*nc < 16) {
+                line[strcspn(line, "\r\n")] = '\0';
+                snprintf(comments[(*nc)++], 200, "%.199s", line);
+            }
+            continue;
+        }
+        if (line[0] == '\n' || n >= max)
+            continue;
+        char *dst = strtok(line, "\t");
+        char *kind = strtok(NULL, "\t");
+        char *src = strtok(NULL, "\t");
+        char *size = strtok(NULL, "\t");
+        char *sha = strtok(NULL, "\t");
+        if (!dst || !kind || !src || !size || !sha)
+            continue;
+        sha[strcspn(sha, "\r\n")] = '\0';
+        snprintf(rows[n].dst, sizeof rows[n].dst, "%.511s", dst);
+        snprintf(rows[n].kind, sizeof rows[n].kind, "%.23s", kind);
+        snprintf(rows[n].src, sizeof rows[n].src, "%.1023s", src);
+        rows[n].size = strtol(size, NULL, 10);
+        snprintf(rows[n].sha, sizeof rows[n].sha, "%.16s", sha);
+        n++;
+    }
+    fclose(f);
+    return n;
+}
+
+static int mrow_cmp(const void *a, const void *b)
+{
+    return strcasecmp(((const mrow *)a)->dst, ((const mrow *)b)->dst);
+}
+
+static int manifest_save(const char *themes_dir, const char comments[16][200], int nc,
+                         mrow *rows, int n)
+{
+    char path[1200], tmp[1240];
+    snprintf(path, sizeof path, "%.1180s/%s", themes_dir, U2_THEMES_MANIFEST);
+    snprintf(tmp, sizeof tmp, "%.1180s.u2tmp", path);
+    FILE *f = fopen(tmp, "wb");
+    if (!f)
+        return -1;
+    if (nc > 0) {
+        for (int i = 0; i < nc; i++)
+            fprintf(f, "%s\n", comments[i]);
+    } else {
+        fprintf(f, "# built by u2 --install — do not hand-edit, regenerate\n");
+    }
+    fprintf(f, "# dst\tkind\tsource\tsize\tsha256:16\n");
+    qsort(rows, (size_t)n, sizeof *rows, mrow_cmp);
+    for (int i = 0; i < n; i++)
+        fprintf(f, "%s\t%s\t%s\t%ld\t%s\n", rows[i].dst, rows[i].kind,
+                rows[i].src, rows[i].size, rows[i].sha);
+    if (fclose(f) != 0) { unlink(tmp); return -1; }
+    if (rename(tmp, path) != 0) { unlink(tmp); return -1; }
+    return 0;
+}
+
+int u2_themes_record(const char *themes_dir, const char *subdir,
+                     const char *origin, char *err, size_t errsz)
+{
+    static mrow rows[512];
+    char comments[16][200];
+    int nc = 0;
+    int n = manifest_load(themes_dir, comments, &nc, rows, 512);
+
+    char dir[1200];
+    snprintf(dir, sizeof dir, "%.1080s/%.100s", themes_dir, subdir);
+    DIR *d = opendir(dir);
+    if (!d) {
+        snprintf(err, errsz, "cannot read %s to record it in the themes manifest", dir);
+        return 1;
+    }
+    struct dirent *e;
+    int added = 0;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.' || !strcmp(e->d_name, U2_THEMES_MANIFEST))
+            continue;
+        char full[1300];
+        snprintf(full, sizeof full, "%.1100s/%.127s", dir, e->d_name);
+        if (!u2_is_file(full))
+            continue;
+        char dst[512];
+        snprintf(dst, sizeof dst, "%.99s/%.127s", subdir, e->d_name);
+
+        int seen = 0;
+        for (int i = 0; i < n; i++)
+            if (!strcasecmp(rows[i].dst, dst)) { seen = 1; break; }
+        if (seen)
+            continue;                       /* idempotent: never duplicate a row */
+        if (n >= 512) {
+            snprintf(err, errsz, "the themes manifest is full");
+            closedir(d);
+            return 1;
+        }
+        char sha[U2_HASH_LEN + 1];
+        long sz = 0;
+        if (u2_hash_file(full, sha, &sz) != 0) {
+            snprintf(err, errsz, "cannot hash %s", full);
+            closedir(d);
+            return 1;
+        }
+        snprintf(rows[n].dst, sizeof rows[n].dst, "%s", dst);
+        snprintf(rows[n].kind, sizeof rows[n].kind, "derived");
+        snprintf(rows[n].src, sizeof rows[n].src, "%.1023s", origin ? origin : "generated");
+        rows[n].size = sz;
+        snprintf(rows[n].sha, sizeof rows[n].sha, "%s", sha);
+        n++;
+        added++;
+    }
+    closedir(d);
+
+    if (manifest_save(themes_dir, comments, nc, rows, n) != 0) {
+        snprintf(err, errsz, "cannot rewrite %s", U2_THEMES_MANIFEST);
+        return 1;
+    }
+    (void)added;
+    return 0;
+}
+
 /* ------------------------------------------------------------------- check */
 
 int u2_themes_check(const char *out, FILE *report, char *err, size_t errsz)

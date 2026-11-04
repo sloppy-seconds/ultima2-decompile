@@ -417,9 +417,9 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/config_check" \
 # The assertion that matters most is the last: the engine pointed at the installed
 # tree with no other flags loads Earth AND an outer planet, which is the only one
 # that catches "copied everything, the planets still do not work".
-cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/install_check" \
-   tests/install_check.c src/core/install.c src/core/themes.c src/core/copy.c \
-   src/core/roots.c src/core/sha256.c \
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/install_check" \
+   tests/install_check.c src/core/install.c src/core/themes.c src/core/fmtowns.c \
+   src/core/copy.c src/core/roots.c src/core/sha256.c \
    src/core/world.c src/core/config.c src/core/ini.c >"$WORK/cc-inst.err" 2>&1 \
     && "$WORK/install_check" "$WORK" >"$WORK/inst.out" 2>&1 \
     && ok "--install: layout, manifest, idempotence, --check refusals ($(grep -c '^  ok' "$WORK/inst.out") checks)" \
@@ -433,6 +433,25 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/install_check" \
 python3 tests/install_controls.py "$WORK/controls" >"$WORK/ctl.out" 2>&1 \
     && ok "$(cat "$WORK/ctl.out")" \
     || { bad "installer controls are not all able to fail:"; sed 's/^/        /' "$WORK/ctl.out"; }
+
+# --- the FM Towns derivation ---------------------------------------------------
+# core/fmtowns.c is a port of the Python derivation, and the only proof a generator
+# port has is byte equality. The disc is gitignored, so the gate is split: THEME.INI,
+# MAP.TSV and PALETTE.RGB depend only on the crosswalk and the palette, so a
+# synthetic ISO carrying filler banks must reproduce them at the same sizes and the
+# pool must be numbered identically -- that runs everywhere. TILES depends on the
+# art, so it is checked structurally here and byte-for-byte against the Python
+# output when references/fmtowns is present, and it says so out loud when it skips.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/fmtowns_check" \
+   tests/fmtowns_check.c src/core/fmtowns.c src/core/copy.c src/core/sha256.c \
+    >"$WORK/cc-fm.err" 2>&1 \
+    && "$WORK/fmtowns_check" "$WORK" ../references/fmtowns ../themes/fmtowns \
+         >"$WORK/fm.out" 2>&1 \
+    && ok "FM Towns derivation: synthetic ISO, pool order, palette, refusals ($(grep -c '^  ok' "$WORK/fm.out") checks)" \
+    || { bad "FM Towns derivation check failed:"; tail -25 "$WORK/fm.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-fm.err" | sed 's/^/        /'; }
+if grep -q '^  SKIP' "$WORK/fm.out" 2>/dev/null; then
+    echo "  info  $(grep '^  SKIP' "$WORK/fm.out" | sed 's/^  SKIP  //')"
+fi
 
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is

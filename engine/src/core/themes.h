@@ -50,6 +50,18 @@ int u2_themes_build(const u2_themes_request *rq, FILE *report, char *err, size_t
  * work on a tree whose media has since been unplugged. */
 int u2_themes_check(const char *out, FILE *report, char *err, size_t errsz);
 
+/* Add every file under `subdir` (relative to the themes root, e.g. "fmtowns") to
+ * the themes manifest, rewriting it with the new rows merged in sorted order.
+ *
+ * This exists so a derived theme — one the installer generated rather than copied
+ * from an art pack — is covered by the same manifest as the copied ones. Without
+ * it, `--install --fmtowns-media-dir` with no `--themes-dir` would leave a themes
+ * tree that `--check` refuses for having no manifest, which is a hole in the one
+ * guarantee the manifest exists to provide. It is idempotent by construction: rows
+ * already present for a path are left alone, so re-running does not accumulate. */
+int u2_themes_record(const char *themes_dir, const char *subdir,
+                     const char *origin, char *err, size_t errsz);
+
 /* Exposed for the gate: classify one filename the way the builder does. Returns
  * the role as a short string ("atlas", "color", "picture", "ignore", "bad-*"). */
 const char *u2_themes_classify(const char *name, long size);

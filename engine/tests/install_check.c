@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         snprintf(inside, sizeof inside, "%.1000s/foreign/keep.me", base);
         write_bytes(inside, 0x5A, 7);
 
-        u2_install_request rq = { foreign, rel, upd, { NULL }, 0 };
+        u2_install_request rq = { foreign, rel, upd, { NULL }, 0, NULL };
         CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_REFUSED,
               "a non-empty directory with no manifest is refused");
         CHECK(size_of(inside) == 7, "  and nothing in it was touched");
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
     }
 
     /* --- greenfield install ------------------------------------------------ */
-    u2_install_request rq = { to, rel, upd, { NULL }, 0 };
+    u2_install_request rq = { to, rel, upd, { NULL }, 0, NULL };
     CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_OK,
           "install into a nonexistent directory creates it");
 
@@ -362,7 +362,7 @@ int main(int argc, char **argv)
         snprintf(d, sizeof d, "%.480s/PICDNG-E", art2);            write_bytes(d, 0x61, 64000);
         snprintf(d, sizeof d, "%.480s/PICMIN-E", art2);            write_bytes(d, 0x62, 64000);
 
-        u2_install_request with_themes = { to, rel, upd, { art, art2 }, 2 };
+        u2_install_request with_themes = { to, rel, upd, { art, art2 }, 2, NULL };
         CHECK(u2_install_apply(&with_themes, log, err, sizeof err) == U2_INSTALL_OK,
               "install with --themes-dir builds themes/");
 
@@ -441,7 +441,7 @@ int main(int argc, char **argv)
             snprintf(bare, sizeof bare, "%.480s/artbare", base);   mkdir(bare, 0755);
             snprintf(d, sizeof d, "%.480s/README.txt", bare);      write_bytes(d, 0x71, 20);
             snprintf(game3, sizeof game3, "%.480s/game3", base);
-            u2_install_request bare_rq = { game3, rel, upd, { bare }, 1 };
+            u2_install_request bare_rq = { game3, rel, upd, { bare }, 1, NULL };
             CHECK(u2_install_apply(&bare_rq, log, err, sizeof err) != U2_INSTALL_OK,
                   "a themes source containing no atlas is refused, not silently empty");
         }
@@ -456,7 +456,7 @@ int main(int argc, char **argv)
             mkdir(bad, 0755);
             snprintf(d, sizeof d, "%.480s/EGATILES", bad);
             write_bytes(d, 0x51, 100);          /* below the size the engine reads */
-            u2_install_request bad_rq = { game2, rel, upd, { bad }, 1 };
+            u2_install_request bad_rq = { game2, rel, upd, { bad }, 1, NULL };
             CHECK(u2_install_apply(&bad_rq, log, err, sizeof err) != U2_INSTALL_OK,
                   "a themes source with a short atlas is refused");
             char m[1024];
