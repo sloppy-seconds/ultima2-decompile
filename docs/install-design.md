@@ -562,6 +562,30 @@ inside the release directory, so asking for it as a separate flag asks the playe
 know the pack's internal layout. An explicit `--updated-dir` still wins, and the
 report says when the layer was found on its own.
 
+**A caveat D8 cannot resolve, found by running it against a second copy of the media.**
+On the test machine the installer reported patching over six sector files, not two:
+as well as `mapx10` and `mapx15` it took `mapx20`, `mapx30`, `monx20` and `monx30`.
+Those four are not fixes. The pristine `updated/` copies there are byte-identical to
+this repository's reference copies, and it was the *release* copies that differed,
+because the original game had been played in that directory and rewrites its own
+sector maps as it goes (D6). So "the release copy differs from the patch copy" has
+two causes and the bytes alone cannot tell them apart: the release copy was either
+corrupt or played-in.
+
+The behaviour is still the right one either way, because the patch layer is pristine
+by construction, so preferring it is correct whether the release copy was broken or
+mid-game. What was wrong was the report, which said *patch* about an event that might
+have been someone's save state being reverted. Sector files now say so:
+
+```
+  patch   mapx15 taken from the patch source; the release copy differed, which
+          is either a fix or play drift (D6)
+```
+
+Non-sector files, where only a fix is possible, keep the plain wording. A player who
+wants their played-in world back has it in `saves/` for the character and, for the
+world itself, in the original directory, which the installer never writes to.
+
 ### 12.4 D10 -- `.pat` deltas are reported, not applied
 
 If a player has a pristine release and the upgrade pack but no `updated/`, the map
