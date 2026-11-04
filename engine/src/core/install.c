@@ -218,18 +218,41 @@ typedef struct {
     row *rows;
     int n;
     int shadowed;
+    int patched_over;
     int skipped;
 } plan;
 
-static int plan_has(const plan *p, const char *dst)
+static int plan_find(const plan *p, const char *dst)
 {
     for (int i = 0; i < p->n; i++)
-        if (!strcmp(p->rows[i].dst, dst))
-            return 1;
-    return 0;
+        if (!strcasecmp(p->rows[i].dst, dst))
+            return i;
+    return -1;
 }
 
-static void scan_source(const char *dir, plan *p, FILE *out)
+/* Does this filename look like a patch delta rather than content? The upgrade
+ * package ships Moonstone Dragon's Map Patch as u2-map.pat, and the installer
+ * cannot apply it, so silence here would be the worst of the three answers: the
+ * player has the fix, we skip it, and nothing says so. */
+static int is_patch_delta(const char *name)
+{
+    const size_t n = strlen(name);
+    return n > 4 && !strcasecmp(name + n - 4, ".pat");
+}
+
+/* Scan one source directory into the plan.
+ *
+ * `may_override` is set only for the Galaxy patch source, and it is what makes a
+ * patch mean what it says. The rule was "first source wins", and the release is
+ * scanned first, so a corrupt release file beat the patched copy sitting beside it.
+ * That is not hypothetical: of the 40 filenames the release and updated/ share,
+ * exactly two differ, and one is mapx15, where 260 bytes at the end of the file are
+ * the corruption GCHANGES.TXT -- the Moonstone Dragon patch's own readme -- was
+ * written to fix. First-wins re-introduced a 1996 bug.
+ *
+ * So: a patch source may replace a planned release-layer file when the bytes
+ * differ, and says so. Identical copies are still just shadowed. */
+static void scan_source(const char *dir, plan *p, FILE *out, int may_override)
 {
     DIR *d = opendir(dir);
     if (!d) {
@@ -253,23 +276,42 @@ static void scan_source(const char *dir, plan *p, FILE *out)
         int galaxy = 0;
         if (!u2_install_classify(names[i], &galaxy)) {
             p->skipped++;
-            fprintf(out, "  skip  %s (not game content)\n", names[i]);
+            if (is_patch_delta(names[i]))
+                fprintf(out, "  skip  %s (a patch delta; the installer applies only an "
+                             "already-patched updated/ directory -- docs/install-design.md)\n",
+                        names[i]);
+            else
+                fprintf(out, "  skip  %s (not game content)\n", names[i]);
             continue;
         }
         char dst[512];
         snprintf(dst, sizeof dst, "%s/%.127s",
                  galaxy ? U2_INSTALL_DATA_UPD : U2_INSTALL_DATA_ORIG, names[i]);
-        if (plan_has(p, dst)) {
-            p->shadowed++;
-            fprintf(out, "  note  %s shadowed by an earlier source\n", names[i]);
-            continue;
-        }
         char full[1024];
         snprintf(full, sizeof full, "%.890s/%.127s", dir, names[i]);
         long sz = 0;
         char sha[HASH_LEN + 1];
         if (hash_file(full, sha, &sz) != 0) {
             fprintf(out, "  error %s could not be read\n", names[i]);
+            continue;
+        }
+
+        const int existing = plan_find(p, dst);
+        if (existing >= 0) {
+            const int differs = strcmp(p->rows[existing].sha, sha) != 0;
+            if (differs && may_override) {
+                snprintf(p->rows[existing].src, sizeof p->rows[existing].src,
+                         "%.599s", full);
+                p->rows[existing].size = sz;
+                memcpy(p->rows[existing].sha, sha, sizeof sha);
+                p->patched_over++;
+                fprintf(out, "  patch   %s taken from this source, replacing a "
+                             "different copy (D8)\n", names[i]);
+            } else {
+                p->shadowed++;
+                fprintf(out, "  note  %s shadowed by an earlier source%s\n",
+                        names[i], differs ? " and the copies DIFFER" : "");
+            }
             continue;
         }
         if (p->n >= MAX_ROWS) {
@@ -353,14 +395,30 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         snprintf(err, errsz, "out of memory");
         return U2_INSTALL_ERROR;
     }
-    plan p = { rows, 0, 0, 0 };
+    plan p = { rows, 0, 0, 0, 0 };
 
     fprintf(out, "u2 install: %s\n", rq->to);
     if (st == T_MINE)
         fprintf(out, "  an existing install of ours; completing it\n");
 
-    /* Release first, so a file both layers carry is taken from the release and the
-     * shadow is reported rather than decided by readdir order. */
+    /* D9: the Galaxy patch lives INSIDE the release directory. `updated/` is a
+     * subdirectory of the IA pack, not a separate download, so making a player
+     * point at it separately asks them to know the pack's internal layout. If
+     * --updated-dir was not given and <original>/updated exists, that is the patch
+     * layer and we use it. An explicit --updated-dir always wins. */
+    const char *upd = rq->updated_dir && *rq->updated_dir ? rq->updated_dir : NULL;
+    char auto_upd[1024];
+    if (!upd && rq->original_dir && *rq->original_dir) {
+        snprintf(auto_upd, sizeof auto_upd, "%.890s/updated", rq->original_dir);
+        if (is_dirpath(auto_upd)) {
+            upd = auto_upd;
+            fprintf(out, "  found the Galaxy patch inside the release at %s\n", auto_upd);
+        }
+    }
+
+    /* Release first, so a file both layers carry is seen from the release and the
+     * shadow -- or, per D8, the patch winning -- is reported rather than decided by
+     * readdir order. */
     if (rq->original_dir && *rq->original_dir) {
         if (!is_dirpath(rq->original_dir)) {
             snprintf(err, errsz, "--original-dir %s is not a directory", rq->original_dir);
@@ -368,16 +426,16 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
             return U2_INSTALL_REFUSED;
         }
         fprintf(out, "-- source %s (release)\n", rq->original_dir);
-        scan_source(rq->original_dir, &p, out);
+        scan_source(rq->original_dir, &p, out, 0);
     }
-    if (rq->updated_dir && *rq->updated_dir) {
-        if (!is_dirpath(rq->updated_dir)) {
-            snprintf(err, errsz, "--updated-dir %s is not a directory", rq->updated_dir);
+    if (upd) {
+        if (!is_dirpath(upd)) {
+            snprintf(err, errsz, "--updated-dir %s is not a directory", upd);
             free(rows);
             return U2_INSTALL_REFUSED;
         }
-        fprintf(out, "-- source %s (Galaxy patch)\n", rq->updated_dir);
-        scan_source(rq->updated_dir, &p, out);
+        fprintf(out, "-- source %s (Galaxy patch)\n", upd);
+        scan_source(upd, &p, out, 1);
     }
     if (p.n == 0) {
         snprintf(err, errsz, "no game content found in the sources given");
@@ -385,8 +443,25 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         return U2_INSTALL_REFUSED;
     }
 
-    fprintf(out, "-- %d file(s) to write, %d shadowed, %d skipped\n",
-            p.n, p.shadowed, p.skipped);
+    fprintf(out, "-- %d file(s) to write, %d shadowed, %d patched over, %d skipped\n",
+            p.n, p.shadowed, p.patched_over, p.skipped);
+
+    if (rq->dry_run) {
+        /* The data layer is planned file by file above, because that is where the
+         * interesting decisions are (which copy of a shared filename wins). Themes
+         * and the FM Towns derivation are deterministic given their sources, so a
+         * dry run names the sources rather than re-planning every file. */
+        fprintf(out, "-- dry run: nothing was written\n");
+        if (rq->n_themes_dir)
+            for (int i = 0; i < rq->n_themes_dir; i++)
+                fprintf(out, "   themes would be built from %s\n", rq->themes_dir[i]);
+        else
+            fprintf(out, "   no theme source given, so themes/ would not be written\n");
+        if (rq->fmtowns_media && *rq->fmtowns_media)
+            fprintf(out, "   themes/fmtowns would be derived from %s\n", rq->fmtowns_media);
+        free(rows);
+        return U2_INSTALL_OK;
+    }
 
     int written = 0, failed = 0;
     for (int i = 0; i < p.n; i++) {

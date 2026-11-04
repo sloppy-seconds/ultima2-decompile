@@ -150,9 +150,14 @@ static void usage(const char *argv0)
         "                    verify a tree against its manifest and write nothing.\n"
         "                    Sector files that differ are reported as played-in,\n"
         "                    because the game rewrites those by design.\n"
+        "  --dry-run         with --install: plan and report, write nothing. Shows which\n"
+        "                    copy of a shared filename wins and what the theme step\n"
+        "                    would do, before anything is copied.\n"
         "  --original-dir DIR    the original DOS release: an unzipped download, a CD\n"
         "                    rip, or a directory an emulator already uses.\n"
-        "  --updated-dir DIR     the Galaxy patch layer (MAPG / MONG / TLKG).\n"
+        "  --updated-dir DIR     the Galaxy patch layer (MAPG / MONG / TLKG). If not\n"
+        "                    given and <original-dir>/updated exists, that is used:\n"
+        "                    the patch ships inside the release directory.\n"
         "  --themes-dir DIR      the fan art pack. Repeatable: no single pack is\n"
         "                    complete, so the upgrade pack (atlases and themes) and\n"
         "                    the Galaxy directory (the full PIC*-E picture set) are\n"
@@ -266,7 +271,7 @@ int main(int argc, char **argv)
     const char *roll_trace_path = NULL;
     const char *dump_ds_path = NULL;
     const char *config_path = NULL;
-    int install_mode = 0, install_check_only = 0;
+    int install_mode = 0, install_check_only = 0, install_dry_run = 0;
     const char *install_to = NULL, *install_orig = NULL;
     const char *install_upd = NULL;
     const char *install_themes[U2_THEMES_MAX_SOURCES] = { 0 };
@@ -341,6 +346,10 @@ int main(int argc, char **argv)
             install_mode = 1;
         } else if (strcmp(a, "--check") == 0) {
             install_check_only = 1;
+        } else if (strcmp(a, "--dry-run") == 0) {
+            /* Plan and report, write nothing. Paired with --install, and it is what
+             * makes a wrong source cheap to see before it is half-copied. */
+            install_dry_run = 1;
         } else if (strcmp(a, "--to") == 0 && i + 1 < argc) {
             install_to = argv[++i];
         } else if (strcmp(a, "--original-dir") == 0 && i + 1 < argc) {
@@ -468,6 +477,7 @@ int main(int argc, char **argv)
         rq.updated_dir = install_upd;
         rq.n_themes_dir = n_install_themes;
         rq.fmtowns_media = install_fmtowns;
+        rq.dry_run = install_dry_run;
         for (int k = 0; k < n_install_themes; k++)
             rq.themes_dir[k] = install_themes[k];
         const u2_install_result r = install_check_only

@@ -66,6 +66,9 @@ typedef struct {
      * player's disc and the mapping is compiled into the binary, so neither the
      * repository nor Python is needed to produce it. */
     const char *fmtowns_media;
+    /* Plan and report, write nothing. The interactive installer shows this before
+     * asking for permission, and it is what makes a mistake cheap to see. */
+    int dry_run;
 } u2_install_request;
 
 /* Install, or complete an install that already carries our manifest. With

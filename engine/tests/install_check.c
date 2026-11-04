@@ -69,6 +69,12 @@ static int copy_file(const char *src, const char *dst)
     return 0;
 }
 
+static int file_exists(const char *p)
+{
+    struct stat st;
+    return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
 static int same_bytes(const char *a, const char *b)
 {
     const long sa = size_of(a), sb = size_of(b);
@@ -137,9 +143,13 @@ static const char *const k_release[] = {
 #define N_PATCH_CONTENT 4
 static const char *const k_patch[] = {
     "MAPG00", "MAPG40", "MONG40", "TLKG40",
-    "mapx00",           /* also in the release: first source wins */
+    "mapx00",           /* also in the release: the patch copy wins (D8) */
     "cgapatch.exe",     /* patcher tooling, not content */
     "RENGAL.BAT",       /* a script that renames things, never run by us */
+    /* The real release spells these lowercase and updated/ spells them uppercase,
+     * so a case-sensitive plan would write both and leave the engine holding the
+     * corrupt one. This is the mapx15 / TLKX03 case from the shipped media. */
+    "TLKX03",
 };
 
 static int rel_fill(int i)  { return 0x10 + i * 7; }
@@ -208,7 +218,7 @@ int main(int argc, char **argv)
         snprintf(inside, sizeof inside, "%.1000s/foreign/keep.me", base);
         write_bytes(inside, 0x5A, 7);
 
-        u2_install_request rq = { foreign, rel, upd, { NULL }, 0, NULL };
+        u2_install_request rq = { .to = foreign, .original_dir = rel, .updated_dir = upd };
         CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_REFUSED,
               "a non-empty directory with no manifest is refused");
         CHECK(size_of(inside) == 7, "  and nothing in it was touched");
@@ -226,7 +236,7 @@ int main(int argc, char **argv)
     }
 
     /* --- greenfield install ------------------------------------------------ */
-    u2_install_request rq = { to, rel, upd, { NULL }, 0, NULL };
+    u2_install_request rq = { .to = to, .original_dir = rel, .updated_dir = upd };
     CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_OK,
           "install into a nonexistent directory creates it");
 
@@ -254,6 +264,11 @@ int main(int argc, char **argv)
     {
         int all_same = 1;
         for (size_t i = 0; i < sizeof k_release / sizeof k_release[0]; i++) {
+            /* mapx00 and tlkx03 exist in both fixtures, and per D8 the installed
+             * copy is the patch's, so the release comparison cannot hold for them.
+             * They get their own assertions below. */
+            if (!strcmp(k_release[i], "mapx00") || !strcmp(k_release[i], "tlkx03"))
+                continue;
             char a[1024], b[1024];
             snprintf(a, sizeof a, "%.1000s/rel/%.127s", base, k_release[i]);
             snprintf(b, sizeof b, "%.480s/data/original/%.127s", to, k_release[i]);
@@ -268,14 +283,41 @@ int main(int argc, char **argv)
         CHECK(all_same, "every copied file is byte-identical to its source");
     }
 
-    /* the shadow: mapx00 is in both sources and the release must win */
+    /* D8: a file in both sources takes the PATCH copy when the bytes differ, and
+     * keeps the release's spelling of the name. The old rule was first-source-wins
+     * with the release scanned first, which meant the corrupt release mapx15 beat
+     * the copy written to fix it. */
     {
         char a[1024], b[1024], c[1024];
         snprintf(a, sizeof a, "%.1000s/rel/mapx00", base);
         snprintf(b, sizeof b, "%.1000s/upd/mapx00", base);
         snprintf(c, sizeof c, "%.480s/data/original/mapx00", to);
-        CHECK(same_bytes(a, c) && !same_bytes(b, c),
-              "a file in both sources is taken from the release, not the patch");
+        CHECK(same_bytes(b, c) && !same_bytes(a, c),
+              "a file in both sources is taken from the patch, not the release (D8)");
+    }
+
+    /* ...and the case difference does not fork the destination: TLKX03 from the
+     * patch lands on the release's tlkx03, one file, patched bytes. */
+    {
+        char b[1024], c[1024], dup[1024];
+        snprintf(b, sizeof b, "%.1000s/upd/TLKX03", base);
+        snprintf(c, sizeof c, "%.480s/data/original/tlkx03", to);
+        snprintf(dup, sizeof dup, "%.480s/data/original/TLKX03", to);
+        CHECK(same_bytes(b, c), "the uppercase patch name lands on the release spelling");
+        CHECK(!file_exists(dup), "the two casings collapse to one file, not two");
+    }
+
+    /* D9: with no --updated-dir, <original>/updated is the patch layer. The Galaxy
+     * patch ships inside the release directory, so asking for it separately asks
+     * the player to know the pack's layout. */
+    {
+        char game9[1024], want[1024];
+        snprintf(game9, sizeof game9, "%.480s/game-d9", base);
+        snprintf(want, sizeof want, "%.480s/game-d9/data/updated/MAPG99", base);
+        u2_install_request d9 = { .to = game9, .original_dir = rel };
+        CHECK(u2_install_apply(&d9, log, err, sizeof err) == U2_INSTALL_OK,
+              "an install with no --updated-dir still finds the patch inside the release");
+        CHECK(file_exists(want), "  and the patch layer it found is installed");
     }
 
     /* assertion 6: the sources are byte-for-byte untouched */
@@ -362,7 +404,8 @@ int main(int argc, char **argv)
         snprintf(d, sizeof d, "%.480s/PICDNG-E", art2);            write_bytes(d, 0x61, 64000);
         snprintf(d, sizeof d, "%.480s/PICMIN-E", art2);            write_bytes(d, 0x62, 64000);
 
-        u2_install_request with_themes = { to, rel, upd, { art, art2 }, 2, NULL };
+        u2_install_request with_themes = { .to = to, .original_dir = rel, .updated_dir = upd,
+                                           .themes_dir = { art, art2 }, .n_themes_dir = 2 };
         CHECK(u2_install_apply(&with_themes, log, err, sizeof err) == U2_INSTALL_OK,
               "install with --themes-dir builds themes/");
 
@@ -441,7 +484,8 @@ int main(int argc, char **argv)
             snprintf(bare, sizeof bare, "%.480s/artbare", base);   mkdir(bare, 0755);
             snprintf(d, sizeof d, "%.480s/README.txt", bare);      write_bytes(d, 0x71, 20);
             snprintf(game3, sizeof game3, "%.480s/game3", base);
-            u2_install_request bare_rq = { game3, rel, upd, { bare }, 1, NULL };
+            u2_install_request bare_rq = { .to = game3, .original_dir = rel, .updated_dir = upd,
+                                           .themes_dir = { bare }, .n_themes_dir = 1 };
             CHECK(u2_install_apply(&bare_rq, log, err, sizeof err) != U2_INSTALL_OK,
                   "a themes source containing no atlas is refused, not silently empty");
         }
@@ -456,7 +500,8 @@ int main(int argc, char **argv)
             mkdir(bad, 0755);
             snprintf(d, sizeof d, "%.480s/EGATILES", bad);
             write_bytes(d, 0x51, 100);          /* below the size the engine reads */
-            u2_install_request bad_rq = { game2, rel, upd, { bad }, 1, NULL };
+            u2_install_request bad_rq = { .to = game2, .original_dir = rel, .updated_dir = upd,
+                                          .themes_dir = { bad }, .n_themes_dir = 1 };
             CHECK(u2_install_apply(&bad_rq, log, err, sizeof err) != U2_INSTALL_OK,
                   "a themes source with a short atlas is refused");
             char m[1024];
