@@ -101,6 +101,10 @@ ones and they are the ones that need a ruling.
 
 ## 4. Decisions needed
 
+> **Update:** all four were ruled on 2026-11-05. See § 9 for the rulings and § 9a for
+> the one that remains a taste call. The text below is kept as asked, because the
+> reasoning behind each ruling is the part worth keeping.
+
 **D1 — does enhanced mode adopt the FM Towns viewport of 11 × 12?**
 Our 20 × 10 is not a preference; it is derived from the DOS original's staging
 buffer (`asm/4ABB`, the 6400-byte span the game flushes to video). Adopting 11 × 12
@@ -199,7 +203,6 @@ are the invasive ones and should not start until they are ruled.
 | S8 | docs, and the § 6 questions onto `needs-gameplay.md` | — |
 
 ## 8. Risks worth stating plainly
-
 - **No byte authority.** The DOS layout is derived from the binary. This layout would
   be derived from photographs of a different binary we have not disassembled. That is
   a lower grade of evidence and every number in § 1 should carry that caveat in the
@@ -213,3 +216,82 @@ are the invasive ones and should not start until they are ruled.
 - **Two sources of truth for text.** If D3 goes the other way, the engine ships
   strings that did not come from the bytes it reconstructs, and that needs saying at
   each site rather than being left implicit.
+
+---
+
+## 9. Owner rulings, 2026-11-05
+
+**D2 — ruled.** Enhanced mode is 640 × 480, and `--enhanced` is what sets it. It also
+makes `--ega` redundant rather than orthogonal: at 640 × 480 there is room for a
+32 px theme by definition, so `--enhanced` implies themed art and `--ega` becomes the
+classic-layout-with-fan-art path that stays at 640 × 400.
+
+**D3 — ruled.** Enhanced mode may invent its own text. It is a reimplementation of a
+presentation, not a byte-matching target, so `WEA:` and `ARM:` are fine and the stat
+labels are ours to choose. Each invented string gets a comment saying it is ours and
+not from `ultimaii.exe`, so nobody later mistakes it for extracted content.
+
+**D4 — ruled.** `--enhanced` is the trigger. Not the theme, which keeps the
+window-resize-on-Ctrl-T problem closed.
+
+**Red bar — ruled.** Keep it, draw it, give it no meaning yet. Candidate future use
+is the planet or area the player is standing on, which is a nicer home for that
+information than the map, but it stays an empty bar until there is a use for it.
+
+**Z screen — ruled.** Takes the whole screen in enhanced mode for now. Paginating it
+into the panel is a later change, and it is worth noting that the Z page is the one
+screen whose content is already too wide for a 276 px column, so pagination is not
+just a layout nicety.
+
+**Stats order — ruled.** Ours, not the reference's.
+
+### 9a. D1: the arithmetic, and what actually sets 11 × 12
+
+The question was whether a viewport at least as large as the DOS one fits beside a
+panel. It does, and the answer turned out to be driven by the panel's **font size**,
+not by the frame.
+
+The hard constraint is `tile_px × cols + panel_px ≤ 640`. At 32 px tiles, 20 columns
+is 640 px — the entire width — so **20 × 10 beside a panel is arithmetically
+impossible**, by 72 px even with a panel only 8 characters wide. That is not a
+layout to tune; it is arithmetic.
+
+What fits at 32 px tiles, 640 × 480, banner dropped and the 16 px bottom bar kept:
+
+| map | cells | vs DOS 200 | panel | text cols at 8 px |
+| --- | --- | --- | --- | --- |
+| 11 × 14 | 154 | −46 | 280 px | 34 |
+| 13 × 14 | 182 | −18 | 216 px | 26 |
+| **14 × 14** | **196** | **−4** | 168 px | 20 |
+| 15 × 14 | 210 | +10 | 144 px | 17 |
+
+So a roughly square **14 × 14** matches the DOS cell count almost exactly, which is
+what the owner suspected when he said it would have to go square.
+
+The reason the reference is 11 wide is now visible: FM Towns draws its panel text at
+about 16 px, so a panel readable at that size is ~276 px, and 640 − 276 = 364 = 11
+columns. **The 11 is not a taste decision, it is the font.** Our font is 8 × 8 and
+the only sizes we can render are 8 px native or 16 px doubled, so the choice is
+binary:
+
+- **Panel at 16 px** — matches the reference's visual weight next to 32 px tiles,
+  needs ~276 px, and the map is 11 × 14 = 154 cells, *smaller than the DOS view*.
+- **Panel at 8 px** — half the reference's text size, but a 168 px panel holds 20
+  columns and the map becomes 14 × 14 = 196 cells, matching DOS.
+
+There is no middle, because there is no 12 px font. This is the remaining decision
+for D1 and it is genuinely a taste call: a faithful-looking panel with a smaller
+world, or a world as large as the original with small panel text. My recommendation
+is the 8 px panel at 14 × 14, because losing 46 cells of visibility is a gameplay
+change and small text is only an aesthetic one — but the reference look is the
+reason to want the other.
+
+One more number worth having: the command log wraps at 40 columns in the DOS binary
+(`asm/53A0`). Any panel narrower than 40 text columns re-wraps it, so 17–26 columns
+means lines like `CMD: ATTACK--EAST--HIT!!!` break across three rows. The reference
+lives with 17, so this is normal rather than a defect, but it is the thing that will
+feel different in play and it is worth seeing in a prototype before committing.
+
+At 16 px tiles (a v1 theme in enhanced mode) none of this binds: 22 × 29 = 638 cells
+fit beside a 34-column panel, so the v1 case has room to spare and the constraint is
+specific to 32 px art.
