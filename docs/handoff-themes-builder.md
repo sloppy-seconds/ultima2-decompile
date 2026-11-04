@@ -1,24 +1,36 @@
 # Handover — theme builder: slice A, slice B, and the held slice C
 
-> **Status, read before anything below.** **Slices A and B are done (2026-11-04).**
-> Slice A: `tools/build_themes.py` + `tools/build_themes_selftest.sh` (12 controls),
-> both wired into `tools/check_all.sh`. Slice B: the v2 format is implemented in the
-> engine (`THEME.INI` / `TILES` / `PALETTE.RGB` / `MAP.TSV`), `--fmtowns` builds the
-> FM Towns theme from the disc, `--ega-theme fmtowns` renders the overworld at
-> 640x400 in FM Towns art and palette, and `engine/tests/theme_v2_check.c` (37
-> checks, 6 of them refusals) is wired into CP4. User-facing page:
-> `docs/ega-graphics.md` § 4. **Slice C (§ 5) is not started and stays held.**
+> **LOCKED OFF 2026-11-04. Do not pick this up from here.** The theme work is
+> finished to the state described below, the format contract now lives in
+> `docs/theme-format.md`, and everything about *assembling* a game tree — including
+> the parts of this handover that were never built — has moved to
+> **`docs/install-design.md`**, which is the entry point from now on. Read that
+> first; read this file only for the design rationale behind slice B and the
+> record of what was refuted along the way.
 >
-> Three things below changed shape while the work was done, and each is written into
-> the section that owns it rather than left as it was: **§ 2.4 is closed** —
-> `EGACOLOR` is a colour-index remap decoded from `ega.drv`, not a palette, so
-> § 5 item 6's hope that it and FM Towns could share one `PALETTE.RGB` mechanism is
-> dead and slice B gave v2 its own; **§ 4.1's `scope` refusal** turned out to mean
-> "refuse to draw", not "refuse to enter", because the second makes the game
-> unwinnable behind an art flag; and **§ 4.3 item 1's warning** about not overloading
-> the atlas with a size field went further than the handoff anticipated — the frame
-> itself is now sized by the theme, because a 32x32 tile cannot be composited into a
-> 320x200 frame without decimating it, which is the downsampling § 4.2 rejects.
+> **What shipped.** Slice A: `tools/build_themes.py` +
+> `tools/build_themes_selftest.sh` (19 controls), both wired into
+> `tools/check_all.sh`. Slice B: the v2 format is implemented in the engine
+> (`THEME.INI` / `TILES` / `PALETTE.RGB` / `MAP.TSV`), `--fmtowns` builds the FM
+> Towns theme from the disc, `--ega-theme fmtowns` renders the overworld in FM
+> Towns art and palette, and `engine/tests/theme_v2_check.c` (39 checks, 6 of them
+> refusals) is wired into CP4. User-facing page: `docs/ega-graphics.md` § 4.
+>
+> **Three corrections to this handover's own plan**, each written into the section
+> that owns it: **§ 2.4 is closed** — `EGACOLOR` is a colour-index remap decoded
+> from `ega.drv`, not a palette, so § 5 item 6's hope that it and FM Towns could
+> share one `PALETTE.RGB` mechanism is dead and slice B gave v2 its own; **§ 4.1's
+> `scope` refusal** turned out to mean "refuse to draw", not "refuse to enter",
+> because the second makes the game unwinnable behind an art flag; and **§ 4.3
+> item 1's warning** about not overloading the atlas with a size field went further
+> than anticipated — the frame is sized by the **art mode**, not the theme, because
+> sizing it per theme turned a Ctrl-T cycle across tile sizes into a renderer
+> resize that wrote past its own staging buffer. The owner ruled instead that
+> `--ega` composites at 640x400 for every theme and a 16x16 theme is block-upscaled
+> into it, which is the identical doubling the SDL window was already doing.
+>
+> **What was left held** is listed in `docs/install-design.md` § 10, split into
+> what the installer inherits and what stays engine work.
 >
 > HEAD before this paragraph was `c38eda3`. `make -C engine test` CP0–CP7 green.
 > `tools/check_all.sh` has **two pre-existing red gates unrelated to this work** —
@@ -438,10 +450,12 @@ loader to leave the CGA pair makes both assertions go red.
   refused at load rather than decimated, so a 64x64 set needs a deliberate change to
   `U2_FRAME_MAX_SCALE` and `U2_EGA_FRAME_SCALE` together, not a manifest edit.
 
-## 5. Slice C — HELD. The v2 extras that make FM Towns complete
+## 5. Slice C — LOCKED OFF, moved to `docs/install-design.md` § 10
 
-**Do not start this.** It is written down so it is not lost, and so slice B does
-not accidentally design itself into a corner that makes this harder.
+**Do not start this from here.** The list below is kept as the original
+rationale — it records *why* each item was parked, which the summary in the design
+doc does not repeat. What each item now blocks on, and which of them the installer
+inherits rather than the engine, is in `docs/install-design.md` § 10.
 
 C is everything the current crosswalk deliberately parked:
 
