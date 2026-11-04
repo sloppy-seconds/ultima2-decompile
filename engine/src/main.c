@@ -22,6 +22,7 @@
 #include "core/ctx.h"
 #include "core/version.h"
 #include "core/licenses.h"
+#include "core/config.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "core/state.h"
@@ -130,6 +131,12 @@ static void usage(const char *argv0)
         "  --ega-theme-dir DIR  where to find EGATILES / EGATHEME.* and the PIC*-E\n"
         "                    files. Default order: this flag, then --data-dir, then\n"
         "                    references/u2upgrade. PROVISIONAL, as --ega.\n"
+        "  --config FILE   read config.ini from FILE instead of ./config.ini.\n"
+        "                    It names the content, saves and themes directories and\n"
+        "                    the selected theme; a flag always wins over it, and a\n"
+        "                    path in it that does not exist is an error rather than\n"
+        "                    a fallback. Absent is normal: the drop-in layout needs\n"
+        "                    no config at all.\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
         "  Ctrl-T  cycle the EGA tile theme (only with --ega; walks the themes\n"
@@ -233,6 +240,8 @@ int main(int argc, char **argv)
     uint8_t rng_state[6];
     const char *roll_trace_path = NULL;
     const char *dump_ds_path = NULL;
+    const char *config_path = NULL;
+    u2_config cfg;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
 
@@ -290,6 +299,11 @@ int main(int argc, char **argv)
             ctx.ega_theme_dir = argv[++i];
         } else if (strcmp(a, "--data-dir") == 0 && i + 1 < argc) {
             ctx.data_dir = argv[++i];
+        } else if (strcmp(a, "--config") == 0 && i + 1 < argc) {
+            /* Where config.ini lives. Read after the loop, because a flag always
+             * outranks the file and the file may only fill what the flags left
+             * unset. docs/install-design.md § 4. */
+            config_path = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {
@@ -382,6 +396,23 @@ int main(int argc, char **argv)
             usage(argv[0]);
             return 2;
         }
+    }
+
+    /* config.ini, if there is one. Absent is normal — the drop-in case has never
+     * had one, and --install is additive — so this is a fill-in step, not a
+     * requirement. A file that exists and is wrong stops the run: a typo in a path
+     * is reported, never papered over by finding the thing somewhere else, which is
+     * the same [LOCKED] rule --ega-theme-dir already follows. */
+    memset(&cfg, 0, sizeof cfg);
+    {
+        char cerr[512];
+        const u2_config_result cr = u2_config_load(
+            config_path ? config_path : U2_CONFIG_DEFAULT_FILE, &cfg, cerr, sizeof cerr);
+        if (cr != U2_CONFIG_OK) {
+            fprintf(stderr, "u2: %s\n", cerr);
+            return 2;
+        }
+        u2_config_apply(&ctx, &cfg);
     }
 
     /* The renderer default is a property of the *build*, not of the run. The

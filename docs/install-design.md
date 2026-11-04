@@ -209,6 +209,26 @@ command line  >  config.ini  >  nothing
 * A `config.ini` naming a directory that does not exist is an error at startup, not
   a silent default.
 
+**What a relative path in `config.ini` is relative to.** The precedence rule says
+nothing about this, and the two candidate answers differ in whether an installed
+tree works when the player launches it from anywhere. Ruled in implementation:
+**relative to the file that names it**, not the cwd. `--config
+/games/ultima2/config.ini` from a home directory would otherwise resolve
+`data = data` to `~/data` and the file would describe a layout it does not have.
+An absolute value is taken exactly as written, and a plain `config.ini` in the
+launch directory resolves against `.`, which is the original's default-drive model
+— so the drop-in case is untouched. `saves` is the one entry allowed to name a
+directory that does not exist yet: it is output, and `save.c` creates it on first
+write the way the original would have.
+
+Two refusals worth naming, because both are the difference between a config that
+can lie and one that cannot. An **unknown key is a refusal**, not an ignore: a key
+nobody reads is indistinguishable from a typo, and a silently ignored typo is a
+player editing the wrong line forever. And a **value longer than the parser's cap
+is a refusal, not a truncation** — a halved path is a path that points somewhere
+else. The cap is 255 characters, raised from the 63 that `THEME.INI` needed, since
+a real filesystem path does not fit in 63.
+
 **Where the code lives.** *ruled* — `--install` ships in both builds and is purely
 text/terminal, needing no SDL, which is what makes it testable headless and in CI.
 The consequence is structural: the installer goes in `engine/src/core/`, not

@@ -239,7 +239,7 @@ fi
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/save_q_check" \
    tests/save_q_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
-   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/sha256.c src/core/seam.c \
+   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
    src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-saveq.err"
@@ -259,7 +259,7 @@ fi
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/food_check" \
    tests/food_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
-   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/sha256.c src/core/seam.c \
+   src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
    src/debug/trace.c src/debug/dump_state.c 2>"$WORK/cc-food.err"
@@ -374,7 +374,7 @@ fi
 # original/updated/), so this block runs unconditionally and never goes red for a
 # missing pack. See docs/ega-graphics-plan.md.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ega_check" \
-   tests/ega_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c \
+   tests/ega_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c src/core/ini.c \
    src/core/pic_ega.c src/core/pic.c src/debug/trace.c \
     >"$WORK/cc-ega.err" 2>&1 \
     && "$WORK/ega_check" >"$WORK/ega.out" 2>&1 \
@@ -389,12 +389,24 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ega_check" \
 # runs in CI with no media; only the FM Towns letter-row assertions skip when
 # themes/fmtowns has not been built, and they say so out loud.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/theme_v2_check" \
-   tests/theme_v2_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c \
+   tests/theme_v2_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c src/core/ini.c \
    src/core/font.c src/core/vram.c src/debug/trace.c \
     >"$WORK/cc-v2.err" 2>&1 \
     && "$WORK/theme_v2_check" >"$WORK/v2.out" 2>&1 \
     && ok "theme format v2: geometry, map indirection, palette, 6 refusals ($(grep -c '^  ok' "$WORK/v2.out") checks)" \
     || { bad "theme format v2 failed:"; tail -20 "$WORK/v2.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-v2.err" | sed 's/^/        /'; }
+
+# --- config.ini -------------------------------------------------------------
+# The one place a shipped binary learns where content lives, so the property under
+# test is that it cannot lie: an unknown key, a misplaced key, a duplicated key, a
+# path that is not a directory and an over-long value are all refusals rather than
+# silent defaults, and precedence is flag > ini > nothing. The fixtures are written
+# under $WORK, so this runs in CI with no media. docs/install-design.md § 4.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/config_check" \
+   tests/config_check.c src/core/config.c src/core/ini.c >"$WORK/cc-cfg.err" 2>&1 \
+    && "$WORK/config_check" "$WORK" >"$WORK/cfg.out" 2>&1 \
+    && ok "config.ini: precedence, path resolution, 8 refusals ($(grep -c '^  ok' "$WORK/cfg.out") checks)" \
+    || { bad "config.ini check failed:"; tail -20 "$WORK/cfg.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-cfg.err" | sed 's/^/        /'; }
 
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is

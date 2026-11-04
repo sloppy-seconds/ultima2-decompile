@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "core/tiles_ega.h"
+#include "core/ini.h"            /* the shared `key = value` reader (ini.h says why) */
 #include "core/frame.h"           /* U2_FRAME_MAX_SCALE: a theme may not ask for
                                    * a frame bigger than the build can composite */
 
@@ -82,41 +83,13 @@ static void trim(char *s)
     while (*s == ' ' || *s == '\t') memmove(s, s + 1, strlen(s));
 }
 
-/* One `key = value` line from THEME.INI, or NULL. Comments and section headers
- * are skipped; the parser is deliberately small because the writer is
- * tools/build_themes.py and a general INI parser would only add ways to accept
- * something the builder never emits. */
+/* THEME.INI is read by the engine's one ini parser, unscoped: the file has no
+ * sections, and the refusal semantics are the ones theme_v2_check.c pins. Keeping
+ * a private copy here would be a second grammar to drift from config.ini, which is
+ * the exact thing docs/install-design.md § 4 rules out. */
 static int ini_get(const char *ini, const char *key, char *out, size_t n)
 {
-    const size_t kl = strlen(key);
-    const char *p = ini;
-    while (p && *p) {
-        const char *eol = strchr(p, '\n');
-        const size_t ll = eol ? (size_t)(eol - p) : strlen(p);
-        if (ll > kl + 1 && p[0] != '#' && p[0] != '[' && p[0] != ';') {
-            const char *eq = memchr(p, '=', ll);
-            if (eq && (size_t)(eq - p) >= kl) {
-                const char *ks = p;
-                while (ks < eq && (*ks == ' ' || *ks == '\t')) ks++;
-                const char *ke = eq;
-                while (ke > ks && (ke[-1] == ' ' || ke[-1] == '\t')) ke--;
-                const size_t klen = (size_t)(ke - ks);
-                if (klen == kl && strncasecmp(ks, key, kl) == 0) {
-                    char buf[64];
-                    const char *vs = eq + 1;
-                    size_t vl = ll - (size_t)(vs - p);
-                    if (vl >= sizeof buf) vl = sizeof buf - 1;
-                    memcpy(buf, vs, vl);
-                    buf[vl] = '\0';
-                    trim(buf);
-                    if (snprintf(out, n, "%s", buf) >= (int)n) return -1;
-                    return 1;
-                }
-            }
-        }
-        p = eol ? eol + 1 : NULL;
-    }
-    return 0;
+    return u2_ini_get(ini, NULL, key, out, n);
 }
 
 /* ------------------------------------------------------------------- v1 */
