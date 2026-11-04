@@ -205,3 +205,58 @@ the passing run was believed.
 The editor keeps verdicts in browser `localStorage` and exports TSV or JSON.
 Right-click marks "no equivalent". Derived candidates appear as a dashed ghost
 showing the actual tile, colour-coded by confidence.
+
+## 10. A screenshot reference set, and what it is good for
+
+Pix's Origin Adventures played through the FM Towns version and photographed the
+screen as they went, in two parts:
+
+* `https://www.pixsoriginadventures.co.uk/ultima-2-fm-towns-part-1/` — 14 images
+* `https://www.pixsoriginadventures.co.uk/ultima-2-fm-towns-part-2/` — 24 images
+
+They are fetched into `references/fmtowns-screens/`, which is gitignored like
+everything else under `references/`. **Never commit them.** They are the
+publisher's art photographed by a third party, and neither is ours; only this
+paragraph and the facts below are.
+
+Beside the images, two files travel with them:
+
+| file | what it is |
+| --- | --- |
+| `_SOURCE.tsv` | name, source page, byte size, `sha256:16` — so a later reader can tell whether the copy they are looking at is the copy we looked at |
+| `_CAPTIONS.tsv` | what each image actually shows, plus the blog paragraph it sits under |
+
+**Read the images, not the paragraph order.** The blog carries no `alt` text, no
+`title` and no `figcaption` — every image is labelled only by its filename, and the
+prose runs ahead of its own galleries in several places. The clearest case: five
+images sit under a paragraph about the final battle, and all five are the victory
+screens the *next* paragraph describes ("a handful of static screens for the
+winning sequence"). So `_CAPTIONS.tsv` states what
+was seen in the pixels and keeps the blog text in a separate column, marked as a
+hint. Contact sheets with the filename printed under each thumbnail were how this
+was done, and it is the method worth repeating if the set grows.
+
+What is actually useful in it:
+
+* **Planet X is on three frames.** `U2FMTowns16` is the space approach ("Orbiting...
+  Planet X!"), `U2FMTowns17` the surface with Father Antos's blessing, and
+  `U2FMTowns19` the town of KUTCHER with a heavy blue cast over everything. That blue
+  cast is a second, independent sighting of the per-planet tint § 8 had to derive from
+  the forcefield row, and it agrees.
+* **The credits are in the game, behind a sign.** `U2FMTowns26` is the trigger ("Enter
+  sign / Program reads: Strange ancient scripts are there.") and `27`, `28`, `29` are
+  the credits themselves: FLAIR, 1990, with named GRAPHICS, SOUND and PROGRAM staff.
+  That is the port's provenance line, from the port itself rather than from a wiki.
+* **Dungeon levels render as `L13`, `L14`, `L15`, `L16`** in five frames. That matches
+  the CP7 finding that the level prints as two packed-decimal digits, and it is the
+  first visual confirmation of it from the FM Towns build.
+* **Screens we had only from bytes**: the death screen (`FMtownsu28`, skull and "Thou
+  art dead!"), the new title (`FMtownsu25`), the four Japanese-narration intro frames
+  (`FMtownsu21`–`24`), Minax's castle entrance (`U2FMTowns32`), her chamber
+  (`U2FMTowns36`, "You defeated Minax!!") and the five victory screens
+  (`40`, `43`, `44`, `45`, `46`).
+
+One thing the set is *not* good for: it is photographs of a screen, so the geometry is
+skewed and the colours are the camera's. Nothing in here settles a pixel-level question
+about a tile; for that, the disc is still the only authority.
+
