@@ -129,6 +129,14 @@ typedef struct u2_world {
      * monx/MONX/mong/MONG. u2_world_store refuses a prefix that is not one of them. */
     const char  *map_prefix;  /* spelling the map sector was found under */
     const char  *mon_prefix;  /* spelling the creature table was found under */
+    /* Which content layer each kind was found in, as the subdirectory of the
+     * content root ("" is the root itself). Recorded for the same reason the
+     * prefixes are and per kind for the same trap: write-back goes to the layer it
+     * was read from, so a sector read from a patch layer is not stored somewhere
+     * the patch layer then hides again. Points into a static table, never
+     * allocated. docs/install-design.md § 3. */
+    const char  *map_root;    /* layer the map sector was found in */
+    const char  *mon_root;    /* layer the creature table was found in */
     /* The sector's scripted dialogue, asm/22D5's second read into [DS:476]. Read-only and
      * never stored: the game writes mapx back (asm/2305) but nothing ever writes dialogue
      * home, so there is no dirty flag here and adding one would invite a write-back that the

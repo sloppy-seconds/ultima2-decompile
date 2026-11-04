@@ -182,6 +182,105 @@ int main(int argc, char **argv)
         ctx.state.world = 0;
     }
 
+    /* --- layout B: the same two roles spelled as data/original + data/updated.
+     *     These must be served by the one root list rather than a second code path,
+     *     so the assertions are about precedence and provenance, not about a
+     *     separate mode: the release layer outranks the game root, the patch layer
+     *     outranks it off Earth and is not consulted on Earth, and a sector read
+     *     from a layer writes back into that layer. That last one is the shadowing
+     *     defect the older layout already had -- a sector read from ./updated used
+     *     to store at the root, where the copy it came from still outranked it, so
+     *     the player's world change was invisible forever. docs/install-design.md
+     *     § 3 (D6: write-back stays in the content dir, re-addressed with saves). */
+    {
+        u2_sector_id jup = { .hi = 5, .lo = 1 };
+        static uint8_t layer[U2_SECTOR_TILES], patched[U2_SECTOR_TILES], rootward[U2_SECTOR_TILES];
+        char q[600], d[600];
+        for (size_t i = 0; i < U2_SECTOR_TILES; i++) {
+            layer[i] = 0x33; patched[i] = 0x44; rootward[i] = 0x55;
+        }
+        snprintf(d, sizeof d, "%.400s/data", dir);           mkdir(d, 0755);
+        snprintf(d, sizeof d, "%.400s/data/original", dir);  mkdir(d, 0755);
+        snprintf(d, sizeof d, "%.400s/data/updated", dir);   mkdir(d, 0755);
+
+        snprintf(q, sizeof q, "%.400s/mapx51", dir);
+        CHECK(write_file(q, rootward, U2_SECTOR_TILES) == 0,
+              "layout B: a stale mapx51 sits at the game root");
+        snprintf(q, sizeof q, "%.400s/data/original/mapx51", dir);
+        CHECK(write_file(q, layer, U2_SECTOR_TILES) == 0,
+              "layout B: data/original/mapx51 written");
+
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x33,
+              "layout B: the release layer outranks the game root on Earth");
+        CHECK(w.map_root && strcmp(w.map_root, "data/original") == 0,
+              "layout B: the layer the map came from is recorded");
+
+        snprintf(q, sizeof q, "%.400s/data/updated/MAPG51", dir);
+        CHECK(write_file(q, patched, U2_SECTOR_TILES) == 0,
+              "layout B: data/updated/MAPG51 written");
+        ctx.state.world = 4;
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x44,
+              "layout B: off Earth the patch layer wins");
+        CHECK(w.map_root && strcmp(w.map_root, "data/updated") == 0,
+              "layout B: a patched sector records the patch layer");
+        memset(&w, 0, sizeof w);
+        ctx.state.world = 0;
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK && w.map[0] == 0x33,
+              "layout B: on Earth the patched spelling is not tried at all");
+
+        ctx.state.world = 4;
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK,
+              "layout B: the patched sector reloads for write-back");
+        u2_world_tile_put(&w, 3, 4, 0x77);
+        CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_OK,
+              "layout B: the patched sector stores");
+        snprintf(q, sizeof q, "%.400s/data/updated/MAPG51", dir);
+        f = fopen(q, "rb");
+        int landed_in_layer = 0;
+        if (f) {
+            size_t n = fread(readback, 1, sizeof readback, f);
+            fclose(f);
+            landed_in_layer = n >= U2_SECTOR_TILES && readback[4 * U2_SECTOR_EDGE + 3] == 0x77;
+        }
+        CHECK(landed_in_layer,
+              "layout B: the write landed in the layer it was read from");
+        snprintf(q, sizeof q, "%.400s/mapx51", dir);
+        f = fopen(q, "rb");
+        int root_untouched = 0;
+        if (f) {
+            size_t n = fread(readback, 1, sizeof readback, f);
+            fclose(f);
+            root_untouched = n >= U2_SECTOR_TILES && readback[0] == 0x55;
+        }
+        CHECK(root_untouched,
+              "layout B: storing a patched sector wrote nothing beside the root mapx");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK &&
+              w.map[4 * U2_SECTOR_EDGE + 3] == 0x77,
+              "layout B: the change survives reload instead of being shadowed by its own layer");
+
+        /* Dialogue and the stroke table are content too, so they cross the same
+         * layers. tlkx is read-only, so only the read side is asserted. */
+        snprintf(q, sizeof q, "%.400s/data/original/tlkx51", dir);
+        CHECK(write_file(q, layer, U2_TLKX_BYTES) == 0, "layout B: data/original/tlkx51 written");
+        snprintf(q, sizeof q, "%.400s/data/updated/TLKG51", dir);
+        CHECK(write_file(q, patched, U2_TLKX_BYTES) == 0, "layout B: data/updated/TLKG51 written");
+        ctx.state.world = 4;
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load_tlkx(&ctx, &w, jup) == U2_WORLD_OK && w.tlkx[0] == 0x44,
+              "layout B: dialogue prefers the patched layer off Earth");
+        ctx.state.world = 0;
+
+        snprintf(q, sizeof q, "%.400s/data/original/monsters", dir);
+        CHECK(write_file(q, layer, U2_STROKE_BYTES) == 0, "layout B: data/original/monsters written");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load_strokes(&ctx, &w) == U2_WORLD_OK,
+              "layout B: the stroke table is found in the release layer, not only beside the binary");
+    }
+
     /* --- write-back: dirty tracking, tail preservation, atomicity ---- */
     memset(&w, 0, sizeof w);
     CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK, "reload mapx30 for write-back");

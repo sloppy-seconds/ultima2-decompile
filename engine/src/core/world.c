@@ -54,17 +54,111 @@ static const char *const *prefix_list(int is_map, size_t *count)
     return k_mon_prefixes;
 }
 
+/* Content roots, in precedence order -- docs/install-design.md § 3.
+ *
+ * One mechanism serves two layouts. `--install` writes explicit layers under
+ * data/; the drop-in case, which stays required, has the same two layers at the
+ * game root. A root is therefore a role (patch layer or release layer) plus the
+ * subdirectory it lives in, and a tree that lacks one of them simply fails to
+ * open that candidate and falls through -- there is no "which layout is this"
+ * branch anywhere, which is the whole point of listing roots instead of testing
+ * for a marker file.
+ *
+ * `.patched` marks a patch layer. The patch layer is where the Galaxy spellings
+ * are looked for, and it is never consulted for the release spellings: that is
+ * the historical behaviour kept intact, since `updated/mapx40` has never been a
+ * candidate and still is not.
+ */
+struct root { const char *sub; int patched; };
+static const struct root k_roots[] = {
+    { "data/updated",  1 },
+    { "updated",       1 },
+    { "data/original", 0 },
+    { "",              0 },
+};
+#define N_ROOTS (sizeof k_roots / sizeof k_roots[0])
+
+/* The Galaxy-patch spellings per kind. The release lists above already carry
+ * both cases and both spellings, so only the patched side needs its own. */
+static const char *const k_map_patch[] = { "MAPG", "mapg" };
+static const char *const k_mon_patch[] = { "MONG", "mong" };
+
+/* One (root, prefix) pair to try, plus the bare prefix recorded for write-back.
+ * `root` points into k_roots, so it is static and safe to keep on the world. */
+struct cand { const char *root; const char *prefix; const char *label; };
+#define N_CAND 20
+
+/* Fill `out` with the candidates for one sector kind, in try order, and return
+ * the count. On a planet the sector filename is shared with an Earth era --
+ * sector 40 is both Earth-2112 and Jupiter -- and the fan pack ships the true
+ * planet content under the patched spelling, either in a patch layer awaiting
+ * RENGAL.BAT or already sitting in the release layer where it ran (docs/planet-
+ * maps-galaxy-patch.md). So off Earth the patched spellings go first, across
+ * every root, patch layer before release layer; the unpatched bytes are the
+ * fallback when no patched copy exists. On Earth (world 0) the release spelling
+ * IS the era content and the patched spellings are not tried at all, which is
+ * the historical order. The `label` is the bare prefix recorded for store, so a
+ * map read from a patch layer still writes back under a legal prefix rather than
+ * the illegal "updated/MAPG". */
+static int build_cands(int off_earth, const char *const *patch_pfx, size_t n_patch,
+                       const char *const *rel_pfx, size_t n_rel,
+                       struct cand *out, int max)
+{
+    int n = 0;
+
+    if (off_earth)
+        for (size_t r = 0; r < N_ROOTS && n < max; r++)
+            for (size_t p = 0; p < n_patch && n < max; p++)
+                out[n++] = (struct cand){ k_roots[r].sub, patch_pfx[p], patch_pfx[p] };
+
+    for (size_t r = 0; r < N_ROOTS && n < max; r++) {
+        if (k_roots[r].patched)
+            continue;
+        for (size_t p = 0; p < n_rel && n < max; p++)
+            out[n++] = (struct cand){ k_roots[r].sub, rel_pfx[p], rel_pfx[p] };
+    }
+    return n;
+}
+
+/* The directory a root resolves to. No trailing slash and no doubled slash when
+ * the root is the game root itself, because a path with `//` in it works and then
+ * reads as a bug, and every comparison and message downstream inherits it. */
+static void root_path(char *buf, size_t bufsz, const u2_ctx *ctx, const char *root)
+{
+    if (root && *root)
+        snprintf(buf, bufsz, "%s/%s", world_dir(ctx), root);
+    else
+        snprintf(buf, bufsz, "%s", world_dir(ctx));
+}
+
+static void sector_path(char *buf, size_t bufsz, const u2_ctx *ctx,
+                        const char *root, const char *prefix, u2_sector_id id)
+{
+    char dir[448];   /* smaller than every caller's path buffer, so the append
+                     * below cannot truncate: gcc proves it and -Werror enforces. */
+    root_path(dir, sizeof dir, ctx, root);
+    snprintf(buf, bufsz, "%s/%s%u%u", dir, prefix,
+             (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
+}
+
 u2_world_result u2_world_load_strokes(u2_ctx *ctx, u2_world *w)
 {
-    char path[512];
-    FILE *f;
+    char path[544];
+    FILE *f = NULL;
 
     /* The name is not templated: no sector digits, no case variants, no extension spelling
      * list. asm/07F3 opens it by name and reads one 0x800 block, which is why the read
      * length is U2_STROKE_BYTES and not the file's 2176 — the last 128 bytes are never
-     * transferred by the original and the engine does not pretend otherwise. */
-    snprintf(path, sizeof path, "%s/monsters", world_dir(ctx));
-    f = fopen(path, "rb");
+     * transferred by the original and the engine does not pretend otherwise.
+     *
+     * It is looked for across the roots like any other content, because under the
+     * explicit-layer layout it lives in the release layer and not beside the binary. */
+    for (size_t r = 0; r < N_ROOTS && !f; r++) {
+        char dir[448];
+        root_path(dir, sizeof dir, ctx, k_roots[r].sub);
+        snprintf(path, sizeof path, "%s/monsters", dir);
+        f = fopen(path, "rb");
+    }
     if (!f)
         return U2_WORLD_MISSING;
 
@@ -123,10 +217,12 @@ u2_world_result u2_world_open(const u2_ctx *ctx)
 /* Writability is checked at store time, not at open time: a read-only content
  * directory is perfectly playable right up until the game needs to write a
  * sector, and that is exactly when the original would have shown its INSERT
- * prompt. Refusing to start would be a deviation nobody asked for. */
-static int dir_writable(const u2_ctx *ctx)
+ * prompt. Refusing to start would be a deviation nobody asked for. The store
+ * checks the directory it is about to write into, which is the layer the sector
+ * was read from -- see u2_world_store. */
+static int dir_writable(const char *dir)
 {
-    return access(world_dir(ctx), W_OK | X_OK) == 0;
+    return access(dir, W_OK | X_OK) == 0;
 }
 
 static size_t want_bytes(int is_map)
@@ -148,46 +244,27 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     size_t got = 0;
     int found = 0;
     const char *used = NULL;
+    const char *used_root = "";
 
     const char *const *prefixes;
     size_t nprefixes;
     prefixes = prefix_list(is_map, &nprefixes);
 
-    /* Candidate (dir, prefix) pairs, tried in order. On a planet the sector filename is
-     * shared with an Earth era -- sector 40 is both Earth-2112 and Jupiter -- and the
-     * fan pack ships the true planet maps under the mapg spelling, either in the
-     * content root or in ./updated awaiting RENGAL.BAT (docs/planet-maps-galaxy-patch.md).
-     * So when the world byte says we are off Earth, try the patched mapg copies first and
-     * fall back to the unpatched mapx bytes only when no patched map exists. On Earth
-     * (world 0) the mapx spelling IS the era map and the order is the historical one.
-     * The `label` is the bare prefix recorded for store, so a map read from ./updated
-     * still writes back under a legal root prefix rather than the illegal "updated/MAPG". */
-    struct cand { const char *dir; const char *prefix; const char *label; };
-    struct cand list[10];
-    int n = 0;
-    const char *base = world_dir(ctx);
-    if (ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
-        /* Monster layouts collide with Earth eras exactly as maps do (monx/mong mirror
-         * mapx/mapg), so the same patched-first order applies to both kinds. */
-        if (is_map) {
-            list[n++] = (struct cand){ base, "updated/MAPG", "MAPG" };
-            list[n++] = (struct cand){ base, "updated/mapg", "mapg" };
-            list[n++] = (struct cand){ base, "MAPG", "MAPG" };
-            list[n++] = (struct cand){ base, "mapg", "mapg" };
-        } else {
-            list[n++] = (struct cand){ base, "updated/MONG", "MONG" };
-            list[n++] = (struct cand){ base, "updated/mong", "mong" };
-            list[n++] = (struct cand){ base, "MONG", "MONG" };
-            list[n++] = (struct cand){ base, "mong", "mong" };
-        }
-    }
-    for (size_t i = 0; i < nprefixes && n < 10; i++)
-        list[n++] = (struct cand){ base, prefixes[i], prefixes[i] };
+    /* Candidate (root, prefix) pairs, tried in order; the reasoning is on
+     * build_cands. Monster layouts collide with Earth eras exactly as maps do
+     * (monx/mong mirror mapx/mapg), so the same patched-first order applies to
+     * both kinds. */
+    struct cand list[N_CAND];
+    int off_earth = ctx && ctx->state.world != 0 && ctx->state.world != 0x0A;
+    int n = build_cands(off_earth,
+                        is_map ? k_map_patch : k_mon_patch,
+                        is_map ? (int)(sizeof k_map_patch / sizeof k_map_patch[0])
+                               : (int)(sizeof k_mon_patch / sizeof k_mon_patch[0]),
+                        prefixes, nprefixes, list, N_CAND);
 
     for (int i = 0; i < n && !found; i++) {
         FILE *f;
-        snprintf(path, sizeof path, "%s/%s%u%u", list[i].dir, list[i].prefix,
-                 (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
+        sector_path(path, sizeof path, ctx, list[i].root, list[i].prefix, id);
         f = fopen(path, "rb");
         if (!f)
             continue;
@@ -195,6 +272,7 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
         fclose(f);
         found = 1;
         used = list[i].label;
+        used_root = list[i].root;
     }
 
     if (!found)
@@ -206,7 +284,8 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
     /* Per kind, never one shared field: see the note on the struct. The overworld loads
      * map then monsters into the same world, so a single field would always say "monx"
      * by the time anything is stored. */
-    if (is_map) w->map_prefix = used; else w->mon_prefix = used;
+    if (is_map) { w->map_prefix = used; w->map_root = used_root; }
+    else        { w->mon_prefix = used; w->mon_root = used_root; }
     if (is_map) {
         w->map_id = id;
         w->map_loaded = 1;
@@ -233,28 +312,24 @@ u2_world_result u2_world_load_tlkx(u2_ctx *ctx, u2_world *w, u2_sector_id id)
     size_t got = 0;
     const char *used = NULL;
 
-    /* Same world-aware preference as u2_world_load: on a planet the sector's dialogue
-     * collides with an Earth era (tlkx/tlkg mirror mapx/mapg), so prefer the patched
-     * tlkg -- in ./updated then the root -- before the unpatched tlkx. On Earth the tlkx
-     * spelling is the era dialogue and the order is unchanged. tlkx is read-only, so the
-     * label is recorded for provenance only. docs/planet-maps-galaxy-patch.md. */
-    struct cand { const char *dir; const char *prefix; const char *label; };
-    struct cand list[8];
-    int n = 0;
-    const char *base = world_dir(ctx);
-    if (ctx && ctx->state.world != 0 && ctx->state.world != 0x0A) {
-        list[n++] = (struct cand){ base, "updated/TLKG", "TLKG" };
-        list[n++] = (struct cand){ base, "updated/tlkg", "tlkg" };
-        list[n++] = (struct cand){ base, "TLKG", "TLKG" };
-        list[n++] = (struct cand){ base, "tlkg", "tlkg" };
-    }
-    for (size_t i = 0; i < sizeof k_tlk_prefixes / sizeof k_tlk_prefixes[0] && n < 8; i++)
-        list[n++] = (struct cand){ base, k_tlk_prefixes[i], k_tlk_prefixes[i] };
+    /* Same world-aware preference as u2_world_load, across the same roots: on a
+     * planet the sector's dialogue collides with an Earth era (tlkx/tlkg mirror
+     * mapx/mapg), so the patched tlkg is preferred wherever it lives before the
+     * unpatched tlkx. On Earth the tlkx spelling is the era dialogue and the
+     * order is unchanged. tlkx is read-only, so nothing records a root for it.
+     * docs/planet-maps-galaxy-patch.md. */
+    static const char *const k_tlk_patch[] = { "TLKG", "tlkg" };
+    struct cand list[N_CAND];
+    int off_earth = ctx && ctx->state.world != 0 && ctx->state.world != 0x0A;
+    int n = build_cands(off_earth, k_tlk_patch,
+                        (int)(sizeof k_tlk_patch / sizeof k_tlk_patch[0]),
+                        k_tlk_prefixes,
+                        (int)(sizeof k_tlk_prefixes / sizeof k_tlk_prefixes[0]),
+                        list, N_CAND);
 
     for (int i = 0; i < n; i++) {
         FILE *f;
-        snprintf(path, sizeof path, "%s/%s%u%u", list[i].dir, list[i].prefix,
-                 (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
+        sector_path(path, sizeof path, ctx, list[i].root, list[i].prefix, id);
         f = fopen(path, "rb");
         if (!f)
             continue;
@@ -336,7 +411,7 @@ int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz)
 u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
 {
     u2_sector_id id;
-    char path[512], tmp[544];
+    char path[544], tmp[576], dir[448];
     size_t want = want_bytes(is_map);
     size_t nprefixes = 0;
     const uint8_t *buf = is_map ? w->map : w->mon;
@@ -344,7 +419,16 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
 
     if (!id_of(w, is_map, &id))
         return U2_WORLD_ERROR;
-    if (!dir_writable(ctx))
+
+    /* Write back into the layer the sector was read from, not always the game
+     * root. Under the explicit-layer layout a planet map read from data/updated
+     * would otherwise be stored at the root and shadowed forever by the very copy
+     * it came from, and a write the player can never see is the defect this file's
+     * header refuses to produce. It also fixes the same hazard in the older
+     * layout: a sector read from ./updated used to store at the root, where the
+     * patched copy still outranked it. */
+    root_path(dir, sizeof dir, ctx, is_map ? w->map_root : w->mon_root);
+    if (!dir_writable(dir))
         return U2_WORLD_NOT_READY;
 
     /* The prefix must belong to the kind being written. This is the loud version of the
@@ -365,8 +449,8 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
             return U2_WORLD_ERROR;
     }
 
-    u2_world_path(path, sizeof path, ctx,
-                  want_prefix ? want_prefix : prefix_list(is_map, &nprefixes)[0], id);
+    sector_path(path, sizeof path, ctx, is_map ? w->map_root : w->mon_root,
+                want_prefix ? want_prefix : prefix_list(is_map, &nprefixes)[0], id);
     snprintf(tmp, sizeof tmp, "%s.u2tmp", path);
 
     dst = fopen(tmp, "wb");

@@ -7,9 +7,9 @@ of `docs/handoff-themes-builder.md` that were never built. That handover is now
 handover, because handovers are entry points and this is the one.
 
 **The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
-§ 11, along with two that came out of them (D6, D7). One point is still open and it
-needs an answer before any code: D7 and the re-run rule contradict each other as
-written, and § 11 proposes the resolution rather than choosing silently.
+§ 11, along with the two that came out of them (D6, D7) and the follow-up ruling
+D7a that settled the last contradiction. **The design is settled; nothing here is
+built yet.**
 
 Prerequisite reading: `AGENTS.md`, then `docs/theme-format.md` (the contract for
 what a themes directory holds), then `docs/planet-maps-galaxy-patch.md` (why the
@@ -392,24 +392,24 @@ Ruled 2026-11-04, in the order they were asked:
 | 4 | FM Towns disc | **follow up later** — not in the first version, though § 5 still recognises it as a source |
 | 5 | Self-update | **out** (§ 9) |
 | D6 | Sector write-back | **stays in the content dir for now**, re-addressed with the save-game mechanisms; the gate must tolerate play drift (§ 3) |
-| D7 | `--to` target | **empty or nonexistent only** (§ 8) |
+| D7 | `--to` target | **empty or nonexistent only** (§ 8), with D7a below governing re-runs |
+| D7a | Re-run into our own tree | **allowed via an install manifest** — empty installs, manifested completes, foreign non-empty refuses (§ 11) |
 
-**One open point, created by D7.** D7 says the target must be empty. § 2 rule 3 says
-re-running is normal and must be safe — install the release, play for a week,
-discover the upgrade pack, add it. Those two cannot both hold as written, and the
-resolution needs a ruling rather than a silent choice:
+**D7a — re-running into a tree we built is allowed, via a manifest.** *Ruled
+2026-11-04.* D7 on its own contradicted § 2 rule 3: the realistic flow is install
+the release, find the Galaxy patch next week, and add it to the same tree, and a
+blanket "target must be empty" refuses exactly that. The resolution is that the
+installer writes a manifest of what it emitted, the same device
+`themes/_BUILD.tsv` already uses for the theme builder, and a target is then one of:
 
-* **Proposal: recognise our own tree.** The installer writes a manifest of what it
-  emitted, exactly as `themes/_BUILD.tsv` already does for the theme builder. An
-  empty target is installable; a target carrying a valid manifest is *completable*
-  — `--check` says which layers it has and which are missing, and `--install` adds
-  the missing ones and re-verifies. A target that is non-empty with no manifest is
-  refused, which is the case D7 was protecting. This keeps the re-run story, keeps
-  idempotence provable, and still never touches a directory the installer did not
-  build.
-* The alternative is that adding a layer means a fresh `--to` and a discarded tree.
-  Simpler, but it throws away the saves unless they live outside the game directory,
-  and it makes "re-running is a no-op" untestable.
+| target state | behaviour |
+| --- | --- |
+| empty, or nonexistent and created | install |
+| carries a valid install manifest | **complete** — add the layers that are missing, re-verify, report what was added |
+| non-empty with no manifest | refuse, and say why. This is the case D7 exists to protect |
 
-Recommend the first. It is also the pattern the theme builder already proved, which
-is worth something: emit, record what was emitted, re-derive and diff.
+So D7's protection survives intact — a directory the installer did not build is never
+written to — while idempotence stays testable, because a second run against our own
+tree is a real operation with a verifiable no-op result rather than an error path.
+It also keeps the saves in place, which the rejected alternative (a fresh `--to` per
+run) would have thrown away or forced out of the game directory.
