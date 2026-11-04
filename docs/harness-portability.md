@@ -190,6 +190,23 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-04 — When a data sidecar's format is undetermined, look for the program that ships
+  beside it which reads it, before guessing at the bytes.** A colour-table sidecar in a fan
+  art pack was 32 bytes for what looked like 16 colours, and every in-memory reading of it
+  (RGB555, nibble pairs, an index remap) was a guess that a byte-level check could not refute.
+  The pack also shipped the real-mode driver that opens the file, and that driver settled it in
+  a dozen instructions: a fixed-size whole-file read over a built-in default table, then five
+  indexed reads whose values go to the pixel and character-attribute writers, and a blit path
+  that never consults the table at all. Three transferable points. (1) A third-party pack is
+  usually self-consistent: if it ships a loader, patcher or driver alongside the data, that
+  binary is the format spec and it is static, so the decode costs a disassembly and not a
+  capture. (2) A fixed-size read (`mov cx,N; rep movsb`) is a size contract, and the presence
+  of a built-in default of the same shape in the reader's own data area is stronger evidence of
+  the record width than anything derivable from the file. (3) Distinguish a palette from a
+  remap by *where the value goes*: a value written to a palette register is a colour, a value
+  written as a pixel or attribute index is a remap, and the two need different engine
+  mechanisms even when they look like the same 32 bytes.
+
 * **2026-11-02 — A measurement taken where two hypotheses look identical cannot decide between them,
   however carefully it is taken, and the reconstruction will generalise the result to every case that
   was never tested.** A viewport rule was established from a live capture and then applied to every

@@ -19,8 +19,18 @@
  *     tiles landing at indices 32..57 in both atlases). The 65th tile is an extra
  *     the CGA set lacks; the engine uses indices 0..63 and ignores it.
  *   - the pack ships four interchangeable themes (default, 10, alt, c64), all the
- *     same format and size, differing only in colour. None carries its own
- *     palette, so the standard EGA RGB table in core/frame.c is used for all.
+ *     same format and size. Two of the three alternates (`10` and `C64`) also ship
+ *     a 32-byte `EGACOLOR`; `EGATHEME.ALT` ships `EGATILES` alone, so "every theme
+ *     carries one" is as false as "none does".
+ *   - `EGACOLOR` is NOT an RGB palette and this engine does not read it. The fan
+ *     pack's `ega.drv` loads it whole (`mov cx,0x20; rep movsb`) over a built-in
+ *     default table and uses it as a per-theme COLOUR-INDEX REMAP applied at draw
+ *     time: entries 0..7 recolour the overlay stream, 8..15 the text attribute
+ *     handed to `int 0x10/ah=0x09`, 16..19 and 20..31 feed box and pen primitives.
+ *     The tile-atlas blit never consults it, so tile colour comes from the
+ *     `EGATILES` bytes themselves and the standard EGA RGB table in `core/frame.c`
+ *     is still what the engine draws with. Addresses and grades:
+ *     `docs/ega-graphics.md` § 3.1.
  *
  * Copyright posture, identical to the CGA atlas and the pic loader: this art is
  * the player's own, read at run time from the resolved themes directory and never

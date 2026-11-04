@@ -22,7 +22,7 @@ the planet maps — see `docs/planet-maps-galaxy-patch.md`). The files the engin
 | file | what it is |
 | --- | --- |
 | `EGATILES` | the 16-colour tile atlas — the map, towns, buildings and figures (the dominant visual) |
-| `EGATHEME.10/`, `EGATHEME.ALT/`, `EGATHEME.C64/` | alternative tile themes, each holding its own `EGATILES` |
+| `EGATHEME.10/`, `EGATHEME.ALT/`, `EGATHEME.C64/` | alternative tile themes, each holding its own `EGATILES`, and (for `10` and `C64`) its own `EGACOLOR` and pictures |
 | `PICDRA-E`, `PICSPA-E`, `PICMIN-E`, `PICDNG-E`, `PICTWN-E`, `PICOUT-E`, `PICCAS-E` | the 16-colour full-screen pictures (some copies spell these `PICDRA.EGA` etc.) |
 
 If you already ran the Exodus installer on your game, these files are in your game folder (the
@@ -68,6 +68,63 @@ to its CGA version.)
 - The status text band stays in the CGA colours (indices 0 and 3), which read as black and
   cyan on the EGA palette. This is a known cosmetic limitation of the interim flag, not a
   bug; the options menu will own text colouring later.
+
+### 3.1 `EGACOLOR` — what it is, and what the engine does with it
+
+Status: **decoded statically 2026-11-04 from the fan pack's own driver.** The claim this
+replaces — "no theme carries its own palette, so the standard EGA table is used for all" —
+was wrong twice over, and it sat in a header people read as contract.
+
+Two themes do ship a colour file: `EGATHEME.10/EGACOLOR` and `EGATHEME.C64/EGACOLOR`, 32
+bytes each, and they differ from one another. `EGATHEME.ALT` ships none. Reading the 32 bytes
+as 16 little-endian RGB555 entries produces nonsense (`#78c018` everywhere, `0f0f` eight
+times out of sixteen), which is the first clue it is not an RGB table at all.
+
+It is not. `references/u2upgrade/ega.drv` says what it is, and the addresses below are file
+offsets in that file — which are also its DS offsets, since the string operands (`EGATILES`
+at `0x9e`, `MONSTERS` at `0xa7`, `EGACOLOR` at `0xb0`) match the file positions exactly.
+
+*observed* — the driver opens `EGATHEME.<name>\EGACOLOR` at `0x535`, and on success copies
+exactly `0x20` bytes (`mov cx,0x20; rep movsb`, `0x54f`..`0x552`) over a table already sitting
+in its own data area at `0xF1`. That built-in default has the same shape as the shipped files
+(`0f 02 04 0c 09 00 00 00 0b 0d 0f 0d 0c 0c 09 0f` then `0f 09 0c 0e 01 03 02 0a 08 0e 04 0b
+0d 07 0f 08`), so an absent `EGACOLOR` means "keep the driver's defaults", not "identity".
+Every byte in all three tables is `<= 0x0F`: these are 4-bit colour indices, one per entry,
+not colours.
+
+*observed* — five places read the table, and each one takes the table value and writes it as
+the **colour index of a pixel or a character**, never to a palette register:
+
+| entries | reader | what it feeds |
+| --- | --- | --- |
+| 0..7 | `0x214` (`mov cl,[bp+0xF1]`) | the 4x4 block fill, whose colour comes from the 3-bit field of the `MONSTERS` overlay stream (`shr al,5` at `0x33f`) |
+| 8..15 | `0x47f` (`mov bl,[bx+0xF9]`) | the attribute byte handed to `int 0x10 / ah=0x09` — i.e. **text colour** |
+| 16..19 | `0x370` (`mov cl,[si+0x101]`, `si & 3`) | a 2-bit selector passed to driver entry 13 |
+| 20..30 | `0x2d0` (`mov cl,[bx+0x105]`) | a switch over ~11 named parts of a box/frame routine (`0x2b2`..`0x2ce`) |
+| 31 | `0x3c2` (`mov cl,[0x110]`) | a fixed pen colour for the routine at `0x37b` |
+
+*observed* — the tile-atlas blit (`0x247`..`0x25e`, the loop that unpacks the 4bpp nibbles and
+XORs them into the plane) does **not** consult the table. So theme tile colour lives in the
+`EGATILES` bytes, and `EGACOLOR` recolours only the driver's own primitives: the overlay
+blocks, the text attribute, and box pens.
+
+*inferred* — the band names in the right-hand column. The mechanism is bytes; "this band is the
+text colour" is my reading of which BIOS call it feeds, and nobody has watched it on a real
+EGA card.
+
+**What the engine does with it: nothing.** `--ega` draws with the fixed 16-entry RGB table in
+`core/frame.c` for every theme, which is correct for the tiles (they carry their own colour)
+and ignores the overlay/text/box remap. Wiring `EGACOLOR` is a real piece of work with its own
+questions — does a text-attribute remap belong in the frame palette or in the text renderer —
+and it is not part of the theme builder's slice A. It is recorded here so the next person
+starts from the driver rather than from a guess.
+
+One more gap in the same direction: the theme directories `10` and `C64` each ship their own
+`PICDNG.EGA` and `PICSPA.EGA`, and those differ from the top-level files. The engine resolves
+pictures at the **top level** of the themes directory only (`pic_ega.c` `candidate_dirs`), so
+per-theme pictures are copied by `tools/build_themes.py` and never read by the engine. The
+fan pack's driver does look for them theme-relative, with a fall-back to the bare name
+(`0x5f1`..`0x60d`), so the art is not exotic — our loader is just narrower.
 
 ## 4. Legal posture
 
