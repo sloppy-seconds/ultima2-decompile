@@ -181,6 +181,14 @@ opt_run "apple2_anchor_map" original/ultimaii.exe decompiled/apple2 -- python3 t
 opt_run "apple2 index fresh" /var/tmp/u2-apple2-6502/u2_6502.tsv -- python3 tools/apple2_index.py --check
 
 echo
+echo "== FM Towns crosswalk (needs gitignored media) =="
+# Disc-free check: validates the committed crosswalk's structure, completeness and
+# letter rule. Controls proven red first: a dropped row, a broken letter mapping
+# and an unknown bank all exit 1. See docs/fmtowns-graphics.md.
+opt_run "fmtowns crosswalk" disasm/fmtowns-crosswalk.tsv -- python3 tools/fmtowns_xwalk.py --check disasm/fmtowns-crosswalk.tsv
+opt_run "fmtowns crosswalk reproducible" disasm/fmtowns-owner-mapping.json references/fmtowns -- python3 tools/fmtowns_xwalk.py --export disasm/fmtowns-owner-mapping.json /var/tmp/u2fmt/regen.tsv
+
+echo
 if [ "$fails" -gt 0 ]; then
     echo "CHECK-ALL: FAIL ($fails gate(s) red, $skips skipped, $opt_skips optional-skipped)"
     exit 1
