@@ -51,6 +51,23 @@ canonical set the game itself uses):
 ./u2-sdl --ega --data-dir ~/u2 --ega-theme c64
 ```
 
+The two places the art comes from are complementary, and neither is complete: the tile atlas
+and the `EGATHEME.*` folders exist only in the upgrade package, while the full `PIC*-E`
+picture set exists only in `updated/`. Instead of pointing at one and losing the other, build
+a merged tree:
+
+```bash
+python3 tools/build_themes.py --report    # inventory every source, write nothing
+python3 tools/build_themes.py             # build themes/ and verify every byte
+./u2-sdl --ega --data-dir ~/u2 --ega-theme-dir themes/ --ega-theme c64
+```
+
+The builder copies **whole theme directories**, never selected files (a theme is `EGATILES`
+plus an optional `EGACOLOR` plus optional pictures, and which extras exist is per-theme),
+emits `EGATILES` byte-identical, keeps one file per picture base with the first `--source`
+winning and the shadow reported, and finishes by re-checking the tree against its sources.
+`themes/` is gitignored: it is your art, not this repository's.
+
 While playing, **Ctrl-T** cycles to the next theme found in the directory (alphabetical
 order), live — no restart. The map recolours and the message line names the theme you landed
 on.

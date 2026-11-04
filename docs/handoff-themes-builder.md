@@ -1,15 +1,20 @@
 # Handover — theme builder: slice A, slice B, and the held slice C
 
-> **Status, read before anything below.** This is a plan with measured ground under
-> it, not a piece of work in progress. **Nothing here is built yet.** The facts in § 1
-> and § 2 were measured on 2026-11-04 while committing the FM Towns crosswalk, and
-> one of them **refutes a claim currently sitting in `engine/src/core/tiles_ega.h`**
-> (§ 2.4) — that is the most valuable paragraph in this file and it should be
-> checked and fixed before any of the code is written.
+> **Status, read before anything below.** **Slice A is done (2026-11-04):**
+> `tools/build_themes.py` exists, `tools/build_themes_selftest.sh` carries its 12 controls,
+> and both are wired into `tools/check_all.sh`. `themes/` builds, verifies, and cycles the
+> same four theme names through the engine's own `u2_tiles_ega_next_theme` as the source
+> directory does. **§ 2.4 is closed** — `EGACOLOR` is decoded statically from the fan pack's
+> `ega.drv`, and it is a colour-index remap and not a palette; see `docs/ega-graphics.md`
+> § 3.1. **Slice B (§ 4) is not started** and is the remaining work. One finding changed
+> shape while slice A was built and is written into § 2.4 below rather than left as it was:
+> `EGACOLOR` cannot be the palette field v2 wanted, so slice B still needs a real RGB
+> mechanism of its own.
 >
-> HEAD is `c38eda3`. `make -C engine test` CP0–CP7 green. `tools/check_all.sh` has
-> **two pre-existing red gates unrelated to this work** — `cmd_provenance_derived`
-> and `xref_provenance` — which were already failing and are not yours to inherit.
+> HEAD before this paragraph was `c38eda3`. `make -C engine test` CP0–CP7 green.
+> `tools/check_all.sh` has **two pre-existing red gates unrelated to this work** —
+> `cmd_provenance_derived` and `xref_provenance` — which were already failing and are not
+> yours to inherit.
 >
 > Prerequisite reading: `AGENTS.md`, then `docs/fmtowns-graphics.md` (the FM Towns
 > format, the palette, and three refutations), then `docs/ega-graphics.md` and
@@ -119,35 +124,39 @@ half-recoloured: tiles from the theme, pictures from the top level.
   Dungeon, tower and the whole `PLAYER` bank are unmapped. A v2 theme built today
   is an overworld theme, and should say so in its manifest.
 
-### 2.4 REFUTED — go and check this first
+### 2.4 CLOSED — `EGACOLOR` is a colour-index remap, not a palette
 
-`engine/src/core/tiles_ega.h` currently states:
+`engine/src/core/tiles_ega.h` used to state:
 
 > the pack ships four interchangeable themes (default, 10, alt, c64), all the same
 > format and size, **differing only in colour. None carries its own palette**, so
 > the standard EGA RGB table in `core/frame.c` is used for all.
 
-**Two of the three alternate themes do carry a palette.** `EGATHEME.10/EGACOLOR`
+**Two of the three alternate themes do carry a colour file.** `EGATHEME.10/EGACOLOR`
 and `EGATHEME.C64/EGACOLOR` exist, are 32 bytes, and differ from each other.
 `EGATHEME.ALT` has no `EGACOLOR`, so the claim is true for `alt` and false for
 `10` and `c64`.
 
-**Its layout is undecoded and you must not guess it.** 32 bytes for 16 colours
-means 2 bytes per entry. Reading it as little-endian RGB555 produces nonsense —
-`EGATHEME.C64` decodes to mostly `#78c018`, with the raw word `0f0f` appearing 8
-times out of 16, which is not a C64 palette. The raw nibble pairs look more like
-an index remap than an RGB table. Treat it as an open decode:
+The RGB555 reading was the wrong hypothesis, and the fan pack's own driver says why.
+`references/u2upgrade/ega.drv` loads the file whole (`mov cx,0x20; rep movsb`) over a
+built-in default table in its data area, and reads it in five places as a **colour-index
+remap applied at draw time**: entries 0..7 recolour the `MONSTERS` overlay blocks, 8..15 the
+text attribute handed to `int 0x10/ah=0x09`, 16..19 and 20..31 feed box and pen primitives.
+The tile-atlas blit never consults it. Full evidence, addresses and grades:
+`docs/ega-graphics.md` § 3.1.
 
-```bash
-xxd references/u2upgrade/EGATHEME.10/EGACOLOR
-xxd references/u2upgrade/EGATHEME.C64/EGACOLOR
-```
+**What this does to slice B.** § 5 item 6 hoped `EGACOLOR` and FM Towns could share one
+`PALETTE.RGB` mechanism. They cannot: `EGACOLOR` remaps logical colour indices for the fan
+pack's own drawing primitives, and an FM Towns palette is an RGB table for a different atlas.
+Keep them apart. v2 still needs its own `PALETTE.RGB`, and honouring the fan pack's remap is a
+separate feature with a separate name, not a field in the same file.
 
-This matters beyond tidiness: **v2 needs a palette field anyway**, so if
-`EGACOLOR` decodes, the fan pack and FM Towns share one mechanism instead of
-two. Fix the comment in `tiles_ega.h` in the same commit as your first slice,
-with whatever you find — a stale comment in a header that people read as
-contract is how this got asserted in the first place.
+Two gaps found on the way, both recorded in `docs/ega-graphics.md` § 3.1 and neither
+belonging to slice A: the engine reads `EGACOLOR` nowhere, and `pic_ega.c` resolves pictures
+at the **top level** of the themes dir only — so the per-theme `PICDNG.EGA`/`PICSPA.EGA` that
+themes `10` and `C64` ship (and which differ from the top-level files) are copied faithfully
+and never drawn. The fan pack's driver does look for them theme-relative with a fall-back to
+the bare name, so closing that gap is a loader change, not an art problem.
 
 ---
 
@@ -204,6 +213,43 @@ way `tools/u2_mkprobe.py` does.
 
 **Slice A explicitly does not** touch the engine, does not decode `EGACOLOR`, and
 does not involve FM Towns. If you find yourself editing `engine/`, stop.
+
+> *(the one deviation, and it was asked for: § 2.4 told the first slice to fix the
+> `tiles_ega.h` comment with whatever it found, and the only way to fix that comment
+> honestly was to read `ega.drv`. The decode is a separate commit from the tool, and
+> `engine/` gained a comment and no code.)*
+
+### 3.1 Slice A — done 2026-11-04, and what the build actually decided
+
+`tools/build_themes.py` (with `tools/build_themes_selftest.sh`, 12 controls, both wired
+into `tools/check_all.sh`). Built tree: 17 files, four themes (`10`, `alt`, `c64`,
+`default`), every one `cmp`-identical to its source.
+
+Three decisions the plan did not settle, resolved by reading the inventory first, as step 1
+said to:
+
+1. **Pictures dedupe by BASE, not by filename.** `PICDNG.EGA` and `PICDNG-E` are the same
+   slot to `pic_ega.c`, which tries `-E` before `.EGA` *inside* a directory — so shipping
+   both lets the suffix order decide which art draws, silently and opposite to the source
+   order. One file per base, first `--source` wins, and the shadow is reported with a byte
+   comparison. Measured: `PICDNG`/`PICDRA` agree between the two sources, `PICSPA` differs
+   in 48 bytes, and that is the one place the choice actually matters.
+2. **The tree carries `_BUILD.tsv`**, one row per file naming its source and size. It is
+   what makes "which `EGATILES` is this?" answerable after the fact, and the verifier diffs
+   it against the re-derived plan, so a hand-edited tree goes red as a stale manifest and as
+   a byte mismatch at the same time.
+3. **A `EGATHEME.*` with no `EGATILES` is a problem, not a theme.** The engine would list the
+   name from the directory entry and then fail to load it, which is the worst of both.
+
+The named control is control 2 in the selftest and it goes red twice over: `missing:
+.../EGACOLOR` from the plan, and `theme 'foo' is missing EGACOLOR that its source ships
+(half-copied theme)`. Controls 3-6 cover a truncated atlas, an edited atlas of the same
+size, a stray file, and a stale manifest row; 7-10 cover the refusals.
+
+Verified against the engine, not against my own re-reading of it: `--ega-theme-dir themes/
+--ega-theme <t>` passes the strict launch check for all four themes and refuses a fifth
+(`theme 'nosuchtheme' not found (looked in: ../themes)`), and a throwaway probe calling
+`u2_tiles_ega_next_theme()` on both directories printed `10 alt c64 default` for each.
 
 ---
 

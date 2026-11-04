@@ -114,6 +114,13 @@ run "space_check selftest" engine/tests/space_check_selftest.sh -- bash engine/t
 # SDL3 container cycle to a message blaming the Makefile. Runs against a podman
 # stub, so it needs no daemon and no images.
 run "image_fresh selftest" deploy/image_fresh.sh -- bash deploy/image_fresh_selftest.sh
+# The theme builder's gate is `--verify`, and what it exists to catch is a theme
+# that loads, renders, and is quietly half-recoloured because one file from the
+# source theme did not come across. The controls build a synthetic pack under
+# /var/tmp so they need no player media; the verify line then re-checks the real
+# themes/ tree when someone has built one.
+run "build_themes selftest" tools/build_themes.py -- bash tools/build_themes_selftest.sh
+opt_run "build_themes verify" themes/EGATILES references/u2upgrade -- python3 tools/build_themes.py --verify
 # The release workflow's shell is only parsed by the runner, minutes after a tag is
 # pushed, and two v0.0.8 attempts died on things a local `bash -n` catches instantly
 # (a missing `fi`, and an unquoted substitution). This renders every run: block with
