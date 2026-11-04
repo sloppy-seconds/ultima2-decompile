@@ -115,6 +115,25 @@ def rel(p, base=None):
 ATLAS_NAME = "EGATILES"
 
 
+def default_theme_ini():
+    """The manifest for a reshaped default theme. It describes the EGATILES it
+    sits beside rather than inventing anything: 16x16 at 4bpp, identity mapping
+    (no MAP.TSV is written), no palette of its own, and every scope claimed —
+    which is what the v1 loader assumed for a bare EGATILES too, so reshaping the
+    default cannot quietly narrow what the engine will draw with it."""
+    return (
+        "[theme]\n"
+        "name = default\n"
+        "tile_w = 16\n"
+        "tile_h = 16\n"
+        "bpp = 4\n"
+        "pixel = nibble-high-left\n"
+        "identity = yes\n"
+        "scope = overworld,towns,dungeon,tower\n"
+        "source = the fan pack's top-level EGATILES, reshaped by tools/build_themes.py\n"
+    ).encode()
+
+
 def theme_name_for(d, root):
     """Name a discovered theme from where it was found.
 
@@ -170,7 +189,9 @@ def scan_source(root, max_depth=3):
         theme = theme_name_for(d, root) if is_theme else None
         if is_theme:
             themes_found += 1
-        out_dir = Path() if not theme or theme == DEFAULT_THEME else Path(THEME_PREFIX + theme.upper())
+        out_dir = (None if theme is None else
+                   Path(DEFAULT_THEME) if theme == DEFAULT_THEME
+                   else Path(THEME_PREFIX + theme.upper()))
         have = set()
 
         for f in sorted((e for e in d.iterdir() if e.is_file()),
@@ -201,18 +222,48 @@ def scan_source(root, max_depth=3):
                     rows.append((label, "ignore", detail))
                 continue
 
-            have.add(f.name.upper())
+            # Pictures. A theme's own pictures are copied INTO its directory, as
+            # the pack ships them — dropping them because nothing reads them yet is
+            # the half-copied-theme bug wearing a different hat, and the per-theme
+            # completeness gate below is what notices. They are ALSO hoisted to the
+            # root when they came from the default theme, because pic_ega.c
+            # resolves pictures at the top level of the themes dir and nowhere else
+            # (docs/ega-graphics.md § 3.1), so the default theme's art is the only
+            # set the engine can actually draw today.
+            if role == "picture":
+                items.append(Item("theme-file", f, out_dir / f.name,
+                                  theme=theme, note=detail))
+                have.add(f.name.upper())
+                if theme == DEFAULT_THEME:
+                    items.append(Item("picture", f, Path(f.name), note=detail,
+                                      key="PIC:" + PIC_RE.match(f.name.upper()).group("base")))
+                    rows.append((label, f"picture ({theme}, also at root)", detail))
+                else:
+                    rows.append((label, f"picture -> {theme}", detail))
+                continue
+
+            have.add("TILES" if (theme == DEFAULT_THEME and role == "atlas")
+                     else f.name.upper())
             if theme == DEFAULT_THEME:
-                kind = role if role in ("atlas", "picture") else "theme-file"
-                dst = Path(ATLAS_NAME) if role == "atlas" else Path(f.name)
-                items.append(Item(kind, f, dst,
-                                  theme=DEFAULT_THEME if role == "atlas" else None,
-                                  note=detail,
-                                  key=("PIC:" + PIC_RE.match(f.name.upper()).group("base")
-                                       if role == "picture" else None)))
+                # The default theme is reshaped into a v2 directory like every
+                # other theme. A bare EGATILES at the root is the VENDOR's layout,
+                # and the engine accepts `default/THEME.INI` through the same call,
+                # so there is no reason for our tree to keep the loose file.
+                dst = Path(DEFAULT_THEME) / ("TILES" if role == "atlas" else f.name)
+                items.append(Item("theme-file", f, dst, theme=DEFAULT_THEME, note=detail))
             else:
                 items.append(Item("theme-file", f, out_dir / f.name, theme=theme))
             rows.append((label, f"{role} -> {theme}", detail))
+
+        if is_theme and theme == DEFAULT_THEME:
+            # The manifest for the reshaped default. It describes the atlas it
+            # sits beside: 16x16 at 4bpp, identity mapping, no palette of its own,
+            # and every scope claimed, which is what the v1 loader assumed too.
+            have.add("THEME.INI")
+            items.append(Item("generated", FMTOWNS_XWALK,
+                              Path(DEFAULT_THEME) / "THEME.INI",
+                              theme=DEFAULT_THEME, data=default_theme_ini(),
+                              key="GEN:DEFAULT/THEME.INI"))
 
         if is_theme and have:
             theme_files.setdefault(theme, set()).update(have)

@@ -79,12 +79,22 @@ expect_red "missing EGACOLOR is caught" \
     python3 "$TOOL" --source "$SRC" --source "$SRC2" --out "$OUT" --verify
 mv "$WORK/EGACOLOR.hidden" "$OUT/EGATHEME.FOO/EGACOLOR"
 
-# 3. a truncated atlas
-head -c 4096 "$SRC/EGATILES" > "$OUT/EGATILES.short"
-mv "$OUT/EGATILES" "$WORK/EGATILES.good"; mv "$OUT/EGATILES.short" "$OUT/EGATILES"
-expect_red "truncated EGATILES is caught" \
+# 3. a truncated atlas. The default theme is reshaped into default/TILES, so that
+#    is the file the gate has to catch, not a loose EGATILES at the root.
+head -c 4096 "$SRC/EGATILES" > "$OUT/default/TILES.short"
+mv "$OUT/default/TILES" "$WORK/TILES.good"; mv "$OUT/default/TILES.short" "$OUT/default/TILES"
+expect_red "truncated atlas is caught" \
     python3 "$TOOL" --source "$SRC" --source "$SRC2" --out "$OUT" --verify
-mv "$WORK/EGATILES.good" "$OUT/EGATILES"
+mv "$WORK/TILES.good" "$OUT/default/TILES"
+
+# 3b. the reshaped default: a directory like every other theme, with its own
+#     manifest, and nothing loose at the root of the tree.
+if [ -f "$OUT/default/TILES" ] && [ -f "$OUT/default/THEME.INI" ] \
+   && [ ! -e "$OUT/EGATILES" ]; then
+    ok "the default theme is default/{THEME.INI,TILES}, not a loose EGATILES"
+else
+    bad "the default theme is not reshaped: $(ls "$OUT" | tr '\n' ' ')"
+fi
 
 # 4. same size, different bytes (a re-encoded or edited atlas)
 printf '\x00' | dd of="$OUT/EGATHEME.FOO/EGATILES" bs=1 seek=100 count=1 conv=notrunc 2>/dev/null
@@ -148,7 +158,7 @@ fill "$WORK/elsewhere/pack/EGATHEME.ZED/EGATILES" 8320 Q
 cp "$TOOL" "$WORK/elsewhere/build_themes.py"
 ( cd "$WORK/elsewhere" && python3 build_themes.py --source pack --out themes ) >/dev/null 2>&1
 if [ -f "$WORK/elsewhere/themes/EGATHEME.ZED/EGATILES" ] \
-   && [ -f "$WORK/elsewhere/themes/EGATILES" ] \
+   && [ -f "$WORK/elsewhere/themes/default/TILES" ] \
    && [ ! -d "$WORK/elsewhere/themes/pack" ]; then
     ok "run from outside a repo, it builds a flat tree where it was told to"
 else

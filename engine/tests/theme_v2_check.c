@@ -485,6 +485,39 @@ int main(void)
         u2_frame_free(&big);
     }
 
+    /* --- the name "default" is special-cased in the v1 path; v2 must still win -- */
+    /* theme_relpath() maps the name "default" to a bare EGATILES, so a builder that
+     * reshapes the default theme into default/ only works if the v2 lookup is tried
+     * first for that name too. This is the case the builder now emits. */
+    mkpath("default");
+    {
+        char p[512];
+        snprintf(p, sizeof p, "%s/default/THEME.INI", root);
+        FILE *f = fopen(p, "wb");
+        fputs("[theme]\ntile_w = 16\ntile_h = 16\nbpp = 4\n", f);
+        fclose(f);
+        snprintf(p, sizeof p, "%s/default/TILES", root);
+        f = fopen(p, "wb");
+        for (int i = 0; i < 64; i++) { char b[128]; fill_tile(b, sizeof b, 99); fwrite(b, 1, sizeof b, f); }
+        fclose(f);
+        /* And a v1 EGATILES at the root as well, so the test proves which one won. */
+        snprintf(p, sizeof p, "%s/EGATILES", root);
+        f = fopen(p, "wb");
+        for (int i = 0; i < 65; i++) { char b[128]; fill_tile(b, sizeof b, 1); fwrite(b, 1, sizeof b, f); }
+        fclose(f);
+    }
+    {
+        u2_ctx dc;
+        memset(&dc, 0, sizeof dc);
+        dc.art_mode = U2_ART_EGA;
+        u2_tiles_ega dv;
+        memset(&dv, 0, sizeof dv);
+        const u2_tiles_ega_result r = u2_tiles_ega_open_in(&dc, &dv, root, "default");
+        CHECK(r == U2_TILES_EGA_OK, "--ega-theme default resolves through the v2 directory");
+        CHECK(strstr(dv.source, "default/TILES") != NULL,
+              "and the manifest wins over a bare EGATILES sitting beside it (%s)", dv.source);
+    }
+
     printf("theme_v2_check: %d checks, %d failures\n", checks, fails);;
     return fails ? 1 : 0;
 }

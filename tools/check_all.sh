@@ -120,7 +120,7 @@ run "image_fresh selftest" deploy/image_fresh.sh -- bash deploy/image_fresh_self
 # /var/tmp so they need no player media; the verify line then re-checks the real
 # themes/ tree when someone has built one.
 run "build_themes selftest" tools/build_themes.py -- bash tools/build_themes_selftest.sh
-opt_run "build_themes verify" themes/EGATILES references/u2upgrade -- python3 tools/build_themes.py --verify
+opt_run "build_themes verify" themes/_BUILD.tsv references/u2upgrade -- python3 tools/build_themes.py --verify
 # The release workflow's shell is only parsed by the runner, minutes after a tag is
 # pushed, and two v0.0.8 attempts died on things a local `bash -n` catches instantly
 # (a missing `fi`, and an unquoted substitution). This renders every run: block with
