@@ -320,6 +320,59 @@ int main(int argc, char **argv)
         CHECK(file_exists(want), "  and the patch layer it found is installed");
     }
 
+    /* The target may hold one foreign file: this executable. That is the shape of
+     * "make a folder, drop the engine in it, run --install", and without the
+     * exception the first thing a player meets is a refusal to write into the only
+     * directory they have. Matched by inode, so the fixture hard-links rather than
+     * copies: a copy is a different file and must not qualify. */
+    {
+        char self[1024];
+        const ssize_t sn = readlink("/proc/self/exe", self, sizeof self - 1);
+        if (sn > 0) {
+            self[sn] = '\0';
+            char only[1024], both[1024], lnk[1024];
+            snprintf(only, sizeof only, "%.480s/t-selfonly", base);
+            snprintf(both, sizeof both, "%.480s/t-selfplus", base);
+            mkdir(only, 0755);
+            mkdir(both, 0755);
+            snprintf(lnk, sizeof lnk, "%.480s/t-selfonly/u2check", base);
+            const int l1 = link(self, lnk);
+            snprintf(lnk, sizeof lnk, "%.480s/t-selfplus/u2check", base);
+            const int l2 = link(self, lnk);
+            if (l1 == 0 && l2 == 0) {
+                snprintf(lnk, sizeof lnk, "%.480s/t-selfplus/someone-elses.bin", base);
+                write_bytes(lnk, 0x5a, 64);
+                u2_install_request a = { .to = only, .original_dir = rel, .self_path = self };
+                CHECK(u2_install_apply(&a, log, err, sizeof err) == U2_INSTALL_OK,
+                      "a target holding only this executable is treated as empty");
+                u2_install_request b = { .to = both, .original_dir = rel, .self_path = self };
+                CHECK(u2_install_apply(&b, log, err, sizeof err) == U2_INSTALL_REFUSED,
+                      "one more file beside the executable and the target is foreign again");
+            } else {
+                CHECK(1, "self-binary exception skipped (hard link unavailable)");
+            }
+        }
+    }
+
+    /* A prompt with no terminal behind it must refuse, not block. Piped stdin is how
+     * CI drives this binary, and a question that waits forever is the failure mode
+     * the tty gate exists to prevent; this proves the gate holds even if something
+     * calls the prompt anyway. */
+    {
+        FILE *devnull = fopen("/dev/null", "r");
+        if (devnull) {
+            FILE *saved = stdin;
+            stdin = devnull;
+            u2_install_request q;
+            memset(&q, 0, sizeof q);
+            u2_install_answers ans;
+            const int pr = u2_install_prompt(&q, &ans, log, err, sizeof err);
+            stdin = saved;
+            fclose(devnull);
+            CHECK(pr == -1, "a prompt with no terminal refuses instead of blocking");
+        }
+    }
+
     /* assertion 6: the sources are byte-for-byte untouched */
     {
         char src[1024];

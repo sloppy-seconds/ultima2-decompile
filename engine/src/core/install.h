@@ -69,7 +69,29 @@ typedef struct {
     /* Plan and report, write nothing. The interactive installer shows this before
      * asking for permission, and it is what makes a mistake cheap to see. */
     int dry_run;
+    /* Path to the running executable, normally argv[0]. It is the one exception to
+     * "the target must be empty": a player who drops this binary into a new folder
+     * and runs it should not have to move it out first. Compared by device and
+     * inode, not by name, so a copy sitting elsewhere does not qualify. */
+    const char *self_path;
 } u2_install_request;
+
+/* Storage for the answers a prompt collects. The caller owns the bytes; the
+ * request points into them, so they must outlive the install call. */
+typedef struct {
+    char to[1024];
+    char original[1024];
+    char themes[1024];
+    char fmtowns[1024];
+} u2_install_answers;
+
+/* Fill in whatever the command line did not supply by asking, show the plan, and
+ * ask for permission to write. Only ever called when stdin is a terminal and
+ * --no-prompt was not given: a piped or redirected stdin is a script, and a script
+ * that blocks on a question it cannot answer is the failure this gate exists to
+ * prevent. Returns 1 to proceed, 0 if the player declined, -1 to refuse. */
+int u2_install_prompt(u2_install_request *rq, u2_install_answers *ans,
+                      FILE *out, char *err, size_t errsz);
 
 /* Install, or complete an install that already carries our manifest. With
  * themes_dir supplied, themes/ is built in the same run by core/themes.c. */

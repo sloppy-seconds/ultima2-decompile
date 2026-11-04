@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include "core/ctx.h"
 #include "core/version.h"
@@ -153,6 +153,9 @@ static void usage(const char *argv0)
         "  --dry-run         with --install: plan and report, write nothing. Shows which\n"
         "                    copy of a shared filename wins and what the theme step\n"
         "                    would do, before anything is copied.\n"
+        "  --no-prompt         with --install: never ask. Anything a flag did not supply\n"
+        "                    is refused rather than prompted for. Prompts are also off\n"
+        "                    automatically when stdin is not a terminal.\n"
         "  --original-dir DIR    the original DOS release: an unzipped download, a CD\n"
         "                    rip, or a directory an emulator already uses.\n"
         "  --updated-dir DIR     the Galaxy patch layer (MAPG / MONG / TLKG). If not\n"
@@ -271,7 +274,7 @@ int main(int argc, char **argv)
     const char *roll_trace_path = NULL;
     const char *dump_ds_path = NULL;
     const char *config_path = NULL;
-    int install_mode = 0, install_check_only = 0, install_dry_run = 0;
+    int install_mode = 0, install_check_only = 0, install_dry_run = 0, install_no_prompt = 0;
     const char *install_to = NULL, *install_orig = NULL;
     const char *install_upd = NULL;
     const char *install_themes[U2_THEMES_MAX_SOURCES] = { 0 };
@@ -350,6 +353,8 @@ int main(int argc, char **argv)
             /* Plan and report, write nothing. Paired with --install, and it is what
              * makes a wrong source cheap to see before it is half-copied. */
             install_dry_run = 1;
+        } else if (strcmp(a, "--no-prompt") == 0) {
+            install_no_prompt = 1;
         } else if (strcmp(a, "--to") == 0 && i + 1 < argc) {
             install_to = argv[++i];
         } else if (strcmp(a, "--original-dir") == 0 && i + 1 < argc) {
@@ -480,6 +485,25 @@ int main(int argc, char **argv)
         rq.dry_run = install_dry_run;
         for (int k = 0; k < n_install_themes; k++)
             rq.themes_dir[k] = install_themes[k];
+        rq.self_path = argv[0];
+
+        /* Prompts are the fallback for a flag that was not given, never a replacement
+         * for one, and they are off unless stdin is really a terminal. A piped or
+         * redirected stdin is a script, and a script that blocks on a question is a
+         * worse failure than one that refuses. --no-prompt turns them off by hand so
+         * a human can get the old behaviour back. */
+        u2_install_answers ans;
+        memset(&ans, 0, sizeof ans);
+        if (!install_check_only && !install_no_prompt && isatty(fileno(stdin))) {
+            const int go = u2_install_prompt(&rq, &ans, stdout, ierr, sizeof ierr);
+            if (go < 0) {
+                if (*ierr)
+                    fprintf(stderr, "u2: %s\n", ierr);
+                return 2;
+            }
+            if (go == 0)
+                return 0;
+        }
         const u2_install_result r = install_check_only
             ? u2_install_check(install_to, stdout, ierr, sizeof ierr)
             : u2_install_apply(&rq, stdout, ierr, sizeof ierr);

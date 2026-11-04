@@ -4,6 +4,7 @@
  */
 
 #define _POSIX_C_SOURCE 200809L   /* dirent, stat, mkdir, rename under -std=c11 */
+#define _DEFAULT_SOURCE           /* realpath, for matching the running binary */
 
 #include "core/install.h"
 
@@ -108,7 +109,52 @@ static int copy_verified(const char *src, const char *dst, long want_size,
 
 /* ------------------------------------------------------------------ target */
 
-typedef enum { T_ABSENT, T_EMPTY, T_MINE, T_FOREIGN, T_NOTDIR } t_state;
+typedef enum { T_ABSENT, T_EMPTY, T_MINE, T_SELFONLY, T_FOREIGN, T_NOTDIR } t_state;
+
+/* Is this directory's only content the running binary? That is the one exception
+ * to "the target must be empty", and it exists for the shape people actually use:
+ * make a folder, drop the engine in it, run --install. Matching by device and inode
+ * rather than by name is what keeps a same-named file somewhere else from qualifying,
+ * and a subdirectory disqualifies, because a subdirectory is content. */
+static int only_self_binary(const char *dir, const char *self)
+{
+    if (!self || !*self)
+        return 0;
+    struct stat ss;
+    if (stat(self, &ss) != 0) {
+#ifdef _WIN32
+        return 0;
+#else
+        /* argv[0] is often bare when the binary came from PATH, so resolve it before
+         * comparing; a failed stat here just means no exception applies. */
+        char resolved[1024];
+        if (!realpath(self, resolved) || stat(resolved, &ss) != 0)
+            return 0;
+#endif
+    }
+    if (!S_ISREG(ss.st_mode))
+        return 0;
+    DIR *d = opendir(dir);
+    if (!d)
+        return 0;
+    struct dirent *e;
+    int only = 1, seen = 0;
+    while ((e = readdir(d))) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, ".."))
+            continue;
+        char full[1024];
+        snprintf(full, sizeof full, "%.890s/%.127s", dir, e->d_name);
+        struct stat fs;
+        if (stat(full, &fs) != 0 || !S_ISREG(fs.st_mode) ||
+            fs.st_dev != ss.st_dev || fs.st_ino != ss.st_ino) {
+            only = 0;
+            break;
+        }
+        seen++;
+    }
+    closedir(d);
+    return only && seen > 0;
+}
 
 static int dir_is_empty(const char *to)
 {
@@ -127,7 +173,7 @@ static int dir_is_empty(const char *to)
     return empty;
 }
 
-static t_state inspect_target(const char *to)
+static t_state inspect_target(const char *to, const char *self)
 {
     if (!is_dirpath(to)) {
         struct stat st;
@@ -139,7 +185,9 @@ static t_state inspect_target(const char *to)
         return T_EMPTY;
     char m[1024];
     snprintf(m, sizeof m, "%.1000s/%s", to, U2_INSTALL_MANIFEST);
-    return file_size(m) > 0 ? T_MINE : T_FOREIGN;
+    if (file_size(m) > 0)
+        return T_MINE;
+    return only_self_binary(to, self) ? T_SELFONLY : T_FOREIGN;
 }
 
 /* ---------------------------------------------------------------- manifest */
@@ -245,10 +293,15 @@ static int is_patch_delta(const char *name)
  * `may_override` is set only for the Galaxy patch source, and it is what makes a
  * patch mean what it says. The rule was "first source wins", and the release is
  * scanned first, so a corrupt release file beat the patched copy sitting beside it.
- * That is not hypothetical: of the 40 filenames the release and updated/ share,
- * exactly two differ, and one is mapx15, where 260 bytes at the end of the file are
- * the corruption GCHANGES.TXT -- the Moonstone Dragon patch's own readme -- was
- * written to fix. First-wins re-introduced a 1996 bug.
+ * That is not hypothetical: of the 59 filenames the release and updated/ share, 11
+ * differ, and one is mapx15, where 260 bytes at the end of the file are the
+ * corruption GCHANGES.TXT -- the Moonstone Dragon patch's own readme -- was written
+ * to fix. First-wins re-introduced a 1996 bug.
+ *
+ * The comparison has to be case-insensitive, because the two layers spell the same
+ * dialogue files differently (release `tlkx03`, patch `TLKX03`). Copying both
+ * spellings leaves two files where the engine asks for one, and it may find the
+ * corrupt one.
  *
  * So: a patch source may replace a planned release-layer file when the bytes
  * differ, and says so. Identical copies are still just shadowed. */
@@ -371,7 +424,7 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         return U2_INSTALL_REFUSED;
     }
 
-    const t_state st = inspect_target(rq->to);
+    const t_state st = inspect_target(rq->to, rq->self_path);
     if (st == T_NOTDIR) {
         snprintf(err, errsz, "%s exists and is not a directory", rq->to);
         return U2_INSTALL_REFUSED;
@@ -380,12 +433,14 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         snprintf(err, errsz,
                  "%s is not empty and carries no %s, so it is not an install of "
                  "ours. Nothing here is merged, overwritten or deleted: point --to "
-                 "at an empty or new directory and the old one is left alone.",
+                 "at an empty or new directory and the old one is left alone. If "
+                 "this is already a game you downloaded, you can play it in place "
+                 "with --data-dir instead of installing it.",
                  rq->to, U2_INSTALL_MANIFEST);
         return U2_INSTALL_REFUSED;
     }
 
-    if (mkdir_p(rq->to) != 0) {
+    if (!rq->dry_run && mkdir_p(rq->to) != 0) {
         snprintf(err, errsz, "cannot create %s", rq->to);
         return U2_INSTALL_ERROR;
     }
@@ -400,6 +455,8 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
     fprintf(out, "u2 install: %s\n", rq->to);
     if (st == T_MINE)
         fprintf(out, "  an existing install of ours; completing it\n");
+    if (st == T_SELFONLY)
+        fprintf(out, "  %s holds only this executable, which is treated as empty\n", rq->to);
 
     /* D9: the Galaxy patch lives INSIDE the release directory. `updated/` is a
      * subdirectory of the IA pack, not a separate download, so making a player
@@ -582,8 +639,8 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
         snprintf(err, errsz, "--install --check needs --to DIR");
         return U2_INSTALL_REFUSED;
     }
-    const t_state st = inspect_target(to);
-    if (st == T_ABSENT || st == T_EMPTY) {
+    const t_state st = inspect_target(to, NULL);
+    if (st == T_ABSENT || st == T_EMPTY || st == T_SELFONLY) {
         snprintf(err, errsz, "%s is empty or absent; there is nothing to check", to);
         return U2_INSTALL_REFUSED;
     }
@@ -707,4 +764,156 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
         return U2_INSTALL_REFUSED;
     }
     return U2_INSTALL_OK;
+}
+
+/* ------------------------------------------------------------------ prompts */
+
+/* Precedence, stated once because every question below depends on it:
+ * flag > prompt > nothing. Anything a flag already answered is never asked, so a
+ * fully-specified command line behaves exactly as it did before prompts existed,
+ * and a script's behaviour cannot change because a terminal appeared. */
+
+static void trim_tail(char *s)
+{
+    size_t n = strlen(s);
+    while (n && (s[n - 1] == ' ' || s[n - 1] == '\t' ||
+                 s[n - 1] == '\r' || s[n - 1] == '\n'))
+        s[--n] = '\0';
+}
+
+/* Ask one question. Returns 0 with the answer or the default in buf, or -1 on EOF.
+ * EOF is the shape of "stdin is not really here", and it is an error rather than an
+ * empty answer precisely so that a missing answer cannot be mistaken for a declined
+ * optional one. */
+static int ask(FILE *out, const char *q, const char *dflt, char *buf, size_t n)
+{
+    if (dflt && *dflt)
+        fprintf(out, "%s [%s] ", q, dflt);
+    else
+        fprintf(out, "%s ", q);
+    fflush(out);
+    if (!fgets(buf, (int)n, stdin)) {
+        *buf = '\0';
+        return -1;
+    }
+    trim_tail(buf);
+    if (!*buf && dflt && *dflt)
+        snprintf(buf, n, "%.1023s", dflt);
+    return 0;
+}
+
+/* Ask until the answer names a directory, or give up. A wrong path is reported and
+ * asked again rather than being papered over, which is the same rule --ega-theme
+ * follows for an explicit directory: an answer is not a hint. */
+static int ask_dir(FILE *out, const char *q, int required, char *out_buf, size_t n)
+{
+    char a[1024];
+    for (int tries = 0; tries < 5; tries++) {
+        if (ask(out, q, required ? NULL : "none", a, sizeof a) != 0)
+            return -1;
+        if (!*a) {
+            if (required)
+                fprintf(out, "  that is required; the installer cannot guess where "
+                             "your copy of the game lives\n");
+            else
+                return 0;
+            continue;
+        }
+        if (!strcmp(a, "none") && !required)
+            return 0;
+        if (!is_dirpath(a)) {
+            fprintf(out, "  %s is not a directory, try again\n", a);
+            continue;
+        }
+        snprintf(out_buf, n, "%.1023s", a);
+        return 0;
+    }
+    return -1;
+}
+
+int u2_install_prompt(u2_install_request *rq, u2_install_answers *ans, FILE *out,
+                      char *err, size_t errsz)
+{
+    char a[1024];
+    memset(ans, 0, sizeof *ans);
+
+    /* The target. "." is the default because the common shape is a fresh folder
+     * holding this binary, and T_SELFONLY makes that legal. */
+    if (rq->to && *rq->to)
+        snprintf(ans->to, sizeof ans->to, "%.1023s", rq->to);
+    else if (ask(out, "Install into which directory?", ".", ans->to, sizeof ans->to) != 0) {
+        snprintf(err, errsz, "no answer for the target directory");
+        return -1;
+    }
+    if (!*ans->to)
+        snprintf(ans->to, sizeof ans->to, ".");
+    rq->to = ans->to;
+
+    if (!rq->original_dir || !*rq->original_dir) {
+        if (ask_dir(out, "Where is your original Ultima II (DOS) directory?",
+                    1, ans->original, sizeof ans->original) != 0) {
+            snprintf(err, errsz, "no release directory given");
+            return -1;
+        }
+        if (!*ans->original) {
+            snprintf(err, errsz, "--install needs a release directory to copy from");
+            return -1;
+        }
+        rq->original_dir = ans->original;
+    }
+
+    /* The Galaxy layer is not a question: D9 finds <original>/updated on its own,
+     * and asking would require the player to know the pack's internal layout. The
+     * dry run below reports whether it was found. */
+
+    if (rq->n_themes_dir == 0) {
+        if (ask_dir(out, "Any fan art pack to install themes from (the U2Upgrade "
+                         "directory)?", 0, ans->themes, sizeof ans->themes) != 0) {
+            snprintf(err, errsz, "no answer for the theme source");
+            return -1;
+        }
+        if (*ans->themes) {
+            rq->themes_dir[0] = ans->themes;
+            rq->n_themes_dir = 1;
+        }
+    }
+
+    if (!rq->fmtowns_media || !*rq->fmtowns_media) {
+        if (ask(out, "An FM Towns disc image or directory? This one builds the "
+                     "FM Towns theme", "none", a, sizeof a) != 0) {
+            snprintf(err, errsz, "no answer for the FM Towns media");
+            return -1;
+        }
+        if (*a && strcmp(a, "none")) {
+            struct stat st;
+            if (stat(a, &st) != 0)
+                fprintf(out, "  %s does not exist, so the FM Towns theme is skipped\n", a);
+            else {
+                snprintf(ans->fmtowns, sizeof ans->fmtowns, "%.1023s", a);
+                rq->fmtowns_media = ans->fmtowns;
+            }
+        }
+    }
+
+    /* Pre-flight. The plan is the dry run, so the player reads the same report a
+     * --dry-run produces rather than a second, weaker summary written for the
+     * prompt path. One code path, one set of decisions on screen. */
+    fputc('\n', out);
+    const int saved = rq->dry_run;
+    rq->dry_run = 1;
+    const u2_install_result pr = u2_install_apply(rq, out, err, errsz);
+    rq->dry_run = saved;
+    if (pr != U2_INSTALL_OK)
+        return -1;
+
+    fputc('\n', out);
+    if (ask(out, "Write that?", "y", a, sizeof a) != 0) {
+        snprintf(err, errsz, "no answer to the confirmation");
+        return -1;
+    }
+    if (a[0] != 'y' && a[0] != 'Y') {
+        fprintf(out, "cancelled: nothing was written\n");
+        return 0;
+    }
+    return 1;
 }
