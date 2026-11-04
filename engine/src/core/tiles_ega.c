@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "core/tiles_ega.h"
+#include "core/artifact.h"    /* a release artifact does not know about references/ */
 #include "core/ini.h"            /* the shared `key = value` reader (ini.h says why) */
 #include "core/frame.h"           /* U2_FRAME_MAX_SCALE: a theme may not ask for
                                    * a frame bigger than the build can composite */
@@ -450,8 +451,10 @@ static int ega_candidates(u2_ctx *ctx, const char **cands)
     int nc = 0;
     if (ctx && ctx->data_dir && *ctx->data_dir)
         cands[nc++] = ctx->data_dir;
-    cands[nc++] = "../references/u2upgrade";
-    cands[nc++] = "references/u2upgrade";
+    if (!u2_is_release_artifact()) {
+        cands[nc++] = "../references/u2upgrade";
+        cands[nc++] = "references/u2upgrade";
+    }
     return nc;
 }
 

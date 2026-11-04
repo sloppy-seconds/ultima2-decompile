@@ -13,6 +13,7 @@
 #include "core/pic_ega.h"
 
 #include "core/ctx.h"
+#include "core/artifact.h"   /* a release artifact does not know about references/ */
 #include "core/frame.h"
 #include "debug/trace.h"
 
@@ -67,7 +68,8 @@ static int try_pic(const char *path, struct u2_frame *f)
 }
 
 /* The candidate directories, in the same resolution order tiles_ega uses:
- * explicit themes dir, then data dir, then the dev-checkout defaults. */
+ * explicit themes dir, then data dir, then (dev builds only) the dev-checkout
+ * defaults. */
 static int candidate_dirs(u2_ctx *ctx, const char **cands)
 {
     int nc = 0;
@@ -75,8 +77,12 @@ static int candidate_dirs(u2_ctx *ctx, const char **cands)
         cands[nc++] = ctx->ega_theme_dir;
     if (ctx && ctx->data_dir && *ctx->data_dir)
         cands[nc++] = ctx->data_dir;
-    cands[nc++] = "../references/u2upgrade";
-    cands[nc++] = "references/u2upgrade";
+    /* A release artifact does not know where this repository keeps its copy of the
+     * upgrade package; core/artifact.h gives the reason. */
+    if (!u2_is_release_artifact()) {
+        cands[nc++] = "../references/u2upgrade";
+        cands[nc++] = "references/u2upgrade";
+    }
     return nc;
 }
 
