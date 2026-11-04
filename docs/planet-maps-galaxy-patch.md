@@ -100,3 +100,43 @@ Any earlier claim about Mercury/Venus/Mars/Jupiter sectors (10-45) that was read
 `mapx` files is about Earth-clones, not the real planets, and should be re-checked against
 `updated/MAPG*`. The rocket-landing work in `docs/needs-gameplay.md` G59 used sector 40
 (Earth) and sector 90 (X), both valid maps, so it is unaffected.
+### 2a. Same-name files: what the patch changes about the Earth set
+
+The table above compares `mapx` against `mapg`, which are different files doing
+different jobs. The other axis is what `updated/` says about a filename the release
+already has, and that is where the corruption fixes live.
+
+Comparing the release against `updated/` by filename, case-insensitively: **59 shared
+names, 11 differing.**
+
+| file | difference |
+| --- | --- |
+| `mapx15` | 260 bytes, starting at byte 3837 of 4224 |
+| `mapx10` | 1 byte, at 544 |
+| `tlkx03` `tlkx11` `tlkx21` `tlkx22` `tlkx23` `tlkx31` `tlkx32` `tlkx33` `tlkx41` | same 384-byte size, content differs |
+
+`mapx15` is the one to care about: 260 bytes at the end of the file is exactly the
+defect `updated/GCHANGES.TXT` describes, where the tail of the sector-15 map holds the
+city data belonging to `MAPX11` instead of the dungeon, and a Pangea entrance had been
+removed as a consequence. The nine `tlkx` files are dialogue corrections.
+
+Two cautions, both learned the hard way on 2026-11-05.
+
+* **The casing differs between the layers and the comparison must know it.** The
+  release spells the dialogue files `tlkx03`; `updated/` spells them `TLKX03`. A
+  case-sensitive first pass reported "two files differ" and was wrong by nine, because
+  the existence test silently failed and the file was skipped rather than counted. On a
+  case-sensitive filesystem the two spellings are two files, so an installer that copies
+  both leaves the corrupt one in play depending on which name the engine asks for.
+* **The patch has two names and they are the same patch.** `GCHANGES.TXT` is headed
+  *"Ultima II -- The Fixed Version, Patch by Mike Marcelais, The Moonstone Dragon,
+  April 25, 1996"*, and the upgrade pack carries the same work as a delta:
+  `references/up/Files/U2Upgrade/u2up.ini` has `u2-map.pat=Moonstone Dragon's Map Patch
+  (1997)` and `base=u2-map.pat`, so the EGA upgrade patches are computed relative to it.
+  "Galaxy patch" and "Moonstone Dragon map patch" are one thing seen from two packs.
+
+Grade: **measured** — byte comparison of `references/ultima2/<name>` against
+`references/ultima2/updated/<name>` for every shared filename, case-folded. The
+installer's rule that follows from it is D8 in `docs/install-design.md` § 12: where a
+patch layer and the release both carry a name, the patch copy wins and the release's
+spelling of the filename is kept.

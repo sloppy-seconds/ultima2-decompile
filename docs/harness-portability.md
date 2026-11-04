@@ -190,6 +190,19 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-05 — A comparison loop that tests for a file's existence case-sensitively will
+  report a confident, plausible, wrong count when the two layers spell names differently.**
+  Diffing a base release against a community patch directory, a shell loop skipped every file
+  whose case differed, because the existence test silently failed and `continue`d. It reported
+  two differing files where the true number was eleven, and nothing about its output looked
+  broken. Two transferable points. (1) When comparing two directory trees that came from
+  different ecosystems, case-fold the names *before* the existence test, not after, and assert
+  that the shared-name count is what you expect -- a loop that silently drops inputs is the
+  same defect class as a script slicing from the wrong base offset. (2) On a case-sensitive
+  filesystem the two spellings are two files, so any installer or packer that copies both
+  leaves both present and lets the consumer pick which one it finds. A derived view over
+  legacy DOS media should key on the case-folded name and emit one file, keeping one layer's
+  spelling as the visible name.
 * **2026-11-04 — When a data sidecar's format is undetermined, look for the program that ships
   beside it which reads it, before guessing at the bytes.** A colour-table sidecar in a fan
   art pack was 32 bytes for what looked like 16 colours, and every in-memory reading of it

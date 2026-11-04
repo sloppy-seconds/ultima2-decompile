@@ -93,10 +93,11 @@ Secondary reasons, in order of weight:
 | --- | --- | --- |
 | `--install --to DIR` | build a game tree at DIR from the supplied sources | DIR |
 | `--install --check` | inventory a tree and report what is missing, stale or unexpected | nothing |
+| `--dry-run` | with `--install`: plan and report, write nothing. Shows which copy of a shared filename wins, and what the theme step would do | nothing |
 | `--original-dir DIR` | the original DOS release: an unzipped IA copy, a CD rip, or an existing emulator directory | — |
-| `--updated-dir DIR` | the Galaxy patch layer (`updated/`, or a tree where the patch already ran) | — |
-| `--themes-dir DIR` | the fan art package (a `U2Upgrade` directory or the patcher archive) | — |
-| `--media-dir DIR` | reserved for optional extras, e.g. the FM Towns disc (§ 5) | — |
+| `--updated-dir DIR` | the Galaxy patch layer. If omitted and `<original-dir>/updated` exists, that is used (D9, § 12) | — |
+| `--themes-dir DIR` | the fan art package (a `U2Upgrade` directory or the patcher archive). Repeatable | — |
+| `--fmtowns-media-dir DIR` | the FM Towns disc image, or a directory holding one; derives `themes/fmtowns` in the same run (§ 10) | — |
 
 Every question the installer can ask has a flag, so nothing about its behaviour
 requires a keyboard. `--to` is the target and is required; the source flags are what
@@ -449,6 +450,9 @@ Ruled 2026-11-04, in the order they were asked:
 | D6 | Sector write-back | **stays in the content dir for now**, re-addressed with the save-game mechanisms; the gate must tolerate play drift (§ 3) |
 | D7 | `--to` target | **empty or nonexistent only** (§ 8), with D7a below governing re-runs |
 | D7a | Re-run into our own tree | **allowed via an install manifest** — empty installs, manifested completes, foreign non-empty refuses (§ 11) |
+| D8 | Shared filenames | **the patch layer wins** when the bytes differ, and keeps the release's spelling of the name (§ 12) |
+| D9 | Finding the Galaxy patch | **auto-detected at `<original-dir>/updated`** when `--updated-dir` is not given (§ 12) |
+| D10 | `.pat` deltas | **detected and reported, not applied** for now; applying them is deferred (§ 12.4) |
 
 **D7a — re-running into a tree we built is allowed, via a manifest.** *Ruled
 2026-11-04.* D7 on its own contradicted § 2 rule 3: the realistic flow is install
@@ -468,3 +472,116 @@ written to — while idempotence stays testable, because a second run against ou
 tree is a real operation with a verifiable no-op result rather than an error path.
 It also keeps the saves in place, which the rejected alternative (a fresh `--to` per
 run) would have thrown away or forced out of the game directory.
+
+## 12. The patch layer, and three rulings about where it comes from
+
+Ruled 2026-11-05, prompted by the owner asking whether the upgrade pack contains
+Moonstone Dragon's map patch, and whether the installer should look for the Galaxy
+patch inside the release rather than asking for it separately.
+
+### 12.1 Two names, one patch
+
+The Galaxy map patch and the Moonstone Dragon map patch are the same thing. Both
+halves of that are in our own tree, so this is `observed` and not folklore:
+
+* `references/up/Files/U2Upgrade/u2up.ini` names the delta and makes it a
+  prerequisite, not an option:
+  `u2-map.pat=Moonstone Dragon's Map Patch (1997)`, and separately
+  `base=u2-map.pat`, meaning the EGA upgrade patches are computed *relative to* it.
+  The full chain is `releases=u2-u16.pat,u2-uc.pat,u2-map.pat,u2-gog.pat`.
+* `references/ultima2/updated/GCHANGES.TXT` is that patch's own readme, headed
+  *"Ultima II -- The Fixed Version, Patch by Mike Marcelais, The Moonstone Dragon,
+  April 25, 1996"*, and it documents the mechanism: three `mov` instructions
+  overwrite the memory where the MON/MAP/TLK filename is built, so galactic maps
+  load as `MAPG??` and player maps as `MAPX??` and stop colliding. That is the same
+  `G`-versus-`X` disambiguation § 3 of `docs/planet-maps-galaxy-patch.md` derives
+  from our own bytes, arrived at independently by the person who wrote the patch.
+
+So `updated/` in the Internet Archive pack is the **already-applied result**, and
+`u2-map.pat` in the upgrade pack is **the same patch as a delta**. One is a
+destination, the other is a diff.
+
+**One recalled detail did not survive the readme.** The owner remembered the patch
+fixing "the greenland dungeon". GCHANGES.TXT names no Greenland. What it documents
+is `MAPX15` being corrupt — the last 260 bytes hold the city data belonging to
+`MAPX11` instead of the dungeon for sector 15 -- and a dungeon entrance in **Pangea**
+that had been removed because of that corruption and which the patch restores. The
+shape of the recollection (galaxy maps plus a dungeon fix) is right; the place name
+is not, and the shipped readme outranks the memory here.
+
+### 12.2 What actually differs, and the number I got wrong the first time
+
+Comparing the release against `updated/` case-insensitively: **59 shared filenames,
+11 of which differ.**
+
+| file | bytes differing | note |
+| --- | --- | --- |
+| `mapx15` | 260, starting at byte 3837 of 4224 | exactly the corruption GCHANGES.TXT describes |
+| `mapx10` | 1, at byte 544 | |
+| `tlkx03` `tlkx11` `tlkx21` `tlkx22` `tlkx23` `tlkx31` `tlkx32` `tlkx33` `tlkx41` | same size, content differs | dialogue, nine sectors |
+
+Two things worth recording about the measurement itself.
+
+First, **an earlier pass over this reported "exactly two differ" and that was wrong.**
+The shell loop tested `references/ultima2/TLKX03`, which does not exist, because the
+release spells those files lowercase and `updated/` spells them uppercase; the `-f`
+test failed, the file was skipped, and the loop reported a confident, plausible,
+wrong count. This is the failure mode `AGENTS.md` § 5 warns about in the section on
+deriving rather than eyeballing, and it is worth noting that it recurred here in a
+different guise: a case-sensitive existence check silently dropping half the inputs.
+
+Second, **that casing split is itself a bug source.** On a case-sensitive filesystem
+`data/original/tlkx03` and `data/original/TLKX03` are two files, and the engine finds
+one of them. An install that copied both would leave the corrupt one in play depending
+on which name the engine happened to ask for.
+
+### 12.3 D8 and D9, and what they fixed
+
+**D8 -- the patch layer wins a shared filename.** The rule was "first source wins"
+with the release scanned first, which meant the corrupt release `mapx15` beat the
+copy whose entire purpose is to fix it. The installer was re-introducing a 1996 bug.
+Now a patch source may replace a planned release-layer file when the bytes differ,
+the report says `patch ... replacing a different copy (D8)`, and the summary counts
+them separately from shadows. The destination keeps the **release's** spelling of the
+name, so the casing split in § 12.2 collapses to one file instead of two.
+
+Gated by `install_check` ("a file in both sources is taken from the patch, not the
+release (D8)", plus the two casing assertions) and by the control
+`patch-loses-the-shadow`, which flips the `may_override` argument and must go red.
+
+**D9 -- the Galaxy patch is auto-detected at `<original-dir>/updated`.** It ships
+inside the release directory, so asking for it as a separate flag asks the player to
+know the pack's internal layout. An explicit `--updated-dir` still wins, and the
+report says when the layer was found on its own.
+
+### 12.4 D10 -- `.pat` deltas are reported, not applied
+
+If a player has a pristine release and the upgrade pack but no `updated/`, the map
+fixes exist only as `u2-map.pat`, which the installer cannot apply. Its header is
+`PZ1`/`FZ1` with embedded filenames, an LZH-family archive rather than a byte delta,
+so supporting it is a real piece of work and not a few lines.
+
+The ruling is that the installer **says so out loud**: a `.pat` in a source directory
+is reported as a patch delta the installer does not apply, pointing at this section,
+instead of being silently counted as "not game content". Silence was the worst of the
+three possible answers, because the player would hold the fix, skip it, and be told
+nothing.
+
+### 12.5 Deferred, in rough order of value
+
+1. **Apply `.pat` deltas.** Read the `PZ1`/`FZ1` container, extract, and let
+   `--install` take a pristine release plus `u2-map.pat` as a complete input. This
+   is what `u2up.exe` does, and it is the only way to serve a player who has the
+   upgrade pack and a 1989 release but no `updated/` directory.
+2. **Accept `.zip` downloads directly.** Every one of these sources — the Internet
+   Archive pack, the upgrade pack, the FM Towns image — reaches players as an
+   archive, and today `--install` needs them unpacked first. Accepting a `.zip` path
+   for `--original-dir`, `--updated-dir` and `--themes-dir` would remove a step that
+   currently has to be explained, and would let the installer read a CD image out of
+   an archive too. Needs a zip reader in C (stored and deflate), and the same rule as
+   everywhere else here: read from the archive, never re-encode what comes out.
+3. **Verify against the patch's own byte templates.** GCHANGES.TXT carries the exact
+   before/after byte sequences for the `ultimaii.exe` edits. A check that our
+   `original/ultimaii.exe` matches one of those templates would tell us which release
+   level the Internet Archive pack actually is, which § 0 of this document currently
+   concedes we do not know.
