@@ -1411,6 +1411,17 @@ static int overworld_open(u2_ctx *ctx, u2_overworld *ow)
  */
 static int overworld_resume(u2_ctx *ctx, u2_overworld *ow)
 {
+    /* The frame is allocated here rather than at the struct declaration because
+     * its size is not known until the theme is: a 32x32-tile theme composites at
+     * 640x400 and a 16x16 one at 320x200, and the theme is resolved by
+     * overworld_open, which every caller has just run. Both overworld inits come
+     * through here, so this is the one place that cannot be missed. */
+    if (u2_frame_ensure(&ow->frame, ctx->frame_scale) != 0) {
+        snprintf(ow->note, sizeof ow->note, "out of memory for the frame buffer");
+        return -1;
+    }
+    u2_frame_set_text_fg(&ow->frame, ctx->text_fg);
+
     if (!ctx->load_ds_path)
         return 0;
 
@@ -1508,6 +1519,20 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
     if (ctx->state.rocket_parked && ctx->state.world != 0) {
         u2_world_terrain_put(&ow->world, ctx->state.rocket_parked_x,
                              ctx->state.rocket_parked_y, U2_TILE_ROCKET);
+    }
+
+    /* Scope, not decoration (docs/handoff-themes-builder.md § 4.1). A theme that
+     * covers the overworld and towns only — which is every theme the FM Towns
+     * crosswalk can build today — has nothing to draw a dungeon with, and the
+     * dungeon is CGA art regardless of theme. The handoff said "refuse the mode";
+     * refusing to enter would make the game unwinnable behind an art flag, so this
+     * says out loud what is about to be drawn in the wrong art and carries on.
+     * Silence is the failure the owner's rule forbids, not the fallback. */
+    if (u2_site_is_dungeon(ctx) && ow->use_ega && !ow->tiles_ega.scope_dungeon) {
+        fprintf(stderr, "u2: theme '%s' does not cover dungeons; the dungeon draws "
+                        "in the original CGA art\n",
+                ow->tiles_ega.name[0] ? ow->tiles_ega.name : ow->ega_theme);
+        u2_feedback(ctx, "THEME ART DOES NOT COVER DUNGEONS");
     }
 
     if (u2_site_is_dungeon(ctx)) u2_dungeon_enter(ctx, ow);
@@ -1831,6 +1856,13 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 if (u2_tiles_ega_open_in(ctx, &cand, ow->tiles_ega.dir, next)
                         == U2_TILES_EGA_OK) {
                     ow->tiles_ega = cand;
+                    /* A v2 theme can be a different tile size, and the frame is
+                     * sized by the theme, so a cycle that changes the scale must
+                     * re-allocate rather than blit a 32x32 theme into a 320-wide
+                     * buffer (or the reverse, which draws a quarter-size island).
+                     * u2_frame_init frees the old store, so this cannot leak. */
+                    u2_frame_ensure(&ow->frame, ctx->frame_scale);
+                    ow->frame.text_fg = ctx->text_fg ? ctx->text_fg : U2_CGA_WHITE;
                     snprintf(ow->ega_theme, sizeof ow->ega_theme, "%s", next);
                     char msg[48];
                     snprintf(msg, sizeof msg, "EGA THEME: %s", next);
@@ -2242,7 +2274,8 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
         int wrc;
         if (ow->use_ega) {
             uint8_t pal[16][3];
-            u2_frame_palette_ega(pal);
+            if (ctx->theme_palette_set) memcpy(pal, ctx->theme_palette, sizeof pal);
+            else u2_frame_palette_ega(pal);
             wrc = u2_frame_write_ppm16(&ow->frame, ctx->frame_dump_path, pal);
         } else {
             uint8_t pal[4][3];
@@ -2254,6 +2287,7 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                     ctx->frame_dump_path);
     }
     ctx->frame = NULL;
+    u2_frame_free(&ow->frame);
     return 0;
 }
 
@@ -2278,13 +2312,15 @@ int u2_overworld_dump(u2_ctx *ctx, const char *path)
     int wrc;
     if (ow.use_ega) {
         uint8_t pal[16][3];
-        u2_frame_palette_ega(pal);
+        if (ctx->theme_palette_set) memcpy(pal, ctx->theme_palette, sizeof pal);
+        else u2_frame_palette_ega(pal);
         wrc = u2_frame_write_ppm16(&ow.frame, path, pal);
     } else {
         uint8_t pal[4][3];
         u2_frame_palette(pal);
         wrc = u2_frame_write_ppm(&ow.frame, path, pal);
     }
+    u2_frame_free(&ow.frame);
     if (wrc != 0) {
         fprintf(stderr, "overworld: could not write %s\n", path);
         return -1;

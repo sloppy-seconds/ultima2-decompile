@@ -48,32 +48,86 @@
 #define U2_TILE_EGA_BYTES  (U2_TILE_H * U2_TILE_EGA_STRIDE)   /* 128 */
 #define U2_TILE_EGA_FILE   8320                               /* 65 * 128 */
 
+/* Format v2 bounds (docs/handoff-themes-builder.md § 4.1). A THEME.INI names a
+ * tile size and a pool of tiles, and the atlas below is sized for the largest
+ * one this project has evidence for; a theme that exceeds a bound is refused
+ * with a reason rather than truncated. */
+#define U2_TILE_EGA_MAX_SIDE   32
+#define U2_TILE_EGA_MAX_TILE   (U2_TILE_EGA_MAX_SIDE * U2_TILE_EGA_MAX_SIDE / 2) /* 512 */
+#define U2_TILE_EGA_MAX_TILES  128
+#define U2_TILE_EGA_MAX_FRAMES 8
+
+typedef struct u2_tiles_ega {
+    /* The pool. For a v1 theme this is the EGATILES array and `art index ==
+     * pool index`; for a v2 theme MAP.TSV supplies the indirection, so the pool
+     * holds every frame the mapping names and an art index may point at several
+     * of them. */
+    uint8_t  px[U2_TILE_EGA_MAX_TILES][U2_TILE_EGA_MAX_TILE];
+    int      count;                 /* tiles present in px */
+    int      tile_w, tile_h;        /* 0 means the v1 default, 16x16 */
+    int      stride;                /* bytes per row; 0 means tile_w/2 */
+    int      bpp;                   /* 0 means 4 */
+    int      scale;                 /* frame scale this theme asks for */
+    int      has_palette;
+    uint8_t  palette[16][3];        /* only meaningful when has_palette */
+    int      has_map;
+    uint16_t map[U2_TILE_COUNT][U2_TILE_EGA_MAX_FRAMES];
+    uint8_t  map_n[U2_TILE_COUNT];
+    int      scope_dungeon;         /* the theme claims dungeon art is mapped */
+    int      scope_tower;
+    int      loaded;
+    char     source[760];           /* the file we read, for diagnostics; sized so
+                                     * a snprintf from a path buffer cannot truncate */
+    char     dir[512];              /* the themes dir it was found in, so a mid-run
+                                     * theme cycle scans the same directory */
+    char     name[32];              /* the theme name it was loaded as */
+} u2_tiles_ega;
+
+/* Geometry accessors with the v1 defaults behind them. A zeroed struct means
+ * "the legacy 16x16 4bpp atlas", which is what every existing caller and test
+ * builds by hand, and it is why these exist: the stride is not a constant any
+ * more, and reading `t->stride` directly on a hand-built atlas would give 0. */
+static inline int u2_tiles_ega_tile_w(const u2_tiles_ega *t)
+{ return t && t->tile_w > 0 ? t->tile_w : U2_TILE_W; }
+static inline int u2_tiles_ega_tile_h(const u2_tiles_ega *t)
+{ return t && t->tile_h > 0 ? t->tile_h : U2_TILE_H; }
+static inline int u2_tiles_ega_stride(const u2_tiles_ega *t)
+{ return t && t->stride > 0 ? t->stride : u2_tiles_ega_tile_w(t) / 2; }
+static inline int u2_tiles_ega_count(const u2_tiles_ega *t)
+{ return t && t->count > 0 ? t->count : U2_TILE_COUNT; }
+
+/* Which pool entry draws art index `art`. Identity when the theme carries no
+ * map, which is every v1 theme by definition. Returns -1 for an art index the
+ * map does not cover, and the caller must not draw rather than guess. */
+static inline int u2_tiles_ega_tile(const u2_tiles_ega *t, int art)
+{
+    if (art < 0 || art >= U2_TILE_COUNT) return -1;
+    if (!t || !t->has_map) return art;
+    if (t->map_n[art] == 0) return -1;
+    return t->map[art][0];
+}
+
+/* Colour index 0..15 of one EGA pixel. High nibble is the left pixel of each
+ * byte, the opposite of the CGA atlas's top-two-bits convention. The stride is
+ * the theme's, not a constant: a 32-wide 4bpp row is 16 bytes, not 8. */
+static inline int u2_tile_ega_pixel(const u2_tiles_ega *t, int tile, int x, int y)
+{
+    const uint8_t b = t->px[tile][y * u2_tiles_ega_stride(t) + (x >> 1)];
+    return (x & 1) ? (b & 0xF) : (b >> 4);
+}
+
 /* The four shipped theme names. "default" is the top-level EGATILES the game
- * itself uses; the others live in EGATHEME.<NAME>/ subdirectories. */
+ * itself uses; the others live in EGATHEME.<NAME>/ subdirectories. A format-v2
+ * theme is a directory named <name>/ holding a THEME.INI, and it is discovered
+ * by the same calls. */
 #define U2_EGA_THEME_DEFAULT "default"
 
 typedef enum u2_tiles_ega_result {
     U2_TILES_EGA_OK = 0,
-    U2_TILES_EGA_NOT_READY,   /* no themes dir / no EGATILES found anywhere */
-    U2_TILES_EGA_BAD,         /* file present but wrong size */
+    U2_TILES_EGA_NOT_READY,   /* no themes dir / no theme found anywhere */
+    U2_TILES_EGA_BAD,         /* file present but wrong size or shape */
     U2_TILES_EGA_ERROR        /* I/O failure */
 } u2_tiles_ega_result;
-
-typedef struct u2_tiles_ega {
-    uint8_t px[U2_TILE_COUNT][U2_TILE_EGA_BYTES];
-    int     loaded;
-    char    source[600];      /* the file we read, for diagnostics */
-    char    dir[512];         /* the themes dir it was found in, so a mid-run
-                               * theme cycle scans the same directory */
-} u2_tiles_ega;
-
-/* Colour index 0..15 of one EGA pixel. High nibble is the left pixel of each
- * byte, the opposite of the CGA atlas's top-two-bits convention. */
-static inline int u2_tile_ega_pixel(const u2_tiles_ega *t, int tile, int x, int y)
-{
-    const uint8_t b = t->px[tile][y * U2_TILE_EGA_STRIDE + (x >> 1)];
-    return (x & 1) ? (b & 0xF) : (b >> 4);
-}
 
 /*
  * Resolve the themes directory and load the chosen theme's EGATILES.

@@ -143,14 +143,73 @@ per-theme pictures are copied by `tools/build_themes.py` and never read by the e
 fan pack's driver does look for them theme-relative, with a fall-back to the bare name
 (`0x5f1`..`0x60d`), so the art is not exotic — our loader is just narrower.
 
-## 4. Legal posture
+## 4. Format v2 themes, and the FM Towns art
+
+`--ega` now takes two theme formats from the same directory, and Ctrl-T cycles
+across both. v1 is the fan pack's `EGATILES`, described above. v2 is a directory
+with a manifest, and it exists because the FM Towns art cannot be expressed as a
+flat array: its tiles are 32x32, one DOS art index maps to a *set* of FM tiles,
+and the alignment between a DOS index and an FM tile is not the identity
+(`docs/fmtowns-graphics.md`, and `docs/handoff-themes-builder.md` § 1). The field
+by field contract is `docs/theme-format.md`; this section is the shape of it.
+
+```bash
+python3 tools/build_themes.py --fmtowns        # derives themes/fmtowns/ from your disc
+./u2-sdl --ega --data-dir ~/u2 --ega-theme-dir themes/ --ega-theme fmtowns
+```
+
+What a v2 theme directory holds:
+
+| file | what it is |
+| --- | --- |
+| `THEME.INI` | the manifest: tile size, bpp, pixel order, and which of the other three files to read |
+| `TILES` | the tile pool, `tile_w * tile_h * bpp / 8` bytes each, in the order `MAP.TSV` first names them |
+| `PALETTE.RGB` | optional, 16 x 3 bytes. Absent means the built-in EGA table |
+| `MAP.TSV` | optional, `art_index -> pool indices`. Absent means identity, which is what keeps every v1 theme valid with no changes |
+
+Three consequences worth knowing before you try it:
+
+* **The window grows.** A 32x32-tile theme composites at 640x400, because the map
+  window is the same 20x10 cells either way and shrinking the view to keep the
+  window size would change what the player can see — a rules change wearing an art
+  flag. The text band scales with it (each glyph dot becomes a 2x2 block), so the
+  layout is a uniform doubling rather than a big map with a corner of tiny text.
+* **The palette comes from the theme.** The FM Towns table has index 3 as black and
+  is not the EGA order; drawing that art through the EGA table makes it read as
+  noise while every byte-level check passes. The renderer re-reads the table when a
+  Ctrl-T cycle changes it. One consequence took a screenshot to find: the text layer
+  is written with CGA white, which is index 3, and index 3 in the FM Towns table is
+  black — so the status band was invisible. A theme that ships a palette now also
+  supplies the ink the text is drawn in (the brightest entry, white for FM Towns).
+  That is a choice, not a capture; `docs/theme-format.md` § 5 says so.
+* **Scope is enforced by telling you.** The crosswalk covers the overworld and towns
+  only, so `THEME.INI` says `scope = overworld,towns`, and entering a dungeon prints
+  `THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in the original CGA art.
+  The handoff said "refuse the mode"; refusing to *enter* would make the game
+  unwinnable behind an art flag, so the engine says out loud what is about to be
+  drawn in the wrong art and carries on. Silence is the failure the owner's rule
+  forbids, not the fallback.
+
+What v2 does **not** do yet: animation. `MAP.TSV` keeps every frame the crosswalk
+names — `art 0C` really does carry `ENEMY2/17,ENEMY2/16` — and the engine draws
+the first of each list, so the frames are in the file and nothing was thrown away
+to get here. Slice C (`docs/handoff-themes-builder.md` § 5) is animation, the
+`PLAYER` bank's race-and-class variants, and the dungeon banks.
+
+The refusals are as deliberate as the accepts: a `bpp` other than 4, a map row
+pointing outside the pool, a misspelt `scope` word, a tile width that is not a
+multiple of the 16 px layout, a `TILES` whose size is not a whole number of tiles,
+and a manifest with no pool are each refused at load with a reason naming the file,
+and `engine/tests/theme_v2_check.c` proves all six go red.
+
+## 5. Legal posture
 
 Identical to the CGA tile art and the original pictures: the EGA files are the player's own,
 read at run time from the directory you point at, and never committed. The committed cleanroom
 substitute tiles (`engine/assets/tiles/cleanroom/`) remain the shipped fallback when no EGA
 art is present. No new art enters the repository.
 
-## 5. Relationship to the options menu
+## 6. Relationship to the options menu
 
 `--ega` is an interim launch flag. When `docs/options-menu.md` lands, the art mode and theme
 become live-switchable menu rows (graphics is presentation, safe to change mid-run) seeded

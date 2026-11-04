@@ -33,10 +33,14 @@ typedef struct sdl_video {
     SDL_Window   *win;
     SDL_Renderer *ren;
     SDL_Texture  *tex;
-    uint32_t     * staging;   /* 320x200 RGBA, filled from the indexed frame */
+    uint32_t     * staging;   /* w*h RGBA, filled from the indexed frame */
     Uint32        pal[16];    /* CGA fills 0..3 (rest black); EGA fills all 16.
                                * The upload indexes with & 15, so a CGA frame
                                * (values 0..3) reads the same four entries. */
+    uint8_t       pal_src[16][3];  /* the RGB table v->pal was built from, so a
+                                    * Ctrl-T cycle into a themed palette is
+                                    * noticed and the mapping is rebuilt */
+    int           pal_from_theme;
     unsigned      frames;
     const struct u2_frame *last;  /* last frame uploaded, so a window resize can
                                    * repaint without the game drawing a new one */
@@ -52,6 +56,15 @@ typedef struct sdl_video {
 } sdl_video;
 
 static sdl_video *sv(u2_ctx *ctx) { return (sdl_video *)ctx->be_render; }
+
+/* The window and texture follow the theme: a 16x16-tile theme is 320x200 and a
+ * 32x32-tile theme is 640x400, because the map window is the same 20x10 cells
+ * either way and shrinking the view to keep the window size would change what
+ * the player can see, which is a rules change wearing an art flag. */
+static int sdl_frame_scale(const u2_ctx *ctx)
+{
+    return ctx && ctx->frame_scale > 1 ? ctx->frame_scale : 1;
+}
 
 /* One driver name per line, for --video-drivers. Does not initialise video, so it
  * works on a machine with no display at all — which is exactly where the release
@@ -105,6 +118,7 @@ static int sdl_init(u2_ctx *ctx)
 {
     sdl_video *v = calloc(1, sizeof *v);
     if (!v) return -1;
+    const int fs = sdl_frame_scale(ctx);
 
     /* SDL3 returns bool, where SDL2 returned 0 for success. Inverting the test
      * rather than the call is the whole change, but it is the kind of change that
@@ -124,7 +138,8 @@ static int sdl_init(u2_ctx *ctx)
      * draws, it just smears every pixel into a gradient, and a screenshot taken
      * in a hurry looks like a plausible retro blur rather than a bug. */
     v->win = SDL_CreateWindow("Ultima II (engine reconstruction)",
-                              U2_SCREEN_W * SDL_SCALE, U2_SCREEN_H * SDL_SCALE,
+                              U2_SCREEN_W * fs * SDL_SCALE,
+                              U2_SCREEN_H * fs * SDL_SCALE,
                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!v->win) {
         fprintf(stderr, "sdl: window: %s\n", SDL_GetError());
@@ -150,7 +165,7 @@ static int sdl_init(u2_ctx *ctx)
     }
     v->tex = SDL_CreateTexture(v->ren, SDL_PIXELFORMAT_RGBA8888,
                                SDL_TEXTUREACCESS_STREAMING,
-                               U2_SCREEN_W, U2_SCREEN_H);
+                               U2_SCREEN_W * fs, U2_SCREEN_H * fs);
     if (!v->tex) {
         fprintf(stderr, "sdl: texture: %s\n", SDL_GetError());
         SDL_DestroyRenderer(v->ren);
@@ -161,7 +176,8 @@ static int sdl_init(u2_ctx *ctx)
     if (!SDL_SetTextureScaleMode(v->tex, SDL_SCALEMODE_NEAREST))
         fprintf(stderr, "u2: WARNING: nearest-neighbour scaling refused (%s);"
                         " 2bpp art will be smeared\n", SDL_GetError());
-    v->staging = malloc(sizeof(uint32_t) * U2_SCREEN_W * U2_SCREEN_H);
+    v->staging = malloc(sizeof(uint32_t) * (size_t)(U2_SCREEN_W * fs) *
+                        (size_t)(U2_SCREEN_H * fs));
     if (!v->staging) {
         SDL_DestroyTexture(v->tex);
         SDL_DestroyRenderer(v->ren);
@@ -180,6 +196,16 @@ static int sdl_init(u2_ctx *ctx)
                                          * rest defined so & 15 is well-formed */
             { pal[i][0] = pal[i][1] = pal[i][2] = 0; }
     }
+    /* A v2 theme may bring its own RGB table (docs/handoff-themes-builder.md
+     * § 4.1). The FM Towns palette is not an EGA palette — index 3 is black there
+     * — and drawing that art through the EGA table makes it read as noise while
+     * every byte-level check passes, which is the failure this whole thread
+     * started from. The theme's table wins whenever it exists. */
+    if (ctx->theme_palette_set) {
+        memcpy(pal, ctx->theme_palette, sizeof pal);
+        v->pal_from_theme = 1;
+    }
+    memcpy(v->pal_src, pal, sizeof v->pal_src);
     /* SDL3 replaced SDL_AllocFormat with a read-only details struct, and MapRGBA
      * now takes that plus an explicit palette (NULL: RGBA8888 has none). The
      * details pointer is owned by SDL and must not be freed. */
@@ -195,7 +221,14 @@ static int sdl_init(u2_ctx *ctx)
     }
 
     ctx->be_render = v;
+    if (u2_frame_init(&v->text, fs) != 0) {
+        free(v->staging); SDL_DestroyTexture(v->tex);
+        SDL_DestroyRenderer(v->ren); SDL_DestroyWindow(v->win); free(v);
+        ctx->be_render = NULL;
+        return -1;
+    }
     u2_frame_clear(&v->text, U2_CGA_BLACK);
+    u2_frame_set_text_fg(&v->text, ctx->text_fg);
     for (int r = 0; r < U2_ROWS; r++)
         for (int c = 0; c < U2_COLS; c++)
             v->grid[r][c] = ' ';
@@ -209,12 +242,31 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
 {
     sdl_video *v = sv(ctx);
     const u2_frame *fr = (const u2_frame *)f;
-    if (!v || !fr) return;
+    if (!v || !fr || !fr->px) return;
 
-    for (int y = 0; y < U2_SCREEN_H; y++) {
+    /* Re-map when the theme's palette changed under us. A Ctrl-T cycle can land
+     * on a v2 theme from a v1 one mid-run, and a stale mapping would draw FM Towns
+     * indices through the EGA table: legal, silent, and wrong in exactly the way a
+     * screenshot catches and a byte test does not. */
+    uint8_t want[16][3];
+    if (ctx->theme_palette_set) memcpy(want, ctx->theme_palette, sizeof want);
+    else if (ctx->art_mode == U2_ART_EGA) u2_frame_palette_ega(want);
+    else { u2_frame_palette(want);
+           for (int i = 4; i < 16; i++) { want[i][0]=want[i][1]=want[i][2]=0; } }
+    if (memcmp(want, v->pal_src, sizeof want) != 0) {
+        const SDL_PixelFormatDetails *fd = SDL_GetPixelFormatDetails(SDL_PIXELFORMAT_RGBA8888);
+        if (fd) {
+            for (int i = 0; i < 16; i++)
+                v->pal[i] = SDL_MapRGBA(fd, NULL, want[i][0], want[i][1], want[i][2], 255);
+            memcpy(v->pal_src, want, sizeof v->pal_src);
+            v->pal_from_theme = ctx->theme_palette_set;
+        }
+    }
+
+    for (int y = 0; y < fr->h; y++) {
         const uint8_t *src = fr->px[y];
-        uint32_t *dst = v->staging + (size_t)y * U2_SCREEN_W;
-        for (int x = 0; x < U2_SCREEN_W; x++) dst[x] = v->pal[src[x] & 15];
+        uint32_t *dst = v->staging + (size_t)y * (size_t)fr->w;
+        for (int x = 0; x < fr->w; x++) dst[x] = v->pal[src[x] & 15];
     }
 
     /* Destination is computed, not NULL. NULL means "fill the output rect", which
@@ -231,9 +283,9 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
         fprintf(stderr, "u2: render output size: %s\n", SDL_GetError());
         return;
     }
-    u2_fit fit = u2_fit_integer(ow, oh, U2_SCREEN_W, U2_SCREEN_H);
+    u2_fit fit = u2_fit_integer(ow, oh, fr->w, fr->h);
 
-    if (!SDL_UpdateTexture(v->tex, NULL, v->staging, U2_SCREEN_W * (int)sizeof(uint32_t))) {
+    if (!SDL_UpdateTexture(v->tex, NULL, v->staging, fr->w * (int)sizeof(uint32_t))) {
         fprintf(stderr, "u2: texture upload failed: %s\n", SDL_GetError());
         return;
     }
@@ -260,7 +312,8 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
         int wrc;
         if (ctx->art_mode == U2_ART_EGA) {
             uint8_t pal[16][3];
-            u2_frame_palette_ega(pal);
+            if (ctx->theme_palette_set) memcpy(pal, ctx->theme_palette, sizeof pal);
+            else u2_frame_palette_ega(pal);
             wrc = u2_frame_write_ppm16(fr, ctx->dump_screen, pal);
         } else {
             uint8_t pal[4][3];
@@ -296,7 +349,7 @@ static void sdl_cell(u2_ctx *ctx, int row, int col, uint8_t ch, uint8_t attr)
                    * engine prints; real attribute mapping is CP9 work. */
     if (!v || row < 0 || row >= U2_ROWS || col < 0 || col >= U2_COLS) return;
     v->grid[row][col] = ch;
-    u2_font_draw_cell(&v->text, row, col, ch, U2_CGA_WHITE, U2_CGA_BLACK);
+    u2_font_draw_cell(&v->text, row, col, ch, v->text.text_fg, U2_CGA_BLACK);
 }
 
 static void sdl_cursor(u2_ctx *ctx, int row, int col, int visible)
@@ -330,6 +383,7 @@ static void sdl_shutdown(u2_ctx *ctx)
     SDL_DestroyRenderer(v->ren);
     SDL_DestroyWindow(v->win);
     free(v->staging);
+    u2_frame_free(&v->text);
     free(v);
     ctx->be_render = NULL;
     SDL_QuitSubSystem(SDL_INIT_VIDEO);

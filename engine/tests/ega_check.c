@@ -63,6 +63,7 @@ int main(void)
     t.px[0][0] = 0x12;
     t.px[0][1] = 0xAB;
     u2_frame f;
+    u2_frame_init(&f, 1);   /* heap-backed store; see frame_check.c */
     u2_frame_clear(&f, 0);
     u2_frame_blit_tile_ega(&f, &t, 0, 0, 0);
     CHECK(f.px[0][0]==1 && f.px[0][1]==2, "4bpp decode: 0x12 -> left 1, right 2");
@@ -151,6 +152,7 @@ int main(void)
         printf("  SKIP  original/updated/PICDRA-E not present; the pic checks need it\n");
     } else {
         u2_frame pf;
+        u2_frame_init(&pf, 1);
         u2_frame_clear(&pf, 0);
         CHECK(u2_pic_blit_ega(&ctx, "picdra", &pf) == 0, "PICDRA-E blitted");
         /* Every pixel must be in 0..15 and the frame fully written (64000 px). */

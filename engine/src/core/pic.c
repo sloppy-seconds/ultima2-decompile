@@ -101,17 +101,22 @@ int u2_pic_blit(u2_ctx *ctx, const char *name, struct u2_frame *f)
      * field at BA000, so line 2n is byte n*80 of the first field and line 2n+1 is
      * byte n*80 of the second. Within a byte the leftmost pixel is the top two bits,
      * which is the same convention the tile art uses (frame.h), so the two paths agree. */
+    uint8_t rowbuf[U2_SCREEN_W];
     for (int line = 0; line < U2_SCREEN_H; line++) {
         const int field = (line & 1) ? PIC_ODD_FIELD : 0;
         const uint8_t *src = raw + field + (line >> 1) * U2_SCREEN_ROW;
-        uint8_t *dst = f->px[line];
         for (int b = 0; b < U2_SCREEN_ROW; b++) {
             const uint8_t v = src[b];
-            dst[b * 4 + 0] = (uint8_t)((v >> 6) & 3);
-            dst[b * 4 + 1] = (uint8_t)((v >> 4) & 3);
-            dst[b * 4 + 2] = (uint8_t)((v >> 2) & 3);
-            dst[b * 4 + 3] = (uint8_t)(v & 3);
+            rowbuf[b * 4 + 0] = (uint8_t)((v >> 6) & 3);
+            rowbuf[b * 4 + 1] = (uint8_t)((v >> 4) & 3);
+            rowbuf[b * 4 + 2] = (uint8_t)((v >> 2) & 3);
+            rowbuf[b * 4 + 3] = (uint8_t)(v & 3);
         }
+        /* The pictures are 320x200 art whatever the theme, so at a larger frame
+         * scale they are block-upscaled rather than left as an island in the
+         * corner. Nearest-neighbour is the only honest choice for 4-colour art. */
+        for (int x = 0; x < U2_SCREEN_W; x++)
+            u2_frame_put_logical(f, x, line, rowbuf[x]);
     }
     u2_trace(ctx, "pic", "535A", "name=%s loaded=1 bytes=%d", name, PIC_PIXEL_BYTES);
     return 0;

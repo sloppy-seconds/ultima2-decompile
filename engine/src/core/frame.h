@@ -58,13 +58,86 @@
 #define U2_PALETTE_CGA_ENTRIES 4
 #define U2_PALETTE_EGA_ENTRIES 16
 
+/* A frame is a PHYSICAL pixel buffer whose extent follows the active theme: a
+ * 16x16-tile theme gets 320x200, a 32x32-tile theme gets 640x400, and the map
+ * window is the top VIEW_ROWS*tile_h of it in both cases. `scale` is the ratio
+ * to the 1x layout, and it is what the text layer multiplies by so the status
+ * band stays the same proportion of the screen instead of shrinking into the
+ * corner. Tile blits write physical pixels 1:1 and keep every pixel the art
+ * has; a blit that went through the logical space would decimate a 32x32 tile
+ * to 16x16 and throw away the reason for the theme. */
+#define U2_FRAME_MAX_SCALE 2
+#define U2_FRAME_MAX_W     (U2_SCREEN_W * U2_FRAME_MAX_SCALE)   /* 640 */
+#define U2_FRAME_MAX_H     (U2_SCREEN_H * U2_FRAME_MAX_SCALE)   /* 400 */
+
 typedef struct u2_frame {
-    /* One byte per pixel, value 0..3. 64 KB, which is fine on any host and
-     * keeps the blit trivially readable; a 2bpp packed variant is a later
-     * optimisation, not a correctness requirement. */
-    uint8_t  px[U2_SCREEN_H][U2_SCREEN_W];
+    /* One byte per pixel, a palette index: 0..3 in the CGA path, 0..15 in an
+     * EGA or v2-theme path. Heap-backed by u2_frame_init; `w` and `h` are the
+     * physical extent in use and rows are U2_FRAME_MAX_W bytes wide. */
+    uint8_t (*px)[U2_FRAME_MAX_W];
+    int      w, h;          /* physical pixels: U2_SCREEN_W/H * scale */
+    int      scale;         /* 1 or 2 */
+    /* The two indices the text layer draws with. Defaults are the CGA pair (3 on
+     * 0), but a theme that ships its own RGB table can make 3 an unusable colour:
+     * the FM Towns palette has index 3 as BLACK, so status text drawn with the CGA
+     * pair is black on black and simply is not there. The theme loader picks the
+     * brightest entry of whatever palette is active. */
+    uint8_t  text_fg, text_bg;
     unsigned presents;      /* frames composited, for tests and diagnostics */
 } u2_frame;
+
+/* Allocate the backing store for one frame at the given scale (0 or 1 means 1).
+ * Returns 0 on success. A frame that was never inited has px == NULL, and every
+ * writer below refuses rather than dereferencing it. */
+int u2_frame_init(u2_frame *f, int scale);
+void u2_frame_free(u2_frame *f);
+
+/* Init only if the frame is not already at this scale, freeing the old store
+ * first. For frames that outlive one theme cycle: a static splash frame or an
+ * overworld re-sized by Ctrl-T. Like init it assumes the struct is zeroed or
+ * inited, never uninitialised garbage. */
+int u2_frame_ensure(u2_frame *f, int scale);
+
+/* Point the text layer at the palette's brightest ink. `fg` of 0 means "leave the
+ * CGA default", which is what every theme without its own RGB table wants. */
+static inline void u2_frame_set_text_fg(u2_frame *f, uint8_t fg)
+{
+    if (f && fg) f->text_fg = fg;
+}
+
+/* Write one PHYSICAL pixel. This is what a tile blit uses. */
+static inline void u2_frame_put(u2_frame *f, int x, int y, uint8_t colour)
+{
+    if (!f || !f->px || x < 0 || y < 0 || x >= f->w || y >= f->h) return;
+    f->px[y][x] = colour;
+}
+
+/* Write one pixel of the 1x LAYOUT — a glyph dot, a cursor, a status rule — as
+ * a scale x scale block. Anything whose coordinates come from the text grid
+ * goes through this; anything whose coordinates come from tile geometry does
+ * not. Mixing them is how a 2x theme draws its text in the top-left quarter. */
+static inline void u2_frame_put_logical(u2_frame *f, int x, int y, uint8_t colour)
+{
+    if (!f || !f->px) return;
+    const int s = f->scale > 1 ? f->scale : 1;
+    for (int j = 0; j < s; j++)
+        for (int i = 0; i < s; i++)
+            u2_frame_put(f, x * s + i, y * s + j, colour);
+}
+
+/* XOR one 1x-layout pixel, for the death-ring mask, which is a plane XOR and not
+ * a write. Same block rule as put_logical, or the ring would cover a quarter of
+ * the cell it belongs to in a large-tile theme. */
+static inline void u2_frame_xor_logical(u2_frame *f, int x, int y, uint8_t bits)
+{
+    if (!f || !f->px || x < 0 || y < 0) return;
+    const int s = f->scale > 1 ? f->scale : 1;
+    for (int j = 0; j < s; j++)
+        for (int i = 0; i < s; i++) {
+            const int px = x * s + i, py = y * s + j;
+            if (px < f->w && py < f->h) f->px[py][px] ^= bits;
+        }
+}
 
 /* The four palette entries as 8-bit RGB, in CGA's canonical order. A backend
  * may substitute its own; this is the default, not an assertion about hardware. */
@@ -73,8 +146,11 @@ void u2_frame_palette(uint8_t out[4][3]);
 /* The sixteen EGA palette entries as 8-bit RGB, in the standard EGA order
  * (black, blue, green, cyan, red, magenta, brown, light grey, grey, light blue,
  * light green, light cyan, light red, light magenta, yellow, white). This is the
- * hardware palette the fan pack's EGA art was authored against; the themes ship
- * no palette of their own (docs/ega-graphics-plan.md § 3, spike S1b). */
+ * hardware palette the fan pack's EGA art was authored against. The v1 themes
+ * carry no RGB table of their own — what EGATHEME.10 and .C64 ship as EGACOLOR
+ * is a colour-index remap for the fan driver's own primitives, not a palette
+ * (docs/ega-graphics.md § 3.1) — but a format-v2 theme may name a PALETTE.RGB,
+ * and when it does the renderer uses that instead of this table. */
 void u2_frame_palette_ega(uint8_t out[16][3]);
 
 void u2_frame_clear(u2_frame *f, uint8_t colour);

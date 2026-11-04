@@ -211,6 +211,7 @@ int main(void)
 {
     u2_ctx ctx;
     u2_frame f;
+    u2_frame_init(&f, 1);   /* heap-backed store; see frame_check.c */
     char buf[64];
 
     memset(&ctx, 0, sizeof ctx);

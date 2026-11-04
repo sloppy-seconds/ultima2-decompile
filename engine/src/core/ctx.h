@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include "platform/platform.h"
 #include "core/vram.h"
 #include "core/state.h"
@@ -70,6 +71,28 @@ typedef struct u2_ctx {
     const char *ega_theme;       /* --ega-theme NAME; NULL means "default" */
     const char *ega_theme_dir;   /* --ega-theme-dir PATH; NULL means use the
                                   * resolution order in core/tiles_ega.h */
+    /* What the active theme's tile size implies for the frame: 1 for CGA and
+     * every v1 EGA theme (16x16 tiles, 320x200), 2 for a 32x32 theme such as the
+     * FM Towns one, which needs a 640x400 window to show the same 20x10 cells at
+     * the art's own resolution. Set by the theme loader (validate and open both
+     * record it) before any frame is allocated; a frame built at the wrong scale
+     * draws a theme at half size or overruns the window, so it is read once at
+     * startup and never changed under a running frame. */
+    int frame_scale;
+    /* The active theme's own RGB table, when it ships one (a v2 PALETTE.RGB).
+     * The renderer uses this instead of the built-in EGA table whenever
+     * theme_palette_set is true, and re-reads it on each upload so a Ctrl-T cycle
+     * into or out of a themed palette takes effect without a restart. Zero means
+     * "no theme palette", which is every v1 theme: what EGATHEME.10 and .C64 ship
+     * as EGACOLOR is an index remap for the fan driver, not RGB
+     * (docs/ega-graphics.md § 3.1). */
+    int theme_palette_set;
+    uint8_t theme_palette[16][3];
+    /* The palette index the text layer should use for ink under the active theme.
+     * 0 means "unset, use CGA white (3)". A theme that ships an RGB table gets the
+     * brightest entry of it, because the FM Towns palette has index 3 as black and
+     * the CGA pair then draws status text in the background colour. */
+    uint8_t text_fg;
     const u2_renderer *renderer;
     const u2_input    *input;
     const u2_audio    *audio;

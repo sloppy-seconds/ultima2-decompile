@@ -1,18 +1,30 @@
 /*
- * tiles_ega.c — load the fan pack's 16-colour EGATILES atlas into the engine.
+ * tiles_ega.c — load an EGA or v2 tile theme into the engine.
  *
- * See tiles_ega.h for the format evidence and the copyright posture. The short
- * version: EGATILES is a flat 65x128 array of 4bpp tiles with no header, and
- * tile N lines up with the CGA atlas's tile N, so the engine reads the first 64
- * and hands them to the EGA blit in core/frame.c.
+ * Two formats, one loader, because Ctrl-T has to cycle across both:
+ *
+ *   v1  the fan pack's `EGATILES` — a headerless flat array of 65 16x16 tiles at
+ *       4bpp packed, high nibble = left pixel. Art index == tile index. See the
+ *       header for the evidence and docs/ega-graphics.md for the user story.
+ *
+ *   v2  a directory with a THEME.INI naming a TILES pool, an optional
+ *       PALETTE.RGB and an optional MAP.TSV (docs/handoff-themes-builder.md
+ *       § 4.1). This is what an art set that does NOT align 1:1 with the DOS art
+ *       indices needs — the FM Towns banks are the reason it exists.
+ *
+ * `MAP.TSV` absent means identity, and that is what keeps every v1 theme valid
+ * with no changes. An explicit --ega-theme-dir stays authoritative with no
+ * fall-through (docs/ega-graphics-plan.md § 2, [LOCKED]): a wrong path is
+ * reported, never papered over.
  *
  * Zero game content is committed, so — exactly like the CGA extractor — the art
- * has to arrive at run time from a file the player owns. A missing or short file
- * is a clean NOT_READY, never a half-loaded atlas: the caller keeps the CGA path
- * and the screen is no worse than before this module existed.
+ * has to arrive at run time from a file the player owns. A missing file is a
+ * clean NOT_READY; a file that is present and wrong is U2_TILES_EGA_BAD with a
+ * reason, and `--ega` refuses to start rather than drawing a plausible half-theme.
  */
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,11 +34,392 @@
 #include <sys/stat.h>
 
 #include "core/tiles_ega.h"
+#include "core/frame.h"           /* U2_FRAME_MAX_SCALE: a theme may not ask for
+                                   * a frame bigger than the build can composite */
 
-/* The theme name maps to a path under the themes dir. The names are matched
- * case-insensitively because a copy that came off a FAT volume can arrive with
- * them uppercased, and refusing to look is indistinguishable from the theme not
- * existing. */
+#define V2_INI     "THEME.INI"
+#define V2_TILES   "TILES"
+
+/* ---------------------------------------------------------------- helpers */
+
+static int path_is_dir(const char *p)
+{
+    struct stat st;
+    return p && *p && stat(p, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+/* Size of a regular file, or -1 if it is not one. */
+static long path_size(const char *p)
+{
+    struct stat st;
+    if (!p || stat(p, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
+    return (long)st.st_size;
+}
+
+/* Read a whole file into a malloc'd buffer. Returns 0 on success. */
+static int slurp(const char *path, unsigned char **out, long *out_len)
+{
+    const long sz = path_size(path);
+    if (sz < 0) return -1;
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    unsigned char *buf = malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return -1; }
+    const size_t got = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    if (got != (size_t)sz) { free(buf); return -1; }
+    buf[sz] = '\0';
+    *out = buf;
+    if (out_len) *out_len = sz;
+    return 0;
+}
+
+static void trim(char *s)
+{
+    char *e = s + strlen(s);
+    while (e > s && (e[-1] == '\r' || e[-1] == '\n' || e[-1] == ' ' || e[-1] == '\t'))
+        *--e = '\0';
+    while (*s == ' ' || *s == '\t') memmove(s, s + 1, strlen(s));
+}
+
+/* One `key = value` line from THEME.INI, or NULL. Comments and section headers
+ * are skipped; the parser is deliberately small because the writer is
+ * tools/build_themes.py and a general INI parser would only add ways to accept
+ * something the builder never emits. */
+static int ini_get(const char *ini, const char *key, char *out, size_t n)
+{
+    const size_t kl = strlen(key);
+    const char *p = ini;
+    while (p && *p) {
+        const char *eol = strchr(p, '\n');
+        const size_t ll = eol ? (size_t)(eol - p) : strlen(p);
+        if (ll > kl + 1 && p[0] != '#' && p[0] != '[' && p[0] != ';') {
+            const char *eq = memchr(p, '=', ll);
+            if (eq && (size_t)(eq - p) >= kl) {
+                const char *ks = p;
+                while (ks < eq && (*ks == ' ' || *ks == '\t')) ks++;
+                const char *ke = eq;
+                while (ke > ks && (ke[-1] == ' ' || ke[-1] == '\t')) ke--;
+                const size_t klen = (size_t)(ke - ks);
+                if (klen == kl && strncasecmp(ks, key, kl) == 0) {
+                    char buf[64];
+                    const char *vs = eq + 1;
+                    size_t vl = ll - (size_t)(vs - p);
+                    if (vl >= sizeof buf) vl = sizeof buf - 1;
+                    memcpy(buf, vs, vl);
+                    buf[vl] = '\0';
+                    trim(buf);
+                    if (snprintf(out, n, "%s", buf) >= (int)n) return -1;
+                    return 1;
+                }
+            }
+        }
+        p = eol ? eol + 1 : NULL;
+    }
+    return 0;
+}
+
+/* ------------------------------------------------------------------- v1 */
+
+/* Try to read a whole legacy EGATILES from `path`. On success fills t->px with
+ * the first 64 tiles and returns U2_TILES_EGA_OK. A file that exists but is too
+ * short is U2_TILES_EGA_BAD (present but wrong), distinct from absent. */
+static u2_tiles_ega_result try_load_v1(const char *path, const char *dir,
+                                       const char *theme, u2_tiles_ega *t)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return U2_TILES_EGA_NOT_READY;
+
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return U2_TILES_EGA_ERROR; }
+    const long sz = ftell(f);
+    rewind(f);
+    if (sz < (long)(U2_TILE_COUNT * U2_TILE_EGA_BYTES)) {
+        fclose(f);
+        return U2_TILES_EGA_BAD;
+    }
+    /* The rows of the pool are wider than a v1 tile, so read tile by tile rather
+     * than in one block: a single fread into px would stride at 512 and interleave
+     * garbage between the tiles. */
+    const int ntiles = (int)(sz / U2_TILE_EGA_BYTES);
+    int stored = 0;
+    uint8_t row[U2_TILE_EGA_BYTES];
+    while (stored < ntiles && stored < U2_TILE_EGA_MAX_TILES) {
+        if (fread(row, 1, sizeof row, f) != sizeof row) break;
+        memcpy(t->px[stored], row, sizeof row);
+        stored++;
+    }
+    fclose(f);
+    if (stored < U2_TILE_COUNT)
+        return U2_TILES_EGA_BAD;
+
+    t->count = stored;
+    t->tile_w = U2_TILE_W;
+    t->tile_h = U2_TILE_H;
+    t->stride = U2_TILE_EGA_STRIDE;
+    t->bpp = U2_TILE_EGA_BPP;
+    t->scale = 1;
+    t->has_map = 0;
+    t->has_palette = 0;
+    memset(t->map_n, 0, sizeof t->map_n);
+    t->scope_dungeon = 1;      /* the v1 atlas is the one the game itself uses */
+    t->scope_tower = 1;
+    snprintf(t->source, sizeof t->source, "%s", path);
+    snprintf(t->dir, sizeof t->dir, "%s", dir ? dir : "");
+    snprintf(t->name, sizeof t->name, "%s", theme ? theme : U2_EGA_THEME_DEFAULT);
+    t->loaded = 1;
+    return U2_TILES_EGA_OK;
+}
+
+/* ------------------------------------------------------------------- v2 */
+
+static void bad_reason(char *err, size_t n, const char *fmt, ...);
+
+/* Parse the scope list. An unrecognised word is a refusal, not a shrug: scope is
+ * the field that decides whether an unmapped mode is refused or silently drawn
+ * with the wrong art, so a typo in it must not read as "everything". */
+static int parse_scope(const char *v, int *dungeon, int *tower,
+                       char *err, size_t n)
+{
+    char buf[64];
+    snprintf(buf, sizeof buf, "%s", v);
+    *dungeon = *tower = 0;
+    for (char *tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
+        trim(tok);
+        if (!*tok) continue;
+        if (!strcasecmp(tok, "dungeon")) *dungeon = 1;
+        else if (!strcasecmp(tok, "tower")) *tower = 1;
+        else if (strcasecmp(tok, "overworld") && strcasecmp(tok, "towns")) {
+            bad_reason(err, n, "THEME.INI scope has an unknown word '%s'", tok);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void bad_reason(char *err, size_t n, const char *fmt, ...)
+{
+    if (!err || n == 0) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(err, n, fmt, ap);
+    va_end(ap);
+}
+
+/* Load a v2 theme from a directory that is known to hold a THEME.INI. Every
+ * refusal names the file and the reason, because the operator is reading this at
+ * a terminal after their theme failed to appear, not reading this source. */
+static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
+                                       const char *dir, u2_tiles_ega *t,
+                                       char *err, size_t errn)
+{
+    u2_tiles_ega_result rc = U2_TILES_EGA_BAD;
+    unsigned char *ini_buf = NULL, *tiles_buf = NULL, *map_buf = NULL;
+    long ini_len = 0, map_len = 0;
+    char path[700], val[64];
+    int tw = 0, th = 0, bpp = 0, scale = 0, dungeon = 0, tower = 0;
+
+    if (err && errn) err[0] = '\0';
+    memset(t->map_n, 0, sizeof t->map_n);
+    t->has_map = 0;
+    t->has_palette = 0;
+
+    snprintf(path, sizeof path, "%s/%s", dirpath, V2_INI);
+    if (slurp(path, &ini_buf, &ini_len) != 0) {
+        bad_reason(err, errn, "cannot read %s", path);
+        return U2_TILES_EGA_ERROR;
+    }
+    const char *ini = (const char *)ini_buf;
+
+    if (ini_get(ini, "tile_w", val, sizeof val) == 1) tw = atoi(val);
+    if (ini_get(ini, "tile_h", val, sizeof val) == 1) th = atoi(val);
+    if (ini_get(ini, "bpp", val, sizeof val) == 1) bpp = atoi(val);
+    if (tw <= 0 || th <= 0) {
+        bad_reason(err, errn, "%s: tile_w/tile_h missing or not positive", path);
+        goto done;
+    }
+    if (tw > U2_TILE_EGA_MAX_SIDE || th > U2_TILE_EGA_MAX_SIDE) {
+        bad_reason(err, errn, "%s: %dx%d exceeds the %d px this engine blits",
+                   path, tw, th, U2_TILE_EGA_MAX_SIDE);
+        goto done;
+    }
+    /* bpp 3 is the control case: a theme that asks for a packing this loader
+     * does not implement must not be drawn with a 4bpp guess. */
+    if (bpp != 4) {
+        bad_reason(err, errn, "%s: bpp = %d, and only 4bpp packed tiles are "
+                   "implemented (high nibble = left pixel)", path, bpp);
+        goto done;
+    }
+    if (ini_get(ini, "pixel", val, sizeof val) == 1 &&
+        strcasecmp(val, "nibble-high-left") != 0) {
+        bad_reason(err, errn, "%s: pixel = '%s' is not implemented", path, val);
+        goto done;
+    }
+    scale = tw / U2_TILE_W;
+    if (scale * U2_TILE_W != tw || scale < 1) {
+        bad_reason(err, errn, "%s: tile_w = %d is not a whole multiple of the "
+                   "%d px layout this engine composites", path, tw, U2_TILE_W);
+        goto done;
+    }
+    if (scale > U2_FRAME_MAX_SCALE) {
+        bad_reason(err, errn, "%s: a %d px tile needs a x%d frame and this build "
+                   "supports up to x%d", path, tw, scale, U2_FRAME_MAX_SCALE);
+        goto done;
+    }
+    if (ini_get(ini, "scope", val, sizeof val) == 1) {
+        if (parse_scope(val, &dungeon, &tower, err, errn) != 0) goto done;
+    } else {
+        dungeon = tower = 1;     /* unscoped means it claims nothing specific */
+    }
+
+    /* --- the pool --- */
+    snprintf(path, sizeof path, "%s/%s", dirpath, V2_TILES);
+    long tsz = 0;
+    if ((tsz = path_size(path)) < 0) {
+        bad_reason(err, errn, "no %s next to %s", V2_TILES, V2_INI);
+        goto done;
+    }
+    const long tbytes = (long)(tw * th * bpp / 8);
+    if (tbytes <= 0 || tsz % tbytes != 0) {
+        bad_reason(err, errn, "%s is %ld B, not a whole number of %ld B tiles",
+                   path, tsz, tbytes);
+        goto done;
+    }
+    const int pool = (int)(tsz / tbytes);
+    if (pool > U2_TILE_EGA_MAX_TILES) {
+        bad_reason(err, errn, "%s holds %d tiles and this engine caps an atlas "
+                   "at %d", path, pool, U2_TILE_EGA_MAX_TILES);
+        goto done;
+    }
+    if (slurp(path, &tiles_buf, NULL) != 0) {
+        bad_reason(err, errn, "cannot read %s", path);
+        rc = U2_TILES_EGA_ERROR;
+        goto done;
+    }
+    for (int i = 0; i < pool; i++)
+        memcpy(t->px[i], tiles_buf + (long)i * tbytes, (size_t)tbytes);
+
+    /* --- palette --- */
+    if (ini_get(ini, "palette", val, sizeof val) == 1 && *val) {
+        char pp[700];
+        snprintf(pp, sizeof pp, "%s/%s", dirpath, val);
+        unsigned char *pb = NULL;
+        if (slurp(pp, &pb, NULL) != 0) {
+            bad_reason(err, errn, "cannot read the palette %s named by %s", val, path);
+            goto done;
+        }
+        if (path_size(pp) < (long)sizeof t->palette) {
+            free(pb);
+            bad_reason(err, errn, "%s is smaller than 16 RGB triples", pp);
+            goto done;
+        }
+        memcpy(t->palette, pb, sizeof t->palette);
+        free(pb);
+        t->has_palette = 1;
+    }
+
+    /* --- the map --- */
+    if (ini_get(ini, "map", val, sizeof val) == 1 && *val) {
+        char mp[700];
+        snprintf(mp, sizeof mp, "%s/%s", dirpath, val);
+        if (slurp(mp, &map_buf, &map_len) != 0) {
+            bad_reason(err, errn, "cannot read the map %s named by %s", val, path);
+            goto done;
+        }
+        int rows = 0;
+        char *ml = (char *)map_buf;
+        for (char *line = ml, *nx; line; line = nx) {
+            nx = strchr(line, '\n');
+            if (nx) *nx++ = '\0';
+            trim(line);
+            if (!*line || *line == '#') continue;
+            char *art_s = line;
+            char *rest = strpbrk(line, " \t");
+            if (!rest) { bad_reason(err, errn, "%s: row '%s' has no tile list", mp, line); goto done; }
+            *rest++ = '\0';
+            while (*rest == ' ' || *rest == '\t') rest++;
+            int art = (int)strtol(art_s, NULL, 16);
+            if (art < 0 || art >= U2_TILE_COUNT) {
+                bad_reason(err, errn, "%s: art index %s is outside the 00..%02X set",
+                           mp, art_s, U2_TILE_COUNT - 1);
+                goto done;
+            }
+            /* The tile list is ONE field: it ends at the first whitespace, and
+             * anything after that is the provenance column. Parsing past the
+             * boundary turns `MAP2_1/1` into a third frame at tile 0, which is
+             * invisible to every other check in this file. */
+            char *fs = strpbrk(rest, " \t");
+            if (fs) *fs = '\0';
+            int n = 0;
+            for (char *tok = rest, *c; tok && *tok; tok = c) {
+                c = tok;
+                while (*c && *c != ',') c++;
+                if (*c) *c++ = '\0';
+                if (!*tok) continue;
+                const int idx = (int)strtol(tok, NULL, 10);
+                if (idx < 0 || idx >= pool) {
+                    bad_reason(err, errn, "%s: art %02X points at tile %d, and the "
+                               "atlas holds %d", mp, art, idx, pool);
+                    goto done;
+                }
+                if (n >= U2_TILE_EGA_MAX_FRAMES) {
+                    bad_reason(err, errn, "%s: art %02X lists more than %d frames",
+                               mp, art, U2_TILE_EGA_MAX_FRAMES);
+                    goto done;
+                }
+                t->map[art][n++] = (uint16_t)idx;
+            }
+            if (n == 0) {
+                bad_reason(err, errn, "%s: art %02X has no tile", mp, art);
+                goto done;
+            }
+            t->map_n[art] = (uint8_t)n;
+            rows++;
+        }
+        if (rows == 0) {
+            bad_reason(err, errn, "%s is named by %s but has no rows", mp, path);
+            goto done;
+        }
+        t->has_map = 1;
+    }
+
+    t->count = pool;
+    t->tile_w = tw;
+    t->tile_h = th;
+    t->stride = tw * bpp / 8;
+    t->bpp = bpp;
+    t->scale = scale;
+    t->scope_dungeon = dungeon;
+    t->scope_tower = tower;
+    snprintf(t->source, sizeof t->source, "%s", path);
+    snprintf(t->dir, sizeof t->dir, "%s", dir ? dir : "");
+    snprintf(t->name, sizeof t->name, "%s", theme ? theme : "");
+    t->loaded = 1;
+    rc = U2_TILES_EGA_OK;
+
+done:
+    free(ini_buf);
+    free(tiles_buf);
+    free(map_buf);
+    return rc;
+}
+
+/* ------------------------------------------------------- theme resolution */
+
+/* Does this directory hold a v2 theme? */
+static int is_v2_dir(const char *p)
+{
+    char q[700];
+    if (snprintf(q, sizeof q, "%s/%s", p, V2_INI) >= (int)sizeof q) return 0;
+    return path_size(q) >= 0;
+}
+
+/* The theme name maps to a path under the themes dir. v2 first: a directory
+ * named <name>/ with a THEME.INI is explicit about its geometry, and a pack that
+ * ships both spellings means the author meant the v2 one. Then the v1
+ * EGATHEME.<UPPERCASED>/EGATILES. Names are matched case-insensitively on
+ * purpose, because the pack ships EGATHEME.10 and EGATHEME.ALT in different
+ * cases and a copy that came off a FAT volume can arrive uppercased. */
 static int theme_relpath(const char *theme, char *out, size_t n)
 {
     if (!theme || !*theme || strcmp(theme, "default") == 0)
@@ -40,6 +433,22 @@ static int theme_relpath(const char *theme, char *out, size_t n)
     }
     up[i] = '\0';
     return snprintf(out, n, "EGATHEME.%s/EGATILES", up) < (int)n ? 0 : -1;
+}
+
+/* The v2 directory name for a theme: the name as given, lower-cased, because
+ * u2_tiles_ega_next_theme reports v2 themes lower-cased the same way it reports
+ * EGATHEME.* ones. */
+static int theme_v2_relpath(const char *theme, char *out, size_t n)
+{
+    if (!theme || !*theme) return -1;
+    char low[32];
+    size_t i = 0;
+    for (; theme[i] && i + 1 < sizeof low; i++) {
+        const char c = theme[i];
+        low[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+    }
+    low[i] = '\0';
+    return snprintf(out, n, "%s", low) < (int)n ? 0 : -1;
 }
 
 /* Candidate themes directories, in resolution order (docs/ega-graphics-plan.md
@@ -63,65 +472,63 @@ static int ega_candidates(u2_ctx *ctx, const char **cands)
     return nc;
 }
 
-static int path_is_dir(const char *p)
+/* Load one theme out of one candidate directory, v2 before v1. */
+static u2_tiles_ega_result open_in_dir(const char *cand, const char *theme,
+                                       u2_tiles_ega *t, char *err, size_t errn)
 {
-    struct stat st;
-    return p && *p && stat(p, &st) == 0 && S_ISDIR(st.st_mode);
+    char v2[40], v1[64], path[700];
+
+    if (theme_v2_relpath(theme, v2, sizeof v2) == 0 &&
+        snprintf(path, sizeof path, "%s/%s", cand, v2) < (int)sizeof path &&
+        path_is_dir(path) && is_v2_dir(path))
+        return try_load_v2(path, theme, cand, t, err, errn);
+
+    if (theme_relpath(theme, v1, sizeof v1) != 0) return U2_TILES_EGA_ERROR;
+    if (snprintf(path, sizeof path, "%s/%s", cand, v1) >= (int)sizeof path)
+        return U2_TILES_EGA_ERROR;
+    return try_load_v1(path, cand, theme, t);
 }
 
-/* Size of a regular file, or -1 if it is not one. */
-static long path_size(const char *p)
+/* Record what the theme implies for the display: the frame scale its tile size
+ * needs, and its RGB table if it ships one. A v1 theme CLEARS the palette flag,
+ * so cycling from a v2 theme back to `c64` restores the built-in EGA table
+ * instead of keeping the FM Towns colours over EGA art. */
+static void apply_to_ctx(u2_ctx *ctx, const u2_tiles_ega *t)
 {
-    struct stat st;
-    if (!p || stat(p, &st) != 0 || !S_ISREG(st.st_mode)) return -1;
-    return (long)st.st_size;
-}
-
-/* Try to read a whole EGATILES from `path`. On success fills t->px with the
- * first 64 tiles and returns U2_TILES_EGA_OK. A file that exists but is too
- * short is U2_TILES_EGA_BAD (present but wrong), distinct from absent. */
-static u2_tiles_ega_result try_load(const char *path, const char *dir,
-                                    u2_tiles_ega *t)
-{
-    FILE *f = fopen(path, "rb");
-    if (!f)
-        return U2_TILES_EGA_NOT_READY;
-
-    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return U2_TILES_EGA_ERROR; }
-    const long sz = ftell(f);
-    rewind(f);
-    if (sz < (long)(U2_TILE_COUNT * U2_TILE_EGA_BYTES)) {
-        fclose(f);
-        return U2_TILES_EGA_BAD;
+    if (!ctx || !t) return;
+    ctx->frame_scale = t->scale > 0 ? t->scale : 1;
+    if (t->has_palette) {
+        memcpy(ctx->theme_palette, t->palette, sizeof ctx->theme_palette);
+        ctx->theme_palette_set = 1;
+        /* Brightest entry, by summed channels. The FM Towns table is
+         * {black, blue, red, BLACK, green, cyan, yellow, white}, so index 3 — the
+         * CGA white the whole text layer is written with — is a second black, and
+         * the status band would be invisible. Picking the brightest is a choice,
+         * not a measurement of what the FM Towns port did with its text; it is
+         * recorded as one in docs/theme-format.md § 6. */
+        int best = 0, bestv = -1;
+        for (int i = 0; i < 16; i++) {
+            const int v = t->palette[i][0] + t->palette[i][1] + t->palette[i][2];
+            if (v > bestv) { bestv = v; best = i; }
+        }
+        ctx->text_fg = (uint8_t)best;
+    } else {
+        ctx->theme_palette_set = 0;
+        ctx->text_fg = 0;      /* unset: the frame keeps the CGA pair */
     }
-    const size_t got = fread(t->px, 1, sizeof t->px, f);
-    fclose(f);
-    if (got != sizeof t->px)
-        return U2_TILES_EGA_BAD;
-
-    snprintf(t->source, sizeof t->source, "%s", path);
-    snprintf(t->dir, sizeof t->dir, "%s", dir ? dir : "");
-    t->loaded = 1;
-    return U2_TILES_EGA_OK;
 }
 
 u2_tiles_ega_result u2_tiles_ega_open_in(u2_ctx *ctx, u2_tiles_ega *t,
                                          const char *dir, const char *theme)
 {
-    (void)ctx;
     if (!t || !dir) return U2_TILES_EGA_ERROR;
     t->loaded = 0;
     t->source[0] = '\0';
     t->dir[0] = '\0';
-
-    char rel[64];
-    if (theme_relpath(theme, rel, sizeof rel) != 0)
-        return U2_TILES_EGA_ERROR;
-
-    char path[600];
-    if (snprintf(path, sizeof path, "%s/%s", dir, rel) >= (int)sizeof path)
-        return U2_TILES_EGA_ERROR;
-    return try_load(path, dir, t);
+    const u2_tiles_ega_result r =
+        open_in_dir(dir, theme ? theme : U2_EGA_THEME_DEFAULT, t, NULL, 0);
+    if (r == U2_TILES_EGA_OK) apply_to_ctx(ctx, t);
+    return r;
 }
 
 u2_tiles_ega_result u2_tiles_ega_open(u2_ctx *ctx, u2_tiles_ega *t,
@@ -131,21 +538,17 @@ u2_tiles_ega_result u2_tiles_ega_open(u2_ctx *ctx, u2_tiles_ega *t,
     t->loaded = 0;
     t->source[0] = '\0';
 
-    char rel[64];
-    if (theme_relpath(theme, rel, sizeof rel) != 0)
-        return U2_TILES_EGA_ERROR;
-
+    const char *name = (theme && *theme) ? theme : U2_EGA_THEME_DEFAULT;
     const char *cands[4];
     const int nc = ega_candidates(ctx, cands);
 
-    char path[512];
     u2_tiles_ega_result last = U2_TILES_EGA_NOT_READY;
     for (int i = 0; i < nc; i++) {
-        if (snprintf(path, sizeof path, "%s/%s", cands[i], rel) >= (int)sizeof path)
-            continue;
-        const u2_tiles_ega_result r = try_load(path, cands[i], t);
-        if (r == U2_TILES_EGA_OK)
+        const u2_tiles_ega_result r = open_in_dir(cands[i], name, t, NULL, 0);
+        if (r == U2_TILES_EGA_OK) {
+            apply_to_ctx(ctx, t);
             return r;
+        }
         if (r == U2_TILES_EGA_BAD)      /* present but wrong: stop, do not fall through */
             return r;
         last = r;
@@ -153,11 +556,12 @@ u2_tiles_ega_result u2_tiles_ega_open(u2_ctx *ctx, u2_tiles_ega *t,
     return last;
 }
 
-/* Map a directory entry name to a theme name, or NULL if it is not a theme.
+/* Map a directory entry name to a theme name, or 0 if it is not a theme.
  * "EGATILES" (case-insensitive) is "default"; "EGATHEME.<X>" is "<x>" lower-
- * cased. This is the inverse of theme_relpath, so a name produced here loads
- * back through u2_tiles_ega_open_in unchanged. */
-static int entry_to_theme(const char *d_name, char *out, size_t n)
+ * cased; any other directory holding a THEME.INI is that directory's own name,
+ * lower-cased. This is the inverse of the two relpath helpers, so a name produced
+ * here loads back through u2_tiles_ega_open_in unchanged. */
+static int entry_to_theme(const char *d_name, const char *dir, char *out, size_t n)
 {
     if (strcasecmp(d_name, "EGATILES") == 0)
         return snprintf(out, n, "default") < (int)n ? 1 : 0;
@@ -171,6 +575,12 @@ static int entry_to_theme(const char *d_name, char *out, size_t n)
         }
         low[i] = '\0';
         return snprintf(out, n, "%s", low) < (int)n ? 1 : 0;
+    }
+    if (dir) {
+        char full[700];
+        if (snprintf(full, sizeof full, "%s/%s", dir, d_name) < (int)sizeof full &&
+            path_is_dir(full) && is_v2_dir(full))
+            return snprintf(out, n, "%s", d_name) < (int)n ? 1 : 0;
     }
     return 0;
 }
@@ -199,15 +609,20 @@ int u2_tiles_ega_next_theme(const char *dir, const char *cur,
         if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
             continue;
         char theme[32];
-        if (!entry_to_theme(e->d_name, theme, sizeof theme))
+        if (!entry_to_theme(e->d_name, dir, theme, sizeof theme))
             continue;
         /* EGATILES must be a file and EGATHEME.* a directory; a stat keeps a
-         * stray file named EGATHEME.FOO from being read as a theme dir. */
-        char full[600];
+         * stray file named EGATHEME.FOO from being read as a theme dir. A v2
+         * theme is a directory too, and it is the only way a bare name like
+         * `fmtowns` counts at all — the first version of this test assumed any
+         * non-EGATHEME entry was a file, which silently left every v2 theme out
+         * of Ctrl-T while --ega-theme still loaded it. */
+        char full[700];
         if (snprintf(full, sizeof full, "%s/%s", dir, e->d_name) < (int)sizeof full) {
             struct stat st;
             if (stat(full, &st) == 0) {
-                const int want_dir = (strncasecmp(e->d_name, "EGATHEME.", 9) == 0);
+                const int want_dir = (strncasecmp(e->d_name, "EGATHEME.", 9) == 0)
+                                  || is_v2_dir(full);
                 if (S_ISDIR(st.st_mode) != want_dir)
                     continue;
             }
@@ -234,25 +649,24 @@ int u2_tiles_ega_next_theme(const char *dir, const char *cur,
 }
 
 /*
- * Fail-fast launch check for --ega. Confirms the chosen theme's EGATILES is
- * present and loadable WITHOUT filling a tile struct, so main() can refuse to
- * start rather than fall back to CGA after the title screen.
+ * Fail-fast launch check for --ega. Confirms the chosen theme is present and
+ * loadable WITHOUT filling a tile struct, so main() can refuse to start rather
+ * than fall back to CGA after the title screen.
  *
  * The owner ruled (2026-11-04) that --ega is strict: it refuses to start when the
  * themes directory does not exist or the chosen theme is not in it. This
  * supersedes the plan's earlier "never fail a launch, fall back to CGA" default
  * (docs/ega-graphics-plan.md § 2/§ 7). On any non-OK result `err` holds a
  * one-line, actionable reason naming the directory searched.
+ *
+ * A v2 theme is checked by loading it for real, because its failure modes are
+ * semantic (a map row pointing outside the atlas, a bpp nobody implements) and
+ * no size check can see them. The cost is one file read at startup.
  */
 u2_tiles_ega_result u2_tiles_ega_validate(u2_ctx *ctx, char *err, size_t n)
 {
     const char *theme = (ctx && ctx->ega_theme && *ctx->ega_theme)
                       ? ctx->ega_theme : U2_EGA_THEME_DEFAULT;
-    char rel[64];
-    if (theme_relpath(theme, rel, sizeof rel) != 0) {
-        if (err) snprintf(err, n, "invalid theme name: %s", theme);
-        return U2_TILES_EGA_ERROR;
-    }
 
     /* An explicitly named themes dir that does not exist is the clearest error,
      * and it is checked before the fall-through search so a typo in
@@ -279,12 +693,35 @@ u2_tiles_ega_result u2_tiles_ega_validate(u2_ctx *ctx, char *err, size_t n)
             if (w > 0) used += (size_t)w;
         }
         if (!exists) continue;
-        char path[600];
+
+        /* v2: load it properly, and remember the scale the frame must have. */
+        char v2[40], path[700];
+        if (theme_v2_relpath(theme, v2, sizeof v2) == 0 &&
+            snprintf(path, sizeof path, "%s/%s", cands[i], v2) < (int)sizeof path &&
+            path_is_dir(path) && is_v2_dir(path)) {
+            static u2_tiles_ega probe;
+            memset(&probe, 0, sizeof probe);
+            char why[256] = "";
+            const u2_tiles_ega_result r = try_load_v2(path, theme, cands[i],
+                                                      &probe, why, sizeof why);
+            if (r == U2_TILES_EGA_OK) apply_to_ctx(ctx, &probe);
+            if (r != U2_TILES_EGA_OK && err && *why)
+                snprintf(err, n, "%s", why);
+            return r;
+        }
+
+        char rel[64];
+        if (theme_relpath(theme, rel, sizeof rel) != 0) {
+            if (err) snprintf(err, n, "invalid theme name: %s", theme);
+            return U2_TILES_EGA_ERROR;
+        }
         if (snprintf(path, sizeof path, "%s/%s", cands[i], rel) >= (int)sizeof path)
             continue;
         const long sz = path_size(path);
-        if (sz >= (long)(U2_TILE_COUNT * U2_TILE_EGA_BYTES))
+        if (sz >= (long)(U2_TILE_COUNT * U2_TILE_EGA_BYTES)) {
+            if (ctx) { ctx->frame_scale = 1; ctx->theme_palette_set = 0; }
             return U2_TILES_EGA_OK;
+        }
         if (sz >= 0) {   /* present but too short: a real file, wrong shape */
             if (err) snprintf(err, n, "EGATILES present but wrong size (%ld B): %s",
                               sz, path);
@@ -305,8 +742,8 @@ const char *u2_tiles_ega_result_text(u2_tiles_ega_result r)
 {
     switch (r) {
     case U2_TILES_EGA_OK:        return "ok";
-    case U2_TILES_EGA_NOT_READY: return "no EGATILES in any themes dir";
-    case U2_TILES_EGA_BAD:       return "EGATILES present but wrong size";
+    case U2_TILES_EGA_NOT_READY: return "no theme found in any themes dir";
+    case U2_TILES_EGA_BAD:       return "theme present but wrong shape";
     case U2_TILES_EGA_ERROR:     return "I/O error";
     }
     return "unknown";

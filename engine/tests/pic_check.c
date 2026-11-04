@@ -63,6 +63,7 @@ int main(void)
      * reason the caller branches before drawing: the terminal build and any player who
      * has not pointed --data-dir at the game both land here. */
     u2_frame f;
+    u2_frame_init(&f, 1);   /* heap-backed store; see frame_check.c */
     u2_frame_clear(&f, U2_CGA_WHITE);
     CHECK(u2_pic_blit(&ctx, "picdoesnotexist", &f) != 0,
           "a missing picture is refused rather than blitted");

@@ -48,16 +48,19 @@ static int try_pic(const char *path, struct u2_frame *f)
 
     /* A short read is refused, not zero-padded: a half-loaded splash would draw a
      * plausible picture with a band of black across it, which reads as the game
-     * rather than as a missing file (the same rule core/pic.c applies). */
+     * rather than as a missing file (the same rule core/pic.c applies).
+     * The row lands in a scratch line first: the frame is 320 px wide only at
+     * scale 1, and a large-tile theme composites at 640. */
+    uint8_t rowbuf[U2_SCREEN_W];
     for (int y = 0; y < U2_SCREEN_H; y++) {
-        if (fread(f->px[y], 1, U2_SCREEN_W, fp) != (size_t)U2_SCREEN_W) {
+        if (fread(rowbuf, 1, U2_SCREEN_W, fp) != (size_t)U2_SCREEN_W) {
             fclose(fp);
             return 2;
         }
-        /* Clamp any stray byte above 15 into range so a corrupt file cannot index
-         * past the 16-entry palette in the renderer. */
         for (int x = 0; x < U2_SCREEN_W; x++)
-            f->px[y][x] &= 15;
+            /* Clamp any stray byte above 15 into range so a corrupt file cannot
+             * index past the 16-entry palette in the renderer. */
+            u2_frame_put_logical(f, x, y, (uint8_t)(rowbuf[x] & 15));
     }
     fclose(fp);
     return 0;
@@ -135,11 +138,17 @@ int u2_pic_blit_ega(u2_ctx *ctx, const char *base, struct u2_frame *f)
     /* Blit into a scratch frame first so a failure partway leaves f untouched,
      * matching core/pic.c's contract that a refused blit does not corrupt f. */
     static struct u2_frame scratch;
+    /* The scratch has to be the same size as the destination, and a Ctrl-T cycle
+     * can change the frame scale between two blits, so a scale change re-allocs
+     * rather than reusing a scratch that would then be half the picture. */
+    if (u2_frame_ensure(&scratch, f->scale ? f->scale : 1) != 0)
+        return 1;
     if (!first_pic(ctx, base, probe_blit, &scratch, path, sizeof path)) {
         u2_trace(ctx, "pic_ega", "-", "base=%s loaded=0", base);
         return 1;
     }
-    memcpy(f->px, scratch.px, sizeof f->px);
+    for (int y = 0; y < f->h && y < scratch.h; y++)
+        memcpy(f->px[y], scratch.px[y], (size_t)(f->w < scratch.w ? f->w : scratch.w));
     u2_trace(ctx, "pic_ega", "-", "base=%s loaded=1 bytes=%d", base, PIC_EGA_BYTES);
     return 0;
 }

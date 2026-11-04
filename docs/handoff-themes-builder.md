@@ -1,15 +1,24 @@
 # Handover — theme builder: slice A, slice B, and the held slice C
 
-> **Status, read before anything below.** **Slice A is done (2026-11-04):**
-> `tools/build_themes.py` exists, `tools/build_themes_selftest.sh` carries its 12 controls,
-> and both are wired into `tools/check_all.sh`. `themes/` builds, verifies, and cycles the
-> same four theme names through the engine's own `u2_tiles_ega_next_theme` as the source
-> directory does. **§ 2.4 is closed** — `EGACOLOR` is decoded statically from the fan pack's
-> `ega.drv`, and it is a colour-index remap and not a palette; see `docs/ega-graphics.md`
-> § 3.1. **Slice B (§ 4) is not started** and is the remaining work. One finding changed
-> shape while slice A was built and is written into § 2.4 below rather than left as it was:
-> `EGACOLOR` cannot be the palette field v2 wanted, so slice B still needs a real RGB
-> mechanism of its own.
+> **Status, read before anything below.** **Slices A and B are done (2026-11-04).**
+> Slice A: `tools/build_themes.py` + `tools/build_themes_selftest.sh` (12 controls),
+> both wired into `tools/check_all.sh`. Slice B: the v2 format is implemented in the
+> engine (`THEME.INI` / `TILES` / `PALETTE.RGB` / `MAP.TSV`), `--fmtowns` builds the
+> FM Towns theme from the disc, `--ega-theme fmtowns` renders the overworld at
+> 640x400 in FM Towns art and palette, and `engine/tests/theme_v2_check.c` (37
+> checks, 6 of them refusals) is wired into CP4. User-facing page:
+> `docs/ega-graphics.md` § 4. **Slice C (§ 5) is not started and stays held.**
+>
+> Three things below changed shape while the work was done, and each is written into
+> the section that owns it rather than left as it was: **§ 2.4 is closed** —
+> `EGACOLOR` is a colour-index remap decoded from `ega.drv`, not a palette, so
+> § 5 item 6's hope that it and FM Towns could share one `PALETTE.RGB` mechanism is
+> dead and slice B gave v2 its own; **§ 4.1's `scope` refusal** turned out to mean
+> "refuse to draw", not "refuse to enter", because the second makes the game
+> unwinnable behind an art flag; and **§ 4.3 item 1's warning** about not overloading
+> the atlas with a size field went further than the handoff anticipated — the frame
+> itself is now sized by the theme, because a 32x32 tile cannot be composited into a
+> 320x200 frame without decimating it, which is the downsampling § 4.2 rejects.
 >
 > HEAD before this paragraph was `c38eda3`. `make -C engine test` CP0–CP7 green.
 > `tools/check_all.sh` has **two pre-existing red gates unrelated to this work** —
@@ -353,6 +362,74 @@ In rough dependency order:
 
 ---
 
+### 4.5 Slice B — done 2026-11-04, and where it departed from the plan
+
+Built: `tools/build_themes.py --fmtowns` derives `themes/fmtowns/` (80-tile pool,
+64 art rows, 18 of them multi-frame, 48-byte palette) and `engine/src/core/
+tiles_ega.c` loads it. `--ega-theme fmtowns` renders the overworld at 640x400; the
+frame was checked against the `c64` render of the same sector and the geography, the
+tree clusters and the avatar cell line up, so the indirection selects the right art
+rather than merely drawing something.
+
+Four decisions the plan left open, and why:
+
+1. **The frame is sized by the theme, not the other way round.** § 4.3 item 1 asked
+   for a size-parameterised atlas; the atlas alone was not enough, because a 32x32
+   tile composited into a 320x200 frame has to be decimated to fit, which is the
+   downsampling § 4.2 rejects. So `u2_frame` is now a physical buffer with `w`, `h`
+   and `scale`, allocated by `u2_frame_init`/`u2_frame_ensure`, and there are two
+   writers: `u2_frame_put` (physical, what a tile blit uses) and
+   `u2_frame_put_logical` (a 1x-layout pixel as a scale x scale block, what text,
+   the flash ring and the full-screen pictures use). Getting that split wrong in
+   either direction is visible — a quarter-size island, or a map that ignores the
+   theme's own pixels — and `theme_v2_check` asserts both.
+2. **The pool holds every frame, so nothing is dropped.** § 4.2 said "first tile of
+   each set only, record the dropped frames in the manifest". Better was to put all
+   of them in `TILES` and keep the whole list in `MAP.TSV`, with `frames = first` in
+   the manifest as an engine policy rather than a data loss. Slice C gets animation
+   without rebuilding the mapping, which was § 5's stated worry.
+3. **`scope` refuses to draw, not to enter.** A theme whose scope omits dungeons
+   prints `THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in CGA. Refusing
+   the mode outright makes the game unwinnable behind an art flag; the owner's rule
+   is that the player is told, and they are.
+4. **No new art-mode enum.** `--ega-theme-dir` reads `THEME.INI` when a theme
+   directory has one and falls back to the legacy `EGATILES` assumption when it does
+   not, so `U2_ART_EGA` still means "the 16-colour axis" and Ctrl-T cycles five
+   themes out of a directory holding four v1 and one v2.
+
+Two bugs the inventory-first habit caught, both recorded because they are the shape
+of bug this project keeps meeting: the `THEME.INI` parser compared the key including
+its trailing space, so `tile_w = 32` never matched and every v2 theme failed to load
+with "tile_w/tile_h missing"; and the `MAP.TSV` parser walked past the field boundary
+into the provenance column, so `MAP2_1/1` parsed as a third frame at tile 0 — a
+plausible wrong answer that only the `map_n[6] == 2` assertion in the new test saw.
+
+**And one that only a screenshot could catch, exactly as `AGENTS.md` § 3 warns.** The
+first FM Towns frame rendered clean at 640x400 with correct art and no status text at
+all: the whole text layer is written with CGA white, which is index 3, and the measured
+FM Towns palette has index 3 as a second black. Every byte-level check in the suite
+passed, because index 3 is a perfectly non-zero index — the blackness lives in the
+palette, not the pixel. So a theme that ships `PALETTE.RGB` now also determines the
+ink the text is drawn with (brightest entry; white for FM Towns, which is also what
+its own letter tiles use against black), and `theme_v2_check` asserts the glyph is
+drawn with *that index* rather than "with something", because an ink check that counts
+non-zero pixels passes on the bug it exists to catch. The control was run: forcing the
+loader to leave the CGA pair makes both assertions go red.
+
+### 4.6 What slice C inherits, concretely
+
+* `MAP.TSV` rows are already lists; the engine reads `map[art][0]` and
+  `map_n[art]`. A frame clock needs a tick source the renderer reads, and the
+  handoff's argument for game-tick over wall-clock still stands.
+* `u2_tiles_ega.map` is `uint16_t [64][8]`. A second key for the `PLAYER` bank
+  (race and class) does not fit that shape, so it grows the format rather than the
+  data — § 5 item 2's "design it before you touch it" is still true.
+* `THEME.INI` refuses an unknown `scope` word, so adding `dungeon` or `tower` to a
+  theme is a manifest edit and a `parse_scope` line, not a loader change. The dungeon
+  banks decode already.
+* The frame scale cap is `U2_FRAME_MAX_SCALE` (2). A 64x64 theme would be refused
+  with a named reason rather than drawn wrong.
+
 ## 5. Slice C — HELD. The v2 extras that make FM Towns complete
 
 **Do not start this.** It is written down so it is not lost, and so slice B does
@@ -418,13 +495,16 @@ Parse the full list, use `list[0]`, and keep the list.
 
 ## 7. What to update as you go
 
-- Slice A done → mark it here, and add the tool to the `tools/` row of
-  `AGENTS.md` § 4.
-- `EGACOLOR` decoded → fix `engine/src/core/tiles_ega.h` in the same commit, and
-  add a line to `docs/ega-graphics.md`.
-- Slice B done → update `docs/ega-graphics.md` (it currently describes only the
-  fan pack), and add the theme format spec to `docs/` rather than leaving it in
-  this handover. Handovers are entry points, not contracts.
+- ~~Slice A done~~ **done 2026-11-04** — marked in § 3.1, and the tool is in the
+  `tools/` row of `AGENTS.md` § 4.
+- ~~`EGACOLOR` decoded~~ **done 2026-11-04** — `engine/src/core/tiles_ega.h` fixed
+  in the same commit as `docs/ega-graphics.md` § 3.1, and the method lesson went to
+  `docs/harness-portability.md` § 6.
+- ~~Slice B done~~ **done 2026-11-04** — `docs/ega-graphics.md` § 4 covers the user
+  story, and the format spec now lives in its own document, `docs/theme-format.md`,
+  rather than in this handover. Handovers are entry points, not contracts; read that
+  file for fields and refusals and treat § 4.1 here as the design rationale it was
+  written as.
 - Anything that changes how a *generic* DOS decompilation harness should be built
   → `docs/harness-portability.md` § 6, same commit. Method transfers; conclusions
   do not.

@@ -172,7 +172,11 @@ static int hold_for_esc(u2_ctx *ctx, unsigned ms)
  * caller's text screen as the whole of what the player sees. */
 static int show_pic(u2_ctx *ctx, const char *name, int hold_ms)
 {
-    static u2_frame pic_frame;      /* 64 KB, and only ever one picture on screen */
+    static u2_frame pic_frame;      /* one picture on screen at a time, heap-backed
+                                     * at the active theme's frame scale */
+
+    if (u2_frame_ensure(&pic_frame, ctx->frame_scale) != 0) return 0;
+    u2_frame_set_text_fg(&pic_frame, ctx->text_fg);
 
     /* EGA first when the art axis asks for it: the fan pack's PIC*-E is a full
      * 16-colour image and the richer art wins. If it is absent the CGA pic is

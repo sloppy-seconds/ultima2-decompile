@@ -31,6 +31,7 @@ static int ink_in_cell(const u2_frame *f, int row, int col, uint8_t colour)
 int main(void)
 {
     u2_frame f;
+    u2_frame_init(&f, 1);   /* heap-backed store; see frame_check.c */
 
     /* The grid must tile the screen exactly: 40x25 cells of 8x8 = 320x200. */
     ok(U2_SCREEN_W / U2_FONT_CELL_W == 40 && U2_SCREEN_H / U2_FONT_CELL_H == 25,

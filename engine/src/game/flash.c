@@ -27,7 +27,11 @@ static void ring_xor(u2_frame *f, int col, int row)
                 const int x = x0 + b * 4 + q;
                 if (x < 0 || x >= U2_SCREEN_W)
                     continue;
-                f->px[y0 + y][x] ^= (uint8_t)((pat >> (6 - 2 * q)) & 3u);
+                /* The ring mask is authored in the 1x tile cell, so it XORs
+                 * through the layout helper and covers the whole cell at any
+                 * frame scale. */
+                u2_frame_xor_logical(f, x, y0 + y,
+                                     (uint8_t)((pat >> (6 - 2 * q)) & 3u));
             }
         }
     }

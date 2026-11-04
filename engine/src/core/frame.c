@@ -8,9 +8,55 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "core/frame.h"
+
+int u2_frame_init(u2_frame *f, int scale)
+{
+    if (!f) return -1;
+    /* The struct must be zeroed or previously freed: this does NOT free an
+     * existing store, because a frame declared as an uninitialised stack local
+     * has a garbage `px` and free()ing it is a crash, not a cleanup. A caller
+     * that re-sizes an existing frame calls u2_frame_free first, and
+     * u2_frame_ensure() does both. */
+    int s = scale > 1 ? scale : 1;
+    if (s > U2_FRAME_MAX_SCALE) s = U2_FRAME_MAX_SCALE;
+    const size_t rows = (size_t)U2_SCREEN_H * s;
+    if (rows > U2_FRAME_MAX_H) return -1;
+    /* One block, rows U2_FRAME_MAX_W wide so `px[y][x]` stays valid at any
+     * scale. calloc rather than malloc: a frame that is read before it is drawn
+     * must read as black, not as whatever the heap had. */
+    uint8_t *mem = calloc(rows, U2_FRAME_MAX_W);
+    if (!mem) return -1;
+    f->px = (uint8_t (*)[U2_FRAME_MAX_W])mem;
+    f->scale = s;
+    f->w = U2_SCREEN_W * s;
+    f->h = U2_SCREEN_H * s;
+    f->text_fg = U2_CGA_WHITE;
+    f->text_bg = U2_CGA_BLACK;
+    f->presents = 0;
+    return 0;
+}
+
+void u2_frame_free(u2_frame *f)
+{
+    if (!f) return;
+    free(f->px);
+    f->px = NULL;
+    f->w = f->h = f->scale = 0;
+}
+
+/* Init only when the scale actually changed, so a flow that draws several
+ * pictures in a row does not allocate and leak one frame per picture. */
+int u2_frame_ensure(u2_frame *f, int scale)
+{
+    const int s = scale > 1 ? scale : 1;
+    if (f && f->px && f->scale == s) return 0;
+    if (f && f->px) u2_frame_free(f);
+    return u2_frame_init(f, s);
+}
 
 void u2_frame_palette(uint8_t out[4][3])
 {
@@ -59,16 +105,20 @@ void u2_frame_palette_ega(uint8_t out[16][3])
 
 void u2_frame_clear(u2_frame *f, uint8_t colour)
 {
-    if (!f) return;
-    const uint8_t c = (uint8_t)(colour & 3);
-    for (int y = 0; y < U2_SCREEN_H; y++)
-        memset(f->px[y], c, U2_SCREEN_W);
+    if (!f || !f->px) return;
+    /* & 15, not & 3: the frame carries 0..15 indices whenever an EGA or v2
+     * theme is drawing, and a clear colour of 14 (yellow) is a legitimate one
+     * there. A CGA caller cannot tell the difference, because CGA only ever
+     * passes 0..3. */
+    const uint8_t c = (uint8_t)(colour & 15);
+    for (int y = 0; y < f->h; y++)
+        memset(f->px[y], c, (size_t)f->w);
     f->presents = 0;
 }
 
 void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y)
 {
-    if (!f || !t) return;
+    if (!f || !t || !f->px) return;
     if (tile < 0 || tile >= U2_TILE_COUNT) return;
 
     for (int row = 0; row < U2_TILE_H; row++) {
@@ -79,25 +129,39 @@ void u2_frame_blit_tile(u2_frame *f, const u2_tiles *t, int tile, int x, int y)
             const int dx = x + col;
             if (dx < 0 || dx >= U2_SCREEN_W) continue;     /* clipped */
             const uint8_t b = src[col >> 2];
-            f->px[dy][dx] = (uint8_t)((b >> (6 - 2 * (col & 3))) & 3);
+            /* put_logical, not put: a CGA tile is 16x16 in a layout that may be
+             * composited at 2x, and a 16x16 island in a 32x32 cell is what a
+             * `put` would draw. The dungeon and town art is CGA even under a
+             * large-tile theme, so this path really does run at scale 2. */
+            u2_frame_put_logical(f, dx, dy,
+                                 (uint8_t)((b >> (6 - 2 * (col & 3))) & 3));
         }
     }
 }
 
 void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x, int y)
 {
-    if (!f || !t) return;
-    if (tile < 0 || tile >= U2_TILE_COUNT) return;
+    if (!f || !t || !f->px) return;
+    if (tile < 0 || tile >= u2_tiles_ega_count(t)) return;
 
-    for (int row = 0; row < U2_TILE_H; row++) {
+    /* Geometry comes from the theme, not from constants: a v1 theme is 16x16 with
+     * an 8-byte stride and a v2 theme may be 32x32 with a 16-byte one, and the
+     * compiler will not stop a hardcoded stride from being quietly wrong for one
+     * of them. Positions here are PHYSICAL pixels, and the tile's own pixels are
+     * physical, so this blit neither scales nor decimates. */
+    const int tw = u2_tiles_ega_tile_w(t);
+    const int th = u2_tiles_ega_tile_h(t);
+    const int stride = u2_tiles_ega_stride(t);
+
+    for (int row = 0; row < th; row++) {
         const int dy = y + row;
-        if (dy < 0 || dy >= U2_SCREEN_H) continue;         /* clipped */
-        const uint8_t *src = t->px[tile] + row * U2_TILE_EGA_STRIDE;
-        for (int col = 0; col < U2_TILE_W; col++) {
+        if (dy < 0 || dy >= f->h) continue;                /* clipped */
+        const uint8_t *src = t->px[tile] + row * stride;
+        for (int col = 0; col < tw; col++) {
             const int dx = x + col;
-            if (dx < 0 || dx >= U2_SCREEN_W) continue;     /* clipped */
+            if (dx < 0 || dx >= f->w) continue;            /* clipped */
             const uint8_t b = src[col >> 1];
-            f->px[dy][dx] = (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4));
+            u2_frame_put(f, dx, dy, (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4)));
         }
     }
 }
@@ -105,8 +169,7 @@ void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x,
 void u2_frame_pixel(u2_frame *f, int x, int y, uint8_t colour)
 {
     if (!f) return;
-    if (x < 0 || x >= U2_SCREEN_W || y < 0 || y >= U2_SCREEN_H) return;
-    f->px[y][x] = (uint8_t)(colour & 3);
+    u2_frame_put(f, x, y, (uint8_t)(colour & 3));
 }
 
 void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour)
@@ -171,22 +234,27 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
 {
     if (!f || !v || !t) return;
 
+    const int tw = u2_tiles_ega_tile_w(t);
+    const int th = u2_tiles_ega_tile_h(t);
+
     for (int row = 0; row < U2_VIEW_ROWS; row++) {
         for (int col = 0; col < U2_VIEW_COLS; col++) {
             /* Same staging->art mapping as the CGA composite (see above); only
              * the atlas and the blit differ, so the two paths cannot drift on
-             * which tile a cell selects. */
+             * which tile a cell selects. The atlas then maps art -> pool entry,
+             * which is identity for every v1 theme and a table for a v2 one. */
             const int staging = u2_view_at(v, col, row);
             if (staging < 0) continue;
-            u2_frame_blit_tile_ega(f, t, u2_view_art(staging),
-                                   col * U2_TILE_W, row * U2_TILE_H);
+            const int tile = u2_tiles_ega_tile(t, u2_view_art(staging));
+            if (tile < 0) continue;   /* the theme does not cover this art */
+            u2_frame_blit_tile_ega(f, t, tile, col * tw, row * th);
         }
     }
 
     if (overlay_tile >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
         overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
         u2_frame_blit_tile_ega(f, t, overlay_tile,
-                               overlay_col * U2_TILE_W, overlay_row * U2_TILE_H);
+                               overlay_col * tw, overlay_row * th);
     }
     f->presents++;
 }
@@ -209,13 +277,13 @@ static void put32le(FILE *f, unsigned long v)
 int u2_frame_write_ppm(const u2_frame *f, const char *path,
                        const uint8_t pal[4][3])
 {
-    if (!f || !path || !pal) return -1;
+    if (!f || !f->px || !path || !pal) return -1;
     FILE *fp = fopen(path, "wb");
     if (!fp) return -1;
 
-    fprintf(fp, "P6\n%d %d\n255\n", U2_SCREEN_W, U2_SCREEN_H);
-    for (int y = 0; y < U2_SCREEN_H; y++) {
-        for (int x = 0; x < U2_SCREEN_W; x++) {
+    fprintf(fp, "P6\n%d %d\n255\n", f->w, f->h);
+    for (int y = 0; y < f->h; y++) {
+        for (int x = 0; x < f->w; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 3];
             fputc(rgb[0], fp); fputc(rgb[1], fp); fputc(rgb[2], fp);
         }
@@ -228,13 +296,13 @@ int u2_frame_write_ppm(const u2_frame *f, const char *path,
 int u2_frame_write_ppm16(const u2_frame *f, const char *path,
                          const uint8_t pal[16][3])
 {
-    if (!f || !path || !pal) return -1;
+    if (!f || !f->px || !path || !pal) return -1;
     FILE *fp = fopen(path, "wb");
     if (!fp) return -1;
 
-    fprintf(fp, "P6\n%d %d\n255\n", U2_SCREEN_W, U2_SCREEN_H);
-    for (int y = 0; y < U2_SCREEN_H; y++) {
-        for (int x = 0; x < U2_SCREEN_W; x++) {
+    fprintf(fp, "P6\n%d %d\n255\n", f->w, f->h);
+    for (int y = 0; y < f->h; y++) {
+        for (int x = 0; x < f->w; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 15];
             fputc(rgb[0], fp); fputc(rgb[1], fp); fputc(rgb[2], fp);
         }
@@ -247,10 +315,10 @@ int u2_frame_write_ppm16(const u2_frame *f, const char *path,
 int u2_frame_write_bmp(const u2_frame *f, const char *path,
                        const uint8_t pal[4][3])
 {
-    if (!f || !path || !pal) return -1;
+    if (!f || !f->px || !path || !pal) return -1;
 
-    const unsigned row_bytes = U2_SCREEN_W * 3;      /* 960, already padded */
-    const unsigned pixels = row_bytes * U2_SCREEN_H;
+    const unsigned row_bytes = (unsigned)f->w * 3;  /* 960 at 1x, already padded */
+    const unsigned pixels = row_bytes * (unsigned)f->h;
     FILE *fp = fopen(path, "wb");
     if (!fp) return -1;
 
@@ -259,8 +327,8 @@ int u2_frame_write_bmp(const u2_frame *f, const char *path,
     put32le(fp, 0);
     put32le(fp, 14 + 40);
     put32le(fp, 40);
-    put32le(fp, U2_SCREEN_W);
-    put32le(fp, U2_SCREEN_H);
+    put32le(fp, (unsigned)f->w);
+    put32le(fp, (unsigned)f->h);
     put16le(fp, 1);
     put16le(fp, 24);
     put32le(fp, 0);                 /* BI_RGB, uncompressed */
@@ -270,8 +338,8 @@ int u2_frame_write_bmp(const u2_frame *f, const char *path,
     put32le(fp, 0);
     put32le(fp, 0);
 
-    for (int y = U2_SCREEN_H - 1; y >= 0; y--) {      /* BMP is bottom-up */
-        for (int x = 0; x < U2_SCREEN_W; x++) {
+    for (int y = f->h - 1; y >= 0; y--) {            /* BMP is bottom-up */
+        for (int x = 0; x < f->w; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 3];
             fputc(rgb[2], fp); fputc(rgb[1], fp); fputc(rgb[0], fp);  /* BGR */
         }
@@ -284,10 +352,10 @@ int u2_frame_write_bmp(const u2_frame *f, const char *path,
 int u2_frame_write_bmp16(const u2_frame *f, const char *path,
                          const uint8_t pal[16][3])
 {
-    if (!f || !path || !pal) return -1;
+    if (!f || !f->px || !path || !pal) return -1;
 
-    const unsigned row_bytes = U2_SCREEN_W * 3;      /* 960, already padded */
-    const unsigned pixels = row_bytes * U2_SCREEN_H;
+    const unsigned row_bytes = (unsigned)f->w * 3;  /* 960 at 1x, already padded */
+    const unsigned pixels = row_bytes * (unsigned)f->h;
     FILE *fp = fopen(path, "wb");
     if (!fp) return -1;
 
@@ -296,8 +364,8 @@ int u2_frame_write_bmp16(const u2_frame *f, const char *path,
     put32le(fp, 0);
     put32le(fp, 14 + 40);
     put32le(fp, 40);
-    put32le(fp, U2_SCREEN_W);
-    put32le(fp, U2_SCREEN_H);
+    put32le(fp, (unsigned)f->w);
+    put32le(fp, (unsigned)f->h);
     put16le(fp, 1);
     put16le(fp, 24);
     put32le(fp, 0);                 /* BI_RGB, uncompressed */
@@ -307,8 +375,8 @@ int u2_frame_write_bmp16(const u2_frame *f, const char *path,
     put32le(fp, 0);
     put32le(fp, 0);
 
-    for (int y = U2_SCREEN_H - 1; y >= 0; y--) {      /* BMP is bottom-up */
-        for (int x = 0; x < U2_SCREEN_W; x++) {
+    for (int y = f->h - 1; y >= 0; y--) {            /* BMP is bottom-up */
+        for (int x = 0; x < f->w; x++) {
             const uint8_t *rgb = pal[f->px[y][x] & 15];
             fputc(rgb[2], fp); fputc(rgb[1], fp); fputc(rgb[0], fp);  /* BGR */
         }

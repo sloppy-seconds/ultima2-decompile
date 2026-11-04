@@ -1,0 +1,175 @@
+# Theme format — what `--ega-theme-dir` reads
+
+Status: **specification, 2026-11-04.** This is the contract; the handover that
+produced it is `docs/handoff-themes-builder.md` and the user-facing page is
+`docs/ega-graphics.md`. Where this file and the code disagree, the code is what
+ships and this file is the bug.
+
+Scope: the two theme formats one themes directory may hold, how a theme is
+resolved and discovered, what each field means, and what is refused. Dungeon and
+tower art is out of scope for both formats today (`docs/fmtowns-graphics.md` § 4).
+
+Grades per `AGENTS.md` § 5. Everything here is measured from the shipped files or
+implemented in `engine/src/core/tiles_ega.c`; nothing is recalled.
+
+---
+
+## 1. Why there are two formats
+
+`EGATILES` is 8320 bytes = 65 x 128: a **headerless flat array** of 16x16 tiles at
+4bpp packed, high nibble = left pixel. No index table, no size field, no palette
+field. It can express exactly one statement — "tile N lives at N x 128" — and that
+is enough for the fan pack because EGA tile N aligns 1:1 with CGA tile N (proven by
+the A-Z letter tiles landing at 32..57 in both atlases, `docs/ega-graphics.md`).
+
+An art set that does not align has nowhere to say so. The FM Towns banks are that
+case: `art 0x0C` is `ENEMY2/16`, not tile 12; one DOS index maps to a *run* of FM
+tiles; the tiles are 32x32; and the palette is not the EGA one. A flat array cannot
+carry any of that, so v2 adds a manifest.
+
+## 2. Directory layout and discovery
+
+One directory holds both formats, and Ctrl-T cycles across them together:
+
+```
+<themes dir>/
+  EGATILES                  v1: the "default" theme
+  EGATHEME.<NAME>/EGATILES  v1: theme "<name>" (lower-cased by the engine)
+  <name>/THEME.INI          v2: theme "<name>"
+```
+
+* **Resolution order for a named theme:** `<name>/THEME.INI` first, then
+  `EGATHEME.<UPPER>/EGATILES`. A pack that ships both spellings means the author
+  meant the manifest, and the manifest is the one that states geometry.
+* **Discovery** (`u2_tiles_ega_next_theme`) recognises the file `EGATILES` as
+  `default`, any directory `EGATHEME.*` as a v1 theme, and any other directory
+  containing a `THEME.INI` as a v2 one. Names are sorted alphabetically so the
+  cycle order is directory order and not `readdir` order.
+* **Names are matched case-insensitively on purpose.** The pack ships
+  `EGATHEME.10` and `EGATHEME.ALT` in different cases, and a copy that came off a
+  FAT volume arrives uppercased. Refusing to look is indistinguishable from the
+  theme not existing.
+* **An explicit `--ega-theme-dir` is authoritative with no fall-through**
+  (`docs/ega-graphics-plan.md` § 2, `[LOCKED]`). A wrong path is reported, never
+  papered over by finding the theme somewhere else.
+
+## 3. v1: `EGATILES`
+
+No header. The file must be at least 64 x 128 bytes; the engine reads the first 64
+tiles and ignores the 65th. Geometry is fixed: 16x16, 4bpp, stride 8, identity
+mapping, built-in EGA palette, and it claims every scope. A file that exists and is
+shorter is `U2_TILES_EGA_BAD` with a size in the message, which is distinct from
+absent and stops the search rather than falling through.
+
+A v1 theme may also carry `EGACOLOR` and `PIC*.EGA` beside its `EGATILES`. Neither
+is read by this engine: `EGACOLOR` is a colour-index remap for the fan pack's own
+driver (`docs/ega-graphics.md` § 3.1) and per-theme pictures are not resolved
+because `pic_ega.c` looks at the top level of the themes directory only. They are
+copied by the builder so nothing is lost when that changes.
+
+## 4. v2: `THEME.INI` and its files
+
+`THEME.INI` is `[key] = [value]` lines; `#` and `;` are comments, `[section]`
+headers are skipped, keys are case-insensitive, and surrounding whitespace is
+stripped from both sides. Unknown keys are ignored, so a manifest can grow without
+breaking an older engine.
+
+| key | required | meaning |
+| --- | --- | --- |
+| `name` | no | cosmetic; the directory name is the theme name |
+| `tile_w`, `tile_h` | yes | tile size in pixels. `tile_w` must be a whole multiple of 16 and at most 32 |
+| `bpp` | yes | bits per pixel. **Only 4 is implemented**, packed, high nibble = left pixel |
+| `pixel` | no | only `nibble-high-left`; any other value is refused rather than guessed at |
+| `palette` | no | filename of a `PALETTE.RGB` beside the manifest |
+| `map` | no | filename of a `MAP.TSV` beside the manifest. **Absent means identity**, which is what keeps every v1 theme valid |
+| `identity` | no | documentation only; the presence of `map` is what the loader reads |
+| `scope` | no | comma list from `overworld`, `towns`, `dungeon`, `tower`. An unrecognised word is a refusal |
+| `source`, `tiles_pool`, `art_count`, `art_with_multiple_frames`, `crosswalk`, `frames` | no | provenance and policy notes; the loader reads `frames` as nothing and the builder writes it as a record |
+
+**`TILES`** is the pool: `tile_w * tile_h * bpp / 8` bytes per tile, and the file
+size must be an exact multiple of that. At most 128 tiles.
+
+**`PALETTE.RGB`** is exactly 16 x 3 bytes of 8-bit RGB. Absent means the built-in
+EGA table in `core/frame.c`. When present the renderer uses it instead, and
+re-reads it when a Ctrl-T cycle changes the theme, so a cycle from a themed palette
+back to `c64` restores the EGA table rather than keeping the wrong colours.
+
+**`MAP.TSV`** is tab-separated, `#` comments, one row per art index:
+
+```
+0C	17,16	ENEMY2/17,ENEMY2/16
+```
+
+Column 1 is the DOS art index in hex, column 2 is a comma list of pool indices,
+column 3 is free-text provenance and is **not parsed**. The tile list ends at the
+first whitespace; parsing past that boundary turns `ENEMY2/16` into a third frame
+at tile 0, which no other check notices. Art indices outside `00..3F`, pool indices
+outside the atlas, a row with no tiles, more than 8 frames in a row, and a file with
+no rows are each refused with the filename in the message.
+
+The engine draws `list[0]` and keeps the rest of the list in
+`u2_tiles_ega.map[art][]` with `map_n[art]`, so animation is a renderer change and
+not a format change. An art index the map does not cover returns -1 from
+`u2_tiles_ega_tile()` and the cell is left alone — drawing a guess is the failure
+this exists to prevent.
+
+## 5. What the theme decides about the display
+
+`scale = tile_w / 16`, and the frame is `320 * scale` by `200 * scale`. A 32x32
+theme therefore composites at 640x400: the map window is the same 20x10 cells in
+both cases, and shrinking the visible cells to keep the window size would change
+what the player can see, which is a rules change wearing an art flag.
+
+Two writers, and the split is the whole design:
+
+* `u2_frame_put` — a **physical** pixel. Tile blits use this, so a 32x32 tile
+  contributes its own 32x32 pixels and nothing is decimated.
+* `u2_frame_put_logical` — one pixel of the **1x layout** as a `scale x scale`
+  block. Text, the cursor, the death-ring mask and the full-screen pictures use
+  this, so the status band stays the same proportion of the screen instead of
+  shrinking into the corner.
+
+`U2_FRAME_MAX_SCALE` is 2; a theme asking for more is refused by name.
+
+**Text ink follows the palette, not the CGA constants.** The whole text layer is
+written with CGA white (index 3) on black (index 0), and the FM Towns palette has
+index 3 as a second black — so a themed palette drawn with that pair produces status
+text that is not there, which every byte-level check passes and a player sees at once.
+When a theme supplies `PALETTE.RGB` the loader picks the brightest entry of it as the
+frame's ink (`ctx->text_fg`, applied by `u2_frame_set_text_fg`), and the frame's
+`text_fg`/`text_bg` are what `u2_font_draw_vram_rows` uses. For the FM Towns table
+that is index 7, white, which is also what the FM Towns letter tiles use against
+black. This is a choice, not a measurement: the port's own text colours have never
+been captured. Themes without a palette keep the CGA pair and are unchanged.
+
+## 6. Scope
+
+`scope` is not decoration. The FM Towns crosswalk covers the overworld and towns
+only, so its manifest says `scope = overworld,towns` and `scope_dungeon` is false.
+Entering a dungeon with such a theme active prints
+`THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in the original CGA art,
+which is what the dungeon does under every theme anyway.
+
+Refusing to *enter* was the literal reading of the handover's "refuse the mode" and
+was rejected: it makes the game unwinnable behind an art flag. The owner's rule is
+that a state change never happens silently, and it is satisfied by saying what is
+about to be drawn in the wrong art.
+
+## 7. Building themes, and the gates
+
+`tools/build_themes.py` writes both formats. v1 themes are copied whole-directory,
+byte-identical, from `references/u2upgrade/` and `original/updated/`; the FM Towns
+v2 theme is derived from the disc through the same reader `tools/fmtowns_xwalk.py`
+uses and the same `disasm/fmtowns-crosswalk.tsv` the editor generates, so there is
+no second copy of either.
+
+| gate | what it proves |
+| --- | --- |
+| `build_themes.py --verify` | the tree on disk matches a fresh derivation of the plan: every byte, no strays, no stale manifest row, no half-copied theme |
+| `tools/build_themes_selftest.sh` | 12 controls, including the named one: a theme built with `EGACOLOR` omitted must be caught |
+| `engine/tests/theme_v2_check.c` | 37 checks: geometry, identity, the map indirection, the palette, the frame scale, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
+| `python3 tools/fmtowns_xwalk.py --check` | the crosswalk the v2 theme is derived from is complete and its letter rows follow the structural rule |
+
+The first three run in `tools/check_all.sh` and CP4; the fourth is wired there too.
+`themes/` is gitignored: it holds art extracted from the player's own media, the
+same posture as `original/`, `tmp/tiles` and `bestiary/cache/`.

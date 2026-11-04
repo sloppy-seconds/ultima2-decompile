@@ -381,6 +381,21 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ega_check" \
     && ok "EGA pipeline: palette, 4bpp blit, atlas + PIC*-E loaders ($(grep -c '^  ok' "$WORK/ega.out") checks)" \
     || { bad "EGA pipeline failed:"; tail -16 "$WORK/ega.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-ega.err" | sed 's/^/        /'; }
 
+# Format v2 (docs/handoff-themes-builder.md § 4): a theme with a manifest, so the
+# loader has geometry, a tile pool, an indirection table and a palette to get
+# wrong. Most of this check is controls — six themes that MUST be refused — because
+# a format that accepts a bad file and draws a guess is how a plausible wrong
+# screen reaches a player. The fixtures are written under /var/tmp, so the check
+# runs in CI with no media; only the FM Towns letter-row assertions skip when
+# themes/fmtowns has not been built, and they say so out loud.
+cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/theme_v2_check" \
+   tests/theme_v2_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c \
+   src/core/font.c src/core/vram.c src/debug/trace.c \
+    >"$WORK/cc-v2.err" 2>&1 \
+    && "$WORK/theme_v2_check" >"$WORK/v2.out" 2>&1 \
+    && ok "theme format v2: geometry, map indirection, palette, 6 refusals ($(grep -c '^  ok' "$WORK/v2.out") checks)" \
+    || { bad "theme format v2 failed:"; tail -20 "$WORK/v2.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-v2.err" | sed 's/^/        /'; }
+
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is
 # derived from the sector's ones digit rather than from the act of entering one, so

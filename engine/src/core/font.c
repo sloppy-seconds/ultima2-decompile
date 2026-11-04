@@ -33,8 +33,12 @@ void u2_font_draw_cell(u2_frame *f, int row, int col, uint8_t ch,
     for (int y = 0; y < U2_FONT_CELL_H; y++) {
         const unsigned char bits = glyph[y];
         for (int x = 0; x < U2_FONT_CELL_W; x++) {
-            /* LSB is the leftmost pixel (font8x8 convention). */
-            f->px[y0 + y][x0 + x] = (bits & (1u << x)) ? fg : bg;
+            /* LSB is the leftmost pixel (font8x8 convention). The text layer is
+             * laid out in the 1x grid, so it goes through put_logical and each
+             * glyph dot becomes a scale x scale block: a 2x theme keeps the same
+             * 80x25 text grid at twice the pixels instead of shrinking into the
+             * top-left corner of a window four times the area. */
+            u2_frame_put_logical(f, x0 + x, y0 + y, (bits & (1u << x)) ? fg : bg);
         }
     }
 }
@@ -61,6 +65,10 @@ void u2_font_draw_vram_rows(u2_frame *f, const u2_vram *v, int top_row,
     if (bottom_row >= U2_ROWS) bottom_row = U2_ROWS - 1;
     for (int r = top_row; r <= bottom_row; r++)
         for (int c = 0; c < U2_COLS; c++)
+            /* The frame's own pair, not the CGA constants: a theme that brings an
+             * RGB table can make index 3 black (FM Towns does), and text drawn in
+             * the background colour is text that does not exist. */
             u2_font_draw_cell(f, r, c, v->cell[r][c].ch,
-                              U2_CGA_WHITE, U2_CGA_BLACK);
+                              f->text_fg ? f->text_fg : U2_CGA_WHITE,
+                              f->text_bg);
 }

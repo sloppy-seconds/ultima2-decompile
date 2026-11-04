@@ -72,14 +72,17 @@ PIC_RE = re.compile(r"^PIC(?P<base>[A-Z]{3,4})[-.](EGA|E)$")
 
 
 class Item:
-    """One file to emit: `src` copied to `dst`, both relative to the repo."""
+    """One file to emit: `src` copied to `dst`, both relative to the repo. A
+    generated item carries `data` instead of a source file, and the verifier
+    re-derives it rather than comparing against a file on disk."""
 
-    def __init__(self, kind, src, dst, theme=None, note="", key=None):
-        self.kind = kind          # atlas | color | picture | theme-file
+    def __init__(self, kind, src, dst, theme=None, note="", key=None, data=None):
+        self.kind = kind          # atlas | color | picture | theme-file | generated
         self.src = Path(src)
         self.dst = Path(dst)
         self.theme = theme
         self.note = note
+        self.data = data
         # Dedup key. Pictures key on their BASE, not their filename: PICDNG.EGA
         # and PICDNG-E are the same slot to the engine (pic_ega.c tries `-E`
         # before `.EGA` inside a directory), so shipping both would let the
@@ -195,7 +198,161 @@ def scan_source(root):
     return items, rows, problems
 
 
-def build_plan(sources):
+# ---------------------------------------------------------------------------
+# Slice B: the FM Towns theme, format v2.
+#
+# Everything here is DERIVED: the tile pool comes off the player's own FM Towns
+# disc through the same reader tools/fmtowns_xwalk.py uses (no second ISO parser,
+# no second decoder, both of which would be free to drift), and the art_index ->
+# tile mapping is read from disasm/fmtowns-crosswalk.tsv, which is itself
+# generated and gated. Nothing in this section re-derives a mapping, and nothing
+# in it hand-copies a crosswalk row.
+#
+# The pool holds EVERY frame the crosswalk names, not just the first. Slice B
+# draws list[0] and nothing else, but collapsing the set on the way into the file
+# would mean slice C rebuilds the mapping layer to add animation — see the handoff
+# § 5. The dropped-frame decision is therefore recorded as an engine policy
+# (`frames = first` in THEME.INI) rather than as data loss.
+# ---------------------------------------------------------------------------
+
+FMTOWNS_XWALK = "disasm/fmtowns-crosswalk.tsv"
+FMTOWNS_NAME = "fmtowns"
+FMTOWNS_SCOPE = "overworld,towns"      # the crosswalk's own scope caveat, verbatim
+
+
+def load_crosswalk(path):
+    """[(art_index, [BANK/tile, ...]), ...] in file order. Rows are tab-separated
+    and the header is comments, same contract `--check` gates."""
+    rows = []
+    with open(path, encoding="utf-8") as fh:
+        for ln in fh:
+            ln = ln.rstrip("\n")
+            if not ln or ln.startswith("#"):
+                continue
+            cols = ln.split("\t")
+            if len(cols) < 2:
+                continue
+            toks = [t.strip() for t in cols[1].split(",") if t.strip()]
+            rows.append((int(cols[0], 16), toks))
+    return rows
+
+
+def fmtowns_theme(xwalk_path=None):
+    """Derive the v2 theme as {relpath: bytes}. Returns (files, (stats, problems)).
+
+    A missing disc or crosswalk is a hard stop, not an empty theme: a themes tree
+    that quietly omits the FM Towns art renders as a theme bug and not a build
+    bug, which is the exact failure this whole tool is built against.
+    """
+    problems = []
+    xwalk = Path(xwalk_path) if xwalk_path else REPO / FMTOWNS_XWALK
+    if not xwalk.is_file():
+        raise SystemExit(f"no crosswalk at {xwalk} — regenerate it with "
+                         f"`python3 tools/fmtowns_xwalk.py --export` before "
+                         f"building a fmtowns theme")
+    sys.path.insert(0, str(REPO / "tools"))
+    try:
+        import fmtowns_xwalk as fx
+    except ImportError as e:
+        raise SystemExit(f"cannot import tools/fmtowns_xwalk.py to read the FM "
+                         f"banks ({e}) — the v2 theme needs its ISO reader")
+    if not os.path.isdir(fx.DISC):
+        raise SystemExit(f"no FM Towns media in {fx.DISC}")
+    files = fx.disc_files(fx.find_disc())
+
+    banks = {}
+    def tile_pixels(token):
+        bank, _, n = token.partition("/")
+        bank = bank.upper()
+        if bank not in banks:
+            key = bank + ".TIF"
+            if key not in files:
+                raise SystemExit(f"no GRAPH/{key} on the FM Towns disc")
+            banks[bank] = fx.decode_bank(files[key])
+        tiles = banks[bank]
+        i = int(n)
+        if i < 0 or i >= len(tiles):
+            raise SystemExit(f"{token}: bank {bank} has {len(tiles)} tiles")
+        return tiles[i]
+
+    def pack(px):
+        """index list -> 4bpp packed rows, high nibble = left pixel. The banks
+        measure zero nibbles above 7, so the upper half of the field is simply
+        never set; nothing here remaps or clamps."""
+        out = bytearray(len(px) // 2)
+        for i in range(0, len(px), 2):
+            out[i // 2] = ((px[i] & 0xF) << 4) | (px[i + 1] & 0xF)
+        return bytes(out)
+
+    pool, order = {}, []
+    rows = load_crosswalk(xwalk)
+    map_lines = []
+    multi = 0
+    for art, toks in rows:
+        idxs = []
+        for t in toks:
+            if t not in pool:
+                pool[t] = len(order)
+                order.append(t)
+            idxs.append(pool[t])
+        if len(idxs) > 1:
+            multi += 1
+        map_lines.append((art, idxs, toks))
+    if len(rows) != 64:
+        problems.append(f"crosswalk has {len(rows)} rows, expected 64")
+    missing = sorted(set(range(64)) - {a for a, _, _ in map_lines})
+    if missing:
+        problems.append(f"crosswalk has no row for art "
+                        f"{', '.join(f'{m:02X}' for m in missing)}")
+
+    tiles = b"".join(pack(tile_pixels(t)) for t in order)
+
+    # PALETTE.RGB: 16 x 3. Only 0..7 are measured (§ 3 of fmtowns-graphics.md);
+    # 8..15 are zero-filled because the art never indexes above 7, and that is
+    # stated here rather than left for someone to discover as a colour bug.
+    pal = bytearray(48)
+    for i, (r, g, b) in enumerate(fx.PAL[:8]):
+        pal[i * 3:i * 3 + 3] = bytes((r, g, b))
+
+    ini = (
+        "[theme]\n"
+        f"name = {FMTOWNS_NAME}\n"
+        f"tile_w = {fx.TILE_W}\n"
+        f"tile_h = {fx.TILE_H}\n"
+        "bpp = 4\n"
+        "pixel = nibble-high-left\n"
+        "palette = PALETTE.RGB\n"
+        "map = MAP.TSV\n"
+        "identity = no\n"
+        f"scope = {FMTOWNS_SCOPE}\n"
+        "source = FM Towns (1990) GRAPH banks\n"
+        "frames = first\n"
+        f"tiles_pool = {len(order)}\n"
+        f"art_count = {len(map_lines)}\n"
+        f"art_with_multiple_frames = {multi}\n"
+        f"crosswalk = {FMTOWNS_XWALK}\n"
+        "# `frames = first` is a slice-B policy, not a claim about the original:\n"
+        "# MAP.TSV keeps every frame the crosswalk names, and the engine draws\n"
+        "# list[0] until animation exists. The frames are in TILES, so nothing\n"
+        "# was thrown away to get here.\n"
+    )
+
+    mtsv = (
+        "# MAP.TSV -- DOS art index -> tile indices into TILES, generated by\n"
+        "# tools/build_themes.py from " + FMTOWNS_XWALK + ". Do not hand-edit.\n"
+        "# Column 3 repeats the source BANK/tile tokens for provenance. A row is\n"
+        "# set-valued: the engine uses the first index and keeps the rest.\n"
+        "# art\ttiles\tsource\n"
+    )
+    for art, idxs, toks in map_lines:
+        mtsv += f"{art:02X}\t{','.join(str(i) for i in idxs)}\t{','.join(toks)}\n"
+
+    return ({"THEME.INI": ini.encode(), "TILES": tiles, "PALETTE.RGB": bytes(pal),
+             "MAP.TSV": mtsv.encode()},
+            ({"pool": len(order), "art": len(map_lines), "multi": multi}, problems))
+
+
+def build_plan(sources, with_fmtowns=False):
     """Inventory every source and resolve conflicts. The FIRST source that
     provides a destination wins; later ones are reported as shadowed rather than
     merged, because two atlases cannot both be the default theme and silently
@@ -213,6 +370,17 @@ def build_plan(sources):
                 continue
             seen[key] = it
             plan.append(it)
+    if with_fmtowns:
+        gen, note = fmtowns_theme()
+        for rel in sorted(gen):
+            it = Item("generated", FMTOWNS_XWALK, Path(FMTOWNS_NAME) / rel,
+                      theme=FMTOWNS_NAME, data=gen[rel],
+                      key="GEN:" + rel.upper())
+            seen[str(it.dst).upper()] = it
+            plan.append(it)
+        rows.append((f"generated: {FMTOWNS_NAME}", [(k, "generated", f"{len(v)} B")
+                                                   for k, v in sorted(gen.items())]))
+        problems += [f"fmtowns: {p}" for p in note[1]]
     return plan, rows, problems, shadowed
 
 
@@ -221,7 +389,7 @@ def theme_names(plan):
     for it in plan:
         if it.kind == "atlas":
             names.add(DEFAULT_THEME)
-        elif it.kind == "theme-file" and it.theme:
+        elif it.theme:
             names.add(it.theme)
     return names
 
@@ -229,30 +397,37 @@ def theme_names(plan):
 def manifest_rows(plan, out):
     rows = []
     for it in sorted(plan, key=lambda i: str(i.dst).upper()):
-        s = it.src_abs()
-        if not s.is_file():
-            rows.append(None)
-            continue
-        h = hashlib.sha256()
-        with s.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(1 << 20), b""):
-                h.update(chunk)
-        rows.append(f"{it.dst.as_posix()}\t{it.kind}\t{it.src.as_posix()}\t"
-                    f"{s.stat().st_size}\t{h.hexdigest()[:16]}")
+        if it.data is not None:
+            body = it.data
+            origin = f"generated:{it.theme}"
+        else:
+            s = it.src_abs()
+            if not s.is_file():
+                rows.append(None)
+                continue
+            body = s.read_bytes()
+            origin = it.src.as_posix()
+        rows.append(f"{it.dst.as_posix()}\t{it.kind}\t{origin}\t"
+                    f"{len(body)}\t{hashlib.sha256(body).hexdigest()[:16]}")
     return [r for r in rows if r]
 
 
 def do_build(plan, out, sources):
     out.mkdir(parents=True, exist_ok=True)
     for it in plan:
-        d = it.dst_abs(out).parent
-        d.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(it.src_abs(), it.dst_abs(out))
+        d = it.dst_abs(out)
+        d.parent.mkdir(parents=True, exist_ok=True)
+        if it.data is not None:
+            d.write_bytes(it.data)
+        else:
+            shutil.copyfile(it.src_abs(), d)
     rows = manifest_rows(plan, out)
     with (out / MANIFEST).open("w", encoding="utf-8", newline="\n") as fh:
         fh.write("# built by tools/build_themes.py — do not hand-edit, regenerate\n")
         for s in sources:
             fh.write(f"# source {s}\n")
+        if any(it.data is not None for it in plan):
+            fh.write(f"# source {FMTOWNS_XWALK} + the FM Towns GRAPH banks\n")
         fh.write("# dst\tkind\tsource\tsize\tsha256:16\n")
         fh.write("\n".join(rows) + "\n")
     return len(plan)
@@ -271,7 +446,15 @@ def do_verify(plan, out, sources):
     want = {str(it.dst).upper(): it for it in plan}
 
     for it in plan:
-        s, d = it.src_abs(), it.dst_abs(out)
+        d = it.dst_abs(out)
+        if it.data is not None:
+            if not d.is_file():
+                fails.append(f"missing: {d} (generated)")
+                continue
+            if d.read_bytes() != it.data:
+                fails.append(f"generated file does not match a fresh derivation: {d}")
+            continue
+        s = it.src_abs()
         if not d.is_file():
             fails.append(f"missing: {d} (from {it.src})")
             continue
@@ -372,6 +555,10 @@ def main():
     ap.add_argument("--report", action="store_true", help="print the full inventory of every source")
     ap.add_argument("--verify", action="store_true",
                     help="check --out against the sources and exit non-zero on any drift")
+    ap.add_argument("--fmtowns", action="store_true",
+                    help=f"also emit the derived v2 '{FMTOWNS_NAME}' theme (needs the FM "
+                         f"Towns disc and {FMTOWNS_XWALK}). Implied by --verify when the "
+                         f"out dir already holds that theme.")
     args = ap.parse_args()
 
     sources = args.source or [s for s in ("references/u2upgrade", "original/updated")
@@ -396,7 +583,11 @@ def main():
         except (ValueError, OSError):
             pass
 
-    plan, rows, problems, shadowed = build_plan(sources)
+    # A tree that already contains the derived theme must be verified with it, or
+    # every one of its files would read as a stray. So the flag is implied by the
+    # tree, not remembered by the operator.
+    want_fmtowns = args.fmtowns or (out / FMTOWNS_NAME).is_dir()
+    plan, rows, problems, shadowed = build_plan(sources, want_fmtowns)
     if args.report:
         print_report(rows, problems, shadowed, plan, out)
     if args.dry_run:

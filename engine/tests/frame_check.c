@@ -60,6 +60,8 @@ int main(void)
     u2_tiles t;
     synth_tiles(&t);
     u2_frame f;
+    u2_frame_init(&f, 1);   /* the frame is heap-backed now; a stack frame with no
+                             * store is a refused draw, not a 320x200 one */
 
     /* --- clear and palette ----------------------------------------------- */
     u2_frame_clear(&f, U2_CGA_BLACK);
