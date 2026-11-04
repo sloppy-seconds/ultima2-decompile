@@ -6,6 +6,11 @@ of `docs/handoff-themes-builder.md` that were never built. That handover is now
 **locked off** — its slice C list is folded into § 10 below rather than left in a
 handover, because handovers are entry points and this is the one.
 
+**The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
+§ 11, along with two that came out of them (D6, D7). One point is still open and it
+needs an answer before any code: D7 and the re-run rule contradict each other as
+written, and § 11 proposes the resolution rather than choosing silently.
+
 Prerequisite reading: `AGENTS.md`, then `docs/theme-format.md` (the contract for
 what a themes directory holds), then `docs/planet-maps-galaxy-patch.md` (why the
 outer planets need a fan patch at all).
@@ -69,12 +74,16 @@ Secondary reasons, in order of weight:
 
 | mode | what it does | writes |
 | --- | --- | --- |
-| `--install` | build a game tree from the supplied sources | yes |
-| `--install --check` | inventory an existing tree and report what is missing, stale or unexpected | nothing |
-| `--install --from DIR` | the original DOS release (an unzipped IA copy, a CD rip, anything) | — |
-| `--install --upgrade DIR` | the Galaxy patch directory (`updated/`, or a tree where the patch already ran) | — |
-| `--install --themes DIR` | the fan art package (a `U2Upgrade` directory or the patcher archive) | — |
-| `--install --media DIR` | optional extras, e.g. the FM Towns disc, for derived themes | — |
+| `--install --to DIR` | build a game tree at DIR from the supplied sources | DIR |
+| `--install --check` | inventory a tree and report what is missing, stale or unexpected | nothing |
+| `--original-dir DIR` | the original DOS release: an unzipped IA copy, a CD rip, or an existing emulator directory | — |
+| `--updated-dir DIR` | the Galaxy patch layer (`updated/`, or a tree where the patch already ran) | — |
+| `--themes-dir DIR` | the fan art package (a `U2Upgrade` directory or the patcher archive) | — |
+| `--media-dir DIR` | reserved for optional extras, e.g. the FM Towns disc (§ 5) | — |
+
+Every question the installer can ask has a flag, so nothing about its behaviour
+requires a keyboard. `--to` is the target and is required; the source flags are what
+a prompt would otherwise ask for, and a prompt is only ever the fallback (§ 8).
 
 Three rules about the shape:
 
@@ -86,48 +95,107 @@ Three rules about the shape:
    tested.
 3. **Re-running is normal and must be safe.** The realistic sequence is install the
    original, play for a week, discover the upgrade pack, re-run. So `--install` is
-   `--check` plus a write, not a separate code path.
+   `--check` plus a write, not a separate code path. What exactly "re-running" means
+   against a target that already exists is the open point in § 11.
 
-## 3. Target layout — the open decision
+## 3. Target layout — ruled: option B, explicit layers
 
-*proposal, needs a ruling.* The engine's resolution order today expects the patch
-in a subdirectory literally named `updated/` (or the patched files at the root).
-The layout floated in discussion was `data/original` + `data/updated`, which is
-clearer to a human and matches nothing the engine currently looks for.
+*Ruled 2026-11-04: B.* The installed tree is `data/original/` + `data/updated/`,
+and `world.c` learns both names. The owner's reasoning: explicit layers are easier
+to keep idempotent, easier to extend with a further layer later, and obviously
+organised to a human who opens the directory.
+
+The formulation that stops this becoming two layouts: the content root becomes an
+**ordered list of roots**, not a single path.
+
+```
+data/updated/     <- patch layer, wins
+data/original/    <- release layer
+```
+
+and for the drop-in case, which stays required:
+
+```
+./updated/        <- patch layer, wins
+./                <- release layer
+```
+
+Layer order is fixed (patch over release) and within one root the existing
+`MAPG` / `mapg` / `mapx` try-order is untouched. Drop-in is then the degenerate case
+of the same mechanism rather than a special path, which is what makes "both work" a
+claim the gate can test instead of a hope. Note the trap to avoid: the fan patch's
+own `RENGAL.BAT` *renames* `mapx` to `mapg` in place. The installer copies verbatim
+and lets precedence choose; it never runs that rename.
+
+What was on the table, kept as the record of why B and not A:
 
 | option | shape | cost |
 | --- | --- | --- |
-| **A. engine-native** | `data/` holds the release files, `data/updated/` holds the patch files, verbatim | zero engine change; the directory name is a magic string the installer must keep in step with `world.c` |
-| **B. explicit layers** | `data/original/`, `data/updated/`, and `world.c` learns both names | one engine change now, and the layout says what it means instead of encoding it in a name |
+| A. engine-native | `data/` holds the release files, `data/updated/` holds the patch files, verbatim | zero engine change, but the directory name is a magic string the installer must keep in step with `world.c`, and it says nothing to a human opening the folder |
+| **B. explicit layers** *(chosen)* | `data/original/`, `data/updated/`, and `world.c` learns both names | one engine change now, and the layout states what it means instead of encoding it in a name |
 
-Recommendation: **A for the first version**, because it copies verbatim and lets the
-existing resolution order do the work, and because a rename is a transformation the
-installer then has to defend. Note the trap A avoids: the fan patch's own
-`RENGAL.BAT` *renames* `mapx` to `mapg` in place. An installer that runs that rename
-mutates the content; one that copies verbatim leaves the engine's precedence to
-choose. Take the second.
+A was the smaller change and B was rejected only on the strength of the reasoning in
+the first paragraph: A's zero-cost claim is real for the first version and false for
+every version after it, because every later layer has to be squeezed into a naming
+convention rather than added to a list.
 
-Whatever the layout, three parts are fixed:
+Three parts, plus the config file:
 
-* `data/` — the game content, treated as read-only after install.
-* `saves/` — the live `player` file and any sector files. This matters beyond
-  tidiness: the original rewrites `player` in place, which is why `AGENTS.md` says
-  never run the game in place. If `data/` keeps a pristine copy and `saves/` holds
-  the live one, a DOS run and an engine run stop fighting over the same file.
+* `data/` — the game content. **Not immutable**: D6 below keeps sector write-back
+  here, so an installed tree is expected to drift under play.
+* `saves/` — the live `player` file. This matters beyond tidiness: the original
+  rewrites `player` in place, which is why `AGENTS.md` says never run the game in
+  place. If `data/` keeps the installed copy and `saves/` holds the live one, a DOS
+  run and an engine run stop fighting over the same file.
 * `themes/` — built by the same code as `tools/build_themes.py`, shared rather than
   reimplemented (§ 10).
+* `config.ini` in the game directory, naming the three.
 
-And `ultima2.ini` in the game directory, naming the three.
+**D6 — sector write-back stays where it is, for now.** *measured* —
+`u2_world_store` writes changed sectors into the content directory it read from,
+using the bare prefix recorded at load, and checks writability at store time
+precisely so a read-only content dir is tolerated rather than fatal. The owner ruled
+that this stays as it is and is re-addressed when the save-game mechanisms are
+updated. The consequence is not cosmetic, and it is recorded here so the gate does
+not contradict it: **an installed tree is allowed to differ from what the installer
+wrote**, so `--install --check` must separate "these sector files have been played
+in" (expected, report as a note) from "this file is missing or a stray appeared"
+(red). A check that goes red the first time someone plays is a check that will be
+ignored.
 
-## 4. Config file and precedence
+## 4. Config file and precedence — ruled: `config.ini`, global
 
-*proposal.* `ultima2.ini` is a small `key = value` file — the same grammar
-`THEME.INI` already uses, so there is one parser and one set of refusals, not two.
+*Ruled 2026-11-04.* The global file is `config.ini`, and it keeps the `key = value`
+grammar `THEME.INI` already uses, so there is one parser and one set of refusals
+rather than two.
+
+**`THEME.INI` stays per-theme and is not folded in.** The two files have different
+subjects, different writers and different lifetimes:
+
+| file | subject | written by | read when |
+| --- | --- | --- | --- |
+| `config.ini` | where things are, what the user prefers | the installer, and the user | every startup |
+| `<theme>/THEME.INI` | what the art in *that directory* is: tile size, bpp, bank layout, palette, scope, `MAP.TSV` | `tools/build_themes.py` | when that theme is selected |
+
+Three reasons the per-theme file cannot move into a global one:
+
+* the engine resolves a theme by name from the themes directory and must be able to
+  do it with no global file present at all
+* the metadata travels with the art — copy a theme directory in and it works,
+  whereas a global config would need an edit per theme
+* the builder emits it as part of emitting a theme and `--verify` re-derives it to
+  catch drift. If installing a theme mutated one shared file, then installing two
+  themes is two writes to the same file, and the idempotence story gets worse
+  rather than better
+
+What does go in `config.ini` is a `[themes]` section for the settings side: the
+themes directory, the selected theme, and anything else that is a preference rather
+than a fact about the art.
 
 Precedence, and this is the part that must be explicit or the feature rots:
 
 ```
-command line  >  ultima2.ini  >  nothing
+command line  >  config.ini  >  nothing
 ```
 
 * An explicit path from either source is **authoritative with no fall-through**.
@@ -138,8 +206,13 @@ command line  >  ultima2.ini  >  nothing
 * **The shipped artifact stops carrying dev fallbacks.** `references/u2upgrade`
   stays a candidate for a developer checkout (driven by the ini or the flags) and
   disappears from the release build, which is what `U2_ARTIFACT=release` is for.
-* An ini naming a directory that does not exist is an error at startup, not a
-  silent default.
+* A `config.ini` naming a directory that does not exist is an error at startup, not
+  a silent default.
+
+**Where the code lives.** *ruled* — `--install` ships in both builds and is purely
+text/terminal, needing no SDL, which is what makes it testable headless and in CI.
+The consequence is structural: the installer goes in `engine/src/core/`, not
+`platform/`, and must not reach for a renderer at all.
 
 ## 5. Inputs it must recognise
 
@@ -172,7 +245,10 @@ went wrong in this project.
    `original/` or `references/`; the installer inherits that rule and the proof.
 2. **Byte-identical copies, no transforms.** No renames, no case-fixing, no
    `RENGAL.BAT`. A transformation is a claim, and claims need evidence.
-3. **Idempotent.** A second run changes nothing and says so.
+3. **Idempotent.** A second run changes nothing and says so — which needs the § 11
+   open point settled, because "a second run" and "the target must be empty" do not
+   yet agree. Note also that idempotence is about the installer's output, not about
+   the tree being frozen: D6 lets play itself change sector files.
 4. **Location-independent.** Everything resolves from argv and the ini, never from
    where the binary sits. *measured* — deriving paths from the script's own
    location is exactly what emitted `themes/ultima2/EGATHEME.C64/` when the theme
@@ -194,13 +270,15 @@ patcher's own tree), `references/fmtowns/` (the disc).
 Six assertions, each written red-first per `AGENTS.md` § 3:
 
 1. the installed tree is **exactly** the expected file set — no strays, nothing
-   missing
+   missing. File set and sizes, with the D6 carve-out: content drift in the
+   writable sector files is expected once someone plays
 2. every copied file is byte-identical to its source
 3. the engine, pointed at the installed tree with **no other flags**, loads Earth
    *and* at least one outer planet — this is the assertion that proves the patch
    layer did something, and the only one that catches "copied the files, planets
    still missing"
-4. re-running the install is a no-op
+4. re-running the install is a no-op, once § 11 settles what re-running into a tree
+   we already built means
 5. `--install --check` goes red on a deliberately broken tree (a missing `TLKG81`,
    a truncated `EGATILES`, a stale theme)
 6. the source directory is byte-for-byte untouched
@@ -209,28 +287,40 @@ Plus one structural rule about how it is run: **the binary is invoked from a thi
 directory** — neither the install target nor a source — so any cwd or self-path
 assumption fails loudly instead of working by accident on the developer's machine.
 
-## 8. Stretch goal: cleaning up an existing install
+## 8. Cleanup: reorganise into a new directory, never touch the old one
 
-A player who has been running the game under DOSBox or a similar emulator may
-already have a directory holding some or all of this content. The instinct to tidy
-it is right and the risk is out of proportion to the reward, so:
+*Ruled 2026-11-04, and it is a better answer than the one this section started
+with.* A player who has been running the game under DOSBox or a similar emulator may
+already have a directory holding some or all of this content. The first draft
+treated "clean up an existing install" as a destructive mode with a confirmation
+flow. The ruling removes the category: **the installer does not clean anything up,
+it builds a new tree somewhere else.**
 
-* **v1 is read-only.** `--install --check` reports "you appear to already have a
-  working install at X, and here is what differs from what an install would
-  produce". No deletion, no moving, no "recommended cleanup".
-* **Detection and cleanup are the same code path**, and the interesting case proves
-  it: a directory where `RENGAL.BAT` already ran has `mapg` where the release had
-  `mapx`. That is the Galaxy patch already applied — an **input** to recognise, not
-  junk to remove. A tool that classifies by expected-name-then-delete gets this
-  exactly backwards.
-* Such a directory may also hold the player's own saves and their emulator config,
-  which are the only files in the whole arrangement that cannot be re-downloaded.
-  `AGENTS.md` has a standing incident about an agent deleting irreplaceable files it
-  was confident about; a cleanup mode is that failure mode with a friendlier face.
-* If deletion ever ships, it is per-item, explicit, confirmed, and it copies
-  anything irreplaceable somewhere safe and says where first.
+* `--to DIR` accepts an **empty directory, or one that does not exist and is
+  created**. Anything else is refused. There is no merge, no overwrite and no
+  deletion, so the mode has no destructive path to get wrong.
+* The existing emulator directory is then just another **source** — § 5 recognises a
+  tree where the patch already ran, which is the common case in the wild — and the
+  old install keeps working under DOSBox until the player decides otherwise.
+  Deleting it is their call, made later, with a file manager and a backup.
+* This is why detection and cleanup were the same code path in the first draft. A
+  directory where `RENGAL.BAT` already ran has `mapg` where the release had `mapx`,
+  and a tool that classifies by expected-name-then-delete reads that as junk when it
+  is the Galaxy patch already applied. Under this ruling the misclassification is no
+  longer dangerous, which is the argument for it.
+* `AGENTS.md` has a standing incident about an agent deleting irreplaceable files it
+  was confident about. A mode whose worst failure is "refused: directory not empty"
+  is the shape this project should prefer on principle.
 
-## 9. Self-update: split it in two
+One case survives the ruling and needs an explicit answer: if the source directory
+holds the player's own `player` save, adopting it is a **migration**, not a cleanup.
+The installer should ask, and must never silently overwrite the `player` file it
+just installed into `saves/`.
+
+## 9. Self-update: ruled out
+
+*Ruled 2026-11-04: out.* The reasoning stays below, because it is the record of why,
+and because the cheap half is still a reasonable thing to want someday.
 
 *measured* — the pieces already exist. The binary stamps `U2_VERSION`,
 `U2_BUILD_TARGET`, `U2_SDL_IMPL`, `U2_SDL_LINKAGE` and `U2_ARTIFACT`, prints them
@@ -270,8 +360,8 @@ this document's problem:
 
 | item | where it lands |
 | --- | --- |
-| asking the player for the art package | § 5, `--themes` |
-| the FM Towns disc as an optional source | § 5, `--media` |
+| asking the player for the art package | § 5, `--themes-dir` |
+| the FM Towns disc as an optional source | § 5, `--media-dir` (deferred, § 11) |
 | `themes/` being built rather than hand-copied | § 3, shared code with `build_themes.py` |
 | the dev-checkout fallbacks going away in a release build | § 4 |
 
@@ -290,15 +380,36 @@ and still held:
 * the `EGACOLOR` remap, decoded and understood, wired to nothing
 * per-screen FM Towns palettes, unproven
 
-## 11. Decisions needed before any of this is built
+## 11. Decisions
 
-1. **Layout**: option A (engine-native, verbatim) or option B (explicit layers plus
-   a `world.c` change). § 3 recommends A.
-2. **The ini**: name, and whether it reuses the `THEME.INI` grammar or grows a
-   shared config parser.
-3. **Which binaries ship `--install`**: the static SDL artifact only, or the
-   terminal build too (the terminal build is what CI can actually execute).
-4. **Is the FM Towns disc in scope for v1**, given the derivation needs the
-   crosswalk and the disc, neither of which ships?
-5. **Self-update**: confirm it is out, and whether signing releases is worth doing
-   now on its own merits.
+Ruled 2026-11-04, in the order they were asked:
+
+| # | decision | ruling |
+| --- | --- | --- |
+| 1 | Layout | **B** — `data/original/` + `data/updated/`, with `./` + `./updated/` still working for the drop-in case (§ 3) |
+| 2 | Config file | **`config.ini`**, global, same grammar as `THEME.INI`; `THEME.INI` stays per-theme; a `[themes]` section carries the settings (§ 4) |
+| 3 | Which builds | **both**, and `--install` is purely terminal with no SDL, so it runs headless and in CI; the code lives in `engine/src/core/` (§ 4) |
+| 4 | FM Towns disc | **follow up later** — not in the first version, though § 5 still recognises it as a source |
+| 5 | Self-update | **out** (§ 9) |
+| D6 | Sector write-back | **stays in the content dir for now**, re-addressed with the save-game mechanisms; the gate must tolerate play drift (§ 3) |
+| D7 | `--to` target | **empty or nonexistent only** (§ 8) |
+
+**One open point, created by D7.** D7 says the target must be empty. § 2 rule 3 says
+re-running is normal and must be safe — install the release, play for a week,
+discover the upgrade pack, add it. Those two cannot both hold as written, and the
+resolution needs a ruling rather than a silent choice:
+
+* **Proposal: recognise our own tree.** The installer writes a manifest of what it
+  emitted, exactly as `themes/_BUILD.tsv` already does for the theme builder. An
+  empty target is installable; a target carrying a valid manifest is *completable*
+  — `--check` says which layers it has and which are missing, and `--install` adds
+  the missing ones and re-verifies. A target that is non-empty with no manifest is
+  refused, which is the case D7 was protecting. This keeps the re-run story, keeps
+  idempotence provable, and still never touches a directory the installer did not
+  build.
+* The alternative is that adding a layer means a fresh `--to` and a discarded tree.
+  Simpler, but it throws away the saves unless they live outside the game directory,
+  and it makes "re-running is a no-op" untestable.
+
+Recommend the first. It is also the pattern the theme builder already proved, which
+is worth something: emit, record what was emitted, re-derive and diff.
