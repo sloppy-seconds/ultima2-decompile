@@ -19,7 +19,7 @@ printf 'engine CP4 test\n'
 
 # --- the sector loader ----------------------------------------------------
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/world_check" \
-   tests/world_check.c src/core/world.c 2>"$WORK/cc.err"
+   tests/world_check.c src/core/world.c src/core/roots.c 2>"$WORK/cc.err"
 if [ $? -ne 0 ]; then
     bad "world test harness did not build: $(head -5 "$WORK/cc.err")"
 else
@@ -33,7 +33,7 @@ fi
 # to reject invention: slots 0 and 3 have never been transited and must report unknown.
 # Evidence: docs/moongates.md, captures/spice86/moongate-cycle.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/gate_check" \
-   tests/gate_check.c src/game/gates.c src/core/world.c src/core/state.c 2>"$WORK/cc-gate.err"
+   tests/gate_check.c src/game/gates.c src/core/world.c src/core/roots.c src/core/state.c 2>"$WORK/cc-gate.err"
 if [ $? -ne 0 ]; then
     bad "gate test harness did not build: $(head -5 "$WORK/cc-gate.err")"
 else
@@ -52,7 +52,7 @@ fi
 # always runs and proves the assertions reject a wrong layout; the real-binary
 # half SKIPs when no copy is here, so CI stays green and honest.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/tiles_check" \
-   tests/tiles_check.c src/core/tiles.c src/core/sha256.c 2>"$WORK/cc-tiles.err"
+   tests/tiles_check.c src/core/tiles.c src/core/roots.c src/core/sha256.c 2>"$WORK/cc-tiles.err"
 if [ $? -ne 0 ]; then
     bad "tiles test harness did not build: $(head -5 "$WORK/cc-tiles.err")"
 else
@@ -238,7 +238,7 @@ fi
 # P lands where the player stood. Plus the outdoors guard and the CP11
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/save_q_check" \
-   tests/save_q_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
+   tests/save_q_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c \
    src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -258,7 +258,7 @@ fi
 # file 0x0B0D spends 10 food per PASS and file 0x0B2E sends a borrow to the
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/food_check" \
-   tests/food_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c \
+   tests/food_check.c src/game/overworld.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c \
    src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -357,7 +357,7 @@ fi
 # row- and quadrant-level. Needs the player's own picdra, so it skips without the content.
 if [ -r "$MAPDIR/picdra" ] || [ -r "$MAPDIR/PICDRA" ]; then
     cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/pic_check" \
-       tests/pic_check.c src/core/pic.c src/core/frame.c src/core/view.c src/debug/trace.c \
+       tests/pic_check.c src/core/pic.c src/core/roots.c src/core/frame.c src/core/view.c src/debug/trace.c \
         >"$WORK/cc-pic.err" 2>&1 \
         && "$WORK/pic_check" >"$WORK/pic.out" 2>&1 \
         && ok "PIC unpack: 16 checks, interleave pinned by scanline and quadrant census" \
@@ -375,7 +375,7 @@ fi
 # missing pack. See docs/ega-graphics-plan.md.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/ega_check" \
    tests/ega_check.c src/core/frame.c src/core/view.c src/core/tiles_ega.c src/core/ini.c \
-   src/core/pic_ega.c src/core/pic.c src/debug/trace.c \
+   src/core/pic_ega.c src/core/pic.c src/core/roots.c src/debug/trace.c \
     >"$WORK/cc-ega.err" 2>&1 \
     && "$WORK/ega_check" >"$WORK/ega.out" 2>&1 \
     && ok "EGA pipeline: palette, 4bpp blit, atlas + PIC*-E loaders ($(grep -c '^  ok' "$WORK/ega.out") checks)" \
@@ -407,6 +407,31 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/config_check" \
     && "$WORK/config_check" "$WORK" >"$WORK/cfg.out" 2>&1 \
     && ok "config.ini: precedence, path resolution, 8 refusals ($(grep -c '^  ok' "$WORK/cfg.out") checks)" \
     || { bad "config.ini check failed:"; tail -20 "$WORK/cfg.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-cfg.err" | sed 's/^/        /'; }
+
+# --- --install ---------------------------------------------------------------
+# The gate from docs/install-design.md § 7, run against synthesised release and
+# patch fixtures so it works in CI with no media. It asserts the installed tree is
+# exactly the expected file set, every copy is byte-identical, the sources come out
+# untouched, a re-run is a no-op, --check goes red on a missing file, a stray and a
+# changed non-sector file, and --check treats a played-in sector as drift (D6).
+# The assertion that matters most is the last: the engine pointed at the installed
+# tree with no other flags loads Earth AND an outer planet, which is the only one
+# that catches "copied everything, the planets still do not work".
+cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/install_check" \
+   tests/install_check.c src/core/install.c src/core/roots.c src/core/sha256.c \
+   src/core/world.c src/core/config.c src/core/ini.c >"$WORK/cc-inst.err" 2>&1 \
+    && "$WORK/install_check" "$WORK" >"$WORK/inst.out" 2>&1 \
+    && ok "--install: layout, manifest, idempotence, --check refusals ($(grep -c '^  ok' "$WORK/inst.out") checks)" \
+    || { bad "--install check failed:"; tail -25 "$WORK/inst.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-inst.err" | sed 's/^/        /'; }
+
+# --- the controls that prove the two gates above can go red --------------------
+# Each breaks one property in a throwaway copy of config.c or install.c, rebuilds
+# the real check against it, and requires the check to go red on exactly the
+# assertions that own that property. A control that does not compile, crashes, or
+# goes red for a fixture reason is reported as broken rather than as a pass.
+python3 tests/install_controls.py "$WORK/controls" >"$WORK/ctl.out" 2>&1 \
+    && ok "$(cat "$WORK/ctl.out")" \
+    || { bad "installer controls are not all able to fail:"; sed 's/^/        /' "$WORK/ctl.out"; }
 
 # --- the site viewport gate -------------------------------------------------
 # A site sector must not draw the world map's wrap, and the mode that decides it is

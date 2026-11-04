@@ -26,6 +26,7 @@
 
 #include "core/world.h"
 #include "core/compat.h"
+#include "core/roots.h"
 
 /* Spelling candidates for the sector name. DOS names are case-insensitive, the
  * shipped pack is lowercase, and the Galaxy patch in the fan pack renames
@@ -54,29 +55,18 @@ static const char *const *prefix_list(int is_map, size_t *count)
     return k_mon_prefixes;
 }
 
-/* Content roots, in precedence order -- docs/install-design.md § 3.
- *
- * One mechanism serves two layouts. `--install` writes explicit layers under
- * data/; the drop-in case, which stays required, has the same two layers at the
- * game root. A root is therefore a role (patch layer or release layer) plus the
- * subdirectory it lives in, and a tree that lacks one of them simply fails to
- * open that candidate and falls through -- there is no "which layout is this"
- * branch anywhere, which is the whole point of listing roots instead of testing
- * for a marker file.
+/* The content roots live in core/roots.c, which is their only owner. world.c, the
+ * tile loader and the picture loader all ask the same list, because two copies of
+ * "where does content live" is the drift this project keeps naming: the engine
+ * would find a sector in a layer the tile atlas never looked at, and the failure
+ * would be a blank screen rather than an error.
  *
  * `.patched` marks a patch layer. The patch layer is where the Galaxy spellings
- * are looked for, and it is never consulted for the release spellings: that is
- * the historical behaviour kept intact, since `updated/mapx40` has never been a
+ * are looked for, and it is never consulted for the release spellings: that is the
+ * historical behaviour kept intact, since `updated/mapx40` has never been a
  * candidate and still is not.
  */
-struct root { const char *sub; int patched; };
-static const struct root k_roots[] = {
-    { "data/updated",  1 },
-    { "updated",       1 },
-    { "data/original", 0 },
-    { "",              0 },
-};
-#define N_ROOTS (sizeof k_roots / sizeof k_roots[0])
+#define N_ROOTS u2_root_count
 
 /* The Galaxy-patch spellings per kind. The release lists above already carry
  * both cases and both spellings, so only the patched side needs its own. */
@@ -84,7 +74,7 @@ static const char *const k_map_patch[] = { "MAPG", "mapg" };
 static const char *const k_mon_patch[] = { "MONG", "mong" };
 
 /* One (root, prefix) pair to try, plus the bare prefix recorded for write-back.
- * `root` points into k_roots, so it is static and safe to keep on the world. */
+ * `root` points into u2_roots, so it is static and safe to keep on the world. */
 struct cand { const char *root; const char *prefix; const char *label; };
 #define N_CAND 20
 
@@ -109,26 +99,22 @@ static int build_cands(int off_earth, const char *const *patch_pfx, size_t n_pat
     if (off_earth)
         for (size_t r = 0; r < N_ROOTS && n < max; r++)
             for (size_t p = 0; p < n_patch && n < max; p++)
-                out[n++] = (struct cand){ k_roots[r].sub, patch_pfx[p], patch_pfx[p] };
+                out[n++] = (struct cand){ u2_roots[r].sub, patch_pfx[p], patch_pfx[p] };
 
     for (size_t r = 0; r < N_ROOTS && n < max; r++) {
-        if (k_roots[r].patched)
+        if (u2_roots[r].patched)
             continue;
         for (size_t p = 0; p < n_rel && n < max; p++)
-            out[n++] = (struct cand){ k_roots[r].sub, rel_pfx[p], rel_pfx[p] };
+            out[n++] = (struct cand){ u2_roots[r].sub, rel_pfx[p], rel_pfx[p] };
     }
     return n;
 }
 
-/* The directory a root resolves to. No trailing slash and no doubled slash when
- * the root is the game root itself, because a path with `//` in it works and then
- * reads as a bug, and every comparison and message downstream inherits it. */
+/* The directory a root resolves to is core/roots.c's job; this stays so the call
+ * sites below read the way they always did. */
 static void root_path(char *buf, size_t bufsz, const u2_ctx *ctx, const char *root)
 {
-    if (root && *root)
-        snprintf(buf, bufsz, "%s/%s", world_dir(ctx), root);
-    else
-        snprintf(buf, bufsz, "%s", world_dir(ctx));
+    u2_root_path(buf, bufsz, ctx, root);
 }
 
 static void sector_path(char *buf, size_t bufsz, const u2_ctx *ctx,
@@ -155,7 +141,7 @@ u2_world_result u2_world_load_strokes(u2_ctx *ctx, u2_world *w)
      * explicit-layer layout it lives in the release layer and not beside the binary. */
     for (size_t r = 0; r < N_ROOTS && !f; r++) {
         char dir[448];
-        root_path(dir, sizeof dir, ctx, k_roots[r].sub);
+        root_path(dir, sizeof dir, ctx, u2_roots[r].sub);
         snprintf(path, sizeof path, "%s/monsters", dir);
         f = fopen(path, "rb");
     }
@@ -185,7 +171,7 @@ const char *u2_world_result_text(u2_world_result r)
 
 static const char *world_dir(const u2_ctx *ctx)
 {
-    return (ctx && ctx->data_dir && *ctx->data_dir) ? ctx->data_dir : ".";
+    return u2_content_root(ctx);
 }
 
 void u2_world_path(char *buf, size_t bufsz, const u2_ctx *ctx,

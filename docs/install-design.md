@@ -1,10 +1,23 @@
 # Installer design — building a game directory out of a pile of media
 
-Status: **design only, nothing implemented.** This document takes over as the entry
-point for everything about *assembling* a playable tree, and it inherits the parts
-of `docs/handoff-themes-builder.md` that were never built. That handover is now
-**locked off** — its slice C list is folded into § 10 below rather than left in a
-handover, because handovers are entry points and this is the one.
+Status: **design, and three slices of it are now built.** This document takes over
+as the entry point for everything about *assembling* a playable tree, and it
+inherits the parts of `docs/handoff-themes-builder.md` that were never built. That
+handover is now **locked off** — its slice C list is folded into § 10 below rather
+than left in a handover, because handovers are entry points and this is the one.
+
+**Built and gated (2026-11-04).** The content roots (§ 3, layout B) in
+`engine/src/core/roots.c`, with `world.c`, `tiles.c` and `pic.c` all resolving
+through the one list; `config.ini` with the precedence rule (§ 4) in
+`engine/src/core/config.c` and the shared parser in `core/ini.c`; and the installer
+itself in `engine/src/core/install.c`, reached as `--install --to DIR` and
+`--install --check --to DIR` in both builds. Gates: `engine/tests/world_check.c`
+(78 checks), `engine/tests/config_check.c` (35), `engine/tests/install_check.c`
+(49), and `engine/tests/install_controls.py` (9 properties, each proved able to go
+red). All of it runs headless in CP4.
+
+**Not built:** themes (§ 10 — `--themes-dir` is accepted and reported as not yet
+consumed), the FM Towns source (deferred, § 11), and self-update (ruled out, § 9).
 
 **The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
 § 11, along with the two that came out of them (D6, D7) and the follow-up ruling
@@ -380,10 +393,17 @@ this document's problem:
 
 | item | where it lands |
 | --- | --- |
-| asking the player for the art package | § 5, `--themes-dir` |
+| asking the player for the art package | § 5, `--themes-dir` — **accepted by the CLI and reported as not yet consumed** |
 | the FM Towns disc as an optional source | § 5, `--media-dir` (deferred, § 11) |
-| `themes/` being built rather than hand-copied | § 3, shared code with `build_themes.py` |
-| the dev-checkout fallbacks going away in a release build | § 4 |
+| `themes/` being built rather than hand-copied | § 3, shared code with `build_themes.py` — **not built** |
+| the dev-checkout fallbacks going away in a release build | § 4 — **not done**: `references/u2upgrade` is still a candidate in `pic_ega.c` |
+
+One thing the § 3 wording glossed over, and it needs saying before themes land: "the
+same code as `tools/build_themes.py`, shared rather than reimplemented" cannot be
+taken literally, because the builder is Python and the installer is C. What can be
+shared is the contract (`docs/theme-format.md`) plus a cross-check gate that runs
+one against the other. Deciding that is part of building the themes path, not a
+footnote to it.
 
 **Still engine work, not installer work** — unchanged from the handover's slice C,
 and still held:

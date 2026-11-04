@@ -15,6 +15,7 @@
 #include "core/pic.h"
 
 #include "core/ctx.h"
+#include "core/roots.h"
 #include "core/frame.h"
 #include "debug/trace.h"
 
@@ -24,32 +25,32 @@
 #define PIC_PIXEL_BYTES (U2_SCREEN_H * U2_SCREEN_ROW)     /* 200 * 80 = 16000 */
 #define PIC_ODD_FIELD   (U2_SCREEN_H / 2 * U2_SCREEN_ROW) /* 100 * 80 = 8000   */
 
-static const char *pic_dir(const u2_ctx *ctx)
-{
-    return (ctx && ctx->data_dir && *ctx->data_dir) ? ctx->data_dir : ".";
-}
-
 /* The pack ships these lowercase. The tile loader carries the same three-way case list
  * for ultimaii.exe for the same reason: a copy that came off a FAT volume can arrive with
  * the names uppercased, and refusing to look is indistinguishable from the file not
- * existing, which is the failure mode worth avoiding. */
+ * existing, which is the failure mode worth avoiding.
+ *
+ * Both spellings are searched across the content roots rather than only beside the
+ * binary, for the reason core/roots.h gives: under the explicit-layer layout the
+ * pictures live in the release layer. */
 static FILE *pic_open(const u2_ctx *ctx, const char *name)
 {
     char path[512];
     char upper[32];
     size_t i = 0;
 
-    FILE *f = snprintf(path, sizeof path, "%s/%s", pic_dir(ctx), name) < (int)sizeof path
-                  ? fopen(path, "rb") : NULL;
-    if (f)
-        return f;
+    if (u2_root_find(ctx, name, 1, path, sizeof path)) {
+        FILE *f = fopen(path, "rb");
+        if (f)
+            return f;
+    }
 
     for (; name[i] && i + 1 < sizeof upper; i++) {
         const char c = name[i];
         upper[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
     }
     upper[i] = '\0';
-    if (snprintf(path, sizeof path, "%s/%s", pic_dir(ctx), upper) >= (int)sizeof path)
+    if (!u2_root_find(ctx, upper, 1, path, sizeof path))
         return NULL;
     return fopen(path, "rb");
 }

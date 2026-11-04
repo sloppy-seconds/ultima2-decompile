@@ -1,0 +1,75 @@
+/*
+ * install.h — building a game directory out of a pile of media.
+ * docs/install-design.md is the design; this is its § 2, § 3, § 6 and § 8.
+ *
+ * This is a tool mode, not a game mode: it runs before video init, needs no
+ * renderer, and lives in core/ rather than platform/ so that the terminal build
+ * the whole test suite drives can execute it. That is not a preference — a
+ * shipped installer nobody can run in CI is an installer nobody can prove.
+ *
+ * Three rules shape everything below, and each exists because the project has
+ * been burned by its absence:
+ *
+ *   1. NEVER write into a source. The player's download comes out untouched, and
+ *      `--check` can prove it because the manifest records sources by path and
+ *      hash without ever opening them for writing.
+ *   2. Copy verbatim or do not copy. No renames, no case-fixing, no running the
+ *      fan patch's RENGAL.BAT. A transformation is a claim, and claims need
+ *      evidence; the engine's own layer precedence (core/world.c) is the evidence
+ *      that verbatim is enough.
+ *   3. Verify by re-derivation, not by "the copy returned 0". Every file written
+ *      is hashed back from disk against the hash of its source, and the manifest
+ *      is what a later `--check` re-derives against.
+ */
+
+#ifndef U2_CORE_INSTALL_H
+#define U2_CORE_INSTALL_H
+
+#include <stddef.h>
+#include <stdio.h>
+
+typedef enum {
+    U2_INSTALL_OK      = 0,   /* did the work, or the tree already matches */
+    U2_INSTALL_REFUSED = 1,   /* a rule stopped it: foreign target, bad source */
+    U2_INSTALL_ERROR   = 2    /* I/O, or the impossible */
+} u2_install_result;
+
+/* The manifest, at the target root. One row per file the installer wrote, with
+ * the source it came from and both sizes and hashes. It is what makes a target
+ * recognisable as ours (D7a: empty installs, manifested completes, foreign
+ * non-empty refuses) and what `--check` re-derives against. Same device as
+ * themes/_BUILD.tsv, for the same reason: emit, record, re-derive, diff. */
+#define U2_INSTALL_MANIFEST "_INSTALL.tsv"
+
+/* The layout, fixed by the § 3 ruling. The engine finds these through its ordered
+ * content roots, so the installer writes them and does not have to explain them. */
+#define U2_INSTALL_DATA_ORIG  "data/original"
+#define U2_INSTALL_DATA_UPD   "data/updated"
+#define U2_INSTALL_SAVES      "saves"
+#define U2_INSTALL_THEMES     "themes"
+#define U2_INSTALL_CONFIG     "config.ini"
+
+typedef struct {
+    const char *to;            /* the target game directory (required) */
+    const char *original_dir;  /* the DOS release: an IA copy, a CD rip, a DOSBox dir */
+    const char *updated_dir;   /* the Galaxy patch layer */
+    const char *themes_dir;    /* the fan art pack; NOT yet consumed, see § 10 */
+} u2_install_request;
+
+/* Install, or complete an install that already carries our manifest. */
+u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
+                                   char *err, size_t errsz);
+
+/* Report on a tree without writing anything. With no manifest it says so and
+ * refuses to guess; with one it verifies every row and separates the two kinds of
+ * difference a player's own play can cause from the kinds that mean the tree is
+ * broken (D6: sector files are expected to drift, so a content difference in one
+ * is a note and a missing file is a failure). */
+u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t errsz);
+
+/* Exposed for the test: is this filename game content at all, and which layer
+ * does its spelling belong to? Returns 0 for anything the installer must not
+ * copy — patcher binaries, READMEs, DOS launcher scaffolding. */
+int u2_install_classify(const char *basename, int *galaxy_spelling);
+
+#endif

@@ -40,6 +40,7 @@
 
 #include "core/tiles.h"
 #include "core/compat.h"
+#include "core/roots.h"
 #include "core/sha256.h"
 
 #define CACHE_MAGIC   "U2TL"
@@ -65,11 +66,6 @@ static void put_le32(uint8_t *p, uint32_t v)
     p[1] = (uint8_t)((v >> 8) & 0xff);
     p[2] = (uint8_t)((v >> 16) & 0xff);
     p[3] = (uint8_t)((v >> 24) & 0xff);
-}
-
-static int file_exists(const char *p)
-{
-    return p && *p && access(p, R_OK) == 0;
 }
 
 static uint8_t *read_whole(const char *path, size_t *len_out)
@@ -231,12 +227,15 @@ u2_tiles_result u2_tiles_cache_store(const char *path, const u2_tiles *t)
 
 u2_tiles_result u2_tiles_find_exe(char *buf, size_t bufsz, const u2_ctx *ctx)
 {
-    const char *dir = (ctx && ctx->data_dir && *ctx->data_dir) ? ctx->data_dir : ".";
-    for (size_t i = 0; i < sizeof k_exe_names / sizeof k_exe_names[0]; i++) {
-        if (snprintf(buf, bufsz, "%s/%s", dir, k_exe_names[i]) >= (int)bufsz)
-            return U2_TILES_ERROR;
-        if (file_exists(buf)) return U2_TILES_OK;
-    }
+    /* Searched across the content roots, not just the game directory: under the
+     * explicit-layer layout the executable sits in the release layer, and a
+     * loader that only looks beside the binary reports "no executable" for a
+     * tree that has one. Release layers only -- the exe has no Galaxy spelling.
+     * core/roots.h says why this is one list rather than a second copy. */
+    if (u2_root_find_any(ctx, k_exe_names,
+                         sizeof k_exe_names / sizeof k_exe_names[0],
+                         1, buf, bufsz))
+        return U2_TILES_OK;
     buf[0] = '\0';
     return U2_TILES_NOT_READY;
 }

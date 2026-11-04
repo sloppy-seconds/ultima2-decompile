@@ -23,6 +23,7 @@
 #include "core/version.h"
 #include "core/licenses.h"
 #include "core/config.h"
+#include "core/install.h"
 #include "core/seam.h"
 #include "core/timer.h"
 #include "core/state.h"
@@ -137,6 +138,21 @@ static void usage(const char *argv0)
         "                    path in it that does not exist is an error rather than\n"
         "                    a fallback. Absent is normal: the drop-in layout needs\n"
         "                    no config at all.\n"
+        "\ninstalling a game directory (no display needed; exits without playing):\n"
+        "  --install --to DIR        build a game tree at DIR from the sources below.\n"
+        "                    DIR must be empty or nonexistent, or carry this\n"
+        "                    installer's own manifest, in which case the missing\n"
+        "                    layers are added. A directory that is not ours is never\n"
+        "                    merged into, overwritten or deleted.\n"
+        "  --install --check --to DIR\n"
+        "                    verify a tree against its manifest and write nothing.\n"
+        "                    Sector files that differ are reported as played-in,\n"
+        "                    because the game rewrites those by design.\n"
+        "  --original-dir DIR    the original DOS release: an unzipped download, a CD\n"
+        "                    rip, or a directory an emulator already uses.\n"
+        "  --updated-dir DIR     the Galaxy patch layer (MAPG / MONG / TLKG).\n"
+        "  --themes-dir DIR      the fan art pack. Not consumed yet: themes are still\n"
+        "                    built by tools/build_themes.py (docs/install-design.md § 10).\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
         "  Ctrl-T  cycle the EGA tile theme (only with --ega; walks the themes\n"
@@ -241,6 +257,9 @@ int main(int argc, char **argv)
     const char *roll_trace_path = NULL;
     const char *dump_ds_path = NULL;
     const char *config_path = NULL;
+    int install_mode = 0, install_check_only = 0;
+    const char *install_to = NULL, *install_orig = NULL;
+    const char *install_upd = NULL, *install_themes = NULL;
     u2_config cfg;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
@@ -304,6 +323,18 @@ int main(int argc, char **argv)
              * outranks the file and the file may only fill what the flags left
              * unset. docs/install-design.md § 4. */
             config_path = argv[++i];
+        } else if (strcmp(a, "--install") == 0) {
+            install_mode = 1;
+        } else if (strcmp(a, "--check") == 0) {
+            install_check_only = 1;
+        } else if (strcmp(a, "--to") == 0 && i + 1 < argc) {
+            install_to = argv[++i];
+        } else if (strcmp(a, "--original-dir") == 0 && i + 1 < argc) {
+            install_orig = argv[++i];
+        } else if (strcmp(a, "--updated-dir") == 0 && i + 1 < argc) {
+            install_upd = argv[++i];
+        } else if (strcmp(a, "--themes-dir") == 0 && i + 1 < argc) {
+            install_themes = argv[++i];
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {
@@ -396,6 +427,26 @@ int main(int argc, char **argv)
             usage(argv[0]);
             return 2;
         }
+    }
+
+    /* --install is a tool mode: it runs before config, before video, before the
+     * game, and it needs no renderer. That is not tidiness — the terminal build is
+     * what CI can execute, so an installer that needed SDL would be an installer
+     * nobody could prove. docs/install-design.md § 2. */
+    if (install_mode || install_check_only) {
+        if (install_check_only && !install_mode) {
+            fprintf(stderr, "u2: --check only means something with --install.\n");
+            return 2;
+        }
+        char ierr[512];
+        const u2_install_result r = install_check_only
+            ? u2_install_check(install_to, stdout, ierr, sizeof ierr)
+            : (u2_install_apply(&(u2_install_request){ install_to, install_orig,
+                                                       install_upd, install_themes },
+                                stdout, ierr, sizeof ierr));
+        if (r != U2_INSTALL_OK && *ierr)
+            fprintf(stderr, "u2: %s\n", ierr);
+        return (int)r;
     }
 
     /* config.ini, if there is one. Absent is normal — the drop-in case has never
