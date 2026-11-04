@@ -11,7 +11,11 @@ exact byte-for-byte fidelity.
 > `disasm/phase1-summary.md`, `disasm/phase2-summary.md` and `disasm/phase3-summary.md`.
 > Phase 4 (portable C engine reimplementation from the asm/ tree) is `docs/phase4-plan.md`;
 > the live task queue is `docs/phase4-state.md` and the running log is
-> `docs/phase4-implementation.md`. **The vehicle state machine is done except `cmd_L`'s flight-loop
+> `docs/phase4-implementation.md`. A plan for an enhanced-mode screen layout taken
+> from the FM Towns version is `docs/enhanced-layout-plan.md` — plan only, nothing
+> built, and its § 4 lists four decisions (viewport shape, frame size, string
+> provenance, when it turns on) that need the owner before work starts.
+> **The vehicle state machine is done except `cmd_L`'s flight-loop
 > gating: read `docs/handoff-vehicle-state-machine.md` for the byte evidence, but note its status
 > block at the head corrects three rows of its own § 1 table, and two things it named as blockers
 > have since closed — `u2_world_store` no longer writes a dirty map to the `monx` filename, and
