@@ -94,6 +94,7 @@ Secondary reasons, in order of weight:
 | `--install --to DIR` | build a game tree at DIR from the supplied sources | DIR |
 | `--install --check` | inventory a tree and report what is missing, stale or unexpected | nothing |
 | `--dry-run` | with `--install`: plan and report, write nothing. Shows which copy of a shared filename wins, and what the theme step would do | nothing |
+| `--no-prompt` | with `--install`: never ask. A flag that was not supplied is refused instead of prompted for. Prompts are also off automatically when stdin is not a terminal (§ 13) | — |
 | `--original-dir DIR` | the original DOS release: an unzipped IA copy, a CD rip, or an existing emulator directory | — |
 | `--updated-dir DIR` | the Galaxy patch layer. If omitted and `<original-dir>/updated` exists, that is used (D9, § 12) | — |
 | `--themes-dir DIR` | the fan art package (a `U2Upgrade` directory or the patcher archive). Repeatable | — |
@@ -106,8 +107,13 @@ a prompt would otherwise ask for, and a prompt is only ever the fallback (§ 8).
 Three rules about the shape:
 
 1. **Declarative first, prompts second.** Every input has a flag. Interactive
-   prompting is only the fallback when a required input is missing, and it is the
-   last thing written, because a prompt loop cannot be gated.
+   prompting is only the fallback when a required input is missing (§ 13). The
+   original form of this rule said a prompt loop "cannot be gated", which turned out
+   to be half wrong: the question text cannot, but the two properties that actually
+   matter can, and both are now checks. That a terminal-less stdin refuses rather than
+   blocks is asserted directly, and the target rule the prompts depend on is covered
+   by a control. What is genuinely untested is the wording and the re-ask loop, and
+   that is the honest limit rather than a reason to skip the gate.
 2. **It runs before video init**, like the other tool modes. An installer that
    needs a display is useless on a headless box, and headless is where it gets
    tested.
@@ -453,6 +459,8 @@ Ruled 2026-11-04, in the order they were asked:
 | D8 | Shared filenames | **the patch layer wins** when the bytes differ, and keeps the release's spelling of the name (§ 12) |
 | D9 | Finding the Galaxy patch | **auto-detected at `<original-dir>/updated`** when `--updated-dir` is not given (§ 12) |
 | D10 | `.pat` deltas | **detected and reported, not applied** for now; applying them is deferred (§ 12.4) |
+| D7b | Target holding only the engine | **counts as empty**, matched by device and inode (§ 13) |
+| D11 | Prompts | **four questions, flag > prompt > nothing**, pre-flight is the dry run, EOF refuses (§ 13) |
 
 **D7a — re-running into a tree we built is allowed, via a manifest.** *Ruled
 2026-11-04.* D7 on its own contradicted § 2 rule 3: the realistic flow is install
@@ -585,3 +593,54 @@ nothing.
    `original/ultimaii.exe` matches one of those templates would tell us which release
    level the Internet Archive pack actually is, which § 0 of this document currently
    concedes we do not know.
+
+## 13. The prompt layer — built 2026-11-05
+
+Precedence, stated once because every question depends on it: **flag > prompt >
+nothing**. Anything a flag already answered is never asked. That is what keeps the
+rule in § 2 true in the only way that matters — a fully-specified command line
+behaves identically with and without a terminal, so a script's behaviour cannot
+change because someone ran it by hand.
+
+Four questions, in the order they matter:
+
+| question | default | required |
+| --- | --- | --- |
+| Install into which directory? | `.` | yes, via the default |
+| Where is your original Ultima II (DOS) directory? | — | yes |
+| Any fan art pack to install themes from? | none | no |
+| An FM Towns disc image or directory? | none | no |
+
+The Galaxy patch is **not** a question. D9 finds `<original>/updated` on its own,
+and asking would require the player to know the pack's internal layout — the same
+reason `--updated-dir` became optional.
+
+Three properties worth naming, because each is a decision rather than a detail:
+
+* **A wrong path is re-asked, not guessed past.** Same rule as `--ega-theme` for an
+  explicit directory: an answer is not a hint. Five attempts, then a refusal.
+* **The pre-flight is the dry run**, not a second summary written for the prompt
+  path. One code path produces the plan, so the confirmation cannot disagree with
+  what gets written.
+* **EOF is an error, not an empty answer.** A required question that gets no answer
+  refuses. This is the difference between a script failing loudly and a script
+  hanging, and `install_check` asserts it by pointing stdin at `/dev/null` and
+  requiring a refusal.
+
+Prompts are on only when `isatty(stdin)` and `--no-prompt` was not given.
+
+### D7b — a target may hold the running binary
+
+*Ruled 2026-11-05, as a consequence of the default target being `.`.* D7 says the
+target must be empty, nonexistent, or carry our manifest. But the shape people
+actually use is: make a folder, drop the engine in it, run `--install`. Under a
+literal D7 the first thing that player meets is a refusal to write into the only
+directory they have.
+
+So a directory whose **only** content is the running executable counts as empty.
+Matched by device and inode, not by name — a same-named file elsewhere does not
+qualify — and a subdirectory disqualifies, because a subdirectory is content. A
+foreign refusal now also names the alternative: a directory that already holds a
+downloaded game can be played in place with `--data-dir`, which is the case D7
+protects and the player can be told about rather than merely blocked.
+
