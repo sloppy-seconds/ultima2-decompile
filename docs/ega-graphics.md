@@ -169,11 +169,15 @@ What a v2 theme directory holds:
 
 Three consequences worth knowing before you try it:
 
-* **The window grows.** A 32x32-tile theme composites at 640x400, because the map
-  window is the same 20x10 cells either way and shrinking the view to keep the
-  window size would change what the player can see — a rules change wearing an art
-  flag. The text band scales with it (each glyph dot becomes a 2x2 block), so the
-  layout is a uniform doubling rather than a big map with a corner of tiny text.
+* **`--ega` composites at 640x400, for every theme.** A 32x32 FM Towns theme fills
+  it 1:1; a 16x16 fan-pack theme is block-upscaled into it, which is the same
+  nearest-neighbour doubling the window was already doing one step later, so nothing
+  on screen changes for the themes that existed before. What that buys is the reason
+  it is done this way: the frame size belongs to the art mode, so cycling Ctrl-T
+  between a 16x16 and a 32x32 theme cannot resize a window the renderer sized once at
+  startup. The accepted cost is that a v1 EGA `--dump-frame` is a doubled image
+  rather than a 1:1 record of the fan pack's pixels (owner ruling, 2026-11-04);
+  `docs/theme-format.md` § 5 states the contract and `theme_v2_check` pins it.
 * **The palette comes from the theme.** The FM Towns table has index 3 as black and
   is not the EGA order; drawing that art through the EGA table makes it read as
   noise while every byte-level check passes. The renderer re-reads the table when a

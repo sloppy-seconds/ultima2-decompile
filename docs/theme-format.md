@@ -115,21 +115,42 @@ this exists to prevent.
 
 ## 5. What the theme decides about the display
 
-`scale = tile_w / 16`, and the frame is `320 * scale` by `200 * scale`. A 32x32
-theme therefore composites at 640x400: the map window is the same 20x10 cells in
-both cases, and shrinking the visible cells to keep the window size would change
-what the player can see, which is a rules change wearing an art flag.
+**The frame size is a property of the art mode, not of the theme.** CGA composites
+at 320x200. `--ega` composites at 640x400 whatever the active theme's tiles are
+(`U2_EGA_FRAME_SCALE`), and a theme whose tiles are smaller than that is
+block-upscaled into it. The atlas still reports its own `scale = tile_w / 16` —
+its *native* scale — and the blit factor is `frame_scale / native`, so a 32x32 FM
+Towns theme is blitted 1:1 and a 16x16 fan-pack theme becomes 2x2 blocks.
+
+Two things follow, and both are deliberate.
+
+* **A Ctrl-T cycle cannot change the window.** Sizing the frame per theme makes a
+  cycle across tile sizes a renderer resize, and a renderer that sized its window,
+  texture and staging buffer once at startup while the frame grew underneath it
+  writes past its own buffer. With the size fixed by the art mode, cycling
+  `c64 -> fmtowns -> c64` changes the pixels drawn and nothing else.
+* **A v1 EGA dump is a doubled image, not a 1:1 record of the fan pack's pixels.**
+  Accepted by the owner (2026-11-04). Nothing on screen changed, because the SDL
+  window was already 2x (`renderer_sdl.c` `SDL_SCALE`) with nearest-neighbour
+  filtering doing the identical doubling one step later; what changed is that the
+  doubling now happens in the frame, so `--dump-frame` for a v1 theme writes
+  640x400 of 2x2 blocks. `theme_v2_check` pins the relationship exactly: the x2
+  frame must be the x1 frame with every pixel replaced by a 2x2 block, and the ink
+  count must be exactly 4x, so a decimation or a mis-sampled block fails rather
+  than rendering plausibly.
+
+A theme whose native scale is *larger* than the frame's is refused at load with a
+named reason, because the alternative is decimating the art — the one thing the
+format exists to avoid. `U2_FRAME_MAX_SCALE` is 2; a bigger ask is refused by name.
 
 Two writers, and the split is the whole design:
 
-* `u2_frame_put` — a **physical** pixel. Tile blits use this, so a 32x32 tile
-  contributes its own 32x32 pixels and nothing is decimated.
+* `u2_frame_put` — a **physical** pixel. Tile blits use this, at the blit factor
+  above, so a 32x32 tile contributes its own 32x32 pixels and nothing is decimated.
 * `u2_frame_put_logical` — one pixel of the **1x layout** as a `scale x scale`
   block. Text, the cursor, the death-ring mask and the full-screen pictures use
   this, so the status band stays the same proportion of the screen instead of
   shrinking into the corner.
-
-`U2_FRAME_MAX_SCALE` is 2; a theme asking for more is refused by name.
 
 **Text ink follows the palette, not the CGA constants.** The whole text layer is
 written with CGA white (index 3) on black (index 0), and the FM Towns palette has

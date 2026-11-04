@@ -211,7 +211,8 @@ static void bad_reason(char *err, size_t n, const char *fmt, ...)
  * a terminal after their theme failed to appear, not reading this source. */
 static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
                                        const char *dir, u2_tiles_ega *t,
-                                       char *err, size_t errn)
+                                       char *err, size_t errn,
+                                       int ctx_frame_scale)
 {
     u2_tiles_ega_result rc = U2_TILES_EGA_BAD;
     unsigned char *ini_buf = NULL, *tiles_buf = NULL, *map_buf = NULL;
@@ -264,6 +265,15 @@ static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
     if (scale > U2_FRAME_MAX_SCALE) {
         bad_reason(err, errn, "%s: a %d px tile needs a x%d frame and this build "
                    "supports up to x%d", path, tw, scale, U2_FRAME_MAX_SCALE);
+        goto done;
+    }
+    /* A theme whose tiles are NATIVELY larger than the frame this art mode
+     * composites at would have to be decimated to fit, which is the one thing the
+     * format exists to avoid, so it is refused rather than shrunk. */
+    if (ctx_frame_scale > 0 && scale > ctx_frame_scale) {
+        bad_reason(err, errn, "%s: %d px tiles need a x%d frame and this run "
+                   "composites at x%d; the frame scale is set by the art mode, "
+                   "not by the theme", path, tw, scale, ctx_frame_scale);
         goto done;
     }
     if (ini_get(ini, "scope", val, sizeof val) == 1) {
@@ -472,8 +482,17 @@ static int ega_candidates(u2_ctx *ctx, const char **cands)
     return nc;
 }
 
+/* What the frame scale is for this run. It is a property of the art mode, not of
+ * the theme (U2_EGA_FRAME_SCALE), so every caller derives it the same way and a
+ * theme can never shrink or grow the window under the renderer. */
+static int ega_frame_scale(const u2_ctx *ctx)
+{
+    return (ctx && ctx->art_mode == U2_ART_EGA) ? U2_EGA_FRAME_SCALE : 1;
+}
+
 /* Load one theme out of one candidate directory, v2 before v1. */
-static u2_tiles_ega_result open_in_dir(const char *cand, const char *theme,
+static u2_tiles_ega_result open_in_dir(const u2_ctx *ctx, const char *cand,
+                                       const char *theme,
                                        u2_tiles_ega *t, char *err, size_t errn)
 {
     char v2[40], v1[64], path[700];
@@ -481,7 +500,7 @@ static u2_tiles_ega_result open_in_dir(const char *cand, const char *theme,
     if (theme_v2_relpath(theme, v2, sizeof v2) == 0 &&
         snprintf(path, sizeof path, "%s/%s", cand, v2) < (int)sizeof path &&
         path_is_dir(path) && is_v2_dir(path))
-        return try_load_v2(path, theme, cand, t, err, errn);
+        return try_load_v2(path, theme, cand, t, err, errn, ega_frame_scale(ctx));
 
     if (theme_relpath(theme, v1, sizeof v1) != 0) return U2_TILES_EGA_ERROR;
     if (snprintf(path, sizeof path, "%s/%s", cand, v1) >= (int)sizeof path)
@@ -496,7 +515,14 @@ static u2_tiles_ega_result open_in_dir(const char *cand, const char *theme,
 static void apply_to_ctx(u2_ctx *ctx, const u2_tiles_ega *t)
 {
     if (!ctx || !t) return;
-    ctx->frame_scale = t->scale > 0 ? t->scale : 1;
+    /* The frame scale follows the ART MODE, not the theme: `--ega` composites at
+     * U2_EGA_FRAME_SCALE whatever the theme's own tiles are, and a theme with
+     * smaller tiles is block-upscaled to fill it (frame.h, and
+     * docs/theme-format.md § 5). Sizing the frame per theme is what turned a
+     * Ctrl-T cycle across tile sizes into a renderer resize, and a renderer that
+     * sized once at startup while the frame grew underneath it wrote past its own
+     * staging buffer. */
+    ctx->frame_scale = ega_frame_scale(ctx);
     if (t->has_palette) {
         memcpy(ctx->theme_palette, t->palette, sizeof ctx->theme_palette);
         ctx->theme_palette_set = 1;
@@ -526,7 +552,7 @@ u2_tiles_ega_result u2_tiles_ega_open_in(u2_ctx *ctx, u2_tiles_ega *t,
     t->source[0] = '\0';
     t->dir[0] = '\0';
     const u2_tiles_ega_result r =
-        open_in_dir(dir, theme ? theme : U2_EGA_THEME_DEFAULT, t, NULL, 0);
+        open_in_dir(ctx, dir, theme ? theme : U2_EGA_THEME_DEFAULT, t, NULL, 0);
     if (r == U2_TILES_EGA_OK) apply_to_ctx(ctx, t);
     return r;
 }
@@ -544,7 +570,7 @@ u2_tiles_ega_result u2_tiles_ega_open(u2_ctx *ctx, u2_tiles_ega *t,
 
     u2_tiles_ega_result last = U2_TILES_EGA_NOT_READY;
     for (int i = 0; i < nc; i++) {
-        const u2_tiles_ega_result r = open_in_dir(cands[i], name, t, NULL, 0);
+        const u2_tiles_ega_result r = open_in_dir(ctx, cands[i], name, t, NULL, 0);
         if (r == U2_TILES_EGA_OK) {
             apply_to_ctx(ctx, t);
             return r;
@@ -703,7 +729,8 @@ u2_tiles_ega_result u2_tiles_ega_validate(u2_ctx *ctx, char *err, size_t n)
             memset(&probe, 0, sizeof probe);
             char why[256] = "";
             const u2_tiles_ega_result r = try_load_v2(path, theme, cands[i],
-                                                      &probe, why, sizeof why);
+                                                      &probe, why, sizeof why,
+                                                      ega_frame_scale(ctx));
             if (r == U2_TILES_EGA_OK) apply_to_ctx(ctx, &probe);
             if (r != U2_TILES_EGA_OK && err && *why)
                 snprintf(err, n, "%s", why);
@@ -719,7 +746,10 @@ u2_tiles_ega_result u2_tiles_ega_validate(u2_ctx *ctx, char *err, size_t n)
             continue;
         const long sz = path_size(path);
         if (sz >= (long)(U2_TILE_COUNT * U2_TILE_EGA_BYTES)) {
-            if (ctx) { ctx->frame_scale = 1; ctx->theme_palette_set = 0; }
+            if (ctx) {
+                ctx->frame_scale = ega_frame_scale(ctx);
+                ctx->theme_palette_set = 0;
+            }
             return U2_TILES_EGA_OK;
         }
         if (sz >= 0) {   /* present but too short: a real file, wrong shape */

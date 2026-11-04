@@ -57,6 +57,20 @@
 #define U2_TILE_EGA_MAX_TILES  128
 #define U2_TILE_EGA_MAX_FRAMES 8
 
+/* The frame scale the EGA art axis composites at, whatever theme is active.
+ * This is a property of the ART MODE and not of the theme, and that is a ruling
+ * rather than an inference: `--ega` always draws 640x400, a 16x16 v1 theme is
+ * block-upscaled into it, and a 32x32 v2 theme fills it 1:1. The alternative —
+ * sizing the frame per theme — makes a Ctrl-T cycle across tile sizes a renderer
+ * resize, and a renderer that sized its window once at startup while a frame grew
+ * underneath it writes past its own staging buffer.
+ *
+ * The owner accepted the consequence (2026-11-04): a v1 EGA dump is a doubled
+ * image, not a 1:1 record of the fan pack's pixels. Nothing on screen changes,
+ * because the SDL window was already 2x (renderer_sdl.c SDL_SCALE) and SDL
+ * nearest-neighbour was doing the same doubling one step later. */
+#define U2_EGA_FRAME_SCALE 2
+
 typedef struct u2_tiles_ega {
     /* The pool. For a v1 theme this is the EGATILES array and `art index ==
      * pool index`; for a v2 theme MAP.TSV supplies the indirection, so the pool
@@ -67,7 +81,11 @@ typedef struct u2_tiles_ega {
     int      tile_w, tile_h;        /* 0 means the v1 default, 16x16 */
     int      stride;                /* bytes per row; 0 means tile_w/2 */
     int      bpp;                   /* 0 means 4 */
-    int      scale;                 /* frame scale this theme asks for */
+    /* The atlas's NATIVE scale: how many physical pixels one of its tile pixels
+     * is worth at 1:1 (16x16 art -> 1, 32x32 art -> 2). The frame may be larger
+     * than this, in which case the blit blocks the tile up to fill it; see
+     * U2_EGA_FRAME_SCALE and frame.h. */
+    int      scale;
     int      has_palette;
     uint8_t  palette[16][3];        /* only meaningful when has_palette */
     int      has_map;
@@ -95,6 +113,19 @@ static inline int u2_tiles_ega_stride(const u2_tiles_ega *t)
 { return t && t->stride > 0 ? t->stride : u2_tiles_ega_tile_w(t) / 2; }
 static inline int u2_tiles_ega_count(const u2_tiles_ega *t)
 { return t && t->count > 0 ? t->count : U2_TILE_COUNT; }
+static inline int u2_tiles_ega_scale(const u2_tiles_ega *t)
+{ return t && t->scale > 0 ? t->scale : 1; }
+
+/* How many physical pixels one pixel of this atlas is worth in a frame composited
+ * at `frame_scale`. 1 means the tile is blitted 1:1; 2 means each tile pixel
+ * becomes a 2x2 block. Never less than 1: a frame smaller than an atlas's native
+ * scale is refused by the loader rather than decimating the art. */
+static inline int u2_tiles_ega_present(const u2_tiles_ega *t, int frame_scale)
+{
+    const int native = u2_tiles_ega_scale(t);
+    if (frame_scale < 1 || native < 1 || frame_scale < native) return 1;
+    return frame_scale / native;
+}
 
 /* Which pool entry draws art index `art`. Identity when the theme carries no
  * map, which is every v1 theme by definition. Returns -1 for an art index the

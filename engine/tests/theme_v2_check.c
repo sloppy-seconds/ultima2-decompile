@@ -62,6 +62,11 @@ static u2_tiles_ega_result load(const char *name, u2_tiles_ega *t, char *why, si
 {
     u2_ctx ctx;
     memset(&ctx, 0, sizeof ctx);
+    /* A 32x32 theme is only loadable under `--ega`, because the frame scale is a
+     * property of the art mode and a 1x frame would have to decimate it. The
+     * fixtures therefore load the way the engine loads them, not in a bare ctx —
+     * and the refusal of the other case is its own control further down. */
+    ctx.art_mode = U2_ART_EGA;
     memset(t, 0, sizeof *t);
     if (why && wn) why[0] = '\0';
     return u2_tiles_ega_open_in(&ctx, t, root, name);
@@ -185,13 +190,17 @@ int main(void)
     char why[256];
     u2_ctx gctx;
     memset(&gctx, 0, sizeof gctx);
+    gctx.art_mode = U2_ART_EGA;
     memset(&t, 0, sizeof t);
     CHECK(u2_tiles_ega_open_in(&gctx, &t, root, "good") == U2_TILES_EGA_OK,
           "a valid v2 theme loads");
     CHECK(t.loaded && t.count == 2, "the pool holds the 2 tiles the file is made of (%d)", t.count);
     CHECK(t.tile_w == 32 && t.tile_h == 32 && t.stride == 16,
           "32x32 at 4bpp gives a 16-byte stride (stride=%d)", t.stride);
-    CHECK(t.scale == 2, "a 32 px tile asks for a x2 frame (scale=%d)", t.scale);
+    CHECK(t.scale == 2, "a 32 px tile is native x2 (scale=%d)", t.scale);
+    CHECK(gctx.frame_scale == U2_EGA_FRAME_SCALE,
+          "and --ega composites at x%d regardless (frame=%d)",
+          U2_EGA_FRAME_SCALE, gctx.frame_scale);
     CHECK(t.has_palette && t.palette[1][1] == 255 && t.palette[1][0] == 0,
           "PALETTE.RGB is read and entry 1 is the green the fixture wrote");
     CHECK(t.has_map, "MAP.TSV is present so the atlas is not identity");
@@ -258,7 +267,20 @@ int main(void)
     CHECK(load("noident", &ti, why, sizeof why) == U2_TILES_EGA_OK, "a v2 theme with no MAP.TSV loads");
     CHECK(!ti.has_map && u2_tiles_ega_tile(&ti, 0x2A) == 0x2A,
           "no map means identity, which is what keeps every v1 theme valid");
-    CHECK(ti.scale == 1, "a 16 px theme keeps the 1x frame");
+    CHECK(ti.scale == 1, "a 16 px theme is native x1");
+    /* The frame it gets, though, is the art mode's: under --ega a 16x16 theme is
+     * block-upscaled rather than shrinking the window. */
+    {
+        u2_ctx ec;
+        memset(&ec, 0, sizeof ec);
+        ec.art_mode = U2_ART_EGA;
+        u2_tiles_ega ti2;
+        memset(&ti2, 0, sizeof ti2);
+        CHECK(u2_tiles_ega_open_in(&ec, &ti2, root, "noident") == U2_TILES_EGA_OK
+              && ec.frame_scale == U2_EGA_FRAME_SCALE,
+              "under --ega even a 16 px theme composites at x%d (frame=%d)",
+              U2_EGA_FRAME_SCALE, ec.frame_scale);
+    }
 
     /* --- the frame scale actually changes the framebuffer ---------------- */
     u2_frame f2;
@@ -400,6 +422,67 @@ int main(void)
         CHECK(u2_tiles_ega_open_in(&ctx, &b, "/var/tmp/u2-theme-v2-check/mixed", "v2two")
                   == U2_TILES_EGA_OK && b.scale == 1,
               "the v2 theme in a mixed directory loads through the same call");
+    }
+
+    /* --- the doubled v1 dump: the owner's accepted consequence ----------- */
+    /* `--ega` composites at 640x400 whatever the theme's tiles are, so a 16x16 v1
+     * theme is block-upscaled and its dump is a doubled image rather than a 1:1
+     * record of the fan pack's pixels. That is a ruling, not an accident, so it
+     * gets a test that would notice if the doubling were done differently (a
+     * decimation, or a 2x that samples the wrong pixel): the x2 frame must be
+     * EXACTLY the 1x frame with every pixel replaced by a 2x2 block. */
+    {
+        mkpath("EGATHEME.V1EGA");
+        char p[512];
+        snprintf(p, sizeof p, "%s/EGATHEME.V1EGA/EGATILES", root);
+        FILE *f = fopen(p, "wb");
+        for (int i = 0; i < 65; i++) { char b[128]; fill_tile(b, sizeof b, i + 7); fwrite(b, 1, sizeof b, f); }
+        fclose(f);
+
+        u2_ctx c1;
+        memset(&c1, 0, sizeof c1);
+        c1.art_mode = U2_ART_EGA;
+        u2_tiles_ega v1;
+        memset(&v1, 0, sizeof v1);
+        CHECK(u2_tiles_ega_open_in(&c1, &v1, root, "v1ega") == U2_TILES_EGA_OK,
+              "a v1 EGATILES still loads through the same entry point");
+        CHECK(v1.scale == 1 && c1.frame_scale == U2_EGA_FRAME_SCALE,
+              "the atlas stays native x1 while the art mode composites at x%d (frame=%d)",
+              U2_EGA_FRAME_SCALE, c1.frame_scale);
+
+        u2_frame small, big;
+        memset(&small, 0, sizeof small); memset(&big, 0, sizeof big);
+        u2_frame_init(&small, 1);
+        u2_frame_init(&big, U2_EGA_FRAME_SCALE);
+        u2_frame_clear(&small, 0); u2_frame_clear(&big, 0);
+        for (int tile = 0; tile < 4; tile++) {
+            u2_frame_blit_tile_ega(&small, &v1, tile, tile * 16, 0);
+            u2_frame_blit_tile_ega(&big, &v1, tile, tile * 32, 0);
+        }
+        int exact = 1, lit1 = 0, lit2 = 0;
+        for (int y = 0; y < small.h; y++)
+            for (int x = 0; x < small.w; x++) {
+                if (small.px[y][x]) lit1++;
+                if (big.px[y][x]) lit2++;
+            }
+        for (int y = 0; y < small.h && exact; y++)
+            for (int x = 0; x < small.w && exact; x++) {
+                const uint8_t a = small.px[y][x];
+                for (int j = 0; j < 2 && exact; j++)
+                    for (int i = 0; i < 2 && exact; i++)
+                        if (big.px[y * 2 + j][x * 2 + i] != a) exact = 0;
+            }
+        /* Both frames must actually contain the blit, or "exactly the expansion"
+         * is two empty buffers agreeing with each other. */
+        CHECK(lit1 > 200 && lit2 == 4 * lit1,
+              "both blits drew real pixels and the second has exactly 4x the ink (x1=%d, x2=%d)",
+              lit1, lit2);
+        CHECK(exact, "the x2 dump is exactly the x2 block expansion of the x1 frame");
+        /* And the cell pitch doubled with it, or four tiles would overlap. */
+        CHECK(big.px[0][31] != 0 || big.px[0][32] == small.px[0][16],
+              "the doubled cells keep their own 32 px pitch");
+        u2_frame_free(&small);
+        u2_frame_free(&big);
     }
 
     printf("theme_v2_check: %d checks, %d failures\n", checks, fails);;

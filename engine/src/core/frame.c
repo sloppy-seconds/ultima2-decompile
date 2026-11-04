@@ -147,21 +147,34 @@ void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x,
     /* Geometry comes from the theme, not from constants: a v1 theme is 16x16 with
      * an 8-byte stride and a v2 theme may be 32x32 with a 16-byte one, and the
      * compiler will not stop a hardcoded stride from being quietly wrong for one
-     * of them. Positions here are PHYSICAL pixels, and the tile's own pixels are
-     * physical, so this blit neither scales nor decimates. */
+     * of them.
+     *
+     * `s` is how many physical pixels one tile pixel is worth in THIS frame: the
+     * frame scale divided by the atlas's native scale. For a 32x32 theme in the
+     * 640x400 EGA frame that is 1 and the tile is blitted 1:1, every pixel it has.
+     * For a 16x16 theme in the same frame it is 2, and each tile pixel becomes a
+     * 2x2 block — the same nearest-neighbour doubling the SDL window was already
+     * doing one step later, moved into the frame so the frame size can be a
+     * property of the art mode instead of the theme. A frame is never SMALLER
+     * than a theme's native scale; the loader refuses that case rather than
+     * decimating the art. */
     const int tw = u2_tiles_ega_tile_w(t);
     const int th = u2_tiles_ega_tile_h(t);
     const int stride = u2_tiles_ega_stride(t);
+    const int s = u2_tiles_ega_present(t, f->scale);
 
     for (int row = 0; row < th; row++) {
-        const int dy = y + row;
-        if (dy < 0 || dy >= f->h) continue;                /* clipped */
+        const int dy = y + row * s;
+        if (dy >= f->h) continue;                          /* clipped */
         const uint8_t *src = t->px[tile] + row * stride;
         for (int col = 0; col < tw; col++) {
-            const int dx = x + col;
-            if (dx < 0 || dx >= f->w) continue;            /* clipped */
+            const int dx = x + col * s;
+            if (dx >= f->w) break;                         /* rest of the row is off-screen */
             const uint8_t b = src[col >> 1];
-            u2_frame_put(f, dx, dy, (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4)));
+            const uint8_t v = (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4));
+            for (int j = 0; j < s; j++)
+                for (int i = 0; i < s; i++)
+                    u2_frame_put(f, dx + i, dy + j, v);
         }
     }
 }
@@ -234,8 +247,9 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
 {
     if (!f || !v || !t) return;
 
-    const int tw = u2_tiles_ega_tile_w(t);
-    const int th = u2_tiles_ega_tile_h(t);
+    const int pres = u2_tiles_ega_present(t, f->scale);
+    const int cell_w = u2_tiles_ega_tile_w(t) * pres;
+    const int cell_h = u2_tiles_ega_tile_h(t) * pres;
 
     for (int row = 0; row < U2_VIEW_ROWS; row++) {
         for (int col = 0; col < U2_VIEW_COLS; col++) {
@@ -247,14 +261,14 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
             if (staging < 0) continue;
             const int tile = u2_tiles_ega_tile(t, u2_view_art(staging));
             if (tile < 0) continue;   /* the theme does not cover this art */
-            u2_frame_blit_tile_ega(f, t, tile, col * tw, row * th);
+            u2_frame_blit_tile_ega(f, t, tile, col * cell_w, row * cell_h);
         }
     }
 
     if (overlay_tile >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
         overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
         u2_frame_blit_tile_ega(f, t, overlay_tile,
-                               overlay_col * tw, overlay_row * th);
+                               overlay_col * cell_w, overlay_row * cell_h);
     }
     f->presents++;
 }

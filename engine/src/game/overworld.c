@@ -1856,14 +1856,17 @@ int u2_overworld_loop(u2_ctx *ctx, u2_overworld *ow)
                 if (u2_tiles_ega_open_in(ctx, &cand, ow->tiles_ega.dir, next)
                         == U2_TILES_EGA_OK) {
                     ow->tiles_ega = cand;
-                    /* A v2 theme can be a different tile size, and the frame is
-                     * sized by the theme, so a cycle that changes the scale must
-                     * re-allocate rather than blit a 32x32 theme into a 320-wide
-                     * buffer (or the reverse, which draws a quarter-size island).
-                     * u2_frame_init frees the old store, so this cannot leak. */
-                    u2_frame_ensure(&ow->frame, ctx->frame_scale);
-                    ow->frame.text_fg = ctx->text_fg ? ctx->text_fg : U2_CGA_WHITE;
+                    /* The frame is deliberately NOT re-sized here. The frame scale
+                     * is a property of the art mode, not of the theme, so a cycle
+                     * between a 16x16 and a 32x32 theme changes the pixels drawn
+                     * and nothing about the window, the texture or the staging
+                     * buffer the renderer allocated at startup. */
                     snprintf(ow->ega_theme, sizeof ow->ega_theme, "%s", next);
+                    snprintf(ow->ega_theme, sizeof ow->ega_theme, "%s", next);
+                    /* The ink DOES follow the theme: cycling into a theme that
+                     * ships a palette changes which index is readable text, and
+                     * cycling out must restore the CGA pair. */
+                    u2_frame_set_text_fg(&ow->frame, ctx->text_fg);
                     char msg[48];
                     snprintf(msg, sizeof msg, "EGA THEME: %s", next);
                     seam_str_out_at(ctx, 0, U2_MSG_TOP, msg);

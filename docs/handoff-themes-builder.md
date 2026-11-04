@@ -373,16 +373,22 @@ rather than merely drawing something.
 
 Four decisions the plan left open, and why:
 
-1. **The frame is sized by the theme, not the other way round.** § 4.3 item 1 asked
-   for a size-parameterised atlas; the atlas alone was not enough, because a 32x32
-   tile composited into a 320x200 frame has to be decimated to fit, which is the
-   downsampling § 4.2 rejects. So `u2_frame` is now a physical buffer with `w`, `h`
-   and `scale`, allocated by `u2_frame_init`/`u2_frame_ensure`, and there are two
-   writers: `u2_frame_put` (physical, what a tile blit uses) and
-   `u2_frame_put_logical` (a 1x-layout pixel as a scale x scale block, what text,
-   the flash ring and the full-screen pictures use). Getting that split wrong in
-   either direction is visible — a quarter-size island, or a map that ignores the
-   theme's own pixels — and `theme_v2_check` asserts both.
+1. **The frame is sized by the art mode, not by the theme.** § 4.3 item 1 asked for
+   a size-parameterised atlas; the atlas alone was not enough, because a 32x32 tile
+   composited into a 320x200 frame has to be decimated to fit, which is the
+   downsampling § 4.2 rejects. The first implementation sized the frame per theme,
+   which moved the problem into the renderer: a Ctrl-T cycle across tile sizes then
+   resizes a window, texture and staging buffer that `sdl_init` sized once, and
+   `sdl_upload` iterating the frame's current `w`/`h` writes 1,024,000 bytes into a
+   256,000-byte buffer. The owner ruled instead that **`--ega` always composites at
+   640x400** and a 16x16 theme is block-upscaled into it, which is the identical
+   doubling the SDL window was already doing (`SDL_SCALE 2`, nearest-neighbour), so
+   nothing on screen changes and the resize path does not exist. `u2_frame` is
+   heap-backed with `w`, `h` and `scale`; two writers keep the distinction honest —
+   `u2_frame_put` (physical, what a tile blit uses, at `frame_scale / native_scale`)
+   and `u2_frame_put_logical` (a 1x-layout pixel as a scale x scale block: text, the
+   flash ring, the pictures). The accepted cost is a doubled v1 dump, and
+   `theme_v2_check` pins the expansion exactly rather than approximately.
 2. **The pool holds every frame, so nothing is dropped.** § 4.2 said "first tile of
    each set only, record the dropped frames in the manifest". Better was to put all
    of them in `TILES` and keep the whole list in `MAP.TSV`, with `frames = first` in
@@ -427,8 +433,10 @@ loader to leave the CGA pair makes both assertions go red.
 * `THEME.INI` refuses an unknown `scope` word, so adding `dungeon` or `tower` to a
   theme is a manifest edit and a `parse_scope` line, not a loader change. The dungeon
   banks decode already.
-* The frame scale cap is `U2_FRAME_MAX_SCALE` (2). A 64x64 theme would be refused
-  with a named reason rather than drawn wrong.
+* The frame scale is `U2_EGA_FRAME_SCALE` (2) for the whole `--ega` axis and 1 for
+  CGA; it is not a theme field. A theme whose tiles are natively larger than that is
+  refused at load rather than decimated, so a 64x64 set needs a deliberate change to
+  `U2_FRAME_MAX_SCALE` and `U2_EGA_FRAME_SCALE` together, not a manifest edit.
 
 ## 5. Slice C — HELD. The v2 extras that make FM Towns complete
 
