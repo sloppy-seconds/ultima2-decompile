@@ -151,8 +151,10 @@ static void usage(const char *argv0)
         "  --original-dir DIR    the original DOS release: an unzipped download, a CD\n"
         "                    rip, or a directory an emulator already uses.\n"
         "  --updated-dir DIR     the Galaxy patch layer (MAPG / MONG / TLKG).\n"
-        "  --themes-dir DIR      the fan art pack. Not consumed yet: themes are still\n"
-        "                    built by tools/build_themes.py (docs/install-design.md § 10).\n"
+        "  --themes-dir DIR      the fan art pack. Repeatable: no single pack is\n"
+        "                    complete, so the upgrade pack (atlases and themes) and\n"
+        "                    the Galaxy directory (the full PIC*-E picture set) are\n"
+        "                    usually both needed. First source wins per file.\n"
         "\nkeys while playing:\n"
         "  Ctrl-Q  quit (the original has no quit key; 'Q' saves)\n"
         "  Ctrl-T  cycle the EGA tile theme (only with --ega; walks the themes\n"
@@ -259,7 +261,9 @@ int main(int argc, char **argv)
     const char *config_path = NULL;
     int install_mode = 0, install_check_only = 0;
     const char *install_to = NULL, *install_orig = NULL;
-    const char *install_upd = NULL, *install_themes = NULL;
+    const char *install_upd = NULL;
+    const char *install_themes[U2_THEMES_MAX_SOURCES] = { 0 };
+    int n_install_themes = 0;
     u2_config cfg;
     memset(&ctx, 0, sizeof ctx);
     ctx.mode = U2_MODE_TERM;
@@ -334,7 +338,15 @@ int main(int argc, char **argv)
         } else if (strcmp(a, "--updated-dir") == 0 && i + 1 < argc) {
             install_upd = argv[++i];
         } else if (strcmp(a, "--themes-dir") == 0 && i + 1 < argc) {
-            install_themes = argv[++i];
+            /* Repeatable: no single art pack is complete, so the upgrade pack and
+             * the Galaxy directory are usually both needed. */
+            if (n_install_themes < U2_THEMES_MAX_SOURCES)
+                install_themes[n_install_themes++] = argv[++i];
+            else {
+                fprintf(stderr, "u2: at most %d --themes-dir values\n",
+                        U2_THEMES_MAX_SOURCES);
+                return 2;
+            }
         } else if (strcmp(a, "--seed") == 0 && i + 1 < argc) {
             seed = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(a, "--replay-report") == 0 && i + 1 < argc) {
@@ -439,11 +451,17 @@ int main(int argc, char **argv)
             return 2;
         }
         char ierr[512];
+        u2_install_request rq;
+        memset(&rq, 0, sizeof rq);
+        rq.to = install_to;
+        rq.original_dir = install_orig;
+        rq.updated_dir = install_upd;
+        rq.n_themes_dir = n_install_themes;
+        for (int k = 0; k < n_install_themes; k++)
+            rq.themes_dir[k] = install_themes[k];
         const u2_install_result r = install_check_only
             ? u2_install_check(install_to, stdout, ierr, sizeof ierr)
-            : (u2_install_apply(&(u2_install_request){ install_to, install_orig,
-                                                       install_upd, install_themes },
-                                stdout, ierr, sizeof ierr));
+            : u2_install_apply(&rq, stdout, ierr, sizeof ierr);
         if (r != U2_INSTALL_OK && *ierr)
             fprintf(stderr, "u2: %s\n", ierr);
         return (int)r;

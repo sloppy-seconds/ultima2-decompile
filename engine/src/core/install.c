@@ -18,11 +18,12 @@
 #include <unistd.h>
 
 #include "core/compat.h"
+#include "core/copy.h"
 #include "core/sha256.h"
 
 #define MAX_ROWS     1024
 #define NAME_LEN     128
-#define HASH_LEN     16           /* sha256 hex prefix, as themes/_BUILD.tsv uses */
+#define HASH_LEN     U2_HASH_LEN   /* the width core/copy.h hashes to */
 #define MAX_FILE_COPY (8u * 1024u * 1024u)
 
 typedef struct {
@@ -80,63 +81,20 @@ int u2_install_classify(const char *name, int *galaxy_spelling)
     return 0;
 }
 
-/* ------------------------------------------------------------------ files */
+/* ------------------------------------------------------------------ files
+ * The primitives are core/copy.c, shared with the theme builder so the two
+ * builders cannot disagree about what "copied" means. */
 
-static long file_size(const char *p)
-{
-    struct stat st;
-    return stat(p, &st) == 0 ? (long)st.st_size : -1;
-}
+static long file_size(const char *p) { return u2_file_size(p); }
 
-static int is_dirpath(const char *p)
-{
-    struct stat st;
-    return stat(p, &st) == 0 && S_ISDIR(st.st_mode);
-}
+static int is_dirpath(const char *p) { return u2_is_dir(p); }
 
-/* sha256 of a whole file, first 16 hex characters. The files here are sector maps
- * and atlases, a few kilobytes each, so reading one into memory is not a streaming
- * problem and the code is honest about the size it will not exceed. */
 static int hash_file(const char *p, char out[HASH_LEN + 1], long *out_size)
 {
-    const long sz = file_size(p);
-    if (sz < 0 || (unsigned long)sz > MAX_FILE_COPY)
-        return -1;
-    FILE *f = fopen(p, "rb");
-    if (!f)
-        return -1;
-    unsigned char *buf = malloc((size_t)sz ? (size_t)sz : 1);
-    if (!buf) { fclose(f); return -1; }
-    const size_t got = fread(buf, 1, (size_t)sz, f);
-    fclose(f);
-    if (got != (size_t)sz) { free(buf); return -1; }
-
-    char hex[65];
-    sha256_hex(buf, (size_t)sz, hex);
-    free(buf);
-    memcpy(out, hex, HASH_LEN);
-    out[HASH_LEN] = '\0';
-    if (out_size)
-        *out_size = sz;
-    return 0;
+    return u2_hash_file(p, out, out_size);
 }
 
-static int mkdir_p(const char *path)
-{
-    char buf[512];
-    snprintf(buf, sizeof buf, "%.511s", path);
-    for (char *s = buf + 1; *s; s++) {
-        if (*s != '/')
-            continue;
-        *s = '\0';
-        if (mkdir(buf, 0755) != 0 && errno != EEXIST)
-            return -1;
-        *s = '/';
-    }
-    if (mkdir(buf, 0755) != 0 && errno != EEXIST)
-        return -1;
-    return 0;
-}
+static int mkdir_p(const char *path) { return u2_mkdir_p(path); }
 
 /* Copy src to dst byte-for-byte, then prove it by hashing the destination back.
  * A copy that "succeeded" and landed wrong is the failure this whole tool is built
@@ -144,42 +102,7 @@ static int mkdir_p(const char *path)
 static int copy_verified(const char *src, const char *dst, long want_size,
                          const char want_sha[HASH_LEN + 1])
 {
-    const long sz = file_size(src);
-    if (sz < 0 || (unsigned long)sz > MAX_FILE_COPY)
-        return -1;
-
-    char tmp[1024];
-    snprintf(tmp, sizeof tmp, "%.1010s.u2tmp", dst);
-    FILE *o = fopen(tmp, "wb");
-    if (!o)
-        return -1;
-    FILE *f = fopen(src, "rb");
-    if (!f) { fclose(o); unlink(tmp); return -1; }
-
-    unsigned char *chunk = malloc(65536);
-    size_t total = 0;
-    int ok = chunk != NULL;
-    while (ok) {
-        const size_t n = fread(chunk, 1, 65536, f);
-        if (n == 0) break;
-        if (fwrite(chunk, 1, n, o) != n) { ok = 0; break; }
-        total += n;
-    }
-    free(chunk);
-    fclose(f);
-    if (fclose(o) != 0) ok = 0;
-    if (!ok || total != (size_t)sz || total != (size_t)want_size || rename(tmp, dst) != 0) {
-        unlink(tmp);
-        return -1;
-    }
-
-    char sha[HASH_LEN + 1];
-    long after = 0;
-    if (hash_file(dst, sha, &after) != 0)
-        return -1;
-    if (after != want_size || strcmp(sha, want_sha) != 0)
-        return -1;
-    return 0;
+    return u2_copy_verified(src, dst, want_size, want_sha);
 }
 
 /* ------------------------------------------------------------------ target */
@@ -506,7 +429,26 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         }
     }
 
-    if (write_config(rq->to, 0) != 0) {
+    int have_themes = 0;
+    if (rq->n_themes_dir > 0) {
+        char tdir[1024];
+        snprintf(tdir, sizeof tdir, "%.1000s/%s", rq->to, U2_INSTALL_THEMES);
+        u2_themes_request trq;
+        memset(&trq, 0, sizeof trq);
+        trq.out = tdir;
+        trq.n_sources = rq->n_themes_dir;
+        for (int i = 0; i < rq->n_themes_dir && i < U2_THEMES_MAX_SOURCES; i++)
+            trq.sources[i] = rq->themes_dir[i];
+        char terr[512];
+        if (u2_themes_build(&trq, out, terr, sizeof terr) != 0) {
+            snprintf(err, errsz, "%.511s", terr);
+            free(rows);
+            return U2_INSTALL_ERROR;
+        }
+        have_themes = 1;
+    }
+
+    if (write_config(rq->to, have_themes) != 0) {
         snprintf(err, errsz, "cannot write %s", U2_INSTALL_CONFIG);
         free(rows);
         return U2_INSTALL_ERROR;
@@ -519,9 +461,9 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
 
     fprintf(out, "installed: %d file(s), manifest %s, config %s\n",
             written, U2_INSTALL_MANIFEST, U2_INSTALL_CONFIG);
-    if (!rq->themes_dir || !*rq->themes_dir)
+    if (!have_themes)
         fprintf(out, "note: no themes installed; --ega needs a themes directory "
-                     "(docs/install-design.md § 10)\n");
+                     "(--themes-dir, or docs/install-design.md § 10)\n");
     free(rows);
     return U2_INSTALL_OK;
 }
@@ -637,8 +579,24 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
         fprintf(out, ", %d played-in", drifted);
     fputc('\n', out);
 
+    /* The themes subtree carries its own manifest, because it is the theme
+     * builder's output rather than a copy of the player's release, and each
+     * manifest stays authoritative for its own half of the tree. */
+    int themes_bad = 0;
+    {
+        char tdir[1024];
+        snprintf(tdir, sizeof tdir, "%.1000s/%s", to, U2_INSTALL_THEMES);
+        if (is_dirpath(tdir)) {
+            char terr[512];
+            if (u2_themes_check(tdir, out, terr, sizeof terr) != 0) {
+                fprintf(out, "  themes: %s\n", terr);
+                themes_bad = 1;
+            }
+        }
+    }
+
     free(rows);
-    if (missing || wrong || strays) {
+    if (missing || wrong || strays || themes_bad) {
         snprintf(err, errsz, "the tree does not match its manifest");
         return U2_INSTALL_REFUSED;
     }

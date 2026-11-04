@@ -57,10 +57,15 @@ picture set exists only in `updated/`. Instead of pointing at one and losing the
 a merged tree:
 
 ```bash
-python3 tools/build_themes.py --report    # inventory every source, write nothing
-python3 tools/build_themes.py             # build themes/ and verify every byte
-./u2-sdl --ega --data-dir ~/u2 --ega-theme-dir themes/ --ega-theme c64
+./u2 --install --to ~/Games/ultima2 --original-dir ~/dl/ultima2 \
+       --updated-dir ~/dl/ultima2/updated --themes-dir ~/dl/U2Upgrade \
+       --themes-dir ~/dl/ultima2/updated      # builds data/, themes/ and config.ini
+./u2-sdl --ega --config ~/Games/ultima2/config.ini --ega-theme c64
 ```
+
+The drop-in path still works for someone who just wants to point at a pack:
+`--ega-theme-dir themes/` takes any directory the builder has produced, or the fan
+pack itself.
 
 The builder copies **whole theme directories**, never selected files (a theme is `EGATILES`
 plus an optional `EGACOLOR` plus optional pictures, and which extras exist is per-theme),
@@ -139,7 +144,7 @@ starts from the driver rather than from a guess.
 One more gap in the same direction: the theme directories `10` and `C64` each ship their own
 `PICDNG.EGA` and `PICSPA.EGA`, and those differ from the top-level files. The engine resolves
 pictures at the **top level** of the themes directory only (`pic_ega.c` `candidate_dirs`), so
-per-theme pictures are copied by `tools/build_themes.py` and never read by the engine. The
+per-theme pictures are copied by the installer and never read by the engine. The
 fan pack's driver does look for them theme-relative, with a fall-back to the bare name
 (`0x5f1`..`0x60d`), so the art is not exotic — our loader is just narrower.
 
@@ -154,8 +159,9 @@ and the alignment between a DOS index and an FM tile is not the identity
 by field contract is `docs/theme-format.md`; this section is the shape of it.
 
 ```bash
-python3 tools/build_themes.py --fmtowns        # derives themes/fmtowns/ from your disc
-./u2-sdl --ega --data-dir ~/u2 --ega-theme-dir themes/ --ega-theme fmtowns
+# the FM Towns derivation is not ported to the installer yet; see
+# docs/install-design.md § 11 and docs/fmtowns-graphics.md for how it is derived
+./u2-sdl --ega --config ~/Games/ultima2/config.ini --ega-theme fmtowns
 ```
 
 What a v2 theme directory holds:

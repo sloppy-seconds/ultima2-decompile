@@ -11,7 +11,7 @@
  * accepts it.
  *
  * The fixtures are written under /var/tmp so the controls need no player media,
- * exactly like tools/build_themes_selftest.sh. The one part that needs the real
+ * exactly like engine/tests/install_controls.py. The one part that needs the real
  * art — that the FM Towns letter rows decode to the right tiles — skips cleanly
  * when themes/fmtowns has not been built, because a gate that passes vacuously
  * is worse than one that says it did not run.
@@ -328,8 +328,8 @@ int main(void)
     memset(&fm, 0, sizeof fm);
     const u2_tiles_ega_result fr = u2_tiles_ega_open(&ctx, &fm, "fmtowns");
     if (fr != U2_TILES_EGA_OK) {
-        printf("  SKIP  themes/fmtowns not built (run `python3 tools/build_themes.py "
-               "--fmtowns`); the real-art checks did not run\n");
+        printf("  SKIP  themes/fmtowns not built (the FM Towns derivation is not "
+               "ported to --install yet); the real-art checks did not run\n");
     } else {
         CHECK(fm.count == 80 || fm.count > 64,
               "the FM Towns pool is the crosswalk's distinct tiles (%d)", fm.count);

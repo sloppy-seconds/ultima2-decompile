@@ -52,6 +52,10 @@ CONFIG_CONTROLS = [
      ["src/core/config.c", "src/core/ini.c"]),
 ]
 
+INSTALL_SRCS = ["src/core/install.c", "src/core/themes.c", "src/core/copy.c",
+                "src/core/roots.c", "src/core/sha256.c",
+                "src/core/world.c", "src/core/config.c", "src/core/ini.c"]
+
 INSTALL_CONTROLS = [
     ("no-manifest", "src/core/install.c",
      '    fprintf(f, "# dst\\tkind\\tsource\\tsize\\tsha256:16\\n");',
@@ -59,49 +63,68 @@ INSTALL_CONTROLS = [
      '    fclose(f); rename(tmp, path); return 0;',
      "the manifest records what was emitted",
      "tests/install_check.c",
-     ["src/core/install.c", "src/core/roots.c", "src/core/sha256.c",
-      "src/core/world.c", "src/core/config.c", "src/core/ini.c"]),
+     INSTALL_SRCS),
     ("everything-is-content", "src/core/install.c",
      '    if (!strcmp(lo, "monsters") || !strcmp(lo, "player") || !strcmp(lo, "ultimaii.exe"))\n'
      "        return 1;",
      "    return 1;",
      "non-content files are skipped, not copied",
      "tests/install_check.c",
-     ["src/core/install.c", "src/core/roots.c", "src/core/sha256.c",
-      "src/core/world.c", "src/core/config.c", "src/core/ini.c"]),
+     INSTALL_SRCS),
     ("foreign-target-allowed", "src/core/install.c",
      '    if (st == T_FOREIGN) {\n        snprintf(err, errsz,\n                 "%s is not empty and carries no %s',
      '    if (0) {\n        snprintf(err, errsz,\n                 "%s is not empty and carries no %s',
      "a directory that is not ours is never written to",
      "tests/install_check.c",
-     ["src/core/install.c", "src/core/roots.c", "src/core/sha256.c",
-      "src/core/world.c", "src/core/config.c", "src/core/ini.c"]),
+     INSTALL_SRCS),
     ("all-drift-is-played-in", "src/core/install.c",
      '    return !strncasecmp(base, "mapx", 4) || !strncasecmp(base, "mapg", 4) ||\n'
      '           !strncasecmp(base, "monx", 4) || !strncasecmp(base, "mong", 4);',
      "    return 1;",
      "only sector files are allowed to drift (D6)",
      "tests/install_check.c",
-     ["src/core/install.c", "src/core/roots.c", "src/core/sha256.c",
-      "src/core/world.c", "src/core/config.c", "src/core/ini.c"]),
+     INSTALL_SRCS),
     ("patch-wins-the-shadow", "src/core/install.c",
      "    if (rq->original_dir && *rq->original_dir) {",
      "    if (0) {",
      "the release layer wins a file present in both sources",
      "tests/install_check.c",
-     ["src/core/install.c", "src/core/roots.c", "src/core/sha256.c",
-      "src/core/world.c", "src/core/config.c", "src/core/ini.c"]),
+     INSTALL_SRCS),
+    ("empty-themes-accepted", "src/core/themes.c",
+     '    if (themes == 0) {',
+     "    if (0) {",
+     "a themes source with no atlas is refused, not silently empty",
+     "tests/install_check.c",
+     INSTALL_SRCS),
+    ("theme-extras-dropped", "src/core/themes.c",
+     '        add_copy(p, full, dst, theme, "theme-file", NULL);\n    }\n\n    if (is_theme && !strcmp(theme, DEFAULT_NAME)) {',
+     '        if (role != ROLE_COLOR)\n            add_copy(p, full, dst, theme, "theme-file", NULL);\n    }\n\n    if (is_theme && !strcmp(theme, DEFAULT_NAME)) {',
+     "a theme is copied whole, EGACOLOR included",
+     "tests/install_check.c",
+     INSTALL_SRCS),
+    ("no-generated-theme-ini", "src/core/themes.c",
+     '        add_generated(p, dst, DEFAULT_NAME, default_theme_ini());',
+     "        (void)dst;",
+     "the reshaped default gains a THEME.INI describing it",
+     "tests/install_check.c",
+     INSTALL_SRCS),
+    ("picture-key-by-filename", "src/core/themes.c",
+     '                    snprintf(key, sizeof key, "PIC:%.6s", base);',
+     '                    snprintf(key, sizeof key, "PIC:%.20s", up);',
+     "root pictures are deduped by picture base, not filename",
+     "tests/install_check.c",
+     INSTALL_SRCS, 2),
 ]
 
 CC = ["cc", "-std=c11", "-Wall", "-Wextra", "-Wno-unused-parameter",
       "-Wno-unused-function", "-Isrc"]
 
 
-def run_control(name, source, old, new, label, test, extra_srcs):
+def run_control(name, source, old, new, label, test, extra_srcs, count=1):
     """Returns None on a satisfied control, or the reason it was not."""
     src_text = (SRC / source).read_text()
-    if src_text.count(old) != 1:
-        return f"anchor found {src_text.count(old)} times (control is stale)"
+    if src_text.count(old) != count:
+        return f"anchor found {src_text.count(old)} times, expected {count}"
 
     broken = WORK / f"{name}.c"
     broken.write_text(src_text.replace(old, new))
@@ -138,10 +161,10 @@ def main():
     WORK.mkdir(parents=True, exist_ok=True)
     bad = []
     for group, controls in (("config", CONFIG_CONTROLS), ("install", INSTALL_CONTROLS)):
-        for name, source, old, new, label, test, extra in controls:
-            reason = run_control(name, source, old, new, label, test, extra)
+        for ctl in controls:
+            reason = run_control(*ctl)
             if reason:
-                bad.append(f"{group}/{name}: {reason}")
+                bad.append(f"{group}/{ctl[0]}: {reason}")
     if bad:
         print("  FAIL  installer controls:")
         for b in bad:

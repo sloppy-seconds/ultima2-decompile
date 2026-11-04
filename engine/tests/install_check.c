@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         snprintf(inside, sizeof inside, "%.1000s/foreign/keep.me", base);
         write_bytes(inside, 0x5A, 7);
 
-        u2_install_request rq = { foreign, rel, upd, NULL };
+        u2_install_request rq = { foreign, rel, upd, { NULL }, 0 };
         CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_REFUSED,
               "a non-empty directory with no manifest is refused");
         CHECK(size_of(inside) == 7, "  and nothing in it was touched");
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
     }
 
     /* --- greenfield install ------------------------------------------------ */
-    u2_install_request rq = { to, rel, upd, NULL };
+    u2_install_request rq = { to, rel, upd, { NULL }, 0 };
     CHECK(u2_install_apply(&rq, log, err, sizeof err) == U2_INSTALL_OK,
           "install into a nonexistent directory creates it");
 
@@ -335,6 +335,135 @@ int main(int argc, char **argv)
               "  and it pins the content root to the installed tree");
         CHECK(ctx.save_dir && strstr(ctx.save_dir, "saves") != NULL,
               "  and the saves directory");
+    }
+
+    /* --- themes: the v1 reshape, built by the same installer ---------------- */
+    {
+        char art[1024], d[1024], e[1024];
+        snprintf(art, sizeof art, "%.480s/art", base);            mkdir(art, 0755);
+        snprintf(d, sizeof d, "%.480s/EGATILES", art);            write_bytes(d, 0x21, 8320);
+        snprintf(d, sizeof d, "%.480s/EGACOLOR", art);            write_bytes(d, 0x22, 32);
+        snprintf(d, sizeof d, "%.480s/PICDNG.EGA", art);          write_bytes(d, 0x23, 64000);
+        snprintf(d, sizeof d, "%.480s/CGATILES", art);            write_bytes(d, 0x24, 8192);
+        snprintf(d, sizeof d, "%.480s/README.txt", art);          write_bytes(d, 0x25, 40);
+        snprintf(d, sizeof d, "%.480s/u2cfg.exe", art);           write_bytes(d, 0x26, 40);
+        snprintf(d, sizeof d, "%.480s/EGATHEME.C64", art);        mkdir(d, 0755);
+        snprintf(e, sizeof e, "%.480s/EGATILES", d);               write_bytes(e, 0x31, 8320);
+        snprintf(e, sizeof e, "%.480s/EGACOLOR", d);               write_bytes(e, 0x32, 32);
+        snprintf(d, sizeof d, "%.480s/EGATHEME.ALT", art);        mkdir(d, 0755);
+        snprintf(e, sizeof e, "%.480s/EGATILES", d);               write_bytes(e, 0x41, 8320);
+
+        /* A second source with no atlas at all, which is how the Galaxy directory
+         * arrives: it ships the full PIC*-E picture set and no themes, and that is
+         * a complete contribution rather than a defect. PICDNG-E is the same
+         * picture as art's PICDNG.EGA in another spelling. */
+        char art2[1024];
+        snprintf(art2, sizeof art2, "%.480s/art2", base);          mkdir(art2, 0755);
+        snprintf(d, sizeof d, "%.480s/PICDNG-E", art2);            write_bytes(d, 0x61, 64000);
+        snprintf(d, sizeof d, "%.480s/PICMIN-E", art2);            write_bytes(d, 0x62, 64000);
+
+        u2_install_request with_themes = { to, rel, upd, { art, art2 }, 2 };
+        CHECK(u2_install_apply(&with_themes, log, err, sizeof err) == U2_INSTALL_OK,
+              "install with --themes-dir builds themes/");
+
+        int tn = collect(to, "", files, 0, 512);
+        CHECK(has(files, tn, "themes/_BUILD.tsv"), "the themes manifest is written");
+        CHECK(has(files, tn, "themes/default/TILES"),
+              "the default theme is reshaped to a v2 directory (EGATILES becomes TILES)");
+        CHECK(has(files, tn, "themes/default/THEME.INI"),
+              "  and gains a THEME.INI describing it");
+        CHECK(has(files, tn, "themes/default/EGACOLOR"), "  and keeps its colour remap");
+        CHECK(has(files, tn, "themes/EGATHEME.C64/EGATILES") &&
+              has(files, tn, "themes/EGATHEME.C64/EGACOLOR"),
+              "a named theme is copied whole, extras included");
+        CHECK(has(files, tn, "themes/EGATHEME.ALT/EGATILES"),
+              "a theme that ships an atlas alone is still a theme");
+        CHECK(has(files, tn, "themes/PICDNG.EGA"),
+              "the default theme's picture is hoisted to the root, where pic_ega.c looks");
+        CHECK(has(files, tn, "themes/PICMIN-E"),
+              "a picture only the second source ships still lands");
+        /* PICDNG.EGA and PICDNG-E are the same picture in two spellings and
+         * pic_ega.c tries both, so the root holds one per base and the first
+         * source wins. Keying the dedup on the filename instead fills the root
+         * with duplicates that differ only in a dash -- the exact divergence the
+         * C builder had against the Python one it replaces. */
+        CHECK(!has(files, tn, "themes/PICDNG-E"),
+              "two spellings of one picture base do not both land at the themes root");
+        CHECK(has(files, tn, "themes/default/PICDNG.EGA"),
+              "  and stays inside its own theme directory too");
+        CHECK(!has(files, tn, "themes/CGATILES") && !has(files, tn, "themes/default/CGATILES"),
+              "the CGA atlas is not theme content");
+        CHECK(!has(files, tn, "themes/README.txt") && !has(files, tn, "themes/u2cfg.exe"),
+              "docs and patcher binaries stay out of the themes tree");
+
+        /* the atlas landed byte-identical, which is the whole no-re-encode rule */
+        {
+            char a[1024], b[1024];
+            snprintf(a, sizeof a, "%.480s/EGATILES", art);
+            snprintf(b, sizeof b, "%.480s/themes/default/TILES", to);
+            CHECK(same_bytes(a, b), "the reshaped atlas is byte-identical to its source");
+            snprintf(a, sizeof a, "%.480s/EGATHEME.C64/EGATILES", art);
+            snprintf(b, sizeof b, "%.480s/themes/EGATHEME.C64/EGATILES", to);
+            CHECK(same_bytes(a, b), "  and so is a named theme's");
+        }
+
+        /* config.ini gains [themes] only because themes actually exist now */
+        {
+            char path[1024];
+            u2_config cfg2;
+            char cerr[512];
+            snprintf(path, sizeof path, "%.480s/config.ini", to);
+            CHECK(u2_config_load(path, &cfg2, cerr, sizeof cerr) == U2_CONFIG_OK &&
+                  *cfg2.themes && strstr(cfg2.themes, "themes") != NULL,
+                  "config.ini names the themes directory once there is one");
+        }
+
+        CHECK(u2_install_check(to, log, err, sizeof err) == U2_INSTALL_OK,
+              "--check verifies the themes subtree too");
+
+        /* a half-copied theme must not pass */
+        {
+            char victim[1024], keep[1024];
+            snprintf(victim, sizeof victim, "%.480s/themes/EGATHEME.C64/EGACOLOR", to);
+            snprintf(keep, sizeof keep, "%.480s/snap-c64color", base);
+            copy_file(victim, keep);
+            unlink(victim);
+            CHECK(u2_install_check(to, log, err, sizeof err) == U2_INSTALL_REFUSED,
+                  "--check goes red when a theme loses a file its source ships");
+            copy_file(keep, victim);
+        }
+
+        /* a themes source with no atlas anywhere in it is refused rather than
+         * producing an empty themes tree, which the engine would report as
+         * "no such theme" while the installer claimed success. */
+        {
+            char bare[1024], game3[1024];
+            snprintf(bare, sizeof bare, "%.480s/artbare", base);   mkdir(bare, 0755);
+            snprintf(d, sizeof d, "%.480s/README.txt", bare);      write_bytes(d, 0x71, 20);
+            snprintf(game3, sizeof game3, "%.480s/game3", base);
+            u2_install_request bare_rq = { game3, rel, upd, { bare }, 1 };
+            CHECK(u2_install_apply(&bare_rq, log, err, sizeof err) != U2_INSTALL_OK,
+                  "a themes source containing no atlas is refused, not silently empty");
+        }
+
+        /* a source whose atlas is the wrong size is refused before anything is
+         * written, and the tree is not claimed as installed: no manifest, so a
+         * later --check cannot mistake a half-built tree for a good one. */
+        {
+            char bad[1024], game2[1024];
+            snprintf(bad, sizeof bad, "%.480s/artbad", base);
+            snprintf(game2, sizeof game2, "%.480s/game2", base);
+            mkdir(bad, 0755);
+            snprintf(d, sizeof d, "%.480s/EGATILES", bad);
+            write_bytes(d, 0x51, 100);          /* below the size the engine reads */
+            u2_install_request bad_rq = { game2, rel, upd, { bad }, 1 };
+            CHECK(u2_install_apply(&bad_rq, log, err, sizeof err) != U2_INSTALL_OK,
+                  "a themes source with a short atlas is refused");
+            char m[1024];
+            snprintf(m, sizeof m, "%.480s/_INSTALL.tsv", game2);
+            CHECK(size_of(m) < 0,
+                  "  and the half-built tree carries no manifest to mistake it for good");
+        }
     }
 
     /* --- assertion 5: --check, and the ways it goes red -------------------- */

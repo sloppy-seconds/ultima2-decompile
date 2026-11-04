@@ -16,8 +16,10 @@ itself in `engine/src/core/install.c`, reached as `--install --to DIR` and
 (49), and `engine/tests/install_controls.py` (9 properties, each proved able to go
 red). All of it runs headless in CP4.
 
-**Not built:** themes (§ 10 — `--themes-dir` is accepted and reported as not yet
-consumed), the FM Towns source (deferred, § 11), and self-update (ruled out, § 9).
+**Not built:** the FM Towns source (deferred, § 11 — and the v2-from-disc derivation
+that produced it lived in the Python builder, which has been deleted), and
+self-update (ruled out, § 9). The theme reshape is built: `--install --themes-dir`
+replaces `tools/build_themes.py`, which is gone.
 
 **The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
 § 11, along with the two that came out of them (D6, D7) and the follow-up ruling
@@ -160,8 +162,9 @@ Three parts, plus the config file:
   rewrites `player` in place, which is why `AGENTS.md` says never run the game in
   place. If `data/` keeps the installed copy and `saves/` holds the live one, a DOS
   run and an engine run stop fighting over the same file.
-* `themes/` — built by the same code as `tools/build_themes.py`, shared rather than
-  reimplemented (§ 10).
+* `themes/` — built by `core/themes.c` in the same `--install` run (§ 10). The
+  Python builder that used to do this was deleted rather than kept beside it, so
+  there is one definition of the format and it is the one in the shipped binary.
 * `config.ini` in the game directory, naming the three.
 
 **D6 — sector write-back stays where it is, for now.** *measured* —
@@ -188,7 +191,7 @@ subjects, different writers and different lifetimes:
 | file | subject | written by | read when |
 | --- | --- | --- | --- |
 | `config.ini` | where things are, what the user prefers | the installer, and the user | every startup |
-| `<theme>/THEME.INI` | what the art in *that directory* is: tile size, bpp, bank layout, palette, scope, `MAP.TSV` | `tools/build_themes.py` | when that theme is selected |
+| `<theme>/THEME.INI` | what the art in *that directory* is: tile size, bpp, bank layout, palette, scope, `MAP.TSV` | the installer (`core/themes.c`) | when that theme is selected |
 
 Three reasons the per-theme file cannot move into a global one:
 
@@ -274,8 +277,9 @@ one that feels magical, and every one of them is here because of something that
 went wrong in this project.
 
 1. **Never write into a source.** Hash the source tree before and after, and prove
-   it is untouched. `tools/build_themes.py` already refuses to write into
-   `original/` or `references/`; the installer inherits that rule and the proof.
+   it is untouched. The installer and the theme builder both refuse to write into
+   `original/` or `references/`, and the gate proves it by comparing the sources
+   byte-for-byte before and after an install.
 2. **Byte-identical copies, no transforms.** No renames, no case-fixing, no
    `RENGAL.BAT`. A transformation is a claim, and claims need evidence.
 3. **Idempotent.** A second run changes nothing and says so — which needs the § 11
@@ -382,28 +386,37 @@ Splitting it matters because the two halves have completely different costs:
 ## 10. What the theme work leaves behind
 
 **Done and gated** (see `docs/theme-format.md` for the contract): the v1 and v2
-loaders, content-based theme discovery, the reshaped `default/` theme, the FM Towns
-v2 derivation, `--ega` compositing at 640×400 with the doubled-dump ruling, the
-theme palette driving both the renderer and the text ink, `tools/build_themes.py`
-with 19 controls, and `engine/tests/theme_v2_check.c` with 39 checks including six
-refusals.
+loaders, content-based theme discovery, the reshaped `default/` theme, `--ega`
+compositing at 640×400 with the doubled-dump ruling, the theme palette driving both
+the renderer and the text ink, `engine/tests/theme_v2_check.c` with 39 checks
+including six refusals, and the theme builder itself — `core/themes.c`, reached
+from `--install --themes-dir`, which replaced `tools/build_themes.py` and that tool
+has been deleted.
+
+The replacement was verified before the deletion rather than after: the C builder and
+the Python builder were run over the same real media and their trees compared. The
+file sets came out identical and every file byte-identical except
+`default/THEME.INI`, whose only difference is the provenance line naming the new
+writer. That check found a real divergence on the way — the C builder keyed root
+picture dedup on the filename and the Python one keyed it on the picture *base*, so
+`PICDNG.EGA` and `PICDNG-E` both landed at the themes root. The Python behaviour was
+the correct contract (one picture per base, first source wins) and is now pinned by
+a test.
 
 **Inherited by the installer** — these were theme-handover items and they are now
 this document's problem:
 
 | item | where it lands |
 | --- | --- |
-| asking the player for the art package | § 5, `--themes-dir` — **accepted by the CLI and reported as not yet consumed** |
-| the FM Towns disc as an optional source | § 5, `--media-dir` (deferred, § 11) |
-| `themes/` being built rather than hand-copied | § 3, shared code with `build_themes.py` — **not built** |
+| asking the player for the art package | § 5, `--themes-dir`, repeatable — **built** |
+| the FM Towns disc as an optional source | § 5, `--media-dir` — **deferred**, and the v2 derivation left with the deleted Python tool; `docs/fmtowns-graphics.md` and `disasm/fmtowns-crosswalk.tsv` remain the record of how it is done |
+| `themes/` being built rather than hand-copied | § 3, `core/themes.c` — **built** |
 | the dev-checkout fallbacks going away in a release build | § 4 — **not done**: `references/u2upgrade` is still a candidate in `pic_ega.c` |
 
-One thing the § 3 wording glossed over, and it needs saying before themes land: "the
-same code as `tools/build_themes.py`, shared rather than reimplemented" cannot be
-taken literally, because the builder is Python and the installer is C. What can be
-shared is the contract (`docs/theme-format.md`) plus a cross-check gate that runs
-one against the other. Deciding that is part of building the themes path, not a
-footnote to it.
+The § 3 phrase "shared rather than reimplemented" turned out not to be achievable
+literally — the builder was Python and the installer is C — and the answer the owner
+ruled was not to share a contract across two implementations but to delete one of
+them. One builder, in the shipped binary, no Python on the target.
 
 **Still engine work, not installer work** — unchanged from the handover's slice C,
 and still held:

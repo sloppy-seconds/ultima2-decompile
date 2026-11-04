@@ -28,6 +28,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "core/themes.h"
+
 typedef enum {
     U2_INSTALL_OK      = 0,   /* did the work, or the tree already matches */
     U2_INSTALL_REFUSED = 1,   /* a rule stopped it: foreign target, bad source */
@@ -53,10 +55,16 @@ typedef struct {
     const char *to;            /* the target game directory (required) */
     const char *original_dir;  /* the DOS release: an IA copy, a CD rip, a DOSBox dir */
     const char *updated_dir;   /* the Galaxy patch layer */
-    const char *themes_dir;    /* the fan art pack; NOT yet consumed, see § 10 */
+    /* The fan art packs. More than one because no single source is complete: the
+     * upgrade pack ships the atlases and the themes, and the Galaxy directory is
+     * the only source with the full PIC*-E picture set. First source wins per
+     * destination, and the shadow is reported. */
+    const char *themes_dir[U2_THEMES_MAX_SOURCES];
+    int n_themes_dir;
 } u2_install_request;
 
-/* Install, or complete an install that already carries our manifest. */
+/* Install, or complete an install that already carries our manifest. With
+ * themes_dir supplied, themes/ is built in the same run by core/themes.c. */
 u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
                                    char *err, size_t errsz);
 

@@ -178,19 +178,26 @@ about to be drawn in the wrong art.
 
 ## 7. Building themes, and the gates
 
-`tools/build_themes.py` writes both formats. v1 themes are copied whole-directory,
-byte-identical, from `references/u2upgrade/` and `original/updated/`; the FM Towns
-v2 theme is derived from the disc through the same reader `tools/fmtowns_xwalk.py`
-uses and the same `disasm/fmtowns-crosswalk.tsv` the editor generates, so there is
-no second copy of either.
+`u2 --install --themes-dir DIR` writes both formats — it is the theme builder, and
+the only one. The Python tool that used to do it (`tools/build_themes.py`) was
+deleted rather than kept beside the C one, because two builders of one format is
+two definitions of it, and this file is the definition they would have drifted
+from. v1 themes are copied whole-directory, byte-identical, from the upgrade pack
+and the Galaxy `updated/` directory; the FM Towns v2 derivation is the part that
+went with the Python tool and has not been ported — it needs the disc, an ISO
+reader and `disasm/fmtowns-crosswalk.tsv`, and it is deferred by
+`docs/install-design.md` § 11 rather than abandoned. `u2_themes_check` still
+verifies a `themes/fmtowns` tree that something else produced.
 
 | gate | what it proves |
 | --- | --- |
-| `build_themes.py --verify` | the tree on disk matches a fresh derivation of the plan: every byte, no strays, no stale manifest row, no half-copied theme |
-| `tools/build_themes_selftest.sh` | 12 controls, including the named one: a theme built with `EGACOLOR` omitted must be caught |
-| `engine/tests/theme_v2_check.c` | 37 checks: geometry, identity, the map indirection, the palette, the frame scale, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
+| `--install --check` | the themes tree matches its own `_BUILD.tsv`: every byte, no strays, no stale manifest row, and every theme directory still holding an atlas (the half-copied-theme case) |
+| `engine/tests/install_check.c` | 70 checks over the whole install, themes included: the default reshape, a named theme copied whole, the root picture hoist, dedup by picture base, and refusals for a source with no atlas and for a short atlas |
+| `engine/tests/install_controls.py` | 13 controls, including the named one: a theme built with `EGACOLOR` omitted must be caught |
+| `engine/tests/theme_v2_check.c` | 39 checks: geometry, identity, the map indirection, the palette, the frame scale, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
 | `python3 tools/fmtowns_xwalk.py --check` | the crosswalk the v2 theme is derived from is complete and its letter rows follow the structural rule |
 
-The first three run in `tools/check_all.sh` and CP4; the fourth is wired there too.
+The first four run in CP4, which `make test` runs and `tools/check_all.sh` runs
+below; the fifth is wired there too.
 `themes/` is gitignored: it holds art extracted from the player's own media, the
 same posture as `original/`, `tmp/tiles` and `bestiary/cache/`.

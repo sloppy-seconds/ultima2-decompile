@@ -418,7 +418,8 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/config_check" \
 # tree with no other flags loads Earth AND an outer planet, which is the only one
 # that catches "copied everything, the planets still do not work".
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/install_check" \
-   tests/install_check.c src/core/install.c src/core/roots.c src/core/sha256.c \
+   tests/install_check.c src/core/install.c src/core/themes.c src/core/copy.c \
+   src/core/roots.c src/core/sha256.c \
    src/core/world.c src/core/config.c src/core/ini.c >"$WORK/cc-inst.err" 2>&1 \
     && "$WORK/install_check" "$WORK" >"$WORK/inst.out" 2>&1 \
     && ok "--install: layout, manifest, idempotence, --check refusals ($(grep -c '^  ok' "$WORK/inst.out") checks)" \
