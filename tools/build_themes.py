@@ -97,14 +97,130 @@ class Item:
         return self.dst if self.dst.is_absolute() else out / self.dst
 
 
-def rel(p, base):
-    """Path relative to the repo when it fits there, else absolute. Keeps the
-    report readable and the manifest portable across checkouts."""
+def rel(p, base=None):
+    """Display path: relative to `base` (default the working directory) when it
+    fits there, else absolute. Nothing in this tool may derive paths from its own
+    location: the same file gets copied next to a player's game and run from
+    there, and assuming a checkout layout is what made themes land in
+    `themes/<dirname>/EGATHEME.X/` instead of `themes/EGATHEME.X/` when the script
+    was run beside the game itself."""
     p = Path(p).resolve()
+    b = Path(base) if base else Path.cwd()
     try:
-        return p.relative_to(base)
+        return p.relative_to(b)
     except ValueError:
         return p
+
+
+ATLAS_NAME = "EGATILES"
+
+
+def theme_name_for(d, root):
+    """Name a discovered theme from where it was found.
+
+    A leading `EGATHEME.` is the vendor's spelling of "this is a theme" and
+    carries no information the directory name does not already carry, so it is
+    stripped. Otherwise the directory's own name is the theme name, and the source
+    root itself is the default theme. Lower-cased, because the engine reports v1
+    theme names lower-cased and matches them case-insensitively."""
+    if d == root and not d.name.upper().startswith(THEME_PREFIX):
+        return DEFAULT_THEME
+    name = d.name.upper()
+    if name.startswith(THEME_PREFIX):
+        name = name[len(THEME_PREFIX):]
+    return (name or d.name).lower()
+
+
+def walk_dirs(root, max_depth):
+    """Every directory under `root` to `max_depth`, hidden ones pruned."""
+    root = Path(root).resolve()
+    for dirpath, dirnames, filenames in os.walk(root):
+        d = Path(dirpath)
+        dirnames[:] = [x for x in dirnames if not x.startswith(".")]
+        if len(d.relative_to(root).parts) >= max_depth:
+            dirnames[:] = []
+        yield d, filenames
+
+
+def scan_source(root, max_depth=3):
+    """Inventory one source. Returns (items, report_rows, problems, theme_files).
+
+    **A theme is a directory whose contents include a tile atlas.** Not one called
+    `EGATHEME.*`: keying discovery on the vendor's directory name meant a pack that
+    ships its themes under any other name produced a tree with no themes in it, and
+    the engine then refused every theme by name while the builder reported success.
+    Depth is the vendor's business too, so the walk goes a few levels down.
+
+    What the theme is CALLED in the output is this tool's decision, and it is the
+    layout the engine reads: `EGATHEME.<NAME>` for a named theme, the top level for
+    the default one. `theme_files` maps each theme name to the set of filenames its
+    source directory ships, which is what the half-copied-theme gate compares
+    against — so that gate no longer has to assume a naming convention either.
+    """
+    root = Path(root).resolve()
+    items, rows, problems, theme_files = [], [], [], {}
+    if not root.is_dir():
+        return (items, [("<missing>", "error", str(root))],
+                [f"source is not a directory: {root}"], theme_files)
+
+    themes_found = 0
+    for d, filenames in walk_dirs(root, max_depth):
+        names_upper = {f.upper() for f in filenames}
+        is_theme = ATLAS_NAME in names_upper
+        theme = theme_name_for(d, root) if is_theme else None
+        if is_theme:
+            themes_found += 1
+        out_dir = Path() if not theme or theme == DEFAULT_THEME else Path(THEME_PREFIX + theme.upper())
+        have = set()
+
+        for f in sorted((e for e in d.iterdir() if e.is_file()),
+                        key=lambda e: e.name.upper()):
+            size = f.stat().st_size
+            role, detail = classify_file(f.name, size)
+            label = f"{rel(d)}/{f.name}"
+            if role.startswith("bad"):
+                problems.append(f"{f}: {detail}")
+                rows.append((label, role, detail))
+                continue
+            if role not in ("atlas", "color", "picture"):
+                rows.append((label, "ignore", detail))
+                continue
+
+            if role == "atlas" and size != TILE_ATLAS_BYTES:
+                problems.append(f"{f} is {size} B, expected {TILE_ATLAS_BYTES} B")
+
+            if theme is None:
+                # Not a theme directory, so the only thing we want out of it is a
+                # full-screen picture: `updated/` ships the whole PIC*-E set and
+                # no atlas at all, and that is a complete answer, not a defect.
+                if role == "picture":
+                    items.append(Item("picture", f, Path(f.name), note=detail,
+                                      key="PIC:" + PIC_RE.match(f.name.upper()).group("base")))
+                    rows.append((label, "picture", detail))
+                else:
+                    rows.append((label, "ignore", detail))
+                continue
+
+            have.add(f.name.upper())
+            if theme == DEFAULT_THEME:
+                kind = role if role in ("atlas", "picture") else "theme-file"
+                dst = Path(ATLAS_NAME) if role == "atlas" else Path(f.name)
+                items.append(Item(kind, f, dst,
+                                  theme=DEFAULT_THEME if role == "atlas" else None,
+                                  note=detail,
+                                  key=("PIC:" + PIC_RE.match(f.name.upper()).group("base")
+                                       if role == "picture" else None)))
+            else:
+                items.append(Item("theme-file", f, out_dir / f.name, theme=theme))
+            rows.append((label, f"{role} -> {theme}", detail))
+
+        if is_theme and have:
+            theme_files.setdefault(theme, set()).update(have)
+
+    if themes_found == 0:
+        rows.append((str(rel(root)), "no-themes",
+                     "no directory with an " + ATLAS_NAME + " here; pictures only"))
+    return items, rows, problems, theme_files
 
 
 def classify_file(name, size):
@@ -139,63 +255,6 @@ def classify_file(name, size):
     if re.match(r"^(MAP|MON|TLK)[GX]", up):
         return ("ignore", "game world data, belongs in --data-dir, not a themes dir")
     return ("ignore", "unrecognised; not copied")
-
-
-def scan_source(root):
-    """Inventory one source. Returns (items, report_rows, problems) where
-    report_rows is [(name, role, detail)] for every top-level entry, in sorted
-    order, so the inventory can be read before anything is copied."""
-    root = Path(root)
-    items, rows, problems = [], [], []
-    if not root.is_dir():
-        return items, [("<missing>", "error", str(root))], [f"source is not a directory: {root}"]
-
-    for entry in sorted(root.iterdir(), key=lambda e: e.name.upper()):
-        up = entry.name.upper()
-        if entry.is_dir():
-            if not up.startswith(THEME_PREFIX):
-                rows.append((entry.name, "ignore", "directory, not " + THEME_PREFIX + "*"))
-                continue
-            theme = up[len(THEME_PREFIX):].lower()
-            inner = sorted((e for e in entry.iterdir() if e.is_file()),
-                           key=lambda e: e.name.upper())
-            names = {e.name.upper() for e in inner}
-            if "EGATILES" not in names:
-                # A EGATHEME.* with no atlas is not a theme: the engine would
-                # list the name and then fail to load it. Refuse it loudly.
-                problems.append(f"{entry}/EGATILES is absent — {entry.name} is not a loadable theme")
-                rows.append((entry.name, "bad-theme", "no EGATILES inside"))
-                continue
-            for f in inner:
-                size = f.stat().st_size
-                role, detail = classify_file(f.name, size)
-                if role == "atlas" and size != TILE_ATLAS_BYTES:
-                    problems.append(f"{f} is {size} B, expected {TILE_ATLAS_BYTES} B")
-                if role.startswith("bad"):
-                    problems.append(f"{entry.name}/{f.name}: {detail}")
-                    rows.append((f"{entry.name}/{f.name}", role, detail))
-                    continue
-                if role in ("atlas", "color", "picture"):
-                    items.append(Item("theme-file", rel(f, REPO),
-                                      rel(entry.name, REPO) / f.name, theme=theme))
-                    rows.append((f"{entry.name}/{f.name}", "theme-" + role, detail))
-                else:
-                    rows.append((f"{entry.name}/{f.name}", "ignore", detail))
-            continue
-
-        size = entry.stat().st_size
-        role, detail = classify_file(entry.name, size)
-        if role in ("atlas", "color", "picture"):
-            key = None
-            if role == "picture":
-                key = "PIC:" + PIC_RE.match(entry.name.upper()).group("base")
-            items.append(Item(role, rel(entry, REPO), Path(entry.name),
-                              theme=DEFAULT_THEME if role == "atlas" else None,
-                              note=detail, key=key))
-        elif role.startswith("bad"):
-            problems.append(f"{entry}: {detail}")
-        rows.append((entry.name, role, detail))
-    return items, rows, problems
 
 
 # ---------------------------------------------------------------------------
@@ -358,11 +417,13 @@ def build_plan(sources, with_fmtowns=False):
     merged, because two atlases cannot both be the default theme and silently
     picking the last one is how a build becomes unreproducible."""
     plan, rows, problems, shadowed = [], [], [], []
-    seen = {}
+    theme_files, seen = {}, {}
     for src in sources:
-        items, inv, probs = scan_source(src)
+        items, inv, probs, tfiles = scan_source(src)
         rows.append((src, inv))
         problems += [f"{src}: {p}" for p in probs]
+        for name, files in tfiles.items():
+            theme_files.setdefault(name, set()).update(files)
         for it in items:
             key = it.key or str(it.dst).upper()
             if key in seen:
@@ -372,16 +433,18 @@ def build_plan(sources, with_fmtowns=False):
             plan.append(it)
     if with_fmtowns:
         gen, note = fmtowns_theme()
-        for rel in sorted(gen):
-            it = Item("generated", FMTOWNS_XWALK, Path(FMTOWNS_NAME) / rel,
-                      theme=FMTOWNS_NAME, data=gen[rel],
-                      key="GEN:" + rel.upper())
+        for path in sorted(gen):
+            it = Item("generated", FMTOWNS_XWALK, Path(FMTOWNS_NAME) / path,
+                      theme=FMTOWNS_NAME, data=gen[path],
+                      key="GEN:" + path.upper())
             seen[str(it.dst).upper()] = it
             plan.append(it)
         rows.append((f"generated: {FMTOWNS_NAME}", [(k, "generated", f"{len(v)} B")
                                                    for k, v in sorted(gen.items())]))
         problems += [f"fmtowns: {p}" for p in note[1]]
-    return plan, rows, problems, shadowed
+        theme_files.setdefault(FMTOWNS_NAME, set()).update(
+            {Path(k).name.upper() for k in gen})
+    return plan, rows, problems, shadowed, theme_files
 
 
 def theme_names(plan):
@@ -406,7 +469,7 @@ def manifest_rows(plan, out):
                 rows.append(None)
                 continue
             body = s.read_bytes()
-            origin = it.src.as_posix()
+            origin = str(rel(it.src))
         rows.append(f"{it.dst.as_posix()}\t{it.kind}\t{origin}\t"
                     f"{len(body)}\t{hashlib.sha256(body).hexdigest()[:16]}")
     return [r for r in rows if r]
@@ -433,7 +496,7 @@ def do_build(plan, out, sources):
     return len(plan)
 
 
-def do_verify(plan, out, sources):
+def do_verify(plan, out, sources, theme_files):
     """Re-derive the plan from the sources and prove the tree on disk matches it.
     Every check below has a failure mode this project has already been bitten by:
     a missing EGACOLOR (half-recoloured theme), a short EGATILES (silent CGA
@@ -465,22 +528,28 @@ def do_verify(plan, out, sources):
             fails.append(f"not byte-identical to source: {d}")
 
     # Per-theme completeness, stated as its own verdict so the message names the
-    # file. The loop above already catches it; this is the line a human reads.
-    src_theme_files = {}
-    for src in sources:
-        root = Path(src)
-        if not root.is_dir():
-            continue
-        for entry in root.iterdir():
-            up = entry.name.upper()
-            if entry.is_dir() and up.startswith(THEME_PREFIX):
-                theme = up[len(THEME_PREFIX):].lower()
-                have = {f.name.upper() for f in entry.iterdir()
-                        if f.is_file() and classify_file(f.name, f.stat().st_size)[0]
-                        in ("atlas", "color", "picture")}
-                src_theme_files.setdefault(theme, set()).update(have)
+    # file. The loop above already catches it; this is the line a human reads, and
+    # it is the gate that catches the half-recoloured theme. The expected file set
+    # comes from the discovery pass, so it does not care what the source directory
+    # was called or how deep it sat.
+    src_theme_files = theme_files
+    # Where each theme actually landed. Taken from the plan rather than from a
+    # naming convention, because the layout is this tool's decision and it differs
+    # by format: a v1 theme is EGATHEME.<NAME>/ and a v2 theme is <name>/.
+    theme_outdir = {}
+    for it in plan:
+        if it.theme and it.theme != DEFAULT_THEME and it.theme not in theme_outdir:
+            theme_outdir[it.theme] = it.dst.parent
+
     for theme, files in sorted(src_theme_files.items()):
-        d = out / f"{THEME_PREFIX}{theme.upper()}"
+        if theme == DEFAULT_THEME:
+            continue     # the default theme IS the top level; the plan loop above
+                         # already compared every one of its files byte for byte
+        sub = theme_outdir.get(theme)
+        if sub is None:
+            fails.append(f"theme '{theme}' was discovered but planned nowhere")
+            continue
+        d = out / sub
         if not d.is_dir():
             fails.append(f"theme '{theme}' has no directory in {out}")
             continue
@@ -531,14 +600,14 @@ def print_report(rows, problems, shadowed, plan, out):
                 same = ("  [identical bytes]"
                         if filecmp.cmp(str(it.src_abs()), str(kept.src_abs()), shallow=False)
                         else "  [BYTES DIFFER — the kept file is what will draw]")
-            print(f"   {it.dst}  from {it.src}   (kept {kept.src}){same}")
+            print(f"   {it.dst}  from {rel(it.src)}   (kept {rel(kept.src)}){same}")
     if problems:
         print("-- problems")
         for p in problems:
             print(f"   {p}")
     print(f"-- plan: {len(plan)} file(s) -> {out}")
     for it in sorted(plan, key=lambda i: str(i.dst).upper()):
-        print(f"   {it.kind:<11} {str(it.dst):<28} <- {it.src}")
+        print(f"   {it.kind:<11} {str(it.dst):<28} <- {rel(it.src)}")
     names = sorted(theme_names(plan))
     print(f"-- themes the engine will list: {', '.join(names) if names else '(none)'}")
     return problems
@@ -561,13 +630,23 @@ def main():
                          f"out dir already holds that theme.")
     args = ap.parse_args()
 
-    sources = args.source or [s for s in ("references/u2upgrade", "original/updated")
-                              if (REPO / s).is_dir()]
+    # Default sources are the two places the fan pack sits on a developer
+    # checkout. They are candidates, not assumptions: if the script is running
+    # beside a player's game instead, there are no defaults and --source is
+    # required, which is said out loud rather than building an empty tree.
+    sources = [Path(s).resolve() for s in
+               (args.source or [s for s in (str(REPO / "references/u2upgrade"),
+                                            str(REPO / "original/updated"))
+                                if Path(s).is_dir()])]
     if not sources:
-        sys.exit("no source directories found (pass --source)")
+        sys.exit("no source directories found and no defaults exist next to this "
+                 "script — pass --source DIR")
 
-    out = Path(args.out)
-    out = out if out.is_absolute() else REPO / out
+    # Relative --out and --source resolve against the working directory, NOT
+    # against wherever this script happens to live. Deriving them from __file__ is
+    # what wrote themes into themes/<dirname>/EGATHEME.X/ when the script was run
+    # beside the game, and the engine then refused every theme by name.
+    out = Path(args.out).resolve()
 
     # Refuse the two places that hold the player's pristine media, and refuse to
     # build a tree inside a source (which would make the next scan see its own
@@ -576,9 +655,8 @@ def main():
     if "/original/" in low or "/references/" in low:
         sys.exit(f"refusing to write into original/ or references/ (got {out})")
     for s in sources:
-        sp = Path(s) if Path(s).is_absolute() else REPO / s
         try:
-            out.resolve().relative_to(sp.resolve())
+            out.resolve().relative_to(Path(s).resolve())
             sys.exit(f"refusing to write inside a source directory: {out} is under {s}")
         except (ValueError, OSError):
             pass
@@ -587,7 +665,7 @@ def main():
     # every one of its files would read as a stray. So the flag is implied by the
     # tree, not remembered by the operator.
     want_fmtowns = args.fmtowns or (out / FMTOWNS_NAME).is_dir()
-    plan, rows, problems, shadowed = build_plan(sources, want_fmtowns)
+    plan, rows, problems, shadowed, theme_files = build_plan(sources, want_fmtowns)
     if args.report:
         print_report(rows, problems, shadowed, plan, out)
     if args.dry_run:
@@ -602,7 +680,7 @@ def main():
         sys.exit("refusing to build: fix the problems above")
 
     if args.verify:
-        fails = do_verify(plan, out, sources)
+        fails = do_verify(plan, out, sources, theme_files)
         for f in fails:
             print(f"  FAIL  {f}")
         print(f"{'FAIL' if fails else 'PASS'}: {len(plan)} file(s) verified in {out}")
@@ -610,7 +688,7 @@ def main():
 
     n = do_build(plan, out, sources)
     print(f"built {n} file(s) into {out}")
-    fails = do_verify(plan, out, sources)
+    fails = do_verify(plan, out, sources, theme_files)
     for f in fails:
         print(f"  FAIL  {f}")
     if fails:
