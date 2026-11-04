@@ -117,9 +117,10 @@ run "image_fresh selftest" deploy/image_fresh.sh -- bash deploy/image_fresh_self
 # The theme builder is now `--install --themes-dir` in the shipped binary
 # (engine/src/core/themes.c); the Python tool that used to do it was deleted rather
 # than kept beside it, because two builders of one format is two definitions of it.
-# Its gate is the engine's: install_check (70 checks) and install_controls (13
-# properties, each proved able to go red) run under `make test`, which this script
-# runs below and CI runs in engine-tests.yml.
+# Its gate is the engine's: install_check and install_controls run under
+# `make test`, which this script runs below and CI runs in engine-tests.yml.
+# No check counts are quoted here on purpose: they moved twice within a day of
+# this line being written, and the authority is the suite's own output.
 # The FM Towns mapping the shipped binary carries is generated from a committed TSV,
 # so unlike the text header it can always be re-derived and the check is exact rather
 # than best-effort. If this goes red, someone edited disasm/fmtowns-crosswalk.tsv or

@@ -204,15 +204,18 @@ void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour);
  *
  * `overlay` is the player marker drawn after the terrain, because the original
  * composites the character on top rather than baking it into the sector. It may
- * be -1 to draw no marker.
+ * be -1 to draw no marker. It is an ART index.
  */
 void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
-                        int overlay_tile, int overlay_col, int overlay_row);
+                        int overlay_art, int overlay_col, int overlay_row);
 
 /* The EGA twin of the view composite: same do-not-draw rule and overlay, but it
- * blits from a `u2_tiles_ega` atlas so the map window lands in 16 colours. */
+ * blits from a `u2_tiles_ega` atlas so the map window lands in 16 colours.
+ * `overlay_art` is an ART index, not an atlas index: like every other tile
+ * selection in this function it goes through the theme's map before it can
+ * address the atlas. */
 void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t,
-                            int overlay_tile, int overlay_col, int overlay_row);
+                            int overlay_art, int overlay_col, int overlay_row);
 
 /* Write the frame as a binary PPM (P6) mapped through `pal`. Uncompressed, so
  * it needs no zlib and no dependency — which is what makes "look at the real

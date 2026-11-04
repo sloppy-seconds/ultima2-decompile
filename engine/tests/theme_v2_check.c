@@ -31,6 +31,7 @@
 #include "core/frame.h"
 #include "core/font.h"
 #include "core/tiles_ega.h"
+#include "core/view.h"
 #include "core/vram.h"
 
 static int checks, fails;
@@ -210,6 +211,41 @@ int main(void)
     CHECK(u2_tiles_ega_tile(&t, 0) == -1,
           "an art index the map does not cover returns -1, not a guess");
     CHECK(!t.scope_dungeon, "scope = overworld,towns does not claim dungeons");
+
+    /* The player marker is an ART index and must pass through the map before it
+     * addresses the atlas. Passing it raw was invisible for every v1 theme, whose
+     * map is identity by definition, and wrong the moment a real table existed:
+     * art 60 is the avatar, and pool index 60 in the FM Towns theme is a capital
+     * O, which is exactly what a player saw. This fixture's atlas holds 2 tiles,
+     * so the raw path draws nothing at all and the difference cannot be missed. */
+    {
+        u2_frame of;
+        memset(&of, 0, sizeof of);
+        u2_view ov;
+        memset(&ov, 0, sizeof ov);
+        u2_frame_init(&of, 2);
+
+        u2_frame_clear(&of, 0);
+        u2_frame_draw_view_ega(&of, &ov, &t, 5, 0, 0);
+        int lit = 0;
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+                if (of.px[y][x]) lit++;
+        CHECK(lit > 32 * 32 / 4,
+              "the overlay draws the tile the map points at, not the raw art index (%d lit)", lit);
+
+        u2_frame_clear(&of, 0);
+        u2_frame_draw_view_ega(&of, &ov, &t, 0, 0, 0);
+        int uncovered = 0;
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+                if (of.px[y][x]) uncovered++;
+        CHECK(uncovered == 0,
+              "an overlay art the theme does not cover draws no marker rather than guessing (%d lit)",
+              uncovered);
+
+        u2_frame_free(&of);
+    }
 
     /* The text-ink trap. This fixture's palette has entry 3 as black (it is
      * zero-filled above 2), exactly like the measured FM Towns table, so the CGA

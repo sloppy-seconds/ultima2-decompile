@@ -82,8 +82,7 @@ breaking an older engine.
 | `pixel` | no | only `nibble-high-left`; any other value is refused rather than guessed at |
 | `palette` | no | filename of a `PALETTE.RGB` beside the manifest |
 | `map` | no | filename of a `MAP.TSV` beside the manifest. **Absent means identity**, which is what keeps every v1 theme valid |
-| `identity` | no | documentation only; the presence of `map` is what the loader reads |
-| `scope` | no | comma list from `overworld`, `towns`, `dungeon`, `tower`. An unrecognised word is a refusal |
+| `identity` | no | documentation only; the presence of `map` is what the loader reads || `scope` | no | comma list from `overworld`, `towns`, `dungeon`, `tower`. An unrecognised word is a refusal |
 | `source`, `tiles_pool`, `art_count`, `art_with_multiple_frames`, `crosswalk`, `frames` | no | provenance and policy notes; the loader reads `frames` as nothing and the builder writes it as a record |
 
 **`TILES`** is the pool: `tile_w * tile_h * bpp / 8` bytes per tile, and the file
@@ -114,6 +113,28 @@ not a format change. An art index the map does not cover returns -1 from
 this exists to prevent.
 
 ## 5. What the theme decides about the display
+
+### 5a. The map covers every art selection, including the player
+
+`MAP.TSV` is not a lookup for terrain only. Every art index the renderer wants —
+including the avatar the game composites on top of the view — is an **art** index,
+and it must pass through the theme's map before it can address the atlas. The
+atlas is indexed by *pool entry*, and the two are different number spaces the
+moment a theme carries a real table.
+
+This is worth writing down because getting it wrong was invisible. Passing the art
+index straight at the atlas is correct for every v1 theme, because their map is
+identity by definition, so the defect waited for the first v2 theme with a real
+table. There, art 60 is the avatar and pool index 60 is a capital **O**: the
+player became a letter, and no byte-level check noticed, because every mapping
+file was exactly right. The crosswalk said `3C → ENEMY2/8`, the map said `3C → 72`,
+and the atlas had the Fighter at 72. Only the renderer's last step was wrong.
+
+The rule, then: a theme that does not cover an art index draws nothing there
+rather than guessing, and that applies to the player marker exactly as it applies
+to a tile. `engine/tests/overlay_map_control.py` keeps the claim honest by putting
+the raw blit back and requiring the check to go red; it had passed for an entire
+format revision before anyone looked.
 
 **The frame size is a property of the art mode, not of the theme.** CGA composites
 at 320x200. `--ega` composites at 640x400 whatever the active theme's tiles are
@@ -200,7 +221,8 @@ agree by assertion.
 | `--install --check` | the themes tree matches its own `_BUILD.tsv`: every byte, no strays, no stale manifest row, and every theme directory still holding an atlas (the half-copied-theme case) |
 | `engine/tests/install_check.c` | 70 checks over the whole install, themes included: the default reshape, a named theme copied whole, the root picture hoist, dedup by picture base, and refusals for a source with no atlas and for a short atlas |
 | `engine/tests/install_controls.py` | 13 controls, including the named one: a theme built with `EGACOLOR` omitted must be caught |
-| `engine/tests/theme_v2_check.c` | 39 checks: geometry, identity, the map indirection, the palette, the frame scale, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
+| `engine/tests/theme_v2_check.c` | 41 checks: geometry, identity, the map indirection, the palette, the frame scale, the player marker going through the map, mixed v1+v2 directories in Ctrl-T, and six refusals that must all go red |
+| `engine/tests/overlay_map_control.py` | control: restores the raw overlay blit and requires the map assertions to go red |
 | `engine/tests/fmtowns_check.c` | the C derivation: a synthetic ISO exercises the sector reader, the pool order, the palette and the refusals with no media at all, and when the disc is present the four output files must be byte-identical to `tools/fmtowns_theme.py`'s |
 | `python3 tools/fmtowns_xwalk.py --check` | the crosswalk the v2 theme is derived from is complete and its letter rows follow the structural rule |
 | `python3 engine/tools/fmtowns_map2h.py --verify` | the mapping compiled into the binary still matches `disasm/fmtowns-crosswalk.tsv` exactly |

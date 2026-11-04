@@ -217,7 +217,7 @@ void u2_frame_line(u2_frame *f, int x0, int y0, int x1, int y1, uint8_t colour)
 }
 
 void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
-                        int overlay_tile, int overlay_col, int overlay_row)
+                        int overlay_art, int overlay_col, int overlay_row)
 {
     if (!f || !v || !t) return;
 
@@ -234,16 +234,16 @@ void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
         }
     }
 
-    if (overlay_tile >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
+    if (overlay_art >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
         overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
-        u2_frame_blit_tile(f, t, overlay_tile,
+        u2_frame_blit_tile(f, t, overlay_art,
                            overlay_col * U2_TILE_W, overlay_row * U2_TILE_H);
     }
     f->presents++;
 }
 
 void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t,
-                            int overlay_tile, int overlay_col, int overlay_row)
+                            int overlay_art, int overlay_col, int overlay_row)
 {
     if (!f || !v || !t) return;
 
@@ -265,10 +265,19 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
         }
     }
 
-    if (overlay_tile >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
+    if (overlay_art >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
         overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
-        u2_frame_blit_tile_ega(f, t, overlay_tile,
-                               overlay_col * cell_w, overlay_row * cell_h);
+        /* The overlay is an ART index and has to go through the theme's map like
+         * every other selection in this function. Passing it straight to the atlas
+         * was invisible for every v1 theme, because their map is identity by
+         * definition, and wrong the moment a v2 theme had a real table: art 60 is
+         * the avatar, pool index 60 is a capital O, and the player became an O.
+         * A theme that does not cover the avatar draws no marker rather than
+         * guessing, which is the same rule the terrain loop above follows. */
+        const int tile = u2_tiles_ega_tile(t, overlay_art);
+        if (tile >= 0)
+            u2_frame_blit_tile_ega(f, t, tile,
+                                   overlay_col * cell_w, overlay_row * cell_h);
     }
     f->presents++;
 }

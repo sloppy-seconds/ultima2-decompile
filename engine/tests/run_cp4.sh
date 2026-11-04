@@ -434,6 +434,14 @@ python3 tests/install_controls.py "$WORK/controls" >"$WORK/ctl.out" 2>&1 \
     && ok "$(cat "$WORK/ctl.out")" \
     || { bad "installer controls are not all able to fail:"; sed 's/^/        /' "$WORK/ctl.out"; }
 
+# The v2 player marker gets the same treatment for the same reason. The raw-blit
+# bug passed every check the format had, because every theme in existence at the
+# time had an identity map; the assertion that would have caught it is only worth
+# having if it can still fail, so this restores the bug and requires red.
+python3 tests/overlay_map_control.py "$WORK/overlay" >"$WORK/ovl.out" 2>&1 \
+    && ok "$(cat "$WORK/ovl.out")" \
+    || { bad "overlay map control is not able to fail:"; sed 's/^/        /' "$WORK/ovl.out"; }
+
 # --- the FM Towns derivation ---------------------------------------------------
 # core/fmtowns.c is a port of the Python derivation, and the only proof a generator
 # port has is byte equality. The disc is gitignored, so the gate is split: THEME.INI,
