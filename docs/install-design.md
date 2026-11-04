@@ -9,17 +9,18 @@ than left in a handover, because handovers are entry points and this is the one.
 **Built and gated (2026-11-04).** The content roots (§ 3, layout B) in
 `engine/src/core/roots.c`, with `world.c`, `tiles.c` and `pic.c` all resolving
 through the one list; `config.ini` with the precedence rule (§ 4) in
-`engine/src/core/config.c` and the shared parser in `core/ini.c`; and the installer
+`engine/src/core/config.c` and the shared parser in `core/ini.c`; the installer
 itself in `engine/src/core/install.c`, reached as `--install --to DIR` and
-`--install --check --to DIR` in both builds. Gates: `engine/tests/world_check.c`
-(78 checks), `engine/tests/config_check.c` (35), `engine/tests/install_check.c`
-(49), and `engine/tests/install_controls.py` (9 properties, each proved able to go
-red). All of it runs headless in CP4.
+`--install --check --to DIR` in both builds; the theme builder in
+`engine/src/core/themes.c` behind `--install --themes-dir`, which replaced and
+removed `tools/build_themes.py`; and `core/artifact.h`, which keeps the
+dev-checkout fallbacks out of a release artifact. Gates: `world_check` (78 checks),
+`config_check` (35), `install_check` (70), and `install_controls.py` (13
+properties, each proved able to go red). All of it runs headless in CP4.
 
 **Not built:** the FM Towns source (deferred, § 11 — and the v2-from-disc derivation
-that produced it lived in the Python builder, which has been deleted), and
-self-update (ruled out, § 9). The theme reshape is built: `--install --themes-dir`
-replaces `tools/build_themes.py`, which is gone.
+that produced it lived in the Python builder, which has been deleted, so re-
+deriving `themes/fmtowns` is now a porting task), and self-update (ruled out, § 9).
 
 **The five open decisions were ruled on 2026-11-04** and the rulings are recorded in
 § 11, along with the two that came out of them (D6, D7) and the follow-up ruling
@@ -411,7 +412,7 @@ this document's problem:
 | asking the player for the art package | § 5, `--themes-dir`, repeatable — **built** |
 | the FM Towns disc as an optional source | § 5, `--media-dir` — **deferred**, and the v2 derivation left with the deleted Python tool; `docs/fmtowns-graphics.md` and `disasm/fmtowns-crosswalk.tsv` remain the record of how it is done |
 | `themes/` being built rather than hand-copied | § 3, `core/themes.c` — **built** |
-| the dev-checkout fallbacks going away in a release build | § 4 — **not done**: `references/u2upgrade` is still a candidate in `pic_ega.c` |
+| the dev-checkout fallbacks going away in a release build | § 4 — **done**: `core/artifact.h` gates the `references/u2upgrade` candidates in both `tiles_ega.c` and `pic_ega.c`, so a release-stamped binary searches only paths it was told |
 
 The § 3 phrase "shared rather than reimplemented" turned out not to be achievable
 literally — the builder was Python and the installer is C — and the answer the owner
