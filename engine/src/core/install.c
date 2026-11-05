@@ -567,17 +567,20 @@ static void scan_source(const char *dir, plan *p, FILE *out, int may_override)
                 memcpy(p->rows[existing].sha, sha, sizeof sha);
                 p->patched_over++;
                 /* Two causes look identical here and only one is a fix. A sector
-                 * file is the one the game rewrites as you play (D6), so a release
-                 * copy that differs may simply be someone's mid-game world, and
-                 * saying "patch" about that would be a claim this code cannot make.
-                 * The behaviour is the same either way -- the patch layer is
+                 * file is the one the game rewrites as you play, so a *source* copy
+                 * that differs may simply be someone's mid-game world — the pack on
+                 * the right is often the one the original was played in — and saying
+                 * "patch" about that would be a claim this code cannot make. The
+                 * behaviour is the same either way, because the patch layer is
                  * pristine by construction, so preferring it is right whether the
-                 * release copy was corrupt or played-in -- but the report has to
-                 * name the ambiguity instead of resolving it silently. */
+                 * release copy was corrupt or played-in; but the report has to name
+                 * the ambiguity rather than resolve it silently. Note this is about
+                 * the source: the installed tree no longer drifts at all, because
+                 * every write goes to a save slot (docs/save-scoped-worlds.md). */
                 if (is_writable_sector(dst))
                     fprintf(out, "  patch   %s taken from the patch source; the "
-                                 "release copy differed, which is either a fix or "
-                                 "play drift (D6)\n", names[i]);
+                                 "release copy differed, which is either a fix or a "
+                                 "world played in the original\n", names[i]);
                 else
                     fprintf(out, "  patch   %s taken from this source, replacing a "
                                  "different copy (D8)\n", names[i]);
