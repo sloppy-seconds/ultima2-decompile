@@ -635,6 +635,36 @@ PY
     else
         printf '  SKIP  no ../original sector files — enhanced present path not exercised\n'
     fi
+
+    # The cursor, in pixels, under a theme that brings its own palette.
+    #
+    # Not a grid assertion, because the cursor is not a character: it is the same
+    # glyph repainted inverse video by sdl_flush, so every text-level check passes
+    # whether the block is drawn or not. Under the FM Towns theme it was not drawn
+    # at all -- index 3 of that palette is a second black and sdl_flush repainted
+    # the cell with U2_CGA_WHITE, which IS index 3 -- and the character under the
+    # cursor was repainted in black as well. Reported from play on 2026-11-06 as
+    # "the cursor is missing, so it is hard to see what line you are editing".
+    #
+    # The skeleton screen is the vehicle because --dump-screen saves the FIRST
+    # presented frame and it is the only screen a test can reach on a first present;
+    # its cursor is placed at column 16, row 12, over the last character of
+    # "press Q to quit". Both themes run, because the fix has to leave the ordinary
+    # EGA path exactly as it was as well as repair the themed one.
+    for th in fmtowns default; do
+        rm -f "$WORK/cursor-$th.ppm"
+        SDL_VIDEODRIVER=dummy timeout -s KILL 20 "$SDL_BIN" --sdl --selftest \
+            --ega --ega-theme "$th" --ega-theme-dir ../themes \
+            --dump-screen "$WORK/cursor-$th.ppm" >/dev/null 2>&1
+        cur_rc=$?
+        if [ "$cur_rc" -ne 0 ] || [ ! -s "$WORK/cursor-$th.ppm" ]; then
+            bad "cursor check ($th): the dumped run failed (rc=$cur_rc)"
+        elif python3 tests/cursor_visible.py "$WORK/cursor-$th.ppm" 12 16 >/dev/null 2>"$WORK/cursor-$th.err"; then
+            ok "cursor is visible under the $th theme (inverse block in the theme's ink)"
+        else
+            bad "cursor invisible under the $th theme: $(sed 's/^/        /' "$WORK/cursor-$th.err")"
+        fi
+    done
 else
     printf '  SKIP  no u2-sdl or u2-sdl-static built — headless SDL path not exercised\n'
 fi

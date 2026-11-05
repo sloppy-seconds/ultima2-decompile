@@ -42,6 +42,22 @@ static void draw_skeleton_screen(u2_ctx *ctx)
     seam_str_out_at(ctx, 2, 9, "seams: char_out str_out key_poll");
     seam_str_out_at(ctx, 2, 10, "       rand_byte timed_wait speaker");
     seam_str_out_at(ctx, 2, 12, "press Q to quit");
+    /* Exercise the cursor seam here, over the last character of that line —
+     * "press Q to quit" is 15 characters from column 2, so the final 't' is
+     * column 16 and not 17. The cursor must sit ON a glyph, not after one: a block
+     * over a blank cell is a solid rectangle, and that cannot distinguish "cursor
+     * drawn" from "cursor drawn on top of the character it is supposed to invert",
+     * which is half of what went wrong under the FM Towns theme.
+     *
+     * Every seam but this one was already on the skeleton, and the cursor is the
+     * one whose correctness no text assertion can see: it is the same glyph
+     * repainted inverse video by the renderer, so a block drawn in the background
+     * colour is invisible while the grid stays byte-for-byte right. It stayed right
+     * through the FM Towns cursor defect of 2026-11-06. --dump-screen saves the
+     * FIRST presented frame and this is the only screen a test can reach on a first
+     * present, so without a cursor here no gate could ever inspect one. */
+    ctx->vram.visible = 1;
+    seam_goto(ctx, 16, 12);
 }
 
 static void draw_probe_line(u2_ctx *ctx, game_ctx *g)
@@ -74,7 +90,13 @@ static void run_selftest(u2_ctx *ctx)
         if (ctx->exit_code || g->quit)
             break;
         if (!seam_key_poll(ctx, &k)) {
-            if (ctx->mode == U2_MODE_HEADLESS)
+            /* A headless run ends when the script is spent. An SDL run has no script
+             * (main refuses --script outside headless), so the only thing that can
+             * end it is --dump-screen having saved the frame it came to save;
+             * without this the loop waits for a key a dummy video driver will never
+             * produce and the gate times out. Same shape as T6: an observation flag
+             * that could not stop the run it was asked to observe. */
+            if (ctx->mode == U2_MODE_HEADLESS || ctx->dump_screen_done)
                 break;
             seam_wait_ms(ctx, 10);
             continue;

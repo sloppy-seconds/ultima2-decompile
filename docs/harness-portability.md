@@ -1398,6 +1398,26 @@ Newest first. One line per learning; the detail stays in the owning document.
   the one on screen. When an entry path can disagree with itself, assert on the field the renderer
   actually consumed, and read state *and* frame. → Tier 2, gate design.
 
+* **2026-11-06** — **A palette index is a colour only inside one palette, so a renderer
+  that hardcodes an index is correct on the table it was written against and silently
+  erases content on any other.** The text layer is written in index 3 on index 0. A
+  theme brought a 16-entry RGB table whose index 3 is a second black, so the ink was
+  chosen from the palette at load and everything that read the frame's ink pair was
+  fine — except one routine that repainted a single cell using the constants. That
+  routine draws the text cursor, inverse video, so the symptom was not wrong colour
+  but *nothing*: the block and the glyph under it were both painted in the
+  background. Three rules. Any renderer path that picks a colour must take it from
+  the frame or the palette in force, and a scan for the palette constants in a
+  backend is a cheap review step. Second, when a defect produces "something is
+  missing" rather than "something is the wrong colour", suspect a value that
+  resolves to the background, because absence is what that looks like. Third, the
+  gate has to read pixels: every text-level assertion passed, since the character
+  grid was correct throughout and only the rendering of one cell was not. The cheap
+  general check is a relational one that needs no colour names — here, the cell's
+  modal colour must differ from the frame's background and be brighter — and the
+  control must run under a second palette that was *never* broken, or a red control
+  proves only that the check can fail. → Tier 2, rendering gates.
+
 ---
 
 ## 7. Non-goals and hazards

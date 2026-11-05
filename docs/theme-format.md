@@ -184,6 +184,27 @@ that is index 7, white, which is also what the FM Towns letter tiles use against
 black. This is a choice, not a measurement: the port's own text colours have never
 been captured. Themes without a palette keep the CGA pair and are unchanged.
 
+**The cursor is the third consumer of that pair, and it was missed for a week.**
+The cursor is not a character: the renderer repaints the glyph of the cell under it
+inverse video. `sdl_flush` did that with `U2_CGA_WHITE` / `U2_CGA_BLACK` instead of
+the frame's pair, which is the same colour on the built-in tables and not on a
+themed one — so under FM Towns the block was black on black *and* the character
+underneath it was repainted in black, leaving an empty cell. Reported from play on
+2026-11-06 as "in the creation screen with the fmtowns theme the cursor is missing,
+so it is hard to see what line you are editing". It is now painted with
+`text_fg`/`text_bg` like every other text pixel.
+
+The reason it survived is worth keeping: the grid is byte-for-byte correct when
+this is wrong, so no text assertion can see it. `engine/tests/cursor_visible.py`
+asserts on the **frame** instead — the cell's modal colour must differ from the
+frame's background and be brighter, which a cursor drawn in the background colour
+cannot satisfy — and `run_cp4.sh` drives it under both `fmtowns` and `default`,
+because a fix that repaired the themed path by changing the ordinary one would be a
+different defect. On the skeleton screen, whose cursor seam exists for this: the
+CP0 selftest now places a cursor over a glyph, since `--dump-screen` saves the
+first presented frame and that is the only screen a test can reach on a first
+present.
+
 ## 6. Scope
 
 `scope` is not decoration. The FM Towns crosswalk covers the overworld and towns

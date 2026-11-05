@@ -1848,6 +1848,77 @@ requests per second.
 
 ---
 
+## The cursor was drawn in the theme's background colour — fixed 2026-11-06
+
+**Owner report (observed, play):** on the character creation screen with the FM Towns
+theme, the cursor is missing or does not show, so it is hard to see which line is
+being edited.
+
+**Cause (observed).** The cursor is not a character. The renderer repaints the glyph
+of the cell under it inverse video, and `sdl_flush` did that with the CGA constants:
+
+```c
+u2_font_draw_cell(&v->text, ..., ch, U2_CGA_WHITE, U2_CGA_BLACK);
+u2_font_draw_cell(&v->text, ..., ch, U2_CGA_BLACK, U2_CGA_WHITE);
+```
+
+`U2_CGA_WHITE` is **3**. The FM Towns palette (`themes/fmtowns/PALETTE.RGB`) keeps a
+second black at index 3:
+
+| index | RGB | note |
+| --- | --- | --- |
+| 0 | 0,0,0 | transparent pen |
+| 1 | 0,0,255 | |
+| 2 | 255,0,0 | |
+| **3** | **0,0,0** | **is `U2_CGA_WHITE`** |
+| 7 | 255,255,255 | the ink `ctx->text_fg` actually picks |
+
+So the block was black on black and the character under it was repainted in black as
+well: an empty cell. Every grid byte was correct the whole time, which is why nothing
+noticed — the same trap `core/font.c`'s `u2_font_draw_vram_rows` already documents one
+file over, and the same one `docs/theme-format.md` § 5 records for the status band.
+The cursor was simply the third consumer of the pair and the only one still using
+constants.
+
+**Fix.** `sdl_flush` paints with the frame's own `text_fg` / `text_bg`, inverting
+them, exactly as the vram-rows path does.
+
+**Gate, and why it is pixels.** `engine/tests/cursor_visible.py` reads a dumped frame
+and requires the cursor cell's modal colour to differ from the frame's background and
+to be brighter. No text-level assertion can carry this claim, because the failure
+leaves the grid untouched.
+
+Getting a frame at all needed two changes, both worth recording:
+
+* `--dump-screen` saves the **first** presented frame, so the only screen a test can
+  reach is the one on a first present. That was the skeleton screen, which exercised
+  every seam except the cursor. It now places a cursor over the final `t` of
+  `press Q to quit` (column 16 row 12 — 15 characters from column 2, and the first
+  attempt used 17, one past the end, which produced a solid block with no glyph and a
+  correct red control for the wrong reason).
+* The selftest loop could never end under `--dump-screen` on an SDL run: it loops on
+  `seam_key_poll` and a dummy video driver produces no keys, so the gate hung to its
+  timeout (rc 137). It now breaks when `dump_screen_done` is set. That is the T6
+  shape again — an observation flag that cannot stop the run it was asked to
+  observe.
+
+**Control (run first, and it is specific rather than merely red):** with the fix
+reverted and everything else in place —
+
+```
+FAIL  cursor invisible under the fmtowns theme:  FAIL  cursor cell (12,16) is one flat colour
+PASS  cursor is visible under the default theme (inverse block in the theme's ink)
+CP4 TEST: FAIL
+```
+
+The ordinary EGA palette passing is the point: the old code was correct there, so the
+check is measuring the palette-dependent property and not the existence of a cursor.
+
+`make test`: CP0..CP7 PASS.
+
+
+---
+
 ## Enhanced-mode creation tail spawned from the probe, not the record — fixed 2026-11-05
 
 **Owner report (observed, play):** on a fresh install, or after deleting `saves/`, a

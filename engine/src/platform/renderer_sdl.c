@@ -419,15 +419,24 @@ static void sdl_flush(u2_ctx *ctx)
 {
     sdl_video *v = sv(ctx);
     if (!v) return;
-    /* The grid is the truth; the cursor is painted on top of it, inverse
-     * video, and the previous cell is restored first so a moving cursor
-     * cannot leave a stale block behind. */
-    const uint8_t ch = v->grid[v->cur_row][v->cur_col];
-    u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch,
-                      U2_CGA_WHITE, U2_CGA_BLACK);
+    /* The grid is the truth; the cursor is painted on top of it, inverse video of
+     * the pair the grid is drawn with, and the previous cell is restored first so
+     * a moving cursor cannot leave a stale block behind.
+     *
+     * That pair is the FRAME's, not the CGA constants, for the reason core/font.c
+     * already spells out one file over: a theme that brings an RGB table can make
+     * index 3 black, and FM Towns does. U2_CGA_WHITE is 3, so a hardcoded white
+     * painted the cursor black-on-black and repainted the character underneath it
+     * in black too -- the block vanished and took the glyph with it. That is the
+     * report "in the creation screen with the fmtowns theme the cursor is
+     * missing", and it is invisible to every text assertion because the grid bytes
+     * are correct; only the pixels were wrong. */
+    const uint8_t ink = v->text.text_fg;
+    const uint8_t bg  = v->text.text_bg;
+    const uint8_t ch  = v->grid[v->cur_row][v->cur_col];
+    u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch, ink, bg);
     if (v->cur_vis)
-        u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch,
-                          U2_CGA_BLACK, U2_CGA_WHITE);
+        u2_font_draw_cell(&v->text, v->cur_row, v->cur_col, ch, bg, ink);
     sdl_upload(ctx, &v->text);
 }
 
