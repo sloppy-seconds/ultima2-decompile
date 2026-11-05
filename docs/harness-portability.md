@@ -204,6 +204,20 @@ Newest first. One line per learning; the detail stays in the owning document.
   hashes and require the diff to name it. Then demonstrate the whole gate red in the
   position it enforces, by building the engine against the write rule it replaced.
   Both halves together are what distinguish a gate from a ceremony.
+* **2026-11-05 — To force a write failure in a test, chmod the file, not its directory.**
+  A gate meant to prove "a save that cannot be written says so" made the save directory
+  read-only and the record still wrote fine, because rewriting a file in place needs write
+  permission on the *file*, while creating, unlinking or renaming a name needs it on the
+  *directory*. Two transferable points. (1) A write path that stages through a temp file
+  plus rename and a write path that truncates in place fail under different permissions, so
+  a fixture that chmods one directory can silently cover only one of them -- exercise each
+  write path against the permission it actually depends on, and assert them as separate
+  cases. (2) The same trap makes a negative assertion pass for the wrong reason: if the
+  screen already carries the message from an earlier case, "the refusal was printed" is
+  vacuous. Order the cases so the first one to assert a message is the first one that could
+  have produced it, or clear the surface between them -- and check that clearing it does not
+  change how the surface renders, which it did here and turned a passing positive assertion
+  into a column of single characters.
 * **2026-11-05 — A layout change that moves a file into a directory of the same name
   cannot be staged, and a harness that assumed one directory level breaks silently in
   teardown.** Moving a save record from `dir/NAME` to `dir/NAME/NAME` (the record and

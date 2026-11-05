@@ -195,6 +195,70 @@ int main(int argc, char **argv)
         unlink(relfile); rmdir(relslot); rmdir(reldir);
     }
 
+    /* --- an upgrade from the pre-slot layout ------------------------------
+     *
+     * An older engine kept the record as a FILE at `<save_dir>/PLAYER`, which is
+     * where the slot directory has to go, so until it moves nothing can be saved.
+     * The engine adopts it: rename only, never overwrite, never touching content.
+     * The played-in CONTENT repair stays in the installer because that one needs
+     * the manifest; this one needs nothing but the name collision. */
+    {
+        char lg[1088], lgflat[1152], lgslot[1152], lgrec[1216];
+        snprintf(lg,     sizeof lg,     "%s/legacy", dir);
+        snprintf(lgflat, sizeof lgflat, "%s/PLAYER", lg);
+        snprintf(lgslot, sizeof lgslot, "%s/PLAYER", lg);
+        snprintf(lgrec,  sizeof lgrec,  "%s/PLAYER", lgslot);
+        mkdir(lg, 0755);
+        u2_save_blank_template(buf);
+        memcpy(buf, "LEGACY", 6);
+        f = fopen(lgflat, "wb");
+        if (f) { fwrite(buf, 1, U2_PLAYER_FILE_SIZE, f); fclose(f); }
+
+        u2_ctx lgctx;
+        memset(&lgctx, 0, sizeof lgctx);
+        lgctx.save_dir = lg;
+        CHECK(u2_save_ensure(&lgctx) == U2_SAVE_OK,
+              "a pre-slot flat record is adopted, not refused");
+        CHECK(filesize(lgrec) == U2_PLAYER_FILE_SIZE &&
+              slurp(lgrec, buf, sizeof buf) == U2_PLAYER_FILE_SIZE &&
+              memcmp(buf, "LEGACY", 6) == 0,
+              "  the record moved into the slot with its bytes intact");
+        {
+            struct stat lst;
+            /* The path is not absent, it is the slot directory now — which is the
+             * whole point, and why "the flat file is gone" has to be asserted as a
+             * type change rather than a missing path. */
+            CHECK(stat(lgflat, &lst) == 0 && S_ISDIR(lst.st_mode),
+                  "  and the flat file is gone: the name is the slot directory now");
+        }
+        memset(&lgctx.state, 0, sizeof lgctx.state);
+        CHECK(u2_save_load(&lgctx) == U2_SAVE_OK &&
+              memcmp(lgctx.state.name, "LEGACY", 6) == 0,
+              "  and the game loads the save it found");
+        CHECK(u2_save_ensure(&lgctx) == U2_SAVE_OK, "  and ensure() is idempotent after it");
+
+        /* A half-done move is a state this code cannot reason about, so it refuses
+         * rather than guessing — and refuses without touching either file. */
+        char hd[1088], hdflat[1152], hdtmp[1152];
+        snprintf(hd,     sizeof hd,     "%s/halfdone", dir);
+        snprintf(hdflat, sizeof hdflat, "%s/PLAYER", hd);
+        snprintf(hdtmp,  sizeof hdtmp,  "%s/.PLAYER.migrating", hd);
+        mkdir(hd, 0755);
+        f = fopen(hdflat, "wb");
+        if (f) { fwrite("x", 1, U2_PLAYER_FILE_SIZE, f); fclose(f); }
+        f = fopen(hdtmp, "wb");
+        if (f) { fwrite("y", 1, U2_PLAYER_FILE_SIZE, f); fclose(f); }
+        u2_ctx hdctx;
+        memset(&hdctx, 0, sizeof hdctx);
+        hdctx.save_dir = hd;
+        CHECK(u2_save_ensure(&hdctx) == U2_SAVE_NOT_READY,
+              "an interrupted move is refused, not guessed at");
+        CHECK(filesize(hdflat) == U2_PLAYER_FILE_SIZE && filesize(hdtmp) == U2_PLAYER_FILE_SIZE,
+              "  and refusal leaves both files exactly as they were");
+        unlink(hdflat); unlink(hdtmp); rmdir(hd);
+        unlink(lgrec); rmdir(lgslot); rmdir(lg);
+    }
+
     /* --- cleanup ---------------------------------------------------------- */
     unlink(path); unlink(shortfile); unlink(bigfile);
     rmdir(shortslot); rmdir(shortdir); rmdir(bigslot); rmdir(bigdir);

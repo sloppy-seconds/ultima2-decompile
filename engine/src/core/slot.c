@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "core/compat.h"
 #include "core/ctx.h"
@@ -47,6 +48,63 @@ void u2_slot_dir(const u2_ctx *ctx, char *buf, size_t bufsz)
     snprintf(buf, bufsz, "%.429s/%.8s", dir, u2_slot_name(ctx));
 }
 
+/* The one repair the engine is allowed to make to a save directory.
+ *
+ * An older build kept the record as a FILE at `<save_dir>/PLAYER`, which is
+ * exactly where the slot directory has to go, so until it moves nothing at all can
+ * be saved — and a player who upgraded the binary without running --install would
+ * find a game that cannot write, in the drop-in layout where there is no installer
+ * to run. So this adopts it: two renames inside one directory, never an overwrite,
+ * and it never touches the content tree.
+ *
+ * That last clause is why the repair of played-in CONTENT files stays in the
+ * installer and does not come here: telling a release map from a stamped one needs
+ * _INSTALL.tsv, and the engine has no such record. Moving a record needs nothing
+ * but the fact that a directory cannot take a file's name while the file holds it.
+ *
+ * If the intermediate name already exists, a previous move was interrupted in a way
+ * this code cannot reason about, so it refuses and leaves everything alone rather
+ * than guessing. The installer's migration is the tool for that tree.
+ */
+static int adopt_flat_record(const char *dir, const char *slot)
+{
+    char tmp[456], rec[456];
+    struct stat st;
+
+    snprintf(tmp, sizeof tmp, "%.429s/.PLAYER.migrating", dir);
+    if (stat(tmp, &st) == 0)
+        return -1;                                  /* half-done: refuse */
+    if (rename(slot, tmp) != 0)
+        return -1;
+    if (mkdir(slot, 0755) != 0 && errno != EEXIST) {
+        rename(tmp, slot);                          /* put it back as it was */
+        return -1;
+    }
+    snprintf(rec, sizeof rec, "%.437s/PLAYER", slot);
+    if (rename(tmp, rec) != 0) {
+        rmdir(slot);
+        rename(tmp, slot);
+        return -1;
+    }
+    fprintf(stderr, "[engine] moved the old flat save record into %s\n", rec);
+    fflush(stderr);            /* gates merge stderr into stdout and read it in order */
+    return 0;
+}
+
+int u2_slot_adopt_legacy(const u2_ctx *ctx)
+{
+    char dir[430], slot[448];
+    struct stat st;
+
+    u2_save_dir(ctx, dir, sizeof dir);
+    u2_slot_dir(ctx, slot, sizeof slot);
+    if (stat(slot, &st) != 0 || S_ISDIR(st.st_mode))
+        return 0;                       /* nothing to adopt, and nothing created */
+    if (stat(dir, &st) != 0 || !S_ISDIR(st.st_mode))
+        return -1;
+    return adopt_flat_record(dir, slot);
+}
+
 int u2_slot_ensure(const u2_ctx *ctx)
 {
     char dir[430], slot[448];
@@ -61,8 +119,11 @@ int u2_slot_ensure(const u2_ctx *ctx)
     }
 
     u2_slot_dir(ctx, slot, sizeof slot);
-    if (stat(slot, &st) == 0)
-        return S_ISDIR(st.st_mode) ? 0 : -1;
+    if (stat(slot, &st) == 0) {
+        /* A directory is the layout already adopted; a file is the layout that
+         * predates slots, and it has to move or nothing can ever be saved. */
+        return S_ISDIR(st.st_mode) ? 0 : adopt_flat_record(dir, slot);
+    }
     if (mkdir(slot, 0755) != 0 && errno != EEXIST)
         return -1;
     return 0;

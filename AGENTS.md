@@ -46,9 +46,9 @@ exact byte-for-byte fidelity.
 > mutation, the `player`/`PLAYER` case collision, and multiple save games all land. Spec is
 > `docs/save-scoped-worlds.md` and its D1-D6 are all ruled, so do not re-argue them. Two things
 > the plan got wrong are recorded in that status block: S2 and S3 cannot be separate commits,
-> because D1 makes the slot directory and the flat record the same path; and an un-migrated old
-> install reports the INSERT-disk analogue until `--install` migrates it, which belongs in the
-> release notes. The gate for the whole change is `engine/tests/content_immutable.py`, wired
+> because D1 makes the slot directory and the flat record the same path; and the engine adopts
+> a record a pre-slot tree left behind (`u2_slot_adopt_legacy`, spec § 4b, an owner-approved
+> amendment to D6) because the drop-in layout has no installer to run. The gate for the whole change is `engine/tests/content_immutable.py`, wired
 > into `run_cp4.sh`, and it runs its own red control every time. **To start a fresh
 > agent, read `docs/handoff-2026-11-03.md` first (**current entry point** — the rocket and
 > space session: G39, G59, G60 and G62 closed and G63/G64 added. `DS:13 = 0x28` finally

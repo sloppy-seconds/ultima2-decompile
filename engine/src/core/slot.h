@@ -65,6 +65,22 @@ void u2_slot_dir(const u2_ctx *ctx, char *buf, size_t bufsz);
  * fails here instead of producing a slot in the wrong place. Returns 0 on ok. */
 int u2_slot_ensure(const u2_ctx *ctx);
 
+/* Adopt a record left behind by the layout that predates slots.
+ *
+ * An older build wrote the record as a FILE at `<save_dir>/PLAYER`, which is
+ * exactly where the slot directory has to go, so until it moves nothing can be
+ * saved at all — and in the drop-in layout (`--data-dir` at a raw release
+ * directory) there is no installer to run. This does the move: rename only,
+ * never an overwrite, never touching content, and it creates nothing when there
+ * is nothing to adopt, so D6's rule that an empty slot is a lie still holds.
+ *
+ * It must run BEFORE the first save load, which is why it is separate from
+ * u2_slot_ensure(): adopting after the load would leave the game holding a blank
+ * state and the first save would overwrite the record it just moved. The
+ * installer's migration covers the same case plus the content repair, which needs
+ * _INSTALL.tsv and so cannot live here. Returns 0 on ok or nothing-to-do. */
+int u2_slot_adopt_legacy(const u2_ctx *ctx);
+
 /* "<slot>/<name>" into `out`, whether or not it exists. For callers that only
  * need the destination of a write. */
 void u2_slot_path(char *buf, size_t bufsz, const u2_ctx *ctx, const char *name);

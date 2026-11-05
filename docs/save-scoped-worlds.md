@@ -106,6 +106,37 @@ must be **move, never copy, and never overwrite**:
 4. Migration runs once, is idempotent, and prints what it moved. A refusal must leave
    the old layout working.
 
+## 4b. Amendment, same day: the engine adopts a legacy record, and a refused save says so
+
+Two defects found by testing both layouts after the change, both fixed with owner
+approval, and both of them corrections to this document rather than additions to it.
+
+**The upgrade path was a dead end without an installer.** A tree an older engine left
+behind holds the record as a FILE at `saves/PLAYER`, which is exactly where the slot
+directory has to go, so nothing could be saved at all — and in the drop-in layout
+(`--data-dir` at a raw release directory, which is what `--install`'s own refusal message
+tells people to do) there is no installer to run. So `u2_slot_adopt_legacy()` does the
+move: rename only, never an overwrite, never touching content, and it creates nothing
+when there is nothing to adopt, so D6's "an empty slot is a lie" rule still holds. It
+runs before the first save load, and that ordering is the whole hazard: adopted after
+the load, the game holds a blank state and the first save overwrites the record it just
+moved. `tests/save_gate.py` case 6 asserts that end to end and was demonstrated red with
+the startup adoption removed — the character came back as six zero bytes with a
+green-looking save on top of it.
+
+What stays in the installer is the *content* repair, because telling a release map from
+a stamped one needs `_INSTALL.tsv` and the engine has no such record.
+
+**A refused save promised success.** `save_body` echoed ONE MOMENT PLEASE! before
+writing and discarded the result of the sector stores, so a Q whose write failed left
+the player told the game saved when nothing reached the disk — the silent mutation
+`AGENTS.md` refuses in both directions. A failed sector store now counts as a failed
+save, and the refusal prints the shipped `(INSERT PLAYER DISK)`, which is what the
+original's own DOS wrapper loops on and so is not invented text. Note the asymmetry the
+gate had to learn: a read-only slot directory stops the temp+rename a sector write uses
+but NOT the record, which is rewritten in place and needs write permission on the file
+rather than the directory. Both are asserted separately.
+
 ## 5. Decisions, all ruled
 
 | # | question | recommendation |
@@ -115,7 +146,7 @@ must be **move, never copy, and never overwrite**:
 | **D3** | Which files overlay? `mapx`/`monx` are written by the game. `tlkx` is never written by anything (docs/save-format.md), so overlaying it buys nothing. | Overlay `mapx`/`monx` only. Keep `tlkx`, `pic*` and the exe as pure content. |
 | **D4** | Where does the tile cache `tiles.u2tl` live? | **Out of `saves/` entirely.** It was never save data: `tiles.c:243` says it plainly — "The cache directory is ours, and a fresh install has no 'our own spot' yet", so it used the save dir for convenience. It is derived from the player's `ultimaii.exe`, self-verifying against that exe, and identical for every slot. With this layout there is a proper place: `cache/tiles.u2tl` at the game root. Per-slot would re-extract once per save for no benefit. |
 | **D5** | Multi-save UI now or later? The layout enables it; a `--save NAME` flag and a slot picker are separate work. | Layout now, flag later. Building the layout without the flag costs nothing extra and the flag is then small. |
-| **D6** | Who creates the default slot directory — the installer, or the engine on first save? | The engine, lazily, the same way `ensure_cache_dir()` already does. A slot that exists but holds nothing is a lie about having a game. The installer only migrates existing ones. |
+| **D6** | Who creates the default slot directory — the installer, or the engine on first save? | The engine, lazily, the same way `ensure_cache_dir()` already does. A slot that exists but holds nothing is a lie about having a game. The installer only migrates existing ones. **Amended same day, owner approved:** the engine also *adopts* a record the pre-slot layout left behind — see § 4b. It still creates nothing on its own, and it still never touches content. |
 
 ## 4a. What `--install` has to do
 

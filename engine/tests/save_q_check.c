@@ -134,6 +134,39 @@ int main(int argc, char **argv)
            "the refusal left the record untouched");
     }
 
+    /* --- a save that cannot be written has to say so ------------------------
+     *
+     * ONE MOMENT PLEASE! is printed before the write, so a failure after it left
+     * the player told that the game saved when nothing reached the disk. The
+     * original cannot fail here — its DOS wrapper loops on "(INSERT PLAYER DISK)"
+     * until a disk arrives — so the refusal text is the shipped one.
+     *
+     * Placed here, before any refusal text has ever reached the screen, so the text
+     * assertion cannot pass on a message left over from an earlier case. And it
+     * covers both halves of the write separately, because they fail for different
+     * reasons: a read-only slot directory stops the temp+rename a sector write uses
+     * but NOT the record, which is rewritten in place and needs write permission on
+     * the file rather than the directory. */
+    {
+        char slotdir[300], recfile[300];
+        snprintf(slotdir, sizeof slotdir, "%.290s/PLAYER", saves);
+        snprintf(recfile, sizeof recfile, "%.290s/PLAYER/PLAYER", saves);
+
+        ok(chmod(recfile, 0444) == 0, "record file made unwritable");
+        ok(u2_overworld_save(&a, &ow, &U2_SAVE_POLICY_ORIGINAL) == 1 &&
+           vram_contains(&a, U2_S_DISK_PLAYER),
+           "a Q whose record write fails says so, not a silent ONE MOMENT PLEASE!");
+        ok(chmod(recfile, 0644) == 0, "record file writable again");
+
+        ok(chmod(slotdir, 0555) == 0, "save slot made read-only");
+        u2_world_tile_put(&ow.world, 5, 5, 0x08);   /* dirty the map: the sector write must be tried */
+        ok(u2_overworld_save(&a, &ow, &U2_SAVE_POLICY_ORIGINAL) == 1,
+           "a Q whose sector write fails is a failed save too, not a discarded one");
+        ok(ow.world.map_dirty == 1,
+           "  and the dirty flag survives, so the change is not silently dropped");
+        ok(chmod(slotdir, 0755) == 0, "save slot writable again");
+    }
+
     /* The faithful save at the walked-to position. */
     ok(u2_overworld_save(&a, &ow, &U2_SAVE_POLICY_ORIGINAL) == 0 &&
        vram_contains(&a, U2_S_Q_MOMENT),

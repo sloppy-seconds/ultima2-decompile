@@ -28,6 +28,7 @@
 #include "core/timer.h"
 #include "core/state.h"
 #include "core/save.h"
+#include "core/slot.h"
 #include "core/tiles_ega.h"
 #include "core/rng.h"
 #include "core/replay.h"
@@ -654,7 +655,18 @@ int main(int argc, char **argv)
      * A blank or missing record is NOT an error and the zeroed state stands: that
      * is the original's own "no character yet" condition -- DS:36 is the first byte
      * of the name, and asm/5400 tests it for zero -- and the CP4 development
-     * scripts depend on it. See docs/save-format.md. */
+     * scripts depend on it. See docs/save-format.md.
+     *
+     * Before any of it reads a record, a tree an older engine left behind has to be
+     * adopted: its record is a FILE where the slot directory goes, and adopting
+     * after the load would leave the game holding a blank state and the first save
+     * overwriting the record it had just moved. core/slot.h says why the engine may
+     * move a record and not a content file. */
+    if (u2_slot_adopt_legacy(&ctx) != 0)
+        fprintf(stderr, "u2: %s holds an interrupted save migration; refusing to guess. "
+                        "Run --install to migrate this tree.\n",
+                        (ctx.save_dir && *ctx.save_dir) ? ctx.save_dir : "saves");
+
     if (ctx.play_map || map_dump_path)
         (void)u2_save_load(&ctx);
 

@@ -609,15 +609,20 @@ static int save_body(u2_ctx *ctx, u2_overworld *ow)
      * is to store only dirty sectors (world.h), and nothing dirties tiles
      * until combat and town visits exist. The creature block is the other half of
      * that write — asm/2305 names MONXFF as well as MAPXFF — so a kill has to
-     * reach the file here and not only on a sector transition. */
-    if (ow->world.map_dirty)
-        u2_world_store(ctx, &ow->world, 1);
-    if (ow->world.mon_dirty)
-        u2_world_store(ctx, &ow->world, 0);
+     * reach the file here and not only on a sector transition.
+     *
+     * A failed sector store used to be `(void)`-discarded, which lost the world
+     * change in silence while the record still wrote. Now it counts as a failed
+     * save, because a change that did not reach the disk has to be said out loud. */
+    int failed = 0;
+    if (ow->world.map_dirty && u2_world_store(ctx, &ow->world, 1) != U2_WORLD_OK)
+        failed = 1;
+    if (ow->world.mon_dirty && u2_world_store(ctx, &ow->world, 0) != U2_WORLD_OK)
+        failed = 1;
 
     if (u2_save_store(ctx) != U2_SAVE_OK)
-        return 1;
-    return 0;
+        failed = 1;
+    return failed;
 }
 
 int u2_overworld_autosave(u2_ctx *ctx, u2_overworld *ow)
@@ -659,7 +664,17 @@ int u2_overworld_save(u2_ctx *ctx, u2_overworld *ow, const u2_save_policy *pol)
 
     echo_cmd(ctx, U2_S_Q_MOMENT);
 
-    return save_body(ctx, ow);
+    if (save_body(ctx, ow) == 0)
+        return 0;
+
+    /* ONE MOMENT PLEASE! has already been printed and the write then failed, so
+     * leaving it standing tells the player the game saved when it did not — the
+     * silent mutation AGENTS.md refuses in both directions. The original has no
+     * failure path to cite here: its DOS wrapper loops on "(INSERT PLAYER DISK)"
+     * until a disk arrives, so that is the text, and it is the shipped one rather
+     * than an invention. */
+    echo_cmd(ctx, U2_S_DISK_PLAYER);
+    return 1;
 }
 
 /* The food a PASS costs. Proven at file 0x0B11: `sbb $0x0a,%al` on the low

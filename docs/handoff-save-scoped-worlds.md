@@ -13,13 +13,18 @@ is now someone else's problem:
 * **The § 5 gate exists**: `engine/tests/content_immutable.py`, wired into `run_cp4.sh`,
   with its red control running every time. It was additionally demonstrated red against
   a store that wrote back into the layer it read from.
+* **An un-migrated install used to be a dead end, and it is fixed.** A tree an older
+  engine left with the record as a flat `saves/PLAYER` file could not save at all, and in
+  the drop-in layout there is no installer to run. `u2_slot_adopt_legacy()` now moves it,
+  before the first load, rename only. Spec § 4b records it as an amendment to D6 with the
+  owner's approval, and records the second fix: a refused save no longer leaves ONE MOMENT
+  PLEASE! standing, it prints the shipped `(INSERT PLAYER DISK)`.
 * **`--install --check`'s `played-in` verdict is gone**, as § 7 said it must be, and the
   four new controls in `install_controls.py` (content drift, delete-a-real-save,
   overwrite-the-slot, dry-run-writes) each go red when their property breaks.
-* **Consequence nobody wrote down in advance**: an install that has *not* been migrated —
-  a flat `saves/PLAYER` file where the slot directory now goes — reports the INSERT-disk
-  analogue until `--install` runs its migration. Non-destructive and repairable, but it
-  belongs in the release notes next to D2.
+* **Consequence nobody wrote down in advance** (since corrected, see the bullet above):
+  an install that had not been migrated used to report the INSERT-disk analogue until
+  `--install` ran its migration. That is what prompted the D6 amendment.
 * **`tools/save_cross_load.py` was run by hand, both directions**, after the record path
   moved: direction B booted the original and had it load the record the engine wrote at
   the new path. It passes. Do the same on any future save-handling change.

@@ -163,6 +163,40 @@ def main():
     case("enhanced mounted", tmp("u2-sg-6-"), ["DOWN", "B", "Q"], "moment",
          extra=["--enhanced"], tiles={(SITE_X, SITE_Y + 1): TILE_HORSE})
 
+    # 6. The upgrade path: a tree an older engine left behind, where the record was a
+    #    FILE at saves/PLAYER -- exactly where the slot directory now has to go. The
+    #    property is not that the file moves, which save_check covers, but WHEN: if
+    #    the adoption happens after the startup load, the game holds a blank state and
+    #    the first save overwrites the record it just moved. That is silent loss of a
+    #    player's character, so it is asserted end to end against the real binary.
+    #    Demonstrated red, not assumed: building the engine with the startup adoption
+    #    removed makes the second check fail with the name coming back as six zero
+    #    bytes, which is the character gone and a green-looking save in its place.
+    work = tmp("u2-sg-7-")
+    build(work)
+    rec = G.record(work)                                  # save/PLAYER/PLAYER
+    slot = os.path.join(work, "save", "PLAYER")
+    with open(rec, "rb") as f:
+        seeded = f.read()
+    os.remove(rec)
+    os.rmdir(slot)
+    with open(slot, "wb") as f:                          # back to the pre-slot layout
+        f.write(seeded)
+    text = G.flatten(run(work, ["DOWN", "Q"], name="legacy"))
+    adopted = os.path.isdir(slot) and os.path.exists(rec)
+    check(adopted, "legacy: the flat record was adopted into a slot directory")
+    if adopted:
+        with open(rec, "rb") as f:
+            after = f.read()
+        check(after[:6] == seeded[:6],
+              "legacy: adoption ran before the load, so the character survived (%r)"
+              % after[:6])
+        check(after != seeded,
+              "  and the Q really wrote: the entry pair moved")
+    else:
+        check(False, "legacy: no slot directory was created, so the save had nowhere to go")
+    shutil.rmtree(work, ignore_errors=True)
+
     print("SAVE GATE: %s" % ("FAIL (%d)" % len(fails) if fails else "PASS"))
     return 1 if fails else 0
 
