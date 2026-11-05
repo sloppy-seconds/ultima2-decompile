@@ -94,8 +94,11 @@ u2_tiles_result u2_tiles_cache_store(const char *path, const u2_tiles *t);
  * them there — so a fresh install generates its own cache on first run.
  *
  * exe_path / cache_path may be NULL to use <data_dir>/ultimaii.exe and
- * <save_dir>/tiles.u2tl. The resolved paths are written back when the buffers
- * are supplied, so the caller can report what happened.
+ * <data_dir>/cache/tiles.u2tl. The cache sits with the content it was derived
+ * from and not in the save directory: it is the same bytes for every save, and it
+ * checks itself against the executable's digest (docs/save-scoped-worlds.md D4).
+ * The resolved paths are written back when the buffers are supplied, so the
+ * caller can report what happened.
  */
 u2_tiles_result u2_tiles_open(u2_ctx *ctx, u2_tiles *t,
                               char *exe_out, size_t exe_sz,

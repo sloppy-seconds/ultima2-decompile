@@ -210,13 +210,17 @@ int main(int argc, char **argv)
     /* --- the start-up bootstrap policy -----------------------------------
      * This is the owner's requirement stated as behaviour: look in our own spot
      * first, and if the tiles are not there, extract them from the player's
-     * executable so a fresh install generates its own cache. */
+     * executable so a fresh install generates its own cache.
+     *
+     * "Our own spot" is <content root>/cache, not the save directory (D4): the
+     * cache is derived from the executable and is the same for every save, so a
+     * per-save copy would re-extract the atlas once per character for nothing. */
     char bootdir[] = "/var/tmp/u2bootXXXXXX";
     if (!mkdtemp(bootdir)) { printf("  FAIL  mkdtemp boot\n"); return 1; }
     char b_exe[512], b_save[512], b_cache[640];
     snprintf(b_exe,   sizeof b_exe,   "%s/ultimaii.exe", bootdir);
     snprintf(b_save,  sizeof b_save,  "%s/saves", bootdir);
-    snprintf(b_cache, sizeof b_cache, "%s/tiles.u2tl", b_save);
+    snprintf(b_cache, sizeof b_cache, "%s/cache/tiles.u2tl", bootdir);
     mkdir(b_save, 0755);
 
     FILE *e = fopen(b_exe, "wb");
@@ -232,6 +236,12 @@ int main(int argc, char **argv)
           && bt.from_cache == 0,
           "first run with no cache extracts from the executable");
     CHECK(access(b_cache, R_OK) == 0, "first run wrote the cache into our own spot");
+    {
+        char wrong[640];
+        snprintf(wrong, sizeof wrong, "%s/tiles.u2tl", b_save);
+        CHECK(access(wrong, R_OK) != 0,
+              "  and not in the save directory, which is a player's game now");
+    }
 
     u2_tiles bt2;
     CHECK(u2_tiles_open(&ctx, &bt2, NULL, 0, NULL, 0) == U2_TILES_OK

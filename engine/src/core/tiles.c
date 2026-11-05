@@ -244,10 +244,11 @@ u2_tiles_result u2_tiles_find_exe(char *buf, size_t bufsz, const u2_ctx *ctx)
  *
  * This is deliberately the opposite of the content directory rule. --data-dir is
  * the player's and is never created, because inventing an empty world directory
- * would hide a wrong path behind a silent empty map. The cache directory is
- * ours, and a fresh install has no "our own spot" yet -- without this the cache
- * silently never gets written and every start re-extracts, which is the exact
- * behaviour the owner asked for and would otherwise never happen.
+ * would hide a wrong path behind a silent empty map. The cache directory is ours,
+ * and a fresh install has no "our own spot" yet -- without this the cache silently
+ * never gets written and every start re-extracts, which is the exact behaviour the
+ * owner asked for and would otherwise never happen. It now creates <content
+ * root>/cache, one level down, so a plain mkdir is the whole job.
  * Failure here is not fatal: extraction still works in memory.
  */
 static void ensure_cache_dir(const char *cache_path)
@@ -273,10 +274,19 @@ u2_tiles_result u2_tiles_open(u2_ctx *ctx, u2_tiles *t,
     else if (u2_tiles_find_exe(exe_buf, sizeof exe_buf, ctx) == U2_TILES_OK)
         exe = exe_buf;
 
-    const char *sdir = (ctx && ctx->save_dir && *ctx->save_dir) ? ctx->save_dir : ".";
+    /* The cache belongs to the content, not to a save (D4). It is derived from the
+     * player's executable, it verifies itself against that executable's digest on
+     * every load, and it is identical for every slot — so it lives beside the
+     * content it came from, at <content root>/cache/tiles.u2tl. It used to sit in
+     * the save directory for want of anywhere else, which is exactly what
+     * ensure_cache_dir()'s comment admitted; now that the save directory means
+     * "one player's game", leaving it there would re-extract the whole atlas once
+     * per save for no benefit and file derived art under a player's saves.
+     *
+     * An explicit cache path from the caller still wins, unchanged. */
     if (cache_out && *cache_out) cache = cache_out;
-    else if (snprintf(cache_buf, sizeof cache_buf, "%s/tiles.u2tl", sdir)
-                 >= (int)sizeof cache_buf)
+    else if (snprintf(cache_buf, sizeof cache_buf, "%.400s/cache/tiles.u2tl",
+                      u2_content_root(ctx)) >= (int)sizeof cache_buf)
         return U2_TILES_ERROR;
     else cache = cache_buf;
 

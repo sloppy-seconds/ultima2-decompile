@@ -39,16 +39,23 @@ the right reference for that; they are just no longer the way to deploy.
 <summary>Manual steps, for seeding a character or picking a different port</summary>
 
 ```sh
-mkdir -p /var/tmp/u2/novnc-saves
-cp original/player /var/tmp/u2/novnc-saves/PLAYER
-tools/u2_edit.py set /var/tmp/u2/novnc-saves/PLAYER sector 20
-tools/u2_edit.py setpos /var/tmp/u2/novnc-saves/PLAYER 20 20
+mkdir -p /var/tmp/u2/novnc-saves/PLAYER
+cp original/player /var/tmp/u2/novnc-saves/PLAYER/PLAYER
+tools/u2_edit.py set /var/tmp/u2/novnc-saves/PLAYER/PLAYER sector 20
+tools/u2_edit.py setpos /var/tmp/u2/novnc-saves/PLAYER/PLAYER 20 20
 ```
 
+The record lives inside a slot directory that shares its name (`<save-dir>/PLAYER/PLAYER`,
+docs/save-scoped-worlds.md D1), so the path is spelled twice on purpose.
+
 Do not copy a `tiles.u2tl` into the save dir to "help" it. It is a cache the engine writes
-for itself, and the cleanroom path never overwrites it, so a stale one sits there looking
-like evidence about a run that is not happening -- it cost one investigation its correct
-conclusion. `up.sh` deletes it on every deploy.
+for itself, it lives beside the content it came from (`<data-dir>/cache/tiles.u2tl`) and
+not with a save at all, and the cleanroom path never overwrites it -- so a stale one sits
+there looking like evidence about a run that is not happening, and it cost one
+investigation its correct conclusion. `up.sh` deletes one from the old save-dir location
+on every deploy. Because `/content` is mounted read-only here the engine cannot write its
+cache at all, and it re-extracts the atlas from the executable on every start; that is
+the designed fallback, not a defect.
 </details>
 
 Keyboard from the browser reaches the game, so this is play, not watching: arrow keys
@@ -67,9 +74,11 @@ walk, `A` + a direction attacks, `E` enters a town, `Q` saves, `ESC` leaves.
    `backend initialisation failed`. The display depth has nothing to do with the
    game's palette; the engine composes a 32-bit RGBA surface and applies the CGA
    palette itself.
-3. **The tiles cache is validated against the executable's digest**, and it lives in
-   the *save* directory (`<save-dir>/tiles.u2tl`), not the content directory. Mount
-   both, and put the cache with the save.
+3. **The tiles cache is validated against the executable's digest**, and since D4 it
+   lives beside the content (`<data-dir>/cache/tiles.u2tl`), not in the save
+   directory. This container mounts `/content` read-only, so the cache is never
+   written and every start re-extracts; that is the designed fallback and it costs
+   extraction time, not correctness. Mount the save directory separately either way.
 4. **Ports.** 6080 and 5900 belong to the Spice86 watching container, so this one
    defaults to 6081/5901 on display `:98`. Override with `-e NOVNC_PORT= -e
    VNC_PORT= -e DISPLAY=` if you run a second one.

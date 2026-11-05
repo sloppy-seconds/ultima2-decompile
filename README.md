@@ -168,7 +168,7 @@ mv u2-sdl-static ~/u2/ && cd ~/u2 && chmod +x u2-sdl-static
 No flags. The data directory defaults to `.`, the same default drive the original
 used, and an SDL build opens the window by default. `ultimaii.exe` in the folder
 is where the tile art is extracted from on first run and cached afterwards (in
-`./saves/tiles.u2tl`, beside your save). If you would rather keep the binary
+`./cache/tiles.u2tl`, beside the content it came from). If you would rather keep the binary
 somewhere else, say so once: `--data-dir ~/u2`.
 
 If the world is not there the engine says which part is missing — *no executable

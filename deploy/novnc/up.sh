@@ -204,9 +204,10 @@ U2_ARGS="--sdl --debug-path /saves/debug"
 [ "$CLEANROOM" = 1 ] && U2_ARGS="$U2_ARGS --cleanroom"
 
 podman rm -f "$CONTAINER" >/dev/null 2>&1 || true
-# A stale tiles.u2tl in the save dir is a real trap: the cleanroom path never overwrites
-# it, so an old cache sits there looking like evidence about a run that is not happening.
-# It is not load-bearing for correctness, but it has already misled one investigation.
+# The cache moved out of the save directory (docs/save-scoped-worlds.md D4), so a
+# tiles.u2tl here is a leftover from the old layout rather than anything the engine
+# reads. Delete it anyway: the cleanroom path never overwrites it, and a stale one
+# sitting beside a save has already misled one investigation.
 rm -f "$SAVES_HOST/tiles.u2tl"
 mkdir -p "$SAVES_HOST"
 podman run -d --name "$CONTAINER" -p "$HOST_PORT:6081" \
