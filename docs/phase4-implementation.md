@@ -1845,3 +1845,70 @@ Tooling note: windowed Spice86 crashes under heavy HTTP API polling -
 `CfgCpuViewModel.CreateBlockHeaderTableEntry` (CfgCpuViewModel.cs:459), a race
 between the CFG graph panel and the emulation thread. Keep API polling to a few
 requests per second.
+
+---
+
+## Enhanced-mode creation tail spawned from the probe, not the record — fixed 2026-11-05
+
+**Owner report (observed, play):** on a fresh install, or after deleting `saves/`, a
+character created in original mode starts in the right place, and one created under
+`--enhanced` starts somewhere else entirely — near Lord British's castle.
+
+**Cause (observed).** `game.c`'s enhanced creation tail called `u2_overworld_run`,
+which is the probe entry: `u2_overworld_init` seeds the position from
+`U2_OVERWORLD_PROBE_SECTOR_HI/_LO/_X/_Y` (sector 30 at 33,23) and never reads the
+player record. `overworld.h` says of those constants that they "are a probe's
+starting point, NOT an assertion about where a new game begins", which is exactly
+what the tail needed and did not get. The record `commit()` writes holds
+`sector_first = 2`, `sector_second = 0`, `entry_x = entry_y = 20`
+(`asm/5BDC..5BE8`).
+
+Original mode never showed the defect, and not because it was correct: its tail
+restarts the program (asm/5400's `TO PLAY ULTIMA ][` / `INSERT PROGRAM MASTER`
+loop), so the player re-enters through `P`, which goes to `u2_overworld_init_state`
+and spawns from the record. Only enhanced mode has an entry that bypasses P.
+
+**Measured, pre-fix vs post-fix** (`--headless --script`, same key script, fresh
+`--save-dir`, `--dump-state`):
+
+| run | `pos` | `sector` |
+| --- | --- | --- |
+| `--enhanced`, before | 33, 23 | 20 |
+| `--enhanced`, after | 20, 20 | 20 |
+
+**The state and the frame disagreed, and that is the part worth keeping.** The
+pre-fix dump printed `sector 20` because that field comes from
+`state.sector_first/second`, which still held what `commit()` wrote;
+`overworld_open` had meanwhile loaded `mapx30` from `ow->sector_hi/lo`. So a
+state-only check would have reported the correct location for a world that was not
+the one drawn. A behavioural claim about where the player is has to name the
+field the renderer consumed.
+
+**Fix.** The choice moved into `overworld.c` as one private `overworld_enter()`:
+`u2_save_record_present(ctx) ? u2_overworld_init_state(...) : u2_overworld_init(...)`.
+`u2_overworld_run` now calls it instead of `u2_overworld_init`, and the
+`--dump-map` path calls the same helper instead of repeating the choice. That last
+part is the point: the rule was already written down once, in the dump path, and
+the tail was written a week later without it. There is now one door, so a call
+site cannot pick the probe by accident.
+
+Enhanced mode also inherits `init_state`'s consequences for free — the
+`view_mode = sector_second ? 0x04 : 0xFF` rule (asm/0C1F/0C2B) and the dungeon
+facing repair. The probe fallback still exists and is still used: `--dump-map` on
+a tree with no record renders sector 30, which is what the probe was for.
+
+**Gate.** `run_cp4.sh`'s T5 grew a fourth assertion: the enhanced run must dump
+`"pos":{"x":20,"y":20},"sector":"20"`. The old T5 assertion only asked whether
+`CMD:` appeared, which was true in both versions — which is why this survived for
+two weeks. Red control run first, from `engine/` as the gate is invoked, with the
+fix reverted:
+
+```
+FAIL  enhanced mode spawned at the wrong place; want pos 20,20 sector 20, got "pos":{"x":33,"y":23},"sector":"20"
+CP4 TEST: FAIL
+```
+
+**Not a save bug.** Nothing in `core/save.c` or the slot layer is involved;
+delete `saves/` and the behaviour is identical, because the record is rewritten by
+creation either way. The bug needed only a *completed* creation plus `--enhanced`.
+

@@ -1378,6 +1378,26 @@ Newest first. One line per learning; the detail stays in the owning document.
   documented workflow rule — but do not leave it implicit, because the failure looks like vandalism
   reported against an innocent file. → Tier 2, gate design.
 
+* **2026-11-05** — A **probe constant is a fixture, and letting a production path call the entry
+  point that carries it turns a documented placeholder into a silently different starting state.**
+  The engine had two ways into the world: one that spawns from the loaded save record, and one that
+  spawns from a compile-time probe coordinate kept for dumps and screenshot comparisons. Its header
+  said in as many words that the probe pair is "NOT an assertion about where a new game begins".
+  A later feature routed a *real* entry — the shortcut that skips an obsolete disk-swap prompt after
+  character creation — through the probe entry, and every new character then started in the wrong
+  sector. It survived review for two weeks because the two paths are one function name apart at the
+  call site (`run` versus `init_state`) and both return success. Three rules. Give a fixture entry
+  point a name that cannot be typed by accident in a production call site, or make it take the
+  record and fall back internally, so there is one door and no choice to get wrong. Second, when a
+  feature "enters the world directly" it must enter the same world the load path enters, and the
+  cheapest proof is a gate that asserts the resulting *position*, not that a command loop started —
+  the existing test checked only that the world screen appeared, which was true in both versions.
+  Third, and the reason this one was nearly missed: **the dumped state disagreed with the rendered
+  frame**. The state still carried the record's sector while the view had been loaded from the
+  probe's, so a dump-only check would have reported the correct location for a world that was not
+  the one on screen. When an entry path can disagree with itself, assert on the field the renderer
+  actually consumed, and read state *and* frame. → Tier 2, gate design.
+
 ---
 
 ## 7. Non-goals and hazards

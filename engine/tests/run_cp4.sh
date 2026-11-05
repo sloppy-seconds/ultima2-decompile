@@ -685,10 +685,19 @@ if [ -n "$CONTENT" ]; then
 
     rm -rf "$WORK/t5enh"; mkdir -p "$WORK/t5enh"
     ./u2 --headless --enhanced --data-dir "$CONTENT" --save-dir "$WORK/t5enh" \
-         --script "$T5KEYS" --dump-each > "$WORK/t5enh.out" 2>&1
+         --script "$T5KEYS" --dump-each --dump-state > "$WORK/t5enh.out" 2>&1
     grep -q "CMD:" "$WORK/t5enh.out" \
         && ok "enhanced mode: completed creation drops straight into the world" \
         || bad "enhanced mode did not enter the world after creation"
+
+    # Entering the world is not enough; it has to be the SAME world the 'P' path
+    # would have loaded. The tail used to call u2_overworld_run, which is the probe
+    # entry and seeds the position from U2_OVERWORLD_PROBE_* (33,23) instead of the
+    # record's entry pair, so every enhanced-mode start landed in sector 30 while
+    # the state still claimed sector 20. Creation writes 20,20 at asm/5BDC..5BE8.
+    grep -q '"pos":{"x":20,"y":20},"sector":"20"' "$WORK/t5enh.out" \
+        && ok "enhanced mode: the fresh character spawns on the record's entry pair, not the probe" \
+        || bad "enhanced mode spawned at the wrong place; want pos 20,20 sector 20, got $(grep -o '"pos":{"x":[0-9]*,"y":[0-9]*},"sector":"[0-9]*"' "$WORK/t5enh.out" | tail -1)"
 
     # An abandoned creation must not run the tail at all.
     rm -rf "$WORK/t5ab"; mkdir -p "$WORK/t5ab"

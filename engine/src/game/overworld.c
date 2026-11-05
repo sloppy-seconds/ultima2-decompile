@@ -1695,12 +1695,29 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
     }
 }
 
+/* The one door into the world, so the record-or-probe choice is made in one place.
+ *
+ * It was a choice at each call site, and it was made wrongly exactly once: the
+ * enhanced-mode creation tail called u2_overworld_init (through u2_overworld_run),
+ * which seeds the position from U2_OVERWORLD_PROBE_* -- sector 30 at 33,23, a
+ * constant overworld.h describes as a probe's starting point and not an assertion
+ * about where a new game begins. Every enhanced-mode character then started in the
+ * Present Era instead of at the entry pair creation writes (sector 20, 20,20;
+ * asm/5BDC..5BE8). A record is present for every completed creation and for every
+ * loaded save, so this is the rule; the probe is the fallback for dev runs on a
+ * blank tree, which is what --play-map and the dump path were written for. */
+static int overworld_enter(u2_ctx *ctx, u2_overworld *ow)
+{
+    const int rc = u2_save_record_present(ctx)
+                       ? u2_overworld_init_state(ctx, ow)
+                       : u2_overworld_init(ctx, ow);
+    if (rc != 0) fprintf(stderr, "overworld: %s\n", ow->note);
+    return rc;
+}
+
 int u2_overworld_run(u2_ctx *ctx, u2_overworld *ow)
 {
-    if (u2_overworld_init(ctx, ow) != 0) {
-        fprintf(stderr, "overworld: %s\n", ow->note);
-        return -1;
-    }
+    if (overworld_enter(ctx, ow) != 0) return -1;
     return u2_overworld_loop(ctx, ow);
 }
 
@@ -2379,14 +2396,9 @@ int u2_overworld_dump(u2_ctx *ctx, const char *path)
      * probe sector, and with one it renders wherever that save left the player,
      * including inside a town. Every capture of a settlement is taken from a
      * loaded character, so a dump that could only ever show the probe sector
-     * could never be put beside one. */
-    const int rc = u2_save_record_present(ctx)
-                       ? u2_overworld_init_state(ctx, &ow)
-                       : u2_overworld_init(ctx, &ow);
-    if (rc != 0) {
-        fprintf(stderr, "overworld: %s\n", ow.note);
-        return -1;
-    }
+     * could never be put beside one. That choice is overworld_enter's, not this
+     * function's, so the dump and the play entry cannot drift apart. */
+    if (overworld_enter(ctx, &ow) != 0) return -1;
     u2_overworld_draw(ctx, &ow);
 
     int wrc;

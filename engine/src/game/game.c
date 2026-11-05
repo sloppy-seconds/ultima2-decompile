@@ -121,10 +121,19 @@ void u2_game_run(u2_ctx *ctx)
     }
 
     /* Enhanced mode's creation tail sets this instead of restarting: straight
-     * into the world, no disk-swap theatre. */
+     * into the world, no disk-swap theatre.
+     *
+     * It must spawn from the player record, exactly as the 'P' path does, because
+     * that is the same record creation just wrote. u2_overworld_run makes that
+     * choice itself now (see overworld_enter) rather than leaving it to each call
+     * site; it used to call u2_overworld_init, the probe entry, which put every
+     * enhanced-mode start in sector 30 near Lord British's castle instead of
+     * sector 20 at 20,20, the pair creation writes at asm/5BDC..5BE8. Original
+     * mode never showed the defect only because its tail restarts and the player
+     * comes back in through 'P'. */
     if (ctx->enter_world && !ctx->exit_code) {
         u2_overworld ow;
-        u2_overworld_run(ctx, &ow);
+        (void)u2_overworld_run(ctx, &ow);
     }
 }
 
