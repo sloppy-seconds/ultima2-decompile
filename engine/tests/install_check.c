@@ -187,7 +187,7 @@ int main(int argc, char **argv)
     char base[512];
     snprintf(base, sizeof base, "%.511s", argc > 1 ? argv[1] : ".");
     char to[1024], rel[1024], upd[1024], err[512], p[1024], q[1024];
-    FILE *log = fopen("/dev/null", "w");
+    FILE *log = getenv("U2_LOG") ? fopen(getenv("U2_LOG"), "w") : fopen("/dev/null", "w");
     entry files[512];
 
     snprintf(to, sizeof to, "%.1000s/game", base);
@@ -248,15 +248,16 @@ int main(int argc, char **argv)
     CHECK(has(files, n, "data/original/mapx00"), "the release layer holds mapx00");
     CHECK(has(files, n, "data/updated/MAPG40"), "the patch layer holds MAPG40");
     CHECK(has(files, n, "data/original/PICDNG-E"), "picture sidecars are content");
-    CHECK(has(files, n, "saves/player"), "saves/ holds the live player record");
+    CHECK(!has(files, n, "saves/player") && !has(files, n, "saves/PLAYER"),
+          "the installer seeds no save at all: a slot that holds nothing is a lie (D6)");
     CHECK(!has(files, n, "data/original/README.txt"), "a README is not copied");
     CHECK(!has(files, n, "data/original/run.bat"), "DOS launcher scaffolding is not copied");
     CHECK(!has(files, n, "data/updated/cgapatch.exe"), "patcher tooling is not copied");
     CHECK(!has(files, n, "data/updated/RENGAL.BAT"), "  nor the rename script");
     CHECK(!has(files, n, "data/updated/MAPG99"), "a subdirectory of a source is not walked into");
     CHECK(!has(files, n, "data/original/mapx99"), "  and nothing leaked from it");
-    CHECK(n == 17, "the tree holds exactly the expected number of files");
-    if (n != 17)
+    CHECK(n == 16, "the tree holds exactly the expected number of files");
+    if (n != 16)
         for (int i = 0; i < n; i++)
             printf("        have %s\n", files[i].name);
 
@@ -594,14 +595,22 @@ int main(int argc, char **argv)
         unlink(p);
     }
     {
-        /* D6: sector files are rewritten by play, so a content difference in one
-         * is expected and must not read as a broken tree. */
+        /* Content is immutable after install now that every sector write goes to a
+         * save slot, so a played-in content file is a defect rather than the
+         * tolerated `played-in` note it used to be. This is a semantic flip of an
+         * existing verdict, and the control that proves it can still go red is the
+         * `content-drift-is-tolerated` one in tests/install_controls.py. */
         snprintf(p, sizeof p, "%.480s/data/original/mapx40", to);
+        snprintf(q, sizeof q, "%.1000s/snap-mapx40-dirt", base);
+        copy_file(p, q);
         write_bytes(p, 0xEE, 4224);
+        CHECK(u2_install_check(to, log, err, sizeof err) == U2_INSTALL_REFUSED,
+              "--check goes red when a content sector file drifts: content is never written");
+        CHECK(strstr(err, "does not match") != NULL, "  and the refusal says the tree is broken");
+        copy_file(q, p);
         CHECK(u2_install_check(to, log, err, sizeof err) == U2_INSTALL_OK,
-              "--check reports a played-in sector as drift, not failure (D6)");
-    }
-    {
+              "  and goes green again once the content copy is restored");
+    }    {
         snprintf(p, sizeof p, "%.480s/data/original/monsters", to);
         write_bytes(p, 0xEE, 4224);
         CHECK(u2_install_check(to, log, err, sizeof err) == U2_INSTALL_REFUSED,
@@ -612,6 +621,141 @@ int main(int argc, char **argv)
         snprintf(foreign, sizeof foreign, "%.1000s/foreign", base);
         CHECK(u2_install_check(foreign, log, err, sizeof err) == U2_INSTALL_REFUSED,
               "--check refuses a tree with no manifest rather than guessing");
+    }
+
+    /* --- migration: an old flat install becomes save-scoped ------------------
+     *
+     * docs/save-scoped-worlds.md § 4, and the only irreversible code in this
+     * change. Each case builds the old layout out of the same synthetic fixtures,
+     * because the shapes that matter are the ones a real played install leaves
+     * behind: a flat saves/PLAYER file where a directory now has to go, a release
+     * blank beside it, and content that play already dirtied. */
+    {
+        char mg[1024], mgs[1024], flat[1024], lowf[1024], rec[1024];
+        char map40[1024], ov40[1024], snap40[1024], dirt40[1024], blanksrc[1024];
+        char snaprec[1024], snapov[1024];
+        snprintf(mg,      sizeof mg,      "%.480s/game-mig", base);
+        snprintf(mgs,     sizeof mgs,     "%.480s/saves", mg);
+        snprintf(flat,    sizeof flat,    "%.480s/saves/PLAYER", mg);
+        snprintf(lowf,    sizeof lowf,    "%.480s/saves/player", mg);
+        snprintf(rec,     sizeof rec,     "%.480s/saves/PLAYER/PLAYER", mg);
+        snprintf(map40,   sizeof map40,   "%.480s/data/original/mapx40", mg);
+        snprintf(ov40,    sizeof ov40,    "%.480s/saves/PLAYER/mapx40", mg);
+        snprintf(snap40,  sizeof snap40,  "%.1000s/mig-snap-mapx40", base);
+        snprintf(dirt40,  sizeof dirt40,  "%.1000s/mig-dirt-mapx40", base);
+        snprintf(snaprec, sizeof snaprec, "%.1000s/mig-snap-rec", base);
+        snprintf(snapov,  sizeof snapov,  "%.1000s/mig-snap-ov", base);
+
+        u2_install_request mrq = { .to = mg, .original_dir = rel, .updated_dir = upd };
+        CHECK(u2_install_apply(&mrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "migration: install a tree first, then play it the old way");
+        mkdir(mgs, 0755);
+        write_bytes(flat, 0x77, 384);                 /* the record, flat */
+        snprintf(blanksrc, sizeof blanksrc, "%.480s/data/original/player", mg);
+        copy_file(blanksrc, lowf);                    /* the seed the old installer wrote */
+        copy_file(map40, snap40);                     /* remember the pristine bytes */
+        write_bytes(map40, 0xEE, 4224);               /* a creature stamp baked in */
+        copy_file(map40, dirt40);
+
+        u2_install_request dryrq = mrq;
+        dryrq.dry_run = 1;
+        entry pre[512]; const int npre = collect(mg, "", pre, 0, 512);
+        CHECK(u2_install_apply(&dryrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "migration shows its plan under --dry-run");
+        entry post[512]; const int npost = collect(mg, "", post, 0, 512);
+        CHECK(npre == npost && file_exists(flat) && !file_exists(rec),
+              "  and a dry run moves nothing");
+
+        CHECK(u2_install_apply(&mrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "migration runs on the real tree");
+        CHECK(file_exists(rec), "the flat record moved into saves/PLAYER/PLAYER");
+        CHECK(!file_exists(flat), "  and the flat file is gone: moved, not copied");
+        CHECK(!file_exists(lowf),
+              "the release blank the old installer seeded was removed");
+        CHECK(same_bytes(map40, snap40),
+              "the played-in content mapx40 was restored from its recorded source");
+        CHECK(file_exists(ov40) && same_bytes(ov40, dirt40),
+              "  and its played-in bytes are now this save's overlay");
+        CHECK(u2_install_check(mg, log, err, sizeof err) == U2_INSTALL_OK,
+              "--check is green afterwards, and a slot overlay is not a stray");
+        {
+            /* The manifest is provenance about what the installer wrote from where.
+             * A slot is player data, and a row for it would make a player's save
+             * look like installer output and invite a cleanup that deletes it. */
+            char man[1024], line[1024];
+            snprintf(man, sizeof man, "%.480s/_INSTALL.tsv", mg);
+            FILE *mf = fopen(man, "rb");
+            int saves_rows = 0;
+            while (mf && fgets(line, sizeof line, mf))
+                if (!strncmp(line, "saves/", 6)) saves_rows++;
+            if (mf) fclose(mf);
+            CHECK(saves_rows == 0,
+                  "the manifest records no slot overlays, so a save is not mistaken for install output");
+        }
+
+        copy_file(rec, snaprec);
+        copy_file(ov40, snapov);
+        const int nmid = collect(mg, "", pre, 0, 512);
+        CHECK(u2_install_apply(&mrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "a second migration run is allowed");
+        const int naft = collect(mg, "", post, 0, 512);
+        CHECK(nmid == naft && same_bytes(rec, snaprec) && same_bytes(ov40, snapov),
+              "  and it is a no-op: nothing moved twice");
+    }
+
+    /* A lowercase record beside a real slot record is a second game, not litter.
+     * Deleting it is the failure the whole document exists to prevent, so the
+     * migration promotes it to its own slot even though nothing can select a
+     * second slot yet. */
+    {
+        char pg[1024], pgs[1024], pslot[1024], prec[1024], plow[1024], pprom[1024];
+        char psnap[1024], plsnap[1024];
+        snprintf(pg,     sizeof pg,     "%.480s/game-mig2", base);
+        snprintf(pgs,    sizeof pgs,    "%.480s/saves", pg);
+        snprintf(pslot,  sizeof pslot,  "%.480s/saves/PLAYER", pg);
+        snprintf(prec,   sizeof prec,   "%.480s/saves/PLAYER/PLAYER", pg);
+        snprintf(plow,   sizeof plow,   "%.480s/saves/player", pg);
+        snprintf(pprom,  sizeof pprom,  "%.480s/saves/player/PLAYER", pg);
+        snprintf(psnap,  sizeof psnap,  "%.1000s/mig2-snap-rec", base);
+        snprintf(plsnap, sizeof plsnap, "%.1000s/mig2-snap-low", base);
+
+        u2_install_request prq = { .to = pg, .original_dir = rel, .updated_dir = upd };
+        CHECK(u2_install_apply(&prq, log, err, sizeof err) == U2_INSTALL_OK,
+              "a second slot case starts from a clean install");
+        mkdir(pgs, 0755);
+        mkdir(pslot, 0755);
+        write_bytes(prec, 0x11, 384);
+        write_bytes(plow, 0x9C, 384);        /* not the release blank: someone's game */
+        copy_file(prec, psnap);
+        copy_file(plow, plsnap);
+        CHECK(u2_install_apply(&prq, log, err, sizeof err) == U2_INSTALL_OK,
+              "migration runs with two spellings of the record present");
+        CHECK(file_exists(pprom) && !file_exists(plow),
+              "a non-blank lowercase record is promoted to its own slot, never deleted");
+        CHECK(same_bytes(prec, psnap) && same_bytes(pprom, plsnap),
+              "  and neither record was overwritten: the slot kept its own bytes");
+    }
+
+    /* The other shape: only the release spelling exists, so it is not a second
+     * save, it is the save, and it belongs in the default slot. */
+    {
+        char qg[1024], qgs[1024], qlow[1024], qrec[1024], qsnap[1024];
+        snprintf(qg,    sizeof qg,    "%.480s/game-mig3", base);
+        snprintf(qgs,   sizeof qgs,   "%.480s/saves", qg);
+        snprintf(qlow,  sizeof qlow,  "%.480s/saves/player", qg);
+        snprintf(qrec,  sizeof qrec,  "%.480s/saves/PLAYER/PLAYER", qg);
+        snprintf(qsnap, sizeof qsnap, "%.1000s/mig3-snap", base);
+
+        u2_install_request qrq = { .to = qg, .original_dir = rel, .updated_dir = upd };
+        CHECK(u2_install_apply(&qrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "a third slot case starts from a clean install");
+        mkdir(qgs, 0755);
+        write_bytes(qlow, 0x5B, 384);
+        copy_file(qlow, qsnap);
+        CHECK(u2_install_apply(&qrq, log, err, sizeof err) == U2_INSTALL_OK,
+              "migration runs with only the release spelling present");
+        CHECK(file_exists(qrec) && same_bytes(qrec, qsnap) && !file_exists(qlow),
+              "a lone release-spelled record becomes the default slot's record");
     }
 
     fclose(log);

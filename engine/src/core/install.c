@@ -22,6 +22,7 @@
 #include "core/copy.h"
 #include "core/fmtowns.h"
 #include "core/sha256.h"
+#include "core/slot.h"
 
 #define MAX_ROWS     1024
 #define NAME_LEN     128
@@ -247,17 +248,224 @@ static int manifest_read(const char *to, row *rows, int max)
     return n;
 }
 
-/* Is a manifest destination one of the sector files the game itself rewrites?
- * D6 keeps write-back in the content directory, so these are the files whose
- * bytes are expected to differ once someone has played. Reporting that as a
- * failure would make --check red for the normal case, and a check that is red for
- * the normal case is a check that gets ignored. */
+/* Is a manifest destination one of the sector files the game rewrites as you
+ * play? It no longer decides what --check tolerates: content is immutable after
+ * install (docs/save-scoped-worlds.md), so a sector file that differs is a defect
+ * and not a state to accept. It survives because two messages still need to tell
+ * a player *why* a difference is tolerable nowhere and what repairs it, and
+ * because the migration below has to know which files a played-in world dirtied. */
 static int is_writable_sector(const char *dst)
 {
     const char *base = strrchr(dst, '/');
     base = base ? base + 1 : dst;
     return !strncasecmp(base, "mapx", 4) || !strncasecmp(base, "mapg", 4) ||
            !strncasecmp(base, "monx", 4) || !strncasecmp(base, "mong", 4);
+}
+
+/* --------------------------------------------------------------- migration
+ *
+ * docs/save-scoped-worlds.md § 4. An existing install has `saves/PLAYER` as a
+ * FILE, and the new layout needs `saves/PLAYER/` as a directory, so the two
+ * cannot coexist: this is the one place that can move a player's record, and the
+ * one place allowed to, because it is the only place that can say what the file
+ * is. The engine never moves a save; it refuses.
+ *
+ * Four rules, and the last one outranks the others:
+ *
+ *   - move, never copy, and never overwrite. A rename that would land on an
+ *     existing file is refused rather than resolved.
+ *   - print every move, and print the plan under --dry-run, because the pre-flight
+ *     is the only chance to catch a migration that would move the wrong thing.
+ *   - idempotent: a second run finds nothing to do.
+ *   - a real save is never deleted. Anything this code cannot prove is the release
+ *     blank becomes its own slot, even when that leaves it unselectable. Losing a
+ *     game to a cleanup is the failure the whole document exists to prevent.
+ *
+ * A crash between the two renames of step 1 leaves the record under a temporary
+ * name in the same directory; the next run puts it back and does the move
+ * properly, so an interrupted migration is recoverable rather than half-gone.
+ */
+
+#define MIGRATE_TMP ".PLAYER.migrating"
+#define MIGRATE_TMP_LOW ".player.migrating"
+
+static int is_regular(const char *p)
+{
+    struct stat st;
+    return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static int files_identical(const char *a, const char *b)
+{
+    char sa[HASH_LEN + 1], sb[HASH_LEN + 1];
+    if (hash_file(a, sa, NULL) != 0 || hash_file(b, sb, NULL) != 0)
+        return 0;
+    return strcmp(sa, sb) == 0;
+}
+
+static int move_file(const char *from, const char *to, int dry, FILE *out)
+{
+    if (dry) {
+        fprintf(out, "  migrate %s -> %s (planned, nothing written)\n", from, to);
+        return 0;
+    }
+    if (rename(from, to) != 0) {
+        fprintf(out, "  error   %s could not be moved to %s (%s)\n", from, to, strerror(errno));
+        return -1;
+    }
+    fprintf(out, "  migrate %s -> %s\n", from, to);
+    return 0;
+}
+
+static int migrate_to_slots(const char *to, const row *rows, int nrows, int dry,
+                            FILE *out, char *err, size_t errsz)
+{
+    char saves[1024], slot[1024], rec[1024], low[1024], tmp[1024], blank[1024];
+    char tmp_low[1024];
+
+    snprintf(saves, sizeof saves, "%.1000s/%s", to, U2_INSTALL_SAVES);
+    snprintf(slot,  sizeof slot,  "%.1000s/%.16s", saves, U2_SAVE_SLOT_DEFAULT);
+    snprintf(rec,   sizeof rec,   "%.1015s/PLAYER", slot);
+    snprintf(low,   sizeof low,   "%.1000s/player", saves);
+    snprintf(blank, sizeof blank, "%.1000s/%s/player", to, U2_INSTALL_DATA_ORIG);
+    snprintf(tmp,   sizeof tmp,   "%.1000s/%s", saves, MIGRATE_TMP);
+    snprintf(tmp_low, sizeof tmp_low, "%.1000s/%s", saves, MIGRATE_TMP_LOW);
+
+    if (!is_dirpath(saves) && !is_regular(slot))
+        return 0;                       /* nothing here is old-layout save data */
+
+    fprintf(out, "-- save-scoped layout\n");
+
+    /* 0. an interrupted previous run */
+    if (is_regular(tmp) && !is_regular(slot)) {
+        if (move_file(tmp, slot, dry, out) != 0) {
+            snprintf(err, errsz, "cannot recover %s from an interrupted migration", tmp);
+            return -1;
+        }
+    }
+    if (is_regular(tmp_low) && !is_regular(low)) {
+        if (move_file(tmp_low, low, dry, out) != 0) {
+            snprintf(err, errsz, "cannot recover %s from an interrupted migration", tmp_low);
+            return -1;
+        }
+    }
+
+    /* 1. the record: a file at saves/PLAYER becomes saves/PLAYER/PLAYER.
+     * Two renames because a directory cannot take a file's name while the file
+     * holds it, and the intermediate stays inside the same directory so both
+     * renames are same-filesystem and neither can lose the record. */
+    int rec_there = is_regular(rec);
+    if (is_regular(slot)) {
+        if (move_file(slot, tmp, dry, out) != 0) {
+            snprintf(err, errsz, "cannot move %s aside to make room for its slot", slot);
+            return -1;
+        }
+        if (!dry && mkdir_p(slot) != 0) {
+            snprintf(err, errsz, "cannot create %s", slot);
+            return -1;
+        }
+        if (move_file(tmp, rec, dry, out) != 0) {
+            snprintf(err, errsz, "cannot move the player record into its slot");
+            return -1;
+        }
+        rec_there = 1;
+    }
+
+    /* 2. the release-spelled lowercase record.
+     * The old installer seeded `saves/player` from the release copy, which is how
+     * a played install ended up holding two files differing only by case. Which
+     * one is the player's game is not guesswork: if the slot has no record yet,
+     * the lowercase file IS the record and moves into the slot. If it does, then
+     * a lowercase file identical to the release blank is the installer's own seed
+     * and goes, and anything else is a real save and gets promoted. */
+    if (is_regular(low)) {
+        if (!rec_there) {
+            if (!dry && mkdir_p(slot) != 0) {
+                snprintf(err, errsz, "cannot create %s", slot);
+                return -1;
+            }
+            if (move_file(low, rec, dry, out) != 0) {
+                snprintf(err, errsz, "cannot move the release-spelled record into its slot");
+                return -1;
+            }
+        } else if (is_regular(blank) && files_identical(low, blank)) {
+            if (!dry && unlink(low) != 0) {
+                snprintf(err, errsz, "cannot remove the seeded blank %s", low);
+                return -1;
+            }
+            fprintf(out, "  remove  %s (byte-identical to %s: the old installer's seed, "
+                         "not a game)%s\n", low, blank, dry ? " (planned, nothing written)" : "");
+        } else {
+            /* The same two-rename shape as step 1, for the same reason: the slot
+             * directory cannot take the file's name while the file holds it, and
+             * mkdir over an existing file is not a thing — u2_mkdir_p tolerates
+             * EEXIST whatever the existing thing happens to be, so a mkdir here
+             * would succeed as a no-op and the rename would then fail with ENOTDIR
+             * and take the whole install down with it. */
+            char pslot[1024], prec[1024];
+            snprintf(pslot, sizeof pslot, "%.1000s/player", saves);
+            snprintf(prec, sizeof prec, "%.1015s/PLAYER", pslot);
+            if (move_file(low, tmp_low, dry, out) != 0) {
+                snprintf(err, errsz, "cannot move %s aside to promote it", low);
+                return -1;
+            }
+            if (!dry && mkdir_p(pslot) != 0) {
+                snprintf(err, errsz, "cannot create %s", pslot);
+                return -1;
+            }
+            if (move_file(tmp_low, prec, dry, out) != 0) {
+                snprintf(err, errsz, "cannot promote %s to its own slot", low);
+                return -1;
+            }
+            fprintf(out, "  note    %s is not the release blank, so it is kept as its own "
+                         "slot. Nothing selects a second slot yet (--save is later, D5).\n",
+                    low);
+        }
+    }
+
+    /* 3. content a played world dirtied.
+     * Detected against the manifest, which is the only record of what the
+     * installer wrote. The dirty file moves into the slot, and the copy loop that
+     * follows restores the content copy from the source the manifest names — so
+     * the move is only offered when that source still hashes to what was
+     * recorded. If it does not, the content file stays where it is: a half-repair
+     * is worse than a reported one, and the old layout must keep working. */
+    for (int i = 0; i < nrows; i++) {
+        if (!is_writable_sector(rows[i].dst))
+            continue;
+        char full[1024], sha[HASH_LEN + 1], src_sha[HASH_LEN + 1];
+        long sz = 0;
+        snprintf(full, sizeof full, "%.500s/%.511s", to, rows[i].dst);
+        if (hash_file(full, sha, &sz) != 0)
+            continue;                       /* absent: --check already calls that out */
+        if (sz == rows[i].size && strcmp(sha, rows[i].sha) == 0)
+            continue;                       /* clean */
+        if (hash_file(rows[i].src, src_sha, NULL) != 0 ||
+            strcmp(src_sha, rows[i].sha) != 0) {
+            fprintf(out, "  refuse  %s differs from its manifest hash, but its recorded "
+                         "source %s is gone or has changed too; left in place\n",
+                    full, rows[i].src);
+            continue;
+        }
+        const char *base = strrchr(rows[i].dst, '/');
+        char dst[1024];
+        snprintf(dst, sizeof dst, "%.890s/%.127s", slot, base ? base + 1 : rows[i].dst);
+        if (is_regular(dst)) {
+            fprintf(out, "  note    %s is already overlaid in the slot; the content copy "
+                         "is restored from its source\n", dst);
+            continue;
+        }
+        if (!dry && mkdir_p(slot) != 0) {
+            snprintf(err, errsz, "cannot create %s", slot);
+            return -1;
+        }
+        if (move_file(full, dst, dry, out) != 0) {
+            snprintf(err, errsz, "cannot move a played-in sector into the save slot");
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------- scan */
@@ -516,6 +724,31 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
     fprintf(out, "-- %d file(s) to write, %d shadowed, %d patched over, %d skipped\n",
             p.n, p.shadowed, p.patched_over, p.skipped);
 
+    /* Migration runs before a single byte is copied, for two reasons. The dirty
+     * sector files have to leave the content tree before the copy loop overwrites
+     * them, or the repair destroys the very bytes it is meant to preserve; and
+     * --dry-run has to show the plan, because the pre-flight is the only place a
+     * migration that would move the wrong thing can be caught before it moves it.
+     *
+     * Only a tree that carries our manifest can be migrated: the manifest is what
+     * records what the installer wrote and from where, and without it there is
+     * nothing to compare a possibly-played-in file against. */
+    if (st == T_MINE) {
+        row *old = calloc(MAX_ROWS, sizeof *old);
+        const int n_old = old ? manifest_read(rq->to, old, MAX_ROWS) : -1;
+        int mres = 0;
+        if (n_old > 0)
+            mres = migrate_to_slots(rq->to, old, n_old, rq->dry_run, out, err, errsz);
+        else
+            fprintf(out, "  note    %s could not be read, so nothing was migrated\n",
+                    U2_INSTALL_MANIFEST);
+        free(old);
+        if (mres != 0) {
+            free(rows);
+            return U2_INSTALL_ERROR;
+        }
+    }
+
     if (rq->dry_run) {
         /* The data layer is planned file by file above, because that is where the
          * interesting decisions are (which copy of a shared filename wins). Themes
@@ -559,21 +792,14 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         return U2_INSTALL_ERROR;
     }
 
-    /* saves/ holds the live player record so a DOS run and an engine run stop
-     * fighting over one file. Seed it from the release copy only when it is not
-     * already there: an existing save is the player's and is never touched. */
-    {
-        char saves[1024], src[1024], dst[1024];
-        snprintf(saves, sizeof saves, "%.1000s/%s", rq->to, U2_INSTALL_SAVES);
-        snprintf(src, sizeof src, "%.1000s/%s/player", rq->to, U2_INSTALL_DATA_ORIG);
-        snprintf(dst, sizeof dst, "%.1000s/%s/player", rq->to, U2_INSTALL_SAVES);
-        if (mkdir_p(saves) == 0 && file_size(src) > 0 && file_size(dst) < 0) {
-            char sha[HASH_LEN + 1];
-            long sz = 0;
-            if (hash_file(src, sha, &sz) == 0 && copy_verified(src, dst, sz, sha) == 0)
-                fprintf(out, "  seeded saves/player from the release copy\n");
-        }
-    }
+    /* saves/ is no longer seeded. A new game starts with no slot at all and reads
+     * pure content, which is what a new game should do, and the engine creates the
+     * slot the first time it has something to put in it (D6). The old seed copied
+     * the release's lowercase `player` beside the uppercase record the engine
+     * writes, which is how a played install ended up holding two files differing
+     * only by case; removing the seed removes that by construction rather than by
+     * the resolve_save_name() workaround. Migration (§ 4) deals with trees that
+     * were installed the old way. */
 
     int have_themes = 0;
     if (rq->n_themes_dir > 0) {
@@ -675,7 +901,7 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
         return U2_INSTALL_ERROR;
     }
 
-    int missing = 0, wrong = 0, drifted = 0, ok = 0;
+    int missing = 0, wrong = 0, ok = 0;
     for (int i = 0; i < n; i++) {
         char full[1024];
         snprintf(full, sizeof full, "%.500s/%.511s", to, rows[i].dst);
@@ -693,15 +919,20 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
             continue;
         }
         if (strcmp(sha, rows[i].sha) != 0) {
-            if (is_writable_sector(rows[i].dst)) {
-                fprintf(out, "  played  %s differs from install (expected after play)\n",
-                        rows[i].dst);
-                drifted++;
-            } else {
+            /* Content is immutable after install now that every write goes to a
+             * save slot, so a difference is a defect and not a state to tolerate.
+             * This flips the meaning of the old `played-in` verdict: it used to
+             * mean "expected after play", and after this change it can only mean
+             * something wrote where it must not. */
+            if (is_writable_sector(rows[i].dst))
+                fprintf(out, "  wrong   %s differs from install. Content is never written "
+                             "after install, so this is a defect: run --install to move it "
+                             "into the save slot and restore the content copy "
+                             "(docs/save-scoped-worlds.md)\n", rows[i].dst);
+            else
                 fprintf(out, "  wrong   %s differs from install and is not a sector file\n",
                         rows[i].dst);
-                wrong++;
-            }
+            wrong++;
             continue;
         }
         ok++;
@@ -749,11 +980,8 @@ u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t 
         }
     }
 
-    fprintf(out, "check %s: %d ok, %d missing, %d wrong, %d strays",
+    fprintf(out, "check %s: %d ok, %d missing, %d wrong, %d strays\n",
             to, ok, missing, wrong, strays);
-    if (drifted)
-        fprintf(out, ", %d played-in", drifted);
-    fputc('\n', out);
 
     /* The themes subtree carries its own manifest, because it is the theme
      * builder's output rather than a copy of the player's release, and each

@@ -43,8 +43,10 @@ typedef enum {
  * themes/_BUILD.tsv, for the same reason: emit, record, re-derive, diff. */
 #define U2_INSTALL_MANIFEST "_INSTALL.tsv"
 
-/* The layout, fixed by the § 3 ruling. The engine finds these through its ordered
- * content roots, so the installer writes them and does not have to explain them. */
+/* The layout, fixed by the § 3 ruling and by docs/save-scoped-worlds.md. The
+ * engine finds these through its ordered content roots, so the installer writes
+ * them and does not have to explain them. `saves` is created by migration or by
+ * the engine, never seeded: a slot that holds nothing is a lie about a game. */
 #define U2_INSTALL_DATA_ORIG  "data/original"
 #define U2_INSTALL_DATA_UPD   "data/updated"
 #define U2_INSTALL_SAVES      "saves"
@@ -99,10 +101,10 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
                                    char *err, size_t errsz);
 
 /* Report on a tree without writing anything. With no manifest it says so and
- * refuses to guess; with one it verifies every row and separates the two kinds of
- * difference a player's own play can cause from the kinds that mean the tree is
- * broken (D6: sector files are expected to drift, so a content difference in one
- * is a note and a missing file is a failure). */
+ * refuses to guess; with one it verifies every row. Since sector writes moved into
+ * the save slot there is no tolerated difference any more: content is immutable
+ * after install, so a sector file that differs from its manifest row is a defect
+ * and not a state, and the message names --install as the repair. */
 u2_install_result u2_install_check(const char *to, FILE *out, char *err, size_t errsz);
 
 /* Exposed for the test: is this filename game content at all, and which layer

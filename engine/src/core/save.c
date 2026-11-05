@@ -178,6 +178,13 @@ u2_save_result u2_save_store(const u2_ctx *ctx)
     char path[512];
     uint8_t file[U2_PLAYER_FILE_SIZE];
     long size = -1;
+
+    /* The slot has to exist before a record can go into it. u2_save_ensure() does
+     * this on the normal route, but --play-map enters the world without passing
+     * through creation, and a Q that printed ONE MOMENT PLEASE! and wrote nothing
+     * is the silent failure this project refuses everywhere else. */
+    if (u2_slot_ensure(ctx) != 0) return U2_SAVE_NOT_READY;
+
     u2_save_path(ctx, path, sizeof path);
     long n = read_file(path, file, sizeof file, &size);
 
