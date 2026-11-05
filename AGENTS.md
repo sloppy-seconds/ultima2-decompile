@@ -39,7 +39,12 @@ exact byte-for-byte fidelity.
 > reading for method as much as content), and `docs/install-design.md` (**the current entry point for
 > anything about assembling a playable game directory** — installer modes, the layout and precedence
 > decisions still open, the invariants, the gate, and what `docs/handoff-themes-builder.md` left
-> behind now that the theme work is locked off).** To start a fresh
+> behind now that the theme work is locked off), and
+> `docs/handoff-save-scoped-worlds.md` (**not built as of 2026-11-05** — moves sector write-back out
+> of the content directory into a per-save overlay under `saves/<slot>/`, which is where `mapx`
+> mutation, the `player`/`PLAYER` case collision, and multiple save games all land. Spec is
+> `docs/save-scoped-worlds.md` and its D1-D6 are all ruled, so do not re-argue them; the handoff has
+> the build order, the exact change sites, and why the migration goes last). **To start a fresh
 > agent, read `docs/handoff-2026-11-03.md` first (**current entry point** — the rocket and
 > space session: G39, G59, G60 and G62 closed and G63/G64 added. `DS:13 = 0x28` finally
 > observed after 167 empty harvests; the parked-rocket triple `DS:69/6A/6B` decoded, which
