@@ -111,18 +111,16 @@ static void text(u2_frame *f, int x, int y, const char *s, uint8_t fg, uint8_t b
     u2_font_draw_text(f, y / U2_ENH_TEXT_H, x / U2_ENH_TEXT_W, s, fg, bg);
 }
 
-/* Four BCD digits as printed by the DOS status block: the first byte carries the
- * high pair. Leading zeros are dropped so the panel reads 258 rather than 0258,
- * which is the reference's style. Invented here; the DOS block prints the zeros. */
+/* Four BCD digits as the DOS status block prints them, leading zeros included: the
+ * original shows GOLD=0009 rather than 9, so the padding is the original's and not
+ * an invention. An earlier version stripped the zeros to match the FM Towns
+ * reference's style, which was the wrong side to err on once the labels came from
+ * the binary. */
 static void bcd4(uint8_t hi, uint8_t lo, char *out, size_t n)
 {
-    char buf[8];
-    snprintf(buf, sizeof buf, "%c%c%c%c",
+    snprintf(out, n, "%c%c%c%c",
              (char)('0' + ((hi >> 4) & 0x0F)), (char)('0' + (hi & 0x0F)),
              (char)('0' + ((lo >> 4) & 0x0F)), (char)('0' + (lo & 0x0F)));
-    const char *p = buf;
-    while (*p == '0' && p[1]) p++;
-    snprintf(out, n, "%s", p);
 }
 
 /* Right-align a value in a field, the way the reference's leader column does. */
@@ -141,44 +139,55 @@ static void draw_vitals(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tile
     const int x = U2_ENH_VIT_X, y = U2_ENH_VIT_Y, w = U2_ENH_VIT_W, h = U2_ENH_VIT_H;
     box(f, x, y, w, h, c->box_bg, c->border);
 
+    const int cx = x + U2_ENH_BOX_PAD;          /* first text column, pixels */
+    const int r0 = y + U2_ENH_BOX_PAD;
+    /* The avatar owns the last two interior cells, so text is cut short of the box
+     * rather than running out under the figure. */
+    const int text_cols = U2_ENH_VIT_COLS - 2;
+
     char name[17];
     int len = 0;
     /* The name field is not guaranteed NUL-terminated in a hand-edited save, so
      * bound it by the field rather than trusting the bytes. */
     while (len < (int)sizeof ctx->state.name && ctx->state.name[len]) len++;
-    /* And bound it by the box: the interior is 12 cells, a 16-char name would run
-     * under the avatar, and clipped text beats overlapping text. */
-    if (len > U2_ENH_VIT_COLS) len = U2_ENH_VIT_COLS;
+    if (len > text_cols) len = text_cols;
     if (len > (int)sizeof name - 1) len = (int)sizeof name - 1;
     memcpy(name, ctx->state.name, (size_t)len);
     name[len] = '\0';
-    text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD, name, c->text, c->box_bg);
+    text(f, cx, r0, name, c->text, c->box_bg);
 
-    char h1[8], h2[8], f1[8], g1[8];    bcd4(ctx->state.hp, ctx->state.unk_52, h1, sizeof h1);
-    bcd4(ctx->state.exp_lo, ctx->state.exp_hi, h2, sizeof h2);
-    bcd4(ctx->state.food_hi, ctx->state.food_lo, f1, sizeof f1);
-    bcd4(ctx->state.gold_lo, ctx->state.gold_hi, g1, sizeof g1);
+    char hp[8], xp[8], gd[8], fd[8];
+    bcd4(ctx->state.hp, ctx->state.unk_52, hp, sizeof hp);
+    bcd4(ctx->state.exp_lo, ctx->state.exp_hi, xp, sizeof xp);
+    bcd4(ctx->state.gold_lo, ctx->state.gold_hi, gd, sizeof gd);
+    bcd4(ctx->state.food_hi, ctx->state.food_lo, fd, sizeof fd);
 
-    /* One column, per the owner: H E G F top to bottom. The reference uses a 2x2
-     * grid only because its panel is narrow; ours is a tall thin box now, so the
-     * single column is both the request and the better fit. Values right-align on
-     * one edge so four- and five-digit numbers still line up. */
-    const int cx = x + U2_ENH_BOX_PAD;          /* first text column, pixels */
-    const int r0 = y + U2_ENH_BOX_PAD;
-    static const char *const vl[4] = { "H:", "E:", "G:", "F:" };
-    const char *vv[4] = { h1, h2, g1, f1 };
-    /* Column 7 is the right edge of the value field: the avatar owns the last two
-     * interior cells, and stopping here keeps a 5-digit EXP from touching it. */
-    const int vright = cx + 7 * U2_ENH_TEXT_W;
+    /* The original's own four labels, taken from the status block (asm/50F9):
+     * H.P.= EXP.= GOLD= FOOD=. Used verbatim rather than abbreviated, and the
+     * values keep the original's zero padding, so this reads GOLD=0009 and not
+     * GOLD: 9. The order down the column is the owner's: HP, EXP, GOLD, FOOD. */
+    static const char *const vl[4] = {
+        U2_S_STATUS_HP, U2_S_STATUS_EXP, U2_S_STATUS_GOLD, U2_S_STATUS_FOOD
+    };
+    const char *vv[4] = { hp, xp, gd, fd };
+    char line[32];
     for (int i = 0; i < 4; i++) {
-        const int ry = r0 + (i + 1) * U2_ENH_TEXT_H;
-        text(f, cx, ry, vl[i], c->text, c->box_bg);
-        value_right(f, vright, ry, vv[i], c->text, c->box_bg);
+        snprintf(line, sizeof line, "%s%s", vl[i], vv[i]);
+        text(f, cx, r0 + (i + 1) * U2_ENH_TEXT_H, line, c->text, c->box_bg);
     }
+
+    /* WEAPON: and its name on the last two rows. Two rows because the longest
+     * weapon name (GREAT SWORD) plus the label is 18 cells and the box has 13 of
+     * text; splitting beats truncating a name the player went looking for.
+     * "WEAPON:" is ours -- the binary has no such status label -- and the name
+     * after it is the real extracted pool. */
+    text(f, cx, r0 + 5 * U2_ENH_TEXT_H, "WEAPON:", c->text, c->box_bg);
+    text(f, cx, r0 + 6 * U2_ENH_TEXT_H,
+         P_NAME(U2_T_WEAPONS, ctx->state.readied_weapon), c->text, c->box_bg);
 
     if (avatar_art >= 0 && tiles) {
         /* Through the theme's map, not raw: art 60 is the avatar and pool index 60
-         * in a v2 theme is a capital O. That was a real bug, fixed today. */
+         * in a v2 theme is a capital O. That was a real bug, fixed 2026-11-05. */
         const int tile = u2_tiles_ega_tile(tiles, avatar_art);
         if (tile >= 0)
             u2_frame_blit_tile_ega(f, tiles, tile,
@@ -192,24 +201,24 @@ static void draw_stats(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c
     const int x = U2_ENH_STA_X, y = U2_ENH_STA_Y, w = U2_ENH_STA_W, h = U2_ENH_STA_H;
     box(f, x, y, w, h, c->box_bg, c->border);
 
-    /* Our order and our labels, per the ruling. The reference truncates
-     * INTELLIGENCE to fit its wider font; at 8px we have room for the whole word. */
-    static const char *const labels[6] = {
-        "STRENGTH", "AGILITY", "STAMINA", "CHARISMA", "WISDOM", "INTELLIGENCE"
-    };
+    /* The original's own stat names, from the name pool (asm/4C55). It ships
+     * INTELL. rather than INTELLIGENCE, and that is five cells this box does not
+     * have, so using the binary's spelling is both more faithful and what makes the
+     * layout fit at all. Order is the pool's order. */
     const uint8_t v[6] = {
         ctx->state.stat_str, ctx->state.stat_agi, ctx->state.stat_sta,
         ctx->state.stat_cha, ctx->state.stat_wis, ctx->state.stat_int
     };
     const int right  = x + w - U2_ENH_BOX_PAD;
     for (int i = 0; i < 6; i++) {
+        const char *lab = U2_T_STATS[i];
         const int ry = y + U2_ENH_BOX_PAD + i * U2_ENH_TEXT_H;
-        text(f, x + U2_ENH_BOX_PAD, ry, labels[i], c->text, c->box_bg);
+        text(f, x + U2_ENH_BOX_PAD, ry, lab, c->text, c->box_bg);
         /* The dotted leader the reference puts between label and value, drawn
          * rather than assumed: fill the gap the label left with dots. Only if a
          * whole cell is left over, or the dots crowd the value in a narrow box. */
         const int dots_from = x + U2_ENH_BOX_PAD
-                            + (int)strlen(labels[i]) * U2_ENH_TEXT_W + U2_ENH_TEXT_W;
+                            + (int)strlen(lab) * U2_ENH_TEXT_W + U2_ENH_TEXT_W;
         const int dots_to   = right - 3 * U2_ENH_TEXT_W;
         for (int dx = dots_from; dx + U2_ENH_TEXT_W <= dots_to; dx += U2_ENH_TEXT_W)
             text(f, dx, ry, ".", c->text, c->box_bg);
@@ -218,16 +227,14 @@ static void draw_stats(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c
         value_right(f, right, ry, num, c->text, c->box_bg);
     }
 
-    char line[40];
-    const int ey = y + U2_ENH_BOX_PAD + 6 * U2_ENH_TEXT_H;
-    /* "WEA:"/"ARM:" are the reference's abbreviations and are NOT strings from
-     * ultimaii.exe, which spells these WEAPON- and ARMOUR-. Invented on purpose:
-     * enhanced mode is a presentation, ruled 2026-11-05. The names after them are
-     * the real extracted pools. */
-    snprintf(line, sizeof line, "WEA:%s", P_NAME(U2_T_WEAPONS, ctx->state.readied_weapon));
-    text(f, x + U2_ENH_BOX_PAD, ey, line, c->text, c->box_bg);
-    snprintf(line, sizeof line, "ARM:%s", P_NAME(U2_T_ARMOUR, ctx->state.worn_armour));
-    text(f, x + U2_ENH_BOX_PAD, ey + U2_ENH_TEXT_H, line, c->text, c->box_bg);
+    /* ARMOUR: and its name on the bottom row, which is why the stats box is 14
+     * cells wide: ARMOUR:LEATHER is exactly that. "ARMOUR:" is ours -- the binary
+     * has no such status label -- and the name is the real extracted pool. */
+    char aline[32];
+    snprintf(aline, sizeof aline, "ARMOUR:%s",
+             P_NAME(U2_T_ARMOUR, ctx->state.worn_armour));
+    text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + 6 * U2_ENH_TEXT_H,
+         aline, c->text, c->box_bg);
 }
 
 static void draw_cmd(u2_frame *f, const u2_panel_colours *c,
