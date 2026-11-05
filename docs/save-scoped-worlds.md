@@ -95,8 +95,31 @@ must be **move, never copy, and never overwrite**:
 | **D1** | Default slot name. `saves/PLAYER/PLAYER` is faithful but reads oddly, a directory and a file with the same name. | Keep it. It matches the engine's `U2_SAVE_FILE_NAME`, and `--save NAME` selects other slots without renaming anything. |
 | **D2** | Does the original game ever share this directory? It reads `mapx` from the game root, so maps we move under `saves/` become invisible to it. | Accept it. The engine's directory is the engine's. Worth stating in the release notes so nobody is surprised running both on one tree. |
 | **D3** | Which files overlay? `mapx`/`monx` are written by the game. `tlkx` is never written by anything (docs/save-format.md), so overlaying it buys nothing. | Overlay `mapx`/`monx` only. Keep `tlkx`, `pic*` and the exe as pure content. |
-| **D4** | Where does the tile cache `tiles.u2tl` live? It is derived from the player's exe, not from a save, so per-slot would rebuild it per slot. | Keep it shared, at `saves/.cache/` or the game root. Not part of a slot. |
+| **D4** | Where does the tile cache `tiles.u2tl` live? | **Out of `saves/` entirely.** It was never save data: `tiles.c:243` says it plainly — "The cache directory is ours, and a fresh install has no 'our own spot' yet", so it used the save dir for convenience. It is derived from the player's `ultimaii.exe`, self-verifying against that exe, and identical for every slot. With this layout there is a proper place: `cache/tiles.u2tl` at the game root. Per-slot would re-extract once per save for no benefit. |
 | **D5** | Multi-save UI now or later? The layout enables it; a `--save NAME` flag and a slot picker are separate work. | Layout now, flag later. Building the layout without the flag costs nothing extra and the flag is then small. |
+| **D6** | Who creates the default slot directory — the installer, or the engine on first save? | The engine, lazily, the same way `ensure_cache_dir()` already does. A slot that exists but holds nothing is a lie about having a game. The installer only migrates existing ones. |
+
+## 4a. What `--install` has to do
+
+This is not a small part of the change, and it is where a careless version loses someone's
+saved game.
+
+1. **Stop seeding `saves/player`.** `install.c:570` copies the release blank into the save
+   directory when nothing is there. Under the new layout a new game starts with no overlay
+   and no record until the player actually creates a character, so the seed is removed. That
+   is also what deletes the case-collision of § 1.3 by construction rather than by the
+   `resolve_save_name()` workaround.
+2. **Migrate existing installs** (§ 4), idempotently, printing every move, and refusing
+   rather than guessing when it cannot tell what a file is.
+3. **`--install --check` learns the new paths** and its vocabulary changes: `played-in`
+   should no longer appear for content at all, because content is never written. If it
+   does appear, that is now a defect to report, not a state to tolerate. That flips the
+   meaning of an existing verdict, so it needs its own controls.
+4. **Slot overlays are not install artefacts.** `mapx20` under `saves/PLAYER/` must not go
+   into `_INSTALL.tsv`, which records what the installer wrote from what source. A slot is
+   player data; the manifest is provenance.
+5. **`--dry-run` must show the migration** before it happens. The pre-flight is the only
+   chance to catch a migration that would move something it should not.
 
 ## 6. What has to change, and what guards it
 
@@ -104,7 +127,11 @@ must be **move, never copy, and never overwrite**:
 - `engine/src/core/world.c` — `u2_world_store()` targets the slot; the "write back into
   the layer it was read from" rule at `world.c:409` is replaced by "always the slot".
 - `engine/src/core/save.c` — the record path becomes `saves/<slot>/PLAYER`.
-- `engine/src/core/install.c` — stop seeding `saves/player`; add the migration of § 4.
+- `engine/src/core/install.c` — stop seeding `saves/player`; add the migration of § 4;
+  make `--dry-run` show the migration; keep slot overlays out of `_INSTALL.tsv`.
+- `engine/src/core/tiles.c` — the cache path moves from `<save_dir>/tiles.u2tl` to
+  `cache/tiles.u2tl` (D4). `ensure_cache_dir()` already creates its parent, so the lazy
+  creation behaviour carries over unchanged.
 - `tools/save_cross_load.py` — this is the gate that loads a record between the engine
   and the original game. It reads and writes paths directly and **must be updated in the
   same change**, or it will test the old location and pass vacuously. Per AGENTS.md § 3,
