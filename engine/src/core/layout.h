@@ -79,26 +79,25 @@
  * decoration — with the boxes flush to the frame edge their right border was the
  * last pixel column and read as an open box.
  *
- * The widths are set by what the original's own strings need, not by taste. WEAPON:
- * with the longest weapon name (GREAT SWORD) wants 18 cells, which does not fit
- * beside a stats column that needs 14 for ARMOUR:LEATHER, so the weapon label and
- * its name take two rows. Using the binary's own stat names is what buys the room
- * back: the original ships INTELL. (asm/4C55 pool[67]), not INTELLIGENCE, and that
- * difference alone is five cells.
+ * The widths are set by what the original's own strings need, not by taste. Using
+ * the binary's own stat names is what makes the two-box shape fit at all: the
+ * original ships INTELL. (asm/4C55 pool[67]), not INTELLIGENCE, and that
+ * difference alone is five cells. Equipment is labelled W: and A: for the same
+ * reason -- the full words plus the longest name do not fit beside a stats column.
  */
 #define U2_ENH_TOP_Y     0
 #define U2_ENH_TOP_H     (9 * U2_ENH_TEXT_H)    /* 144: seven text rows plus pads */
 #define U2_ENH_GUT       U2_ENH_TEXT_W          /* 16: one cell, either side */
 
-/* Vitals: name, then H.P.= EXP.= GOLD= FOOD= down one column, then WEAPON: and its
- * name on the last two rows, with the avatar owning the right two cells. */
+/* Vitals: name, then H.P.= EXP.= GOLD= FOOD= down one column, then W: and its
+ * name on the last row, with the avatar owning the right two cells. */
 #define U2_ENH_VIT_X     (U2_ENH_PANEL_X + U2_ENH_GUT)
 #define U2_ENH_VIT_W     (17 * U2_ENH_TEXT_W)                        /* 272 */
 #define U2_ENH_VIT_Y     U2_ENH_TOP_Y
 #define U2_ENH_VIT_H     U2_ENH_TOP_H
 #define U2_ENH_VIT_COLS  ((U2_ENH_VIT_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W) /* 15 */
 
-/* Stats: six with dotted leaders, then ARMOUR: and its name on the bottom row. */
+/* Stats: six with dotted leaders, then A: and its name on the bottom row. */
 #define U2_ENH_STA_X     (U2_ENH_VIT_X + U2_ENH_VIT_W + U2_ENH_TEXT_W)  /* 1-cell gap */
 #define U2_ENH_STA_W     (U2_ENH_PANEL_W - U2_ENH_VIT_W - 3 * U2_ENH_TEXT_W) /* 256 */
 #define U2_ENH_STA_Y     U2_ENH_TOP_Y

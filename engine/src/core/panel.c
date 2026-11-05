@@ -176,14 +176,17 @@ static void draw_vitals(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tile
         text(f, cx, r0 + (i + 1) * U2_ENH_TEXT_H, line, c->text, c->box_bg);
     }
 
-    /* WEAPON: and its name on the last two rows. Two rows because the longest
-     * weapon name (GREAT SWORD) plus the label is 18 cells and the box has 13 of
-     * text; splitting beats truncating a name the player went looking for.
-     * "WEAPON:" is ours -- the binary has no such status label -- and the name
-     * after it is the real extracted pool. */
-    text(f, cx, r0 + 5 * U2_ENH_TEXT_H, "WEAPON:", c->text, c->box_bg);
-    text(f, cx, r0 + 6 * U2_ENH_TEXT_H,
-         P_NAME(U2_T_WEAPONS, ctx->state.readied_weapon), c->text, c->box_bg);
+    /* One line at the box floor, per the owner. W and A are enough of a label once
+     * the box is this narrow: "W:GREAT SWORD" is 13 cells and the box has exactly
+     * 13 of text once the avatar keeps its two. The names are truncated rather
+     * than wrapped, which only bites on a name longer than anything the game
+     * ships. "W:"/"A:" are ours -- the binary has no such status label -- and the
+     * name after them is the real extracted pool. */
+    char wline[24];
+    snprintf(wline, sizeof wline, "W:%s",
+             P_NAME(U2_T_WEAPONS, ctx->state.readied_weapon));
+    if ((int)strlen(wline) > text_cols) wline[text_cols] = '\0';
+    text(f, cx, r0 + 6 * U2_ENH_TEXT_H, wline, c->text, c->box_bg);
 
     if (avatar_art >= 0 && tiles) {
         /* Through the theme's map, not raw: art 60 is the avatar and pool index 60
@@ -227,12 +230,12 @@ static void draw_stats(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c
         value_right(f, right, ry, num, c->text, c->box_bg);
     }
 
-    /* ARMOUR: and its name on the bottom row, which is why the stats box is 14
-     * cells wide: ARMOUR:LEATHER is exactly that. "ARMOUR:" is ours -- the binary
-     * has no such status label -- and the name is the real extracted pool. */
+    /* A: and its name on the bottom row, same one-line rule as the weapon. "A:" is
+     * ours; the name is the real extracted pool. */
     char aline[32];
-    snprintf(aline, sizeof aline, "ARMOUR:%s",
+    snprintf(aline, sizeof aline, "A:%s",
              P_NAME(U2_T_ARMOUR, ctx->state.worn_armour));
+    if ((int)strlen(aline) > U2_ENH_STA_COLS) aline[U2_ENH_STA_COLS] = '\0';
     text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + 6 * U2_ENH_TEXT_H,
          aline, c->text, c->box_bg);
 }
