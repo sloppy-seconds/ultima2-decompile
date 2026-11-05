@@ -20,9 +20,14 @@
 #include "core/font.h"   /* U2_FONT_CELL_W, so text columns are whole glyphs */
 
 /* The frame the enhanced layout is designed for. Classic mode stays at 320x200
- * (or 640x400 doubled) and is untouched by any of this. */
-#define U2_ENH_W 768
-#define U2_ENH_H 480
+ * (or 640x400 doubled) and is untouched by any of this.
+ *
+ * 1024x512 rather than a full 4:3: the width is what lets a 14-column map and a
+ * readable 16px panel coexist, and the height is only what the map plus the bar
+ * need, so there is no dead band under the map. Fits a 1024x768 display with room
+ * to spare, which is the smallest display the owner was willing to assume. */
+#define U2_ENH_W 1024
+#define U2_ENH_H 512
 
 /* The enhanced frame is a DOUBLED canvas, and that is load-bearing twice over.
  * Text drawn through the font API comes out at 16px rather than the unreadable 8px
@@ -67,9 +72,11 @@
 
 /* The bottom bar. Measured as constant full-width chrome in the reference (it does
  * not track HP: identical in frames at H:258 and H:4922), and ruled to stay
- * meaningless for now with "planet or area" as its candidate use. */
-#define U2_ENH_BAR_Y       456
+ * meaningless for now with "planet or area" as its candidate use.
+ * Positioned from the bottom of the frame rather than a literal, so it survives a
+ * change of frame height without silently overlapping the map. */
 #define U2_ENH_BAR_H       16
+#define U2_ENH_BAR_Y       (U2_ENH_MAP_Y + U2_ENH_MAP_ROWS * 32 + 8)
 #define U2_ENH_BAR_X       8
 #define U2_ENH_BAR_W       (U2_ENH_W - 2 * U2_ENH_BAR_X)
 

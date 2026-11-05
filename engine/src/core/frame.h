@@ -67,14 +67,13 @@
  * has; a blit that went through the logical space would decimate a 32x32 tile
  * to 16x16 and throw away the reason for the theme. */
 #define U2_FRAME_MAX_SCALE 2
-/* 800, not 640: the enhanced layout is 768 wide so that the panel can carry 16px
- * text without shrinking the map below 14 columns. At 640 the two demands are in
- * direct conflict — see docs/enhanced-layout-plan.md § 9a. */
-#define U2_FRAME_MAX_W     800
-/* 480, not 400: the enhanced layout is a native 640x480 canvas rather than a
- * doubled 320x200, because its panel text is drawn at 1:1 8px and a doubled frame
- * would make every glyph 16px. core/layout.h has the geometry and the reasoning. */
-#define U2_FRAME_MAX_H     480
+/* 1024x512: the enhanced layout's ceiling. The width is what buys a readable
+ * 16px panel beside a 14-column map (docs/enhanced-layout-plan.md § 9a showed that
+ * 640 cannot hold both), and the height is deliberately short rather than a full
+ * 4:3, because a taller frame would leave dead space under a map we are not
+ * enlarging. The stride is the maximum, so this sizes every frame's row buffer. */
+#define U2_FRAME_MAX_W     1024
+#define U2_FRAME_MAX_H     512
 
 typedef struct u2_frame {
     /* One byte per pixel, a palette index: 0..3 in the CGA path, 0..15 in an
