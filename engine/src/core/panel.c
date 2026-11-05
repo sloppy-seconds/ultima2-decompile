@@ -8,17 +8,14 @@
 #include "core/layout.h"
 #include "core/font.h"
 #include "core/state.h"
-#include "gen_content.h"     /* the weapon and armour name pools, same as status.c */
+#include "core/pool_names.h" /* the weapon and armour name pools, same lookup as status.c */
 
 #ifdef U2_T_WEAPONS_N
-#  define P_NAME(tbl, i) (((i) >= 0 && (i) < (tbl##_N)) ? (tbl)[i] : "")
-#else
    /* The pools come from the player's own executable, so a build without it has
     * blank names and correct positions. Same deliberate degradation status.c
     * documents; it is not a silent one. */
-static const char *const p_no_pool[1] = { "" };
-#  define P_NAME(tbl, i) p_no_pool[0]
 #endif
+#define P_NAME(tbl, i) U2_POOL_NAME(tbl, i)
 
 /* ------------------------------------------------------------- colours */
 

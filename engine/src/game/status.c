@@ -15,6 +15,7 @@
 #include "game/status.h"
 #include "core/seam.h"
 #include "gen_content.h"
+#include "core/pool_names.h"   /* U2_POOL_NAME, shared with the enhanced panel */
 
 /* asm/53A5 prints a status pair as two packed-decimal bytes, low address first:
  *   call 0x55b5 (al = [lo]) ; mov ax,di (di = [hi]) ; call 0x55b5
@@ -144,16 +145,16 @@ void u2_status_draw(u2_ctx *ctx)
  */
 #ifdef U2_T_WEAPONS_N
 #  define U2_Z_POOL 1
-#  define Z_NAME(tbl, i) (((i) >= 0 && (i) < (tbl##_N)) ? (tbl)[i] : "")
 #  define Z_TBL(tbl)  (tbl), (tbl##_N)
 #else
 #  define U2_Z_POOL 0
-#  define Z_NAME(tbl, i) ""
    /* One shared empty table so the list loops keep their shape and bounds when the pool
     * was not generated. The names come out blank; the positions and counts do not. */
 static const char *const z_no_pool[1] = { "" };
 #  define Z_TBL(tbl)  z_no_pool, 0
 #endif
+/* The name lookup itself is shared with the enhanced panel; see core/pool_names.h. */
+#define Z_NAME(tbl, i) U2_POOL_NAME(tbl, i)
 
 /* One packed-decimal byte, the way asm/55B5 renders it, appended to `out`. */
 static void z_bcd(char *out, size_t cap, uint8_t v)
@@ -298,9 +299,11 @@ void u2_status_draw_full(u2_ctx *ctx)
     const uint8_t vals[6] = { st->stat_str, st->stat_agi, st->stat_sta,
                               st->stat_cha, st->stat_wis, st->stat_int };
     for (int i = 0; i < 6; i++) {
-        char s[24];
-        snprintf(s, sizeof s, "%s-%c%c", stats[i].label,
-                 '0' + ((vals[i] >> 4) & 0x0F), '0' + (vals[i] & 0x0F));
+        char s[24], d[3];
+        /* Through the shared packed-decimal helper rather than a fourth inline copy
+         * of the nibble arithmetic. */
+        u2_bcd2_str(vals[i], d);
+        snprintf(s, sizeof s, "%s-%s", stats[i].label, d);
         seam_str_out_at(ctx, stats[i].col, stats[i].row, s);
     }
 
