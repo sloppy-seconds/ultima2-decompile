@@ -252,6 +252,19 @@ int main(void)
         ok(strcmp(status_text(&ctx, 21, buf), "FOOD=0359") == 0,
            "FOOD= prints 0359 even with food_lo set: the low byte stays hidden");
     }
+
+    /* Stats are packed decimal as stored, and both renderers must read them that
+     * way. The enhanced panel used %u on the raw byte, so a STR of 0x60 -- BCD 60 --
+     * displayed as 96 while the CGA path correctly showed 60. */
+    {
+        char d[3];
+        u2_bcd2_str(0x60, d);
+        ok(strcmp(d, "60") == 0, "a stat byte of 0x60 reads as BCD 60, not decimal 96");
+        u2_bcd2_str(0x99, d);
+        ok(strcmp(d, "99") == 0, "0x99 reads as 99");
+        u2_bcd2_str(0x05, d);
+        ok(strcmp(d, "05") == 0, "0x05 reads as 05, zero kept");
+    }
     ok(ctx.state.right_margin == 0x1d,
        "GOLD= tail restores the right margin to 0x1d (scroll rect stops at col 29)");
 

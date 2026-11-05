@@ -544,6 +544,20 @@ static inline void u2_state_bcd_pair(const u2_state *st, u2_bcd_field f,
     }
 }
 
+/* One packed-decimal byte as its two digits, the way asm/55B5 renders it. The six
+ * stats are stored packed decimal and printed as stored, with no conversion, so the
+ * record and the screen agree.
+ *
+ * Shared for the same reason u2_state_bcd_pair is: the enhanced panel printed these
+ * bytes with %u instead, so a STR held as 0x60 -- BCD for 60 -- came out as 96. Same
+ * defect, same cause: two renderers each deciding how to read one stored format. */
+static inline void u2_bcd2_str(uint8_t v, char out[3])
+{
+    out[0] = (char)('0' + ((v >> 4) & 0x0F));
+    out[1] = (char)('0' + (v & 0x0F));
+    out[2] = '\0';
+}
+
 #define U2_OFF(f) ((int)offsetof(u2_state, f))
 
 /* Compile-time proof that the struct still matches the asm offsets. */

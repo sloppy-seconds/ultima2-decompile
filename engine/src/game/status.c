@@ -53,12 +53,12 @@ void u2_status_draw_hp(u2_ctx *ctx)
     draw_field(ctx, 20, U2_S_STATUS_HP, U2_BCD_HP);
 }
 
-/* One packed-decimal byte as its two digits, the way asm/55B5 renders it. */
+/* One packed-decimal byte as its two digits, the way asm/55B5 renders it. Thin
+ * wrapper over the shared core definition so the classic band and the enhanced panel
+ * cannot disagree about how a stored stat reads. */
 static void bcd2(int v, char *out)
 {
-    out[0] = (char)('0' + ((v >> 4) & 0x0F));
-    out[1] = (char)('0' + (v & 0x0F));
-    out[2] = '\0';
+    u2_bcd2_str((uint8_t)v, out);
 }
 
 void u2_status_draw_character(u2_ctx *ctx)

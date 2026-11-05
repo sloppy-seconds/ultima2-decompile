@@ -230,8 +230,11 @@ static void draw_stats(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c
         const int dots_to   = right - 3 * U2_ENH_TEXT_W;
         for (int dx = dots_from; dx + U2_ENH_TEXT_W <= dots_to; dx += U2_ENH_TEXT_W)
             text(f, dx, ry, ".", c->text, c->box_bg);
-        char num[4];
-        snprintf(num, sizeof num, "%u", v[i]);
+        char num[3];
+        /* Packed decimal, as stored. Printing these bytes with %u showed 96 for a
+         * STR held as 0x60, which is BCD for 60 -- the same class of mistake as the
+         * FOOD byte pair, and fixed the same way: one shared definition. */
+        u2_bcd2_str(v[i], num);
         value_right(f, right, ry, num, c->text, c->box_bg);
     }
 
