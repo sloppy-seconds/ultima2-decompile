@@ -1418,6 +1418,28 @@ Newest first. One line per learning; the detail stays in the owning document.
   control must run under a second palette that was *never* broken, or a red control
   proves only that the check can fail. → Tier 2, rendering gates.
 
+* **2026-11-06** — **Two entry points into one hardware seam must answer in the same
+  alphabet, and a three-state return read as a two-state one turns a quit into the
+  previous input.** The engine wrapped the original's single blocking key-read in two
+  functions. One normalised its backend's `1 / 0 / -1` to `1 / 0`; the other returned
+  the raw value. Every caller tested for the documented `0`, so the third state read as
+  "input arrived", and the caller then consumed an output parameter the backend had
+  deliberately not written. The symptom was not a crash and not a hang: it was the
+  *previous keystroke, repeated* — the struct sat at the same stack offset on every
+  iteration and still held what the last call had written through it, so a player
+  pressing Ctrl-C on a form whose last key was Down saw Down. Four rules. (1) When two
+  functions wrap one seam, diff their return contracts, not just their names; the
+  asymmetry is the bug and it is invisible at every call site. (2) An out-parameter must
+  say which return values write it, and a caller that reads it after any other value is
+  reading uninitialised memory that will look like data. (3) Fix a three-state collapse
+  at the seam, not at each caller — five sites had the same wrong test and a sixth would
+  appear. (4) If a state can only be produced by one backend, no scripted test can reach
+  it; write a fake backend that can say all three, gate the contract there, and record
+  in the worklist which state stays unexercised in the shipped artifact. Separately, and
+  it produced a false "still running" during verification: a job backgrounded by a
+  non-interactive shell inherits SIGINT as ignored, so signal-handling tests need
+  `setsid` or they measure the harness. → Tier 2, harness contract.
+
 ---
 
 ## 7. Non-goals and hazards

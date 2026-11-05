@@ -1916,6 +1916,89 @@ check is measuring the palette-dependent property and not the existence of a cur
 
 `make test`: CP0..CP7 PASS.
 
+---
+
+## A quit request was read as the last key pressed — fixed 2026-11-06
+
+**Owner report (observed, play):** closing the window or pressing Ctrl-C in the
+launching terminal while on the character creation screen is taken as a **Down**
+keypress instead of an exit.
+
+**Cause (observed, then measured).** The input backends answer in three states and
+the two seams disagreed about it:
+
+| backend | a key | no key / spent | quit requested |
+| --- | --- | --- | --- |
+| script | 1 | 0 | — |
+| terminal | 1 | 0 (EOF sets `input_exhausted`) | — |
+| SDL | 1 | 0 | **-1** (window close, SIGINT/SIGTERM) |
+
+`seam_key_poll` has always collapsed that to `return got > 0`. `seam_key_wait`
+did `return got` — it leaked the `-1`. `platform.h` documented `wait` as "returns 0
+on end of input", so every caller tested for 0 only:
+
+```c
+if (!seam_key_wait(ctx, &k)) return -1;      /* creation.c:159 */
+if (seam_key_wait_shown(ctx, &k) == 0) break; /* commands.c x4 */
+```
+
+So a quit read as "a key arrived", and the caller then read `k.ch`, which the
+backend had not written. **Why it was specifically Down, and not garbage:**
+`u2_key k` is a local declared inside the wait helper, so it lands at the same stack
+offset every iteration, and the previous iteration's `sdl_poll` wrote through that
+same address. The byte still held the last key the player actually pressed. On the
+creation form that is normally Down or Tab. The report was accurate and the
+mechanism was a stale stack slot, not a random one.
+
+`commands.c:250` asserted the wrong contract in a comment — "returns NON-ZERO when
+it has a key (creation.c:159 relies on that)" — and four other sites cited that
+comment. Both comments are corrected rather than left as folklore.
+
+**Fix, at the seam rather than at five call sites.** `seam_key_wait` now answers in
+the same alphabet as `seam_key_poll`: `return got > 0`, and `input_exhausted` is set
+when the backend reported a quit. The original has ONE seam here (asm/4F4D, whose
+own header records that both returns fall into the upper-case tail), so the engine's
+two entries must not answer in different alphabets. `platform.h`'s `wait` contract
+now states all three states, and says plainly that on a non-1 answer `*out` is not
+written and must not be read.
+
+**Gate, and why it is a fake backend.** No scripted run can produce a `-1`: the
+script backend reports a spent run as 0 and the terminal reports EOF as 0. Only SDL
+gives the third answer, and SDL cannot be driven headlessly without a script, which
+`main` refuses outside headless. So `engine/tests/keywait_check.c` wires a backend
+that can say all three and asserts: a key is 1 and arrives upper-case folded; a
+`-1` is **0**, leaves `*out` untouched, and marks the player gone; a `0` is 0; and a
+second `-1` after a `0` is still 0. Wired into CP0, with a zero-check guard so it
+cannot pass by not running.
+
+Red control, fix reverted, everything else in place:
+
+```
+FAIL  seam_key_wait contract violated:
+        NOT OK  a quit request (-1) must NOT be reported as a key
+CP0 TEST: FAIL
+```
+
+**End-to-end, as far as it can go without a window.** SIGINT was proven against the
+shipped binary at the title screen:
+
+```
+SDL_VIDEODRIVER=dummy setsid ./u2-sdl-static --sdl &   # SigCgt shows SIGINT+SIGTERM caught
+kill -INT $pid                                          -> process exits
+```
+
+The first attempt at that test reported "still running" and was wrong: a job
+backgrounded by a non-interactive shell inherits SIGINT as ignored, so it measured
+the harness rather than the game. `setsid` fixed it. That is the same trap as
+`/proc/<pid>/status`'s `SigIgn` bit the SDL backend's own comment already warns
+about.
+
+What remains unproven by automation is registered as **G65**: the `SDL_EVENT_QUIT`
+half, in a real window, on the creation form specifically. Five seconds of anyone
+pressing Ctrl-C and the close button.
+
+`make test`: CP0..CP7 PASS.
+
 
 ---
 

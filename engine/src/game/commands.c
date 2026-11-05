@@ -247,10 +247,12 @@ static u2_cmd_result cmd_Z(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     }
 
     u2_key dismiss;
-    /* seam_key_wait returns NON-ZERO when it has a key (creation.c:159 relies on that). An
-     * earlier revision tested `== 0` here and then read `dismiss` uninitialised, so its
-     * Escape branch never fired. That branch is gone now; the wait itself is the byte, and
-     * which key arrived is deliberately not looked at. */
+    /* seam_key_wait returns 1 only when it filled `dismiss`; a quit request (window
+     * closed, Ctrl-C) and a spent script both answer 0 now, so neither can be read as
+     * "the player pressed a key". An earlier revision tested `== 0` here and then read
+     * `dismiss` uninitialised, so its Escape branch never fired. That branch is gone
+     * now; the wait itself is the byte, and which key arrived is deliberately not
+     * looked at. */
     const int got_key = seam_key_wait(ctx, &dismiss);
 
     /* The original BLOCKS here: no timeout, no path out without a keypress. So the page is on
@@ -533,10 +535,10 @@ static u2_cmd_result cmd_M(u2_ctx *ctx, u2_overworld *ow, uint8_t letter)
     int digit = -1;
     while (digit < 0) {
         u2_key k;
-        /* seam_key_wait returns NON-ZERO when it got a key and 0 when there is none —
-         * same convention creation.c:159 depends on. Getting this backwards is invisible
-         * in the dispatch gate, which is why the gate for M reads the echoed digit and not
-         * just the prompt.
+        /* seam_key_wait returns 1 when it got a key and 0 when it did not — a spent
+         * script and a quit request both answer 0, so neither can be mistaken for
+         * input. Getting this backwards is invisible in the dispatch gate, which is
+         * why the gate for M reads the echoed digit and not just the prompt.
          *
          * _shown for the same reason as cmd_R: the prompt is printed above and nothing
          * between there and here puts it on the screen. */

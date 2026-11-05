@@ -183,10 +183,31 @@ int seam_key_poll(u2_ctx *ctx, u2_key *out)
 int seam_key_wait(u2_ctx *ctx, u2_key *out)
 {
     int got = ctx->input->wait(ctx, out);
-    if (got > 0)
+    if (got > 0) {
         key_uppercase_fold(out);   /* same tail as the poll path; see key_uppercase_fold */
+    } else if (got < 0) {
+        /* Collapse to the same two-state answer seam_key_poll gives, and set the
+         * same flag. This is the whole fix for "closing the window or pressing
+         * Ctrl-C on the creation screen acts like the Down arrow".
+         *
+         * The SDL backend returns -1 for a quit request, and every caller of wait
+         * asks either `if (!got)` or `if (got == 0)`, because the header documented
+         * wait as "returns 0 on end of input" and only 0. So -1 was read as "a key
+         * arrived", and the caller then read out->ch, which the backend had not
+         * written. That is not random: `u2_key` sits at the same stack offset on
+         * every iteration, so it still holds the LAST key the player pressed. On the
+         * creation form the last key is normally Down or Tab, which is exactly the
+         * report. commands.c:250 even asserts the wrong contract in a comment --
+         * "returns NON-ZERO when it has a key" -- and four other sites cite it.
+         *
+         * Normalising here rather than at five call sites is the point: the original
+         * has ONE seam (asm/4F4D, and its header records that both returns fall into
+         * the upper-case tail), so the engine's two entries must answer in the same
+         * alphabet. A negative stays available to the trace line below. */
+        ctx->input_exhausted = 1;
+    }
     u2_trace(ctx, "key_wait", "4F4D", "got=%d ch=0x%02X", got, got > 0 ? out->ch : 0);
-    return got;
+    return got > 0;
 }
 
 int seam_key_wait_shown(u2_ctx *ctx, u2_key *out)

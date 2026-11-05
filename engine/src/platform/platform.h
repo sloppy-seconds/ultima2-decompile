@@ -90,7 +90,11 @@ typedef struct u2_input {
      *  0  = no key right now
      * -1  = input is finished for good (script exhausted, stdin closed) */
     int  (*poll)(u2_ctx *ctx, u2_key *out);
-    /* wait: blocking read (INT 16h AH=00). Returns 0 on end of input. */
+    /* wait: blocking read (INT 16h AH=00). Same alphabet as poll above, and it
+     * matters: 1 means *out was written and nothing else does. The SDL backend
+     * answers -1 for a quit request (window closed, SIGINT/SIGTERM), so a caller
+     * that tests only for 0 reads a key that never arrived. seam_key_wait collapses
+     * the three states to 1/0 for exactly that reason; see its comment. */
     int  (*wait)(u2_ctx *ctx, u2_key *out);
     void (*shutdown)(u2_ctx *ctx);
 } u2_input;

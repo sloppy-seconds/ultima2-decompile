@@ -213,8 +213,10 @@ typedef struct u2_ctx {
      * the player straight into the overworld instead of restarting. */
     int restart_requested;
     int enter_world;
-    int input_exhausted;    /* set by the script backend when the keys run out;
-                               the flow treats it as "the player left" */
+    int input_exhausted;    /* the player is gone: the script ran out, stdin hit EOF,
+                             * or a quit was requested (window closed, SIGINT). Set by
+                             * seam_key_poll and seam_key_wait together, and every flow
+                             * reads it as "the player left". */
     const char *content_source; /* set by the game layer from the generated header */
     const char *script_path;/* --script PATH (input_script backend input) */
     const char *save_dir;    /* --save-dir PATH; "saves" when unset (core/save.h) */

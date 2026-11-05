@@ -59,6 +59,35 @@ grep -q 'seam=str_out_at asm=51EB' "$tr" && grep -q 'seam=rand_byte asm=5217' "$
     || bad "--trace output missing or uncited"
 rm -f "$tr"
 
+# The input seam's answer alphabet, driven by a fake backend.
+#
+# This one cannot be reached by a scripted run: the script backend reports a spent
+# run as 0 and the terminal reports EOF as 0, so the only backend that answers -1 is
+# SDL, for a window close or a SIGINT. That is how "closing the window on the
+# creation screen acts like the Down arrow" survived to be reported from play — no
+# capture could produce the third answer. So the contract is pinned here instead,
+# with a backend that can say all three.
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "${WORK:-/var/tmp}/keywait_check" \
+        tests/keywait_check.c src/core/seam.c src/core/vram.c src/core/state.c \
+        src/core/font.c src/core/frame.c src/core/view.c src/core/rng.c \
+        src/core/timer.c src/core/replay.c src/core/sha256.c src/core/version.c \
+        src/debug/trace.c src/debug/dump_state.c 2>"${WORK:-/var/tmp}/keywait.build"; then
+    if "${WORK:-/var/tmp}/keywait_check" > "${WORK:-/var/tmp}/keywait.out" 2>&1; then
+        n=$(sed -n 's/^  ok  \([0-9]\{1,\}\) checks.*/\1/p' "${WORK:-/var/tmp}/keywait.out")
+        if [ "${n:-0}" -eq 0 ]; then
+            bad "CP0 key-wait run executed 0 checks — the test is not running"
+        else
+            ok "seam_key_wait: a quit request is never read as a key ($n checks)"
+        fi
+    else
+        bad "seam_key_wait contract violated:"
+        sed 's/^/        /' "${WORK:-/var/tmp}/keywait.out"
+    fi
+else
+    bad "key-wait test harness did not build:"
+    sed 's/^/        /' "${WORK:-/var/tmp}/keywait.build" | head -5
+fi
+
 # The PRNG is a shift register (asm/5217 + asm/522B + asm/5236), seeded once at
 # launch from the 0x40:6C byte (asm/0100). Vector derived by hand-decoding those
 # three fragments together; it guards regressions and documents the decode.
