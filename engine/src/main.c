@@ -567,6 +567,16 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    /* --enhanced drives the screen layout as well as the fidelity rules, and it
+     * implies the EGA art axis: a 640x480 canvas has room for a 32px theme by
+     * definition, so --ega is redundant under it rather than orthogonal (owner,
+     * 2026-11-05). Done after the argument loop because --enhanced may appear on
+     * either side of --ega, and an explicit --ega-theme still selects the theme. */
+    if (ctx.fidelity == U2_FIDELITY_ENHANCED) {
+        ctx.enhanced_layout = 1;
+        ctx.art_mode = U2_ART_EGA;
+    }
+
     /* --ega is strict (owner, 2026-11-04): if the themes directory does not exist
      * or the chosen theme is not in it, refuse to start rather than fall back to
      * CGA. This supersedes the plan's original "never fail a launch" default; the

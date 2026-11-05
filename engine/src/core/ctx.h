@@ -79,6 +79,22 @@ typedef struct u2_ctx {
      * draws a theme at half size or overruns the window, so it is read once at
      * startup and never changed under a running frame. */
     int frame_scale;
+    /* The enhanced screen layout: map on the left, three status boxes on the
+     * right, at a native 640x480. Turned on by --enhanced, which also implies the
+     * EGA art axis because a 640x480 canvas has room for a 32px theme by
+     * definition — the owner ruled --ega redundant under --enhanced rather than
+     * orthogonal to it. Read once at launch, like frame_scale: a layout that
+     * changed under a running frame would resize the window mid-play, which is the
+     * exact failure the frame-scale rule exists to prevent.
+     * core/layout.h holds the geometry; docs/enhanced-layout-plan.md the reasoning. */
+    int enhanced_layout;
+    /* Where the player's own cell sits inside the view window, in view cells.
+     * The classic layout's (9,5) is asm/5AE1's, and the enhanced layout's comes
+     * from core/layout.h. It lives on ctx rather than being read off the view so
+     * that game logic far from the renderer — the swamp flash, a melee contact —
+     * can say "flash the player" without threading the overworld struct through
+     * every call. One source: set where the view shape is set. */
+    int screen_player_col, screen_player_row;
     /* The active theme's own RGB table, when it ships one (a v2 PALETTE.RGB).
      * The renderer uses this instead of the built-in EGA table whenever
      * theme_palette_set is true, and re-reads it on each upload so a Ctrl-T cycle

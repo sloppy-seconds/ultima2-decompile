@@ -37,6 +37,12 @@
 #define U2_VIEW_TILES     (U2_VIEW_COLS * U2_VIEW_ROWS)   /* 200 */
 #define U2_VIEW_PLAYER_COL 9
 #define U2_VIEW_PLAYER_ROW 5
+/* The grid is sized for the largest shape anything asks for, not for the DOS one.
+ * The DOS shape above is a transcription of asm/5AE1 and stays exactly as it was;
+ * the enhanced layout uses a squarer window (see core/layout.h), and a fixed
+ * buffer with a runtime shape is what lets ONE fill implementation serve both.
+ * Two copies of the suppression and torus rules is how they drift. */
+#define U2_VIEW_MAX_CELLS 1024
 #define U2_VIEW_NO_DRAW    0x80
 #define U2_VIEW_EMPTY      0x2E   /* the index that escapes suppression */
 /* What a site sector draws outside its own 64x64 array: the ground byte. Measured
@@ -45,12 +51,43 @@
 #define U2_VIEW_SITE_OFFGRID 0x08
 
 typedef struct u2_view {
+    /* Shape of this viewport. The classic path sets the DOS 20x10 with the player
+     * at (9,5), which is what asm/5AE1 compares against; enhanced sets a squarer
+     * window. Everything that walks the grid reads these instead of the macros, so
+     * there is no second implementation of the fill to keep honest. */
+    int     cols, rows;
+    int     player_col, player_row;
     /* Staging grid, the DS:0x272 analogue: low 7 bits are the tile index,
-     * bit 7 means "do not draw". */
-    uint8_t tile[U2_VIEW_TILES];
+     * bit 7 means "do not draw". Only cols*rows of it are meaningful. */
+    uint8_t tile[U2_VIEW_MAX_CELLS];
     /* Count of cells actually drawable, for tests and diagnostics. */
     int     drawn;
 } u2_view;
+
+/* Give a viewport its shape. Call before u2_view_fill. Passing the DOS numbers
+ * reproduces the original window exactly; anything else is a presentation choice
+ * and does not inherit that claim. */
+void u2_view_init(u2_view *v, int cols, int rows, int player_col, int player_row);
+
+/* The shape to draw with, falling back to the DOS window when a view was never
+ * given one. A zeroed struct must not mean "draw nothing": that fails silently and
+ * looks like a graphics bug, and it did exactly that to the overlay check when the
+ * shape first became runtime. The fallback is the DOS 20x10, so an uninitialised
+ * view draws the classic window rather than an empty frame. */
+static inline void u2_view_shape(const u2_view *v, int *cols, int *rows,
+                                 int *player_col, int *player_row)
+{
+    int c = v ? v->cols : 0, r = v ? v->rows : 0;
+    int pc = v ? v->player_col : 0, pr = v ? v->player_row : 0;
+    if (c <= 0 || c > U2_VIEW_MAX_CELLS) c = U2_VIEW_COLS;
+    if (r <= 0 || r > U2_VIEW_MAX_CELLS) r = U2_VIEW_ROWS;
+    if (pc < 0 || pc >= c) pc = U2_VIEW_PLAYER_COL < c ? U2_VIEW_PLAYER_COL : c / 2;
+    if (pr < 0 || pr >= r) pr = U2_VIEW_PLAYER_ROW < r ? U2_VIEW_PLAYER_ROW : r / 2;
+    if (cols) *cols = c;
+    if (rows) *rows = r;
+    if (player_col) *player_col = pc;
+    if (player_row) *player_row = pr;
+}
 
 /* The mapping itself, exposed because the encounter and passability code needs
  * the same translation the renderer does (asm/2423 asks about the tile the

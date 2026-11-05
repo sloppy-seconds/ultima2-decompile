@@ -23,6 +23,8 @@
 #include "core/rng.h"         /* u2_rand_byte: asm/0BDB's damage randomiser */
 #include "game/status.h"
 #include "core/font.h"
+#include "core/layout.h"
+#include "core/panel.h"
 #include "core/save.h"
 #include "core/seam.h"
 #include "core/tiles.h"
@@ -175,7 +177,7 @@ static void creature_turn(u2_ctx *ctx, u2_overworld *ow)
      * per contact; the original loops per hit. The frame is bit-identical after.
      * The text stays absent in both modes: the original prints no text here either
      * (the flash and the tone ARE its feedback — see the long comment below). */
-    u2_flash_cell(ctx, U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+    u2_flash_cell(ctx, ctx->screen_player_col, ctx->screen_player_row);
     /* NO TEXT IS PRINTED HERE, AND THAT IS NOW ESTABLISHED RATHER THAN ASSUMED.
      * The original's feedback for a wound is a tone plus a screen flash:
      *   - the wound loop is runtime 0x0BB2..0x0BCF, driven by DS:20 (contacts) and DS:21 (hits),
@@ -834,7 +836,7 @@ static void u2_swamp_damage(u2_ctx *ctx)
      * replay (captures/spice86/swamp-flash-20261102) — so this call is gated
      * on enhanced, and original mode keeps the silence asm/2495 cites. */
     if (ctx->fidelity == U2_FIDELITY_ENHANCED)
-        u2_flash_cell(ctx, U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+        u2_flash_cell(ctx, ctx->screen_player_col, ctx->screen_player_row);
 }
 
 /* On-foot passability — asm/2423's ladder, transcribed rather than re-derived.
@@ -1422,6 +1424,30 @@ static int overworld_resume(u2_ctx *ctx, u2_overworld *ow)
     }
     u2_frame_set_text_fg(&ow->frame, ctx->text_fg);
 
+    /* The enhanced layout is a native 640x480 canvas rather than a doubled
+     * 320x200, because its panel text is drawn at 1:1 8px and a doubled frame
+     * would make every glyph 16px. Replacing the frame here is safe only because
+     * nothing has drawn into it yet; if that ever changes, free the old one first.
+     * The view shape follows the layout: the classic window is the DOS 20x10 with
+     * the player at (9,5), which asm/5AE1 compares against, and the enhanced one
+     * is a squarer window whose size core/layout.h derives from the frame. */
+    if (ctx->enhanced_layout) {
+        u2_frame_free(&ow->frame);
+        if (u2_frame_init_size(&ow->frame, U2_ENH_W, U2_ENH_H) != 0) {
+            snprintf(ow->note, sizeof ow->note, "out of memory for the frame buffer");
+            return -1;
+        }
+        u2_frame_set_text_fg(&ow->frame, ctx->text_fg);
+        u2_view_init(&ow->view, U2_ENH_MAP_COLS, U2_ENH_MAP_ROWS,
+                     U2_ENH_PLAYER_COL, U2_ENH_PLAYER_ROW);
+    } else {
+        u2_view_init(&ow->view, U2_VIEW_COLS, U2_VIEW_ROWS,
+                     U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+    }
+
+    ctx->screen_player_col = ow->view.player_col;
+    ctx->screen_player_row = ow->view.player_row;
+
     if (!ctx->load_ds_path)
         return 0;
 
@@ -1578,10 +1604,10 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
      * the rest and the art comes from the player's own extracted tiles. */
     int gate_x = 0, gate_y = 0;
     if (u2_gate_current_cell(ctx, ow, &gate_x, &gate_y)) {
-        const int col = gate_x - (ow->x - U2_VIEW_PLAYER_COL);
-        const int row = gate_y - (ow->y - U2_VIEW_PLAYER_ROW);
-        if (col >= 0 && col < U2_VIEW_COLS && row >= 0 && row < U2_VIEW_ROWS)
-            ow->view.tile[row * U2_VIEW_COLS + col] = U2_GATE_STAGING;
+        const int col = gate_x - (ow->x - ow->view.player_col);
+        const int row = gate_y - (ow->y - ow->view.player_row);
+        if (col >= 0 && col < ow->view.cols && row >= 0 && row < ow->view.rows)
+            ow->view.tile[row * ow->view.cols + col] = U2_GATE_STAGING;
     }
 
     u2_frame_clear(&ow->frame, U2_CGA_BLACK);
@@ -1591,17 +1617,51 @@ void u2_overworld_draw(u2_ctx *ctx, u2_overworld *ow)
     if (ow->use_ega)
         u2_frame_draw_view_ega(&ow->frame, &ow->view, &ow->tiles_ega,
                                U2_OVERWORLD_PLAYER_ART,
-                               U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+                               ow->view.player_col, ow->view.player_row);
     else
         u2_frame_draw_view(&ow->frame, &ow->view, &ow->tiles,
                            U2_OVERWORLD_PLAYER_ART,
-                           U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+                           ow->view.player_col, ow->view.player_row);
 
     /* One framebuffer, per the CP4b decision: the map window owns pixel rows
      * 0..159 and the text grid owns rows 20..24 — status block, CMD prompt
      * and message history. The grid is the same storage the terminal renderer
-     * paints, so both backends show identical text with no second model. */
-    u2_font_draw_vram_rows(&ow->frame, &ctx->vram, U2_MSG_TOP, U2_ROWS - 1);
+     * paints, so both backends show identical text with no second model.
+     *
+     * The enhanced layout replaces that band with the side panel, and the panel
+     * reads the SAME vram storage rather than keeping a second log: two message
+     * histories is two definitions of what the player was told, and the rule that
+     * every effect must produce a message is only checkable against one of them. */
+    if (ctx->enhanced_layout) {
+        /* The vram grid holds the status block in columns 30..39 of rows 20..23
+         * (asm/50F9 sets the right margin to 0x28 before drawing H.P.=), and the
+         * command echo and message history in the columns to their left. The panel
+         * draws the vitals and the stats from state directly, so copying the whole
+         * row would show the player their gold twice in two formats at once. Cut at
+         * the status column and box 3 carries only what was said. */
+        enum { U2_ENH_MSG_COLS = 30 };
+        static char rowbuf[U2_ROWS - U2_MSG_TOP][U2_COLS + 1];
+        const char *lines[U2_ROWS - U2_MSG_TOP];
+        int n = 0;
+        for (int r = U2_MSG_TOP; r < U2_ROWS; r++, n++) {
+            if (u2_vram_row_text(&ctx->vram, r, rowbuf[n], U2_COLS + 1) <= 0)
+                rowbuf[n][0] = '\0';
+            if ((int)strlen(rowbuf[n]) > U2_ENH_MSG_COLS)
+                rowbuf[n][U2_ENH_MSG_COLS] = '\0';
+            lines[n] = rowbuf[n];
+        }
+        u2_panel_colours pc;
+        uint8_t pal[16][3];
+        if (ctx->theme_palette_set)
+            memcpy(pal, ctx->theme_palette, sizeof pal);
+        else
+            u2_frame_palette_ega(pal);
+        u2_panel_pick_colours(&pc, pal, ctx->text_fg ? ctx->text_fg : U2_CGA_WHITE);
+        u2_panel_draw(&ow->frame, ctx, ow->use_ega ? &ow->tiles_ega : NULL, &pc,
+                      ow->use_ega ? U2_OVERWORLD_PLAYER_ART : -1, lines, n);
+    } else {
+        u2_font_draw_vram_rows(&ow->frame, &ctx->vram, U2_MSG_TOP, U2_ROWS - 1);
+    }
 
     /* Dumped here rather than at the command sites because this is the one place
      * the frame is known to be composed: a log written before the draw would show
@@ -1692,7 +1752,7 @@ void u2_overworld_attack_dir(u2_ctx *ctx, u2_overworld *ow, const char *word, in
      * open inside G56's closure), so the flash rides the landed hit only. The
      * interleaving of flash against the "--HIT!!!" print is not observed; this
      * order is the engine's and says so. */
-    u2_flash_cell(ctx, U2_VIEW_PLAYER_COL + dx, U2_VIEW_PLAYER_ROW + dy);
+    u2_flash_cell(ctx, ctx->screen_player_col + dx, ctx->screen_player_row + dy);
 
     /* asm/2BE9 is three bytes: `call L_00133a`, then it falls into the "--HIT!!!"
      * printer at asm/2BEC. So the alarm rings before the player is told they

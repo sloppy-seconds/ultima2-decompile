@@ -68,7 +68,10 @@
  * to 16x16 and throw away the reason for the theme. */
 #define U2_FRAME_MAX_SCALE 2
 #define U2_FRAME_MAX_W     (U2_SCREEN_W * U2_FRAME_MAX_SCALE)   /* 640 */
-#define U2_FRAME_MAX_H     (U2_SCREEN_H * U2_FRAME_MAX_SCALE)   /* 400 */
+/* 480, not 400: the enhanced layout is a native 640x480 canvas rather than a
+ * doubled 320x200, because its panel text is drawn at 1:1 8px and a doubled frame
+ * would make every glyph 16px. core/layout.h has the geometry and the reasoning. */
+#define U2_FRAME_MAX_H     480
 
 typedef struct u2_frame {
     /* One byte per pixel, a palette index: 0..3 in the CGA path, 0..15 in an
@@ -90,6 +93,10 @@ typedef struct u2_frame {
  * Returns 0 on success. A frame that was never inited has px == NULL, and every
  * writer below refuses rather than dereferencing it. */
 int u2_frame_init(u2_frame *f, int scale);
+/* A frame at an explicit pixel size and scale 1, for the enhanced layout. The
+ * classic layout is a scaled 320x200 and must keep using u2_frame_init, because
+ * its text grid and tile blits are defined in that logical space. */
+int u2_frame_init_size(u2_frame *f, int w, int h);
 void u2_frame_free(u2_frame *f);
 
 /* Init only if the frame is not already at this scale, freeing the old store

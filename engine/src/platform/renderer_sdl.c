@@ -23,6 +23,7 @@
 #include "core/ctx.h"
 #include "core/font.h"
 #include "core/frame.h"
+#include "core/layout.h"   /* U2_ENH_W/H for the enhanced window size */
 #include "core/scale.h"
 
 #define SDL_SCALE 2      /* default window size: 320x200 -> 640x400. Only the
@@ -137,9 +138,15 @@ static int sdl_init(u2_ctx *ctx)
      * that fails silently and beautifully: a bilinear upscale of 2bpp CGA still
      * draws, it just smears every pixel into a gradient, and a screenshot taken
      * in a hurry looks like a plausible retro blur rather than a bug. */
+    /* The enhanced layout is a native 640x480 canvas, not a doubled 320x200, so
+     * the window cannot be derived from U2_SCREEN_* times a scale there. Deriving
+     * it anyway would open a 640x400 window and clip the bottom bar and the last
+     * two rows of the command box, which reads as a drawing bug rather than a
+     * sizing one. */
+    const int win_w = ctx->enhanced_layout ? U2_ENH_W : U2_SCREEN_W * fs * SDL_SCALE;
+    const int win_h = ctx->enhanced_layout ? U2_ENH_H : U2_SCREEN_H * fs * SDL_SCALE;
     v->win = SDL_CreateWindow("Ultima II (engine reconstruction)",
-                              U2_SCREEN_W * fs * SDL_SCALE,
-                              U2_SCREEN_H * fs * SDL_SCALE,
+                              win_w, win_h,
                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!v->win) {
         fprintf(stderr, "sdl: window: %s\n", SDL_GetError());

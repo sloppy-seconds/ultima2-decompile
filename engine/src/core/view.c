@@ -22,15 +22,38 @@
  * comparison anywhere. Reproducing that with uint8_t keeps the edge behaviour
  * identical instead of inventing a "nicer" one that would diverge at x < 9.
  */
+void u2_view_init(u2_view *v, int cols, int rows, int player_col, int player_row)
+{
+    if (!v) return;
+    /* Refuse rather than clamp: a caller that asks for a shape larger than the
+     * buffer has a bug, and silently shrinking it would render a truncated world
+     * and look like a graphics problem instead of a programming one. */
+    if (cols <= 0 || rows <= 0 || cols * rows > U2_VIEW_MAX_CELLS) {
+        cols = U2_VIEW_COLS; rows = U2_VIEW_ROWS;
+        player_col = U2_VIEW_PLAYER_COL; player_row = U2_VIEW_PLAYER_ROW;
+    }
+    if (player_col < 0 || player_col >= cols) player_col = cols / 2;
+    if (player_row < 0 || player_row >= rows) player_row = rows / 2;
+    v->cols = cols;
+    v->rows = rows;
+    v->player_col = player_col;
+    v->player_row = player_row;
+    memset(v->tile, 0, sizeof v->tile);
+    v->drawn = 0;
+}
+
 void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
                   uint8_t off_map, const uint8_t *underlay, int empty_gate)
 {
     if (!v) return;
-    memset(v->tile, 0, sizeof v->tile);
+    if (v->cols <= 0 || v->rows <= 0)
+        u2_view_init(v, U2_VIEW_COLS, U2_VIEW_ROWS,
+                     U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
+    memset(v->tile, 0, (size_t)v->cols * (size_t)v->rows);
     v->drawn = 0;
 
-    const uint8_t ox = (uint8_t)(px - U2_VIEW_PLAYER_COL);
-    const uint8_t oy = (uint8_t)(py - U2_VIEW_PLAYER_ROW);
+    const uint8_t ox = (uint8_t)(px - v->player_col);
+    const uint8_t oy = (uint8_t)(py - v->player_row);
 
     /* asm/5AB1 opens `cmpb $0xff,0x12` and branches between two viewport origins that differ
      * in exactly one respect: asm/5B98 masks both axes with `and $0x3f` and asm/5ABB
@@ -60,11 +83,11 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
      * fills with a constant, then the real terrain arrives all at once. */
     const int torus = (off_map == 0xFF);
 
-    for (int row = 0; row < U2_VIEW_ROWS; row++) {
+    for (int row = 0; row < v->rows; row++) {
         const uint8_t my8 = (uint8_t)(row + oy);
         const int my = torus ? (my8 & (U2_SECTOR_EDGE - 1)) : (int)my8;
 
-        for (int col = 0; col < U2_VIEW_COLS; col++) {
+        for (int col = 0; col < v->cols; col++) {
             const uint8_t mx8 = (uint8_t)(col + ox);
             const int mx = torus ? (mx8 & (U2_SECTOR_EDGE - 1)) : (int)mx8;
 
@@ -77,7 +100,7 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
                                : U2_VIEW_SITE_OFFGRID;
 
             uint8_t idx = u2_view_index(map_byte);
-            const int i = row * U2_VIEW_COLS + col;
+            const int i = row * v->cols + col;
 
             /* asm/5AE1 store path: a tile matching the underlay is hidden,
              * except the two escapes the asm spells out. */
@@ -95,9 +118,11 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
 
 int u2_view_at(const u2_view *v, int col, int row)
 {
-    if (!v || col < 0 || col >= U2_VIEW_COLS || row < 0 || row >= U2_VIEW_ROWS)
+    int vcols, vrows;
+    u2_view_shape(v, &vcols, &vrows, NULL, NULL);
+    if (!v || col < 0 || col >= vcols || row < 0 || row >= vrows)
         return -1;
-    const uint8_t s = v->tile[row * U2_VIEW_COLS + col];
+    const uint8_t s = v->tile[row * vcols + col];
     if (s & U2_VIEW_NO_DRAW) return -1;      /* asm/4ABB: or cl,cl; js skip */
     return s & 0x7F;
 }

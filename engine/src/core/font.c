@@ -22,10 +22,16 @@ _Static_assert(sizeof font8x8_basic / sizeof font8x8_basic[0] == 128,
 void u2_font_draw_cell(u2_frame *f, int row, int col, uint8_t ch,
                        uint8_t fg, uint8_t bg)
 {
-    if (!f || row < 0 || col < 0 ||
-        row >= U2_SCREEN_H / U2_FONT_CELL_H || col >= U2_SCREEN_W / U2_FONT_CELL_W) {
+    if (!f || !f->px || row < 0 || col < 0) return;
+    /* Bounds come from the frame's LOGICAL size, not from the 320x200 constants.
+     * A scaled classic frame keeps the 40x25 grid it is defined by (640/2/8 = 40),
+     * and the enhanced frame is a native 640x480 at scale 1, which is 80x60 cells
+     * and is what lets the panel hold readable 8px text. Hardcoding the constants
+     * here would clip the enhanced panel at a quarter of its width and look like a
+     * drawing bug rather than a bounds bug. */
+    const int s = f->scale > 1 ? f->scale : 1;
+    if (row >= (f->h / s) / U2_FONT_CELL_H || col >= (f->w / s) / U2_FONT_CELL_W)
         return;
-    }
     const unsigned char *glyph = font8x8_basic[ch & 0x7F];
     const int x0 = col * U2_FONT_CELL_W;
     const int y0 = row * U2_FONT_CELL_H;

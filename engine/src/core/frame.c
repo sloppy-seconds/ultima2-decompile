@@ -40,6 +40,25 @@ int u2_frame_init(u2_frame *f, int scale)
     return 0;
 }
 
+int u2_frame_init_size(u2_frame *f, int w, int h)
+{
+    if (!f) return -1;
+    if (w <= 0 || h <= 0 || w > U2_FRAME_MAX_W || h > U2_FRAME_MAX_H) return -1;
+    /* Same one-block, calloc'd layout as u2_frame_init: a frame read before it is
+     * drawn must read as black. Scale is 1 by definition here, so put_logical and
+     * put are the same write and the text grid is physical pixels. */
+    uint8_t *mem = calloc((size_t)h, U2_FRAME_MAX_W);
+    if (!mem) return -1;
+    f->px = (uint8_t (*)[U2_FRAME_MAX_W])mem;
+    f->scale = 1;
+    f->w = w;
+    f->h = h;
+    f->text_fg = U2_CGA_WHITE;
+    f->text_bg = U2_CGA_BLACK;
+    f->presents = 0;
+    return 0;
+}
+
 void u2_frame_free(u2_frame *f)
 {
     if (!f) return;
@@ -221,8 +240,11 @@ void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
 {
     if (!f || !v || !t) return;
 
-    for (int row = 0; row < U2_VIEW_ROWS; row++) {
-        for (int col = 0; col < U2_VIEW_COLS; col++) {
+    int vcols, vrows;
+    u2_view_shape(v, &vcols, &vrows, NULL, NULL);
+
+    for (int row = 0; row < vrows; row++) {
+        for (int col = 0; col < vcols; col++) {
             /* asm/4ABB: `or cl,cl; js skip`. A suppressed cell keeps whatever
              * was already in the frame, which is why the caller clears first.
              * The staging byte halves to reach the art record — see
@@ -235,7 +257,7 @@ void u2_frame_draw_view(u2_frame *f, const u2_view *v, const u2_tiles *t,
     }
 
     if (overlay_art >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
-        overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
+        overlay_col < vcols && overlay_row < vrows) {
         u2_frame_blit_tile(f, t, overlay_art,
                            overlay_col * U2_TILE_W, overlay_row * U2_TILE_H);
     }
@@ -248,11 +270,13 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
     if (!f || !v || !t) return;
 
     const int pres = u2_tiles_ega_present(t, f->scale);
+    int vcols, vrows;
+    u2_view_shape(v, &vcols, &vrows, NULL, NULL);
     const int cell_w = u2_tiles_ega_tile_w(t) * pres;
     const int cell_h = u2_tiles_ega_tile_h(t) * pres;
 
-    for (int row = 0; row < U2_VIEW_ROWS; row++) {
-        for (int col = 0; col < U2_VIEW_COLS; col++) {
+    for (int row = 0; row < vrows; row++) {
+        for (int col = 0; col < vcols; col++) {
             /* Same staging->art mapping as the CGA composite (see above); only
              * the atlas and the blit differ, so the two paths cannot drift on
              * which tile a cell selects. The atlas then maps art -> pool entry,
@@ -266,7 +290,7 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
     }
 
     if (overlay_art >= 0 && overlay_col >= 0 && overlay_row >= 0 &&
-        overlay_col < U2_VIEW_COLS && overlay_row < U2_VIEW_ROWS) {
+        overlay_col < vcols && overlay_row < vrows) {
         /* The overlay is an ART index and has to go through the theme's map like
          * every other selection in this function. Passing it straight to the atlas
          * was invisible for every v1 theme, because their map is identity by
