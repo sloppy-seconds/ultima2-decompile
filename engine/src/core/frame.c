@@ -40,17 +40,21 @@ int u2_frame_init(u2_frame *f, int scale)
     return 0;
 }
 
-int u2_frame_init_size(u2_frame *f, int w, int h)
+int u2_frame_init_size(u2_frame *f, int w, int h, int scale)
 {
     if (!f) return -1;
     if (w <= 0 || h <= 0 || w > U2_FRAME_MAX_W || h > U2_FRAME_MAX_H) return -1;
+    const int s = scale > 1 ? scale : 1;
+    /* The logical canvas is w/s by h/s, and it has to be at least the classic
+     * 320x200 or the text grid the font API bounds-checks against would be
+     * smaller than the screen it is drawing. */
+    if (w / s < U2_SCREEN_W || h / s < U2_SCREEN_H) return -1;
     /* Same one-block, calloc'd layout as u2_frame_init: a frame read before it is
-     * drawn must read as black. Scale is 1 by definition here, so put_logical and
-     * put are the same write and the text grid is physical pixels. */
+     * drawn must read as black. */
     uint8_t *mem = calloc((size_t)h, U2_FRAME_MAX_W);
     if (!mem) return -1;
     f->px = (uint8_t (*)[U2_FRAME_MAX_W])mem;
-    f->scale = 1;
+    f->scale = s;
     f->w = w;
     f->h = h;
     f->text_fg = U2_CGA_WHITE;

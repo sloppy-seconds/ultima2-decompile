@@ -60,15 +60,19 @@ void u2_panel_pick_colours(u2_panel_colours *c, const uint8_t pal[16][3],
 
 /* ---------------------------------------------------------- primitives */
 
-/* Everything the panel draws goes through put_logical, NOT u2_frame_pixel.
- * u2_frame_pixel masks the colour to two bits because it is the CGA 2bpp path,
- * so a 16-colour index written through it silently becomes index & 3 — and in the
- * FM Towns palette index 3 is black, which is how the box borders were drawn and
- * then vanished. put_logical writes the full index and is scale-aware, which at
- * the enhanced frame's scale of 1 is a direct write. */
+/* Everything the panel draws goes through u2_frame_put, NOT u2_frame_pixel and
+ * NOT u2_frame_put_logical.
+ *
+ * u2_frame_pixel masks the colour with &3 because it is the CGA 2bpp path, so a
+ * 16-colour index written through it silently becomes index & 3 — and in the FM
+ * Towns palette index 3 is black, which is how the box borders were being drawn
+ * and then vanished. u2_frame_put_logical would multiply the COORDINATES by the
+ * frame scale, and the panel geometry is already in physical pixels, so it would
+ * draw everything off the right-hand edge. u2_frame_put writes one physical pixel
+ * at the full index, which is what a layout expressed in physical pixels needs. */
 static void pset(u2_frame *f, int x, int y, uint8_t col)
 {
-    u2_frame_put_logical(f, x, y, col);
+    u2_frame_put(f, x, y, col);
 }
 
 static void fill(u2_frame *f, int x, int y, int w, int h, uint8_t col)
@@ -97,12 +101,14 @@ static void box(u2_frame *f, int x, int y, int w, int h, uint8_t bg, uint8_t bor
     vline(f, x + w - 1, y, h, border);
 }
 
-/* Text at a pixel position. The enhanced frame is scale 1, so a cell is exactly
- * U2_FONT_CELL_W by U2_FONT_CELL_H physical pixels and this is a division, not a
- * guess. */
+/* Text at a physical pixel position. The font API works in glyph cells, and one
+ * cell is U2_ENH_TEXT_W physical pixels on the doubled enhanced frame, so this is
+ * a division by the cell and not by the raw 8. Dividing by 8 was correct only for
+ * the scale-1 prototype and silently halved every coordinate once the frame
+ * doubled. */
 static void text(u2_frame *f, int x, int y, const char *s, uint8_t fg, uint8_t bg)
 {
-    u2_font_draw_text(f, y / U2_FONT_CELL_H, x / U2_FONT_CELL_W, s, fg, bg);
+    u2_font_draw_text(f, y / U2_ENH_TEXT_H, x / U2_ENH_TEXT_W, s, fg, bg);
 }
 
 /* Four BCD digits as printed by the DOS status block: the first byte carries the
@@ -124,7 +130,7 @@ static void value_right(u2_frame *f, int right_x, int y, const char *s,
                         uint8_t fg, uint8_t bg)
 {
     const int cols = (int)strlen(s);
-    text(f, right_x - cols * U2_FONT_CELL_W, y, s, fg, bg);
+    text(f, right_x - cols * U2_ENH_TEXT_W, y, s, fg, bg);
 }
 
 /* --------------------------------------------------------------- boxes */
@@ -150,25 +156,25 @@ static void draw_box1(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
     bcd4(ctx->state.food_hi, ctx->state.food_lo, f1, sizeof f1);
     bcd4(ctx->state.gold_lo, ctx->state.gold_hi, g1, sizeof g1);
 
-    /* Column arithmetic in whole text cells, because the box is 24 cells wide and
-     * pixel offsets that were derived by hand were what put the E and G values off
-     * the edge on the first attempt. Layout: name on row 0, then a 2x2 grid of
-     * label+value pairs, then the avatar down the right-hand side. */
+    /* Column arithmetic in whole text cells. The box interior is 18 cells wide and
+     * the avatar takes the last two, so the two label/value pairs live in the first
+     * sixteen. Hand-derived pixel offsets were what put the E and G values off the
+     * edge on the first attempt. */
     const int cx = x + U2_ENH_BOX_PAD;          /* first text column, pixels */
     const int r0 = y + U2_ENH_BOX_PAD;
-    const int r1 = r0 + U2_FONT_CELL_H;
-    const int r2 = r1 + U2_FONT_CELL_H;
-    const int c_lbl = 0, c_val = 7, c_lbl2 = 9, c_val2 = 16;
+    const int r1 = r0 + U2_ENH_TEXT_H;
+    const int r2 = r1 + U2_ENH_TEXT_H;
+    const int c_lbl = 0, c_val = 5, c_lbl2 = 7, c_val2 = 12;
     /* Labels are ours. The reference uses bare H F E G in a 2x2 grid; keeping the
      * letters matches it closely enough to be recognised and costs nothing. */
-    text(f, cx + c_lbl  * U2_FONT_CELL_W, r1, "H:", c->text, c->box_bg);
-    text(f, cx + c_lbl  * U2_FONT_CELL_W, r2, "F:", c->text, c->box_bg);
-    text(f, cx + c_lbl2 * U2_FONT_CELL_W, r1, "E:", c->text, c->box_bg);
-    text(f, cx + c_lbl2 * U2_FONT_CELL_W, r2, "G:", c->text, c->box_bg);
-    value_right(f, cx + (c_val  + 1) * U2_FONT_CELL_W, r1, h1, c->text, c->box_bg);
-    value_right(f, cx + (c_val  + 1) * U2_FONT_CELL_W, r2, f1, c->text, c->box_bg);
-    value_right(f, cx + (c_val2 + 1) * U2_FONT_CELL_W, r1, h2, c->text, c->box_bg);
-    value_right(f, cx + (c_val2 + 1) * U2_FONT_CELL_W, r2, g1, c->text, c->box_bg);
+    text(f, cx + c_lbl  * U2_ENH_TEXT_W, r1, "H:", c->text, c->box_bg);
+    text(f, cx + c_lbl  * U2_ENH_TEXT_W, r2, "F:", c->text, c->box_bg);
+    text(f, cx + c_lbl2 * U2_ENH_TEXT_W, r1, "E:", c->text, c->box_bg);
+    text(f, cx + c_lbl2 * U2_ENH_TEXT_W, r2, "G:", c->text, c->box_bg);
+    value_right(f, cx + (c_val  + 1) * U2_ENH_TEXT_W, r1, h1, c->text, c->box_bg);
+    value_right(f, cx + (c_val  + 1) * U2_ENH_TEXT_W, r2, f1, c->text, c->box_bg);
+    value_right(f, cx + (c_val2 + 1) * U2_ENH_TEXT_W, r1, h2, c->text, c->box_bg);
+    value_right(f, cx + (c_val2 + 1) * U2_ENH_TEXT_W, r2, g1, c->text, c->box_bg);
 
     if (avatar_art >= 0 && tiles) {
         /* Through the theme's map, not raw: art 60 is the avatar and pool index 60
@@ -197,14 +203,14 @@ static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
     };
     const int right  = x + w - U2_ENH_BOX_PAD;
     for (int i = 0; i < 6; i++) {
-        const int ry = y + U2_ENH_BOX_PAD + i * U2_FONT_CELL_H;
+        const int ry = y + U2_ENH_BOX_PAD + i * U2_ENH_TEXT_H;
         text(f, x + U2_ENH_BOX_PAD, ry, labels[i], c->text, c->box_bg);
         /* The dotted leader the reference puts between label and value, drawn
          * rather than assumed: fill the gap the label left with dots. */
         const int dots_from = x + U2_ENH_BOX_PAD
-                            + (int)strlen(labels[i]) * U2_FONT_CELL_W + U2_FONT_CELL_W;
-        const int dots_to   = right - 3 * U2_FONT_CELL_W;
-        for (int dx = dots_from; dx < dots_to; dx += U2_FONT_CELL_W)
+                            + (int)strlen(labels[i]) * U2_ENH_TEXT_W + U2_ENH_TEXT_W;
+        const int dots_to   = right - 3 * U2_ENH_TEXT_W;
+        for (int dx = dots_from; dx < dots_to; dx += U2_ENH_TEXT_W)
             text(f, dx, ry, ".", c->text, c->box_bg);
         char num[4];
         snprintf(num, sizeof num, "%u", v[i]);
@@ -212,7 +218,7 @@ static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
     }
 
     char line[40];
-    const int ey = y + U2_ENH_BOX_PAD + 6 * U2_FONT_CELL_H;
+    const int ey = y + U2_ENH_BOX_PAD + 6 * U2_ENH_TEXT_H;
     /* "WEA:"/"ARM:" are the reference's abbreviations and are NOT strings from
      * ultimaii.exe, which spells these WEAPON- and ARMOUR-. Invented on purpose:
      * enhanced mode is a presentation, ruled 2026-11-05. The names after them are
@@ -220,7 +226,7 @@ static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
     snprintf(line, sizeof line, "WEA:%s", P_NAME(U2_T_WEAPONS, ctx->state.readied_weapon));
     text(f, x + U2_ENH_BOX_PAD, ey, line, c->text, c->box_bg);
     snprintf(line, sizeof line, "ARM:%s", P_NAME(U2_T_ARMOUR, ctx->state.worn_armour));
-    text(f, x + U2_ENH_BOX_PAD, ey + U2_FONT_CELL_H, line, c->text, c->box_bg);
+    text(f, x + U2_ENH_BOX_PAD, ey + U2_ENH_TEXT_H, line, c->text, c->box_bg);
 }
 
 static void draw_box3(u2_frame *f, const u2_panel_colours *c,
@@ -231,7 +237,7 @@ static void draw_box3(u2_frame *f, const u2_panel_colours *c,
     if (!log) return;
 
     const int cols = U2_ENH_TEXT_COLS;
-    const int first_row = (h - U2_ENH_BOX_PAD) / U2_FONT_CELL_H;
+    const int first_row = (h - U2_ENH_BOX_PAD) / U2_ENH_TEXT_H;
     /* Newest at the bottom, like a log. Lines longer than the box wrap, which is
      * a real change from the DOS 40-column grid: the panel is narrower, so a line
      * such as CMD: ATTACK--EAST--HIT!!! occupies more rows here. The reference
@@ -246,7 +252,7 @@ static void draw_box3(u2_frame *f, const u2_panel_colours *c,
             const int take = n - off > cols ? cols : n - off;
             memcpy(chunk, s + off, (size_t)take);
             chunk[take] = '\0';
-            text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + row * U2_FONT_CELL_H,
+            text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + row * U2_ENH_TEXT_H,
                  chunk, c->text, c->box_bg);
             row--;
             if (row < 0) break;

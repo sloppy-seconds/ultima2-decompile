@@ -67,7 +67,10 @@
  * has; a blit that went through the logical space would decimate a 32x32 tile
  * to 16x16 and throw away the reason for the theme. */
 #define U2_FRAME_MAX_SCALE 2
-#define U2_FRAME_MAX_W     (U2_SCREEN_W * U2_FRAME_MAX_SCALE)   /* 640 */
+/* 800, not 640: the enhanced layout is 768 wide so that the panel can carry 16px
+ * text without shrinking the map below 14 columns. At 640 the two demands are in
+ * direct conflict — see docs/enhanced-layout-plan.md § 9a. */
+#define U2_FRAME_MAX_W     800
 /* 480, not 400: the enhanced layout is a native 640x480 canvas rather than a
  * doubled 320x200, because its panel text is drawn at 1:1 8px and a doubled frame
  * would make every glyph 16px. core/layout.h has the geometry and the reasoning. */
@@ -93,10 +96,11 @@ typedef struct u2_frame {
  * Returns 0 on success. A frame that was never inited has px == NULL, and every
  * writer below refuses rather than dereferencing it. */
 int u2_frame_init(u2_frame *f, int scale);
-/* A frame at an explicit pixel size and scale 1, for the enhanced layout. The
- * classic layout is a scaled 320x200 and must keep using u2_frame_init, because
- * its text grid and tile blits are defined in that logical space. */
-int u2_frame_init_size(u2_frame *f, int w, int h);
+/* A frame at an explicit pixel size and an explicit scale, for the enhanced
+ * layout. The scale matters twice over: it is what makes text draw at 16px rather
+ * than 8, and it is what makes a 16px theme present at 32px so every theme fills
+ * the same map cell instead of a v1 theme occupying a quarter of the space. */
+int u2_frame_init_size(u2_frame *f, int w, int h, int scale);
 void u2_frame_free(u2_frame *f);
 
 /* Init only if the frame is not already at this scale, freeing the old store

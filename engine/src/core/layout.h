@@ -21,8 +21,21 @@
 
 /* The frame the enhanced layout is designed for. Classic mode stays at 320x200
  * (or 640x400 doubled) and is untouched by any of this. */
-#define U2_ENH_W 640
+#define U2_ENH_W 768
 #define U2_ENH_H 480
+
+/* The enhanced frame is a DOUBLED canvas, and that is load-bearing twice over.
+ * Text drawn through the font API comes out at 16px rather than the unreadable 8px
+ * of a scale-1 frame, and a v1 16px theme presents at 32px via
+ * u2_tiles_ega_present(), so every theme fills the same map cell instead of a v1
+ * theme occupying a quarter of the space. The cost is width: 768 rather than the
+ * reference's 640, because 14 map columns and a readable panel do not both fit in
+ * 640 (docs/enhanced-layout-plan.md § 9a). */
+#define U2_ENH_SCALE 2
+/* One glyph, in physical pixels. Panel geometry is in these, not raw pixels, so
+ * text can never land half on a glyph cell. */
+#define U2_ENH_TEXT_W (U2_FONT_CELL_W * U2_ENH_SCALE)
+#define U2_ENH_TEXT_H (U2_FONT_CELL_H * U2_ENH_SCALE)
 
 /* Map window: 14 x 14 tiles. The tile side comes from the theme, so a v1 16 px
  * theme draws 14 x 14 of those and simply leaves room at the right; the geometry
@@ -32,23 +45,23 @@
 #define U2_ENH_MAP_X    0
 #define U2_ENH_MAP_Y    0
 
-/* Panel column, and the three boxes inside it. Widths are in whole 8 px text
- * columns so the text never clips mid-glyph. */
-#define U2_ENH_PANEL_X     448
-#define U2_ENH_PANEL_W     192
-#define U2_ENH_TEXT_COLS   ((U2_ENH_PANEL_W - 2 * U2_ENH_BOX_PAD) / U2_FONT_CELL_W)
+/* Panel column, and the three boxes inside it. Widths are in whole text cells so
+ * the text never clips mid-glyph. */
+#define U2_ENH_PANEL_X     (U2_ENH_MAP_COLS * 32)          /* 448 */
+#define U2_ENH_PANEL_W     (U2_ENH_W - U2_ENH_PANEL_X)     /* 320 */
 
-/* Padding is a WHOLE text cell, not 4px. u2_font_draw_cell snaps to the 8px grid,
- * so a 4px pad collapses to 0 and the first glyph lands on top of the box border —
- * which is exactly what made the borders look missing on the first prototype. */
-#define U2_ENH_BOX_PAD     U2_FONT_CELL_W
+/* Padding is a WHOLE text cell, not 4px. The font API snaps to the glyph grid, so
+ * a sub-cell pad collapses to 0 and the first glyph lands on the box border —
+ * which is what made the borders look missing on the first prototype. */
+#define U2_ENH_BOX_PAD     U2_ENH_TEXT_W
 #define U2_ENH_BOX_BORDER  1
 #define U2_ENH_BOX_GAP     4
+#define U2_ENH_TEXT_COLS   ((U2_ENH_PANEL_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W)
 
 #define U2_ENH_BOX1_Y      0
-#define U2_ENH_BOX1_H      64    /* name, H/E, F/G, and the avatar figure */
+#define U2_ENH_BOX1_H      (5 * U2_ENH_TEXT_H)  /* name, H/E, F/G, and the avatar */
 #define U2_ENH_BOX2_Y      (U2_ENH_BOX1_Y + U2_ENH_BOX1_H + U2_ENH_BOX_GAP)
-#define U2_ENH_BOX2_H      80    /* six stats with leaders, then WEA: and ARM: */
+#define U2_ENH_BOX2_H      (9 * U2_ENH_TEXT_H)  /* six stats with leaders, then WEA:/ARM: */
 #define U2_ENH_BOX3_Y      (U2_ENH_BOX2_Y + U2_ENH_BOX2_H + U2_ENH_BOX_GAP)
 #define U2_ENH_BOX3_H      (U2_ENH_MAP_Y + U2_ENH_MAP_ROWS * 32 - U2_ENH_BOX3_Y)
 

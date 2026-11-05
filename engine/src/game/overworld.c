@@ -1424,16 +1424,18 @@ static int overworld_resume(u2_ctx *ctx, u2_overworld *ow)
     }
     u2_frame_set_text_fg(&ow->frame, ctx->text_fg);
 
-    /* The enhanced layout is a native 640x480 canvas rather than a doubled
-     * 320x200, because its panel text is drawn at 1:1 8px and a doubled frame
-     * would make every glyph 16px. Replacing the frame here is safe only because
-     * nothing has drawn into it yet; if that ever changes, free the old one first.
+    /* The enhanced layout is a 768x480 canvas at scale 2. The scale is the whole
+     * trick: it makes panel text 16px (8px was unreadable in play) and it makes a
+     * v1 16px theme present at 32px through u2_tiles_ega_present(), so every theme
+     * fills the same map cell instead of a v1 theme drawing a quarter of the space.
+     * Replacing the frame here is safe only because nothing has drawn into it yet;
+     * if that ever changes, free the old one first.
      * The view shape follows the layout: the classic window is the DOS 20x10 with
      * the player at (9,5), which asm/5AE1 compares against, and the enhanced one
      * is a squarer window whose size core/layout.h derives from the frame. */
     if (ctx->enhanced_layout) {
         u2_frame_free(&ow->frame);
-        if (u2_frame_init_size(&ow->frame, U2_ENH_W, U2_ENH_H) != 0) {
+        if (u2_frame_init_size(&ow->frame, U2_ENH_W, U2_ENH_H, U2_ENH_SCALE) != 0) {
             snprintf(ow->note, sizeof ow->note, "out of memory for the frame buffer");
             return -1;
         }
