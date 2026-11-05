@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "core/tiles_ega.h"
+#include "core/fmtowns.h"      /* U2_FMTOWNS_THEME: one literal, not a second copy */
 #include "core/artifact.h"    /* a release artifact does not know about references/ */
 #include "core/ini.h"            /* the shared `key = value` reader (ini.h says why) */
 #include "core/frame.h"           /* U2_FRAME_MAX_SCALE: a theme may not ask for
@@ -471,6 +472,13 @@ static int ega_candidates(u2_ctx *ctx, const char **cands)
         cands[nc++] = "../references/u2upgrade";
         cands[nc++] = "references/u2upgrade";
     }
+    /* The installed layout's own themes directory, last. Without it an explicit
+     * --ega in a tree that has themes/ beside the binary refuses to start while
+     * saying nothing at all succeeds, because auto-detection knows about themes/
+     * and this list did not — an explicit request must never be worse than an
+     * implicit one. Dev fallbacks are ordered ahead of it on purpose, so nothing
+     * a developer or a test run resolved before resolves differently now. */
+    cands[nc++] = U2_EGA_THEMES_DIR_NAME;
     return nc;
 }
 
@@ -534,6 +542,114 @@ static void apply_to_ctx(u2_ctx *ctx, const u2_tiles_ega *t)
         ctx->theme_palette_set = 0;
         ctx->text_fg = 0;      /* unset: the frame keeps the CGA pair */
     }
+}
+
+/*
+ * Choose the art axis from what is actually installed, when the player asked for
+ * neither. Opened 2026-11-06: a tree built by --install with themes in it still
+ * started in CGA unless the player typed --ega, so the better art sat on disk
+ * unused, and the fan pack's `default` theme was preferred over the derived FM
+ * Towns one even when it was the only reason the install had a themes tree.
+ *
+ * Two rules keep this a default rather than a surprise:
+ *
+ *   An explicit choice always wins. --ega, --cga, --enhanced, --ega-theme,
+ *   --ega-theme-dir and config.ini's [themes] section all mean "I said what I
+ *   want", and auto-detection only fills what nothing set. That is why the
+ *   installer now records the theme it actually built: if it wrote
+ *   `theme = default` over a fmtowns derivation, the config would be an explicit
+ *   choice and this function could never prefer fmtowns on exactly the trees it
+ *   exists for.
+ *
+ *   The candidate list is the INSTALLED layout, never the dev fallbacks.
+ *   ega_candidates() adds `references/u2upgrade` for a dev build and falls
+ *   through to --data-dir; consulting those here would flip every developer and
+ *   every test run to EGA, and the CP2 byte-comparison baseline is measured in
+ *   original CGA mode. So: the explicit dir if one is set, else `themes` beside
+ *   the launch directory. Nothing else.
+ *
+ * Returns 1 and sets ctx->art_mode (and ctx->ega_theme, when nothing named one)
+ * if a usable theme was found; returns 0 and leaves the context untouched
+ * otherwise, which is CGA, which is not a refusal — the strict rule of 2026-11-04
+ * is about an explicit --ega silently downgrading, and nobody asked here.
+ *
+ * `chosen` receives the theme name for the startup announcement.
+ */
+int u2_tiles_ega_autodetect(u2_ctx *ctx, char *chosen, size_t n, int may_change_mode)
+{
+    if (!ctx) return 0;
+
+    /* CGA with the mode already decided has no theme to pick: the player asked for
+     * the 4-colour art (or for substitute art), and naming a theme for art that is
+     * not being drawn would be a fact about nothing. Probing anyway would also
+     * probe at frame scale 1, where a 32x32 theme is refused for a reason that is
+     * an artefact of the probe rather than of the theme. */
+    if (!may_change_mode && ctx->art_mode != U2_ART_EGA)
+        return 0;
+
+    const char *dirs[1];
+    dirs[0] = (ctx->ega_theme_dir && *ctx->ega_theme_dir)
+            ? ctx->ega_theme_dir : U2_EGA_THEMES_DIR_NAME;
+
+    /* fmtowns first: it is the only theme anyone has to go and derive from a disc
+     * they own, so its presence is a deliberate act, and it renders at 32x32.
+     * `default` is the fan pack's top-level EGATILES, which the installer also
+     * writes, so ordering the other way would make the derived theme unreachable
+     * by default on every full install. */
+    const char *names[2];
+    int nn = 0;
+    if (ctx->ega_theme && *ctx->ega_theme) {
+        names[nn++] = ctx->ega_theme;
+    } else {
+        names[nn++] = U2_FMTOWNS_THEME;
+        names[nn++] = U2_EGA_THEME_DEFAULT;
+    }
+
+    /* The frame scale is derived from the art mode (ega_frame_scale), and a v2
+     * theme whose tiles are larger than the frame is REFUSED rather than
+     * decimated. So the mode has to be EGA before the probe or the 32x32 FM Towns
+     * theme is rejected for a reason that is an artefact of the probe. Roll back
+     * on failure so a tree with no themes is left exactly as it was found. */
+    const u2_art_mode was = ctx->art_mode;
+    const char *was_theme = ctx->ega_theme;
+    const char *was_dir = ctx->ega_theme_dir;
+    if (may_change_mode)
+        ctx->art_mode = U2_ART_EGA;
+
+    for (int d = 0; d < 1; d++) {
+        for (int i = 0; i < nn; i++) {
+            static u2_tiles_ega probe;
+            memset(&probe, 0, sizeof probe);
+            if (u2_tiles_ega_open_in(ctx, &probe, dirs[d], names[i])
+                    != U2_TILES_EGA_OK)
+                continue;
+            if (!(ctx->ega_theme && *ctx->ega_theme))
+                ctx->ega_theme = names[i];
+            /* Pin the directory that worked. The strict launch check resolves
+             * through ega_candidates(), which without an explicit dir looks at
+             * --data-dir and the dev fallbacks and NOT at `themes` — so leaving
+             * this unset made the check refuse to start over a theme this function
+             * had just loaded, with "no EGA themes directory found" naming
+             * directories the player has never heard of. Recording it also means
+             * the overworld's own later open() resolves the same way, so the theme
+             * announced at startup is the theme that draws. */
+            if (!(ctx->ega_theme_dir && *ctx->ega_theme_dir))
+                ctx->ega_theme_dir = dirs[d];
+            if (chosen && n)
+                snprintf(chosen, n, "%s", names[i]);
+            return 1;
+        }
+    }
+
+    ctx->art_mode = was;
+    ctx->ega_theme = was_theme;
+    ctx->ega_theme_dir = was_dir;
+    if (may_change_mode) {
+        ctx->theme_palette_set = 0;
+        ctx->text_fg = 0;
+        ctx->frame_scale = 1;
+    }
+    return 0;
 }
 
 u2_tiles_ega_result u2_tiles_ega_open_in(u2_ctx *ctx, u2_tiles_ega *t,

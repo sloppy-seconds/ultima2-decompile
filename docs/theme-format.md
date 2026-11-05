@@ -205,6 +205,53 @@ CP0 selftest now places a cursor over a glyph, since `--dump-screen` saves the
 first presented frame and that is the only screen a test can reach on a first
 present.
 
+## 5c. Which theme a run gets when it names none
+
+Added 2026-11-06. Until then the art axis was opt-in only: an `--install` tree with
+`themes/` in it still started in CGA unless the player typed `--ega`, so the better
+art sat on disk unused, and where both the derived FM Towns theme and the fan pack's
+`default` were installed, `default` won.
+
+The rule now, in one sentence: **an explicit choice always wins, and when nothing is
+chosen the engine takes EGA from an installed themes tree, preferring `fmtowns`.**
+
+What counts as explicit, and therefore suppresses the inference:
+
+| named | suppresses |
+| --- | --- |
+| `--ega`, `--cga`, `--cleanroom` | the art axis |
+| `--ega-theme NAME`, `[themes] theme` | the theme preference **and** the axis — naming a theme is asking for themed art |
+| `--enhanced` | the axis only (it implies EGA); the theme preference still applies |
+| `[themes] dir` alone | nothing; it says where to look, not what to look for |
+
+Three things make this safe rather than surprising.
+
+* **It cannot change what a developer or a test run draws.** The candidate list is
+  the installed layout — the configured dir, else `themes` beside the launch
+  directory — and never `--data-dir` or the `references/u2upgrade` dev fallbacks.
+  The CP2 byte-comparison baseline is measured in original CGA mode, and the test
+  suite runs from `engine/`, which has neither a `themes/` nor a `config.ini`. That
+  is a property of the layout, not a hope: CP2 is unchanged.
+* **An explicit request must never be worse than silence.** Two bugs of that shape
+  were caught while building this and both are now asserted: auto-detection set the
+  mode but not the directory, so `--ega` alone refused to start over a theme it had
+  just loaded while saying nothing succeeded; and `--ega-theme default` named a theme
+  without selecting the axis, so naming a theme downgraded a run that would otherwise
+  have had EGA. `--ega-theme` now implies the axis.
+* **It is announced.** `u2: art mode: ega (theme fmtowns, auto-selected)` is printed
+  at startup, on its own line, because `deploy/novnc/up.sh` greps the line above it
+  for `cleanroom` / `tiles extracted` to verify the artifact and a check that
+  silently stopped matching is the failure mode that script exists to prevent.
+
+`--cga` is new and is the opt-out. Without it, making EGA automatic would have
+removed a capability that currently exists by default, which is the same defect the
+strict-`--ega` ruling was written to stop, pointing the other way.
+
+The gate is `engine/tests/artauto_check.c` (12 checks, v1 `EGATILES` fixtures so it
+needs no art and no media), driving both lookup paths and both directions of the
+rule. Its red control is the preference reversed, which fails exactly the three
+preference checks and nothing else.
+
 ## 6. Scope
 
 `scope` is not decoration. The FM Towns crosswalk covers the overworld and towns

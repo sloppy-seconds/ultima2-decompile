@@ -125,9 +125,16 @@ static void usage(const char *argv0)
         "  --ega             use the fan pack's 16-colour EGA art (EGATILES tiles and\n"
         "                    PIC*-E pictures) instead of the original CGA. An art axis\n"
         "                    only: it changes no rules and is available in both fidelity\n"
-        "                    modes. Falls back to CGA when the EGA files are absent.\n"
+        "                    modes. Strict: if the theme named is not there the run\n"
+        "                    refuses to start rather than quietly drawing CGA.\n"
         "                    PROVISIONAL: superseded by the graphics-set switch in the\n"
         "                    options menu (docs/options-menu.md).\n"
+        "  --cga             the original 4-colour art, and the way to say so when a\n"
+        "                    themes tree is installed. With neither --ega nor --cga the\n"
+        "                    engine picks from what is on disk: EGA if themes/ (or the\n"
+        "                    configured themes dir) holds a usable theme, preferring the\n"
+        "                    derived FM Towns theme, and CGA if it holds none. Which was\n"
+        "                    chosen, and whether it was automatic, is printed at startup.\n"
         "  --ega-theme NAME  which EGA tile theme to load: default, 10, alt, c64\n"
         "                    (default: default). PROVISIONAL, as --ega.\n"
         "  --ega-theme-dir DIR  where to find EGATILES / EGATHEME.* and the PIC*-E\n"
@@ -281,6 +288,15 @@ int main(int argc, char **argv)
     const char *roll_trace_path = NULL;
     const char *dump_ds_path = NULL;
     const char *config_path = NULL;
+    /* Two separate questions, because they have different answers.
+     *   art_mode_forced — the player or the config chose CGA or EGA (or asked for
+     *     substitute art), so the mode is settled and only the theme may still be
+     *     picked for them.
+     *   theme_named — a specific theme was named, which is the one thing that
+     *     suppresses the fmtowns-over-default preference. --enhanced forces the mode
+     *     but names no theme, so it still gets the preference. */
+    int art_mode_forced = 0;
+    int theme_named = 0;
     int install_mode = 0, install_check_only = 0, install_dry_run = 0, install_no_prompt = 0;
     const char *install_to = NULL, *install_orig = NULL;
     const char *install_upd = NULL;
@@ -334,13 +350,31 @@ int main(int argc, char **argv)
             ctx.save_dir = argv[++i];
         } else if (strcmp(a, "--cleanroom") == 0) {
             ctx.cleanroom = 1;
+            art_mode_forced = 1;   /* substitute art is a named choice, not a default */
+        } else if (strcmp(a, "--cga") == 0) {
+            /* The opt-out. EGA is now picked automatically when a themes tree is
+             * installed, so without this flag the original 4-colour art would stop
+             * being reachable by anyone whose install has themes — which is the
+             * common case, and was the default until now. Named for the art, not
+             * for the mode it turns off, so it reads the way --ega reads. */
+            art_mode_forced = 1;
+            ctx.art_mode = U2_ART_CGA;
         } else if (strcmp(a, "--ega") == 0) {
-            /* Art axis only; independent of --enhanced and --cleanroom. The EGA
-             * loaders fall back to CGA when the files are absent, so this can
-             * never fail a launch. */
+            /* Art axis only; independent of --enhanced and --cleanroom. Strict
+             * (owner, 2026-11-04): an explicit request never downgrades quietly. */
+            art_mode_forced = 1;
             ctx.art_mode = U2_ART_EGA;
         } else if (strcmp(a, "--ega-theme") == 0 && i + 1 < argc) {
+            /* Naming a theme is asking for themed art, so it selects the axis too.
+             * It used to set only the name and leave the mode on CGA, which was
+             * always odd and became actively wrong once the mode started being
+             * inferred: --ega-theme default in a tree with themes would have
+             * downgraded a run that gets EGA if you say nothing. An explicit request
+             * must not be worse than no request. */
             ctx.ega_theme = argv[++i];
+            theme_named = 1;
+            art_mode_forced = 1;
+            ctx.art_mode = U2_ART_EGA;
         } else if (strcmp(a, "--ega-theme-dir") == 0 && i + 1 < argc) {
             ctx.ega_theme_dir = argv[++i];
         } else if (strcmp(a, "--data-dir") == 0 && i + 1 < argc) {
@@ -552,6 +586,11 @@ int main(int argc, char **argv)
             return 2;
         }
         u2_config_apply(&ctx, &cfg);
+        /* A theme named in config.ini is the player's choice, exactly as --ega-theme
+         * on the command line, so it suppresses the preference. A `dir` alone says
+         * where to look, not what to look for, so it does not. */
+        if (*cfg.theme)
+            theme_named = 1;
     }
 
     /* The renderer default is a property of the *build*, not of the run. The
@@ -602,6 +641,23 @@ int main(int argc, char **argv)
         ctx.art_mode = U2_ART_EGA;
     }
 
+    /* Nothing named an art axis, so take it from what is installed. Opened
+     * 2026-11-06: an --install tree with themes in it still started in CGA unless
+     * the player typed --ega, so the better art sat on disk unused. When a themes
+     * tree is found this also prefers the derived FM Towns theme over the fan
+     * pack's `default`, because deriving it means the player went and pointed the
+     * installer at a disc they own.
+     *
+     * Runs before the strict check below, and is not itself strict: finding nothing
+     * leaves the run on CGA, which is the default being unfilled rather than a
+     * request being downgraded. --enhanced reaches here with the mode already EGA,
+     * so it gets the theme preference without changing its art mode. */
+    char art_theme[64] = "";
+    int art_auto = 0;
+    if (!theme_named && (ctx.art_mode == U2_ART_EGA || !art_mode_forced))
+        art_auto = u2_tiles_ega_autodetect(&ctx, art_theme, sizeof art_theme,
+                                           !art_mode_forced);
+
     /* --ega is strict (owner, 2026-11-04): if the themes directory does not exist
      * or the chosen theme is not in it, refuse to start rather than fall back to
      * CGA. This supersedes the plan's original "never fail a launch" default; the
@@ -627,6 +683,24 @@ int main(int argc, char **argv)
     fprintf(stderr, "u2: art source: %s\n",
             ctx.cleanroom ? "cleanroom (engine's own substitute tiles)"
                           : "original tiles extracted from the user's copy");
+
+    /* Which art axis, and how it was arrived at. A separate line rather than a
+     * clause on the one above, because deploy/novnc/up.sh greps that line for
+     * "cleanroom" / "tiles extracted" to verify the artifact, and a check that
+     * silently stopped matching is the failure mode that script exists to prevent.
+     * Saying "auto-selected" matters: art that changes because of what happens to
+     * be on disk is exactly the kind of thing a player should be told, not told
+     * nothing about. */
+    if (ctx.cleanroom)
+        fprintf(stderr, "u2: art mode: cga (cleanroom)\n");
+    else if (ctx.art_mode == U2_ART_EGA)
+        fprintf(stderr, "u2: art mode: ega (theme %s%s)\n",
+                *art_theme ? art_theme
+                           : ((ctx.ega_theme && *ctx.ega_theme) ? ctx.ega_theme
+                                                                : U2_EGA_THEME_DEFAULT),
+                art_auto ? ", auto-selected" : "");
+    else
+        fprintf(stderr, "u2: art mode: cga (original 4-colour)\n");
 
     if (trace_arg && u2_trace_open(&ctx, trace_arg) != 0) {
         fprintf(stderr, "u2: cannot open trace file '%s'\n", trace_arg);

@@ -162,6 +162,11 @@ static inline int u2_tile_ega_pixel(const u2_tiles_ega *t, int tile, int x, int 
  * by the same calls. */
 #define U2_EGA_THEME_DEFAULT "default"
 
+/* The directory an installed tree keeps its themes in, when nothing named one.
+ * Same literal as U2_INSTALL_THEMES in core/install.h; install.c static-asserts
+ * the two so a rename cannot silently split the layout from the lookup. */
+#define U2_EGA_THEMES_DIR_NAME "themes"
+
 typedef enum u2_tiles_ega_result {
     U2_TILES_EGA_OK = 0,
     U2_TILES_EGA_NOT_READY,   /* no themes dir / no theme found anywhere */
@@ -214,6 +219,29 @@ int u2_tiles_ega_next_theme(const char *dir, const char *cur,
  * --ega never silently draws CGA because the art is missing.
  */
 u2_tiles_ega_result u2_tiles_ega_validate(u2_ctx *ctx, char *err, size_t n);
+
+/*
+ * Pick the art axis from what is installed when the player named nothing.
+ *
+ * Sets ctx->art_mode to U2_ART_EGA and, if no theme was named, ctx->ega_theme,
+ * preferring the derived FM Towns theme over the fan pack's `default`. Returns 1
+ * on a hit. Returns 0 and leaves the context as it found it when there is nothing
+ * to find, which means the run stays on CGA — that is a default being unfilled, not
+ * the refusal --ega enforces, because nothing was asked for.
+ *
+ * Looks only in the explicit themes dir (flag or config.ini) or `themes` beside
+ * the launch directory. It deliberately does NOT consult --data-dir or the
+ * dev-checkout fallbacks, so it cannot change what a developer's run or the test
+ * suite draws. main() calls it before the strict --ega check.
+ *
+ * `may_change_mode` is 1 when nothing forced the art axis, so a hit may set it;
+ * pass 0 when the mode is already decided and only the theme name is still open.
+ * With 0 and the mode on CGA the probe is skipped, because there is no theme to
+ * pick for CGA art.
+ *
+ * `chosen` receives the theme name for the startup announcement.
+ */
+int u2_tiles_ega_autodetect(u2_ctx *ctx, char *chosen, size_t n, int may_change_mode);
 
 const char *u2_tiles_ega_result_text(u2_tiles_ega_result r);
 

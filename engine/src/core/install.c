@@ -23,6 +23,7 @@
 #include "core/fmtowns.h"
 #include "core/sha256.h"
 #include "core/slot.h"
+#include "core/tiles_ega.h"   /* U2_EGA_THEME_DEFAULT, and the dir-name assert below */
 
 #define MAX_ROWS     1024
 #define NAME_LEN     128
@@ -719,7 +720,18 @@ void u2_install_fill_from_config(u2_install_request *rq, const u2_config *cfg, F
 
 /* ------------------------------------------------------------------ config */
 
-static int write_config(const char *to, int have_themes, const u2_install_request *rq)
+/* `theme` is the theme name to record, or NULL to write no [themes] section at all.
+ * It is the theme the engine would pick on its own, and it has to be recorded: a
+ * config line is an explicit choice as far as auto-detection is concerned, so
+ * writing `theme = default` over a fmtowns derivation would pin the fan pack on
+ * exactly the installs that went to the trouble of deriving the better art. */
+/* The installer writes `dir = themes`; the engine's auto-detection looks for
+ * `themes` when nothing named a directory. Two literals in two files is a drift
+ * waiting to happen, so they are tied here rather than left to agreement. */
+_Static_assert(0 == strcmp(U2_INSTALL_THEMES, U2_EGA_THEMES_DIR_NAME),
+               "the installed themes directory name must match the engine's default");
+
+static int write_config(const char *to, const char *theme, const u2_install_request *rq)
 {
     char path[1024], tmp[1024];
     char orig[1024], upd[1024], fm[1024], th[U2_INSTALL_MAX_RECORDED][1024];
@@ -740,8 +752,8 @@ static int write_config(const char *to, int have_themes, const u2_install_reques
           "data = .\n"
           "saves = saves\n"
           "\n", f);
-    if (have_themes)
-        fputs("[themes]\ndir = themes\ntheme = default\n", f);
+    if (theme)
+        fprintf(f, "[themes]\ndir = %s\ntheme = %s\n", U2_INSTALL_THEMES, theme);
 
     /* What --install was given, so running it again from here needs no flags.
      * `to` is this directory by construction; the sources are absolute because
@@ -946,6 +958,7 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
      * were installed the old way. */
 
     int have_themes = 0;
+    int have_fmtowns = 0;
     if (rq->n_themes_dir > 0) {
         char tdir[1024];
         snprintf(tdir, sizeof tdir, "%.1000s/%s", rq->to, U2_INSTALL_THEMES);
@@ -992,9 +1005,17 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
             return U2_INSTALL_ERROR;
         }
         have_themes = 1;
+        have_fmtowns = 1;
     }
 
-    if (write_config(rq->to, have_themes, rq) != 0) {
+    /* Record the preferred theme, which is the derived one when it exists because
+     * that is the art the player supplied a disc for. Same order the engine's own
+     * auto-detection uses (core/tiles_ega.h), so a tree installed here and a tree
+     * assembled by hand agree on what they start with. */
+    const char *cfg_theme = have_fmtowns ? U2_FMTOWNS_THEME
+                          : (have_themes ? U2_EGA_THEME_DEFAULT : NULL);
+
+    if (write_config(rq->to, cfg_theme, rq) != 0) {
         snprintf(err, errsz, "cannot write %s", U2_INSTALL_CONFIG);
         free(rows);
         return U2_INSTALL_ERROR;

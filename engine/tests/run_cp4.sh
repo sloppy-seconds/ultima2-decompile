@@ -396,6 +396,31 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/theme_v2_check" \
     && ok "theme format v2: geometry, map indirection, palette, 6 refusals ($(grep -c '^  ok' "$WORK/v2.out") checks)" \
     || { bad "theme format v2 failed:"; tail -20 "$WORK/v2.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-v2.err" | sed 's/^/        /'; }
 
+# --- which art a run gets when it says nothing -----------------------------
+# An --install tree holding themes used to start in CGA unless the player typed
+# --ega, so the better art sat on disk unused; and with both the derived FM Towns
+# theme and the fan pack's `default` installed, `default` won, which is backwards.
+# The gate drives both lookup paths (a configured dir, and `themes` beside the
+# launch directory) and both properties that could do damage: it must not fire when
+# the player named anything, and it must not fire in a tree with no themes, because
+# the CP2 byte-comparison baseline is measured in original CGA mode. Fixtures are
+# v1 EGATILES files, so this needs no art and no media and runs in CI.
+rm -rf "$WORK/artauto"
+mkdir -p "$WORK/artauto"
+if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/artauto_check" \
+   tests/artauto_check.c src/core/tiles_ega.c src/core/ini.c src/core/frame.c \
+   src/core/view.c src/core/state.c src/core/rng.c >"$WORK/cc-artauto.err" 2>&1 \
+   && "$WORK/artauto_check" "$WORK/artauto" >"$WORK/artauto.out" 2>&1; then
+    n=$(sed -n 's/^  ok  \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/artauto.out")
+    [ "${n:-0}" -gt 0 ] \
+        && ok "art auto-selection: fmtowns preferred, explicit wins, empty stays CGA ($n checks)" \
+        || bad "art auto-selection run executed 0 checks — the test is not running"
+else
+    bad "art auto-selection check failed:"
+    tail -20 "$WORK/artauto.out" 2>/dev/null | sed 's/^/        /'
+    tail -4 "$WORK/cc-artauto.err" | sed 's/^/        /'
+fi
+
 # --- config.ini -------------------------------------------------------------
 # The one place a shipped binary learns where content lives, so the property under
 # test is that it cannot lie: an unknown key, a misplaced key, a duplicated key, a

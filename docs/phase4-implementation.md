@@ -2066,3 +2066,87 @@ CP4 TEST: FAIL
 delete `saves/` and the behaviour is identical, because the record is rewritten by
 creation either way. The bug needed only a *completed* creation plus `--enhanced`.
 
+---
+
+## Themes are now the default when they are installed — 2026-11-06
+
+**Owner direction:** if the player has installed themes, default to EGA mode, and if
+the fmtowns theme is present default to that.
+
+Until this the art axis was opt-in only. An `--install` tree holding `themes/`
+started in CGA unless the player typed `--ega`, so the better art sat on disk
+unused — and where both the derived FM Towns theme and the fan pack's `default` were
+installed, `default` won, which is backwards: deriving fmtowns means the player
+pointed the installer at a disc they own.
+
+**The rule.** An explicit choice always wins; when nothing is chosen, take EGA from
+an installed themes tree, preferring `fmtowns`. Explicit means `--ega`, `--cga`,
+`--cleanroom` (the axis) or `--ega-theme` / `[themes] theme` (the theme, and now the
+axis too). `--enhanced` forces the axis but names no theme, so it still gets the
+preference. `[themes] dir` alone says where to look, not what to look for, so it
+suppresses nothing.
+
+**The hazard that had to be designed around first.** Auto-EGA firing in a dev
+checkout would move the CP2 byte-comparison baseline, which is measured in original
+CGA mode and needs owner approval to move. So the candidate list is the *installed
+layout only* — the configured dir, else `themes` beside the launch directory — and
+deliberately never `--data-dir` or the `references/u2upgrade` dev fallbacks that
+`ega_candidates()` uses. The suite runs from `engine/`, which has neither a `themes/`
+nor a `config.ini`, so CP2 cannot be reached by this path. Verified: CP2 unchanged.
+
+**Four things fell out of doing it properly, three of them bugs I introduced and
+caught:**
+
+1. `--cga` had to be added. There was no flag for the original art, because it was
+   the default; making EGA automatic would otherwise have *removed a capability*.
+   That is the strict-`--ega` ruling of 2026-11-04 pointing the other way — asking
+   for one art and quietly getting another.
+2. Auto-detection set `art_mode` but not `ega_theme_dir`, so the strict launch check
+   then resolved through `ega_candidates()`, did not look at `themes/`, and refused
+   to start over a theme it had just loaded, naming directories the player has never
+   heard of. The fix records the directory that resolved.
+3. `--ega-theme NAME` set only the name and left the axis on CGA, so naming a theme
+   *downgraded* a run that gets EGA if you say nothing. An explicit request must not
+   be worse than silence; `--ega-theme` now implies the axis. Same reasoning made
+   `themes/` a last candidate in `ega_candidates()`, so `--ega` alone works in an
+   installed tree instead of being stricter than nothing.
+4. The installer wrote `theme = default` unconditionally, even for a fmtowns-only
+   install. A config line is an explicit choice as far as auto-detection is
+   concerned, so that pinned the fan pack on exactly the installs the preference
+   exists for. It now records the theme the engine would pick, and `U2_INSTALL_THEMES`
+   and `U2_EGA_THEMES_DIR_NAME` are tied by a `_Static_assert` rather than by agreement.
+
+**Measured** (`engine/u2 --headless`, art-mode line):
+
+| tree | flags | result |
+| --- | --- | --- |
+| `engine/` (no themes) | — | `cga (original 4-colour)` |
+| repo root (`themes/`) | — | `ega (theme fmtowns, auto-selected)` |
+| themes: fmtowns + default | — | `ega (theme fmtowns, auto-selected)` |
+| themes: fmtowns + default | `--cga` | `cga (original 4-colour)` |
+| themes: fmtowns + default | `--ega` | `ega (theme fmtowns, auto-selected)` |
+| themes: fmtowns + default | `--ega-theme default` | `ega (theme default)` |
+| themes: fmtowns + default | `--cleanroom` | `cga (cleanroom)` |
+| no themes | `--ega` | refused, strict, as ruled 2026-11-04 |
+
+**Gates.** `engine/tests/artauto_check.c`, 12 checks, wired into CP4: empty themes
+dir stays CGA; `default` alone is found; fmtowns is preferred when both exist; an
+explicit theme beats the preference; `may_change_mode` semantics both ways; the
+resolved directory is recorded; and the bare `themes`-beside-the-launch-directory
+case, reached by `chdir`. Fixtures are v1 `EGATILES` files, so it needs no art and
+no media and runs in CI. `install_check` also asserts the generated `config.ini`
+records a theme at all.
+
+Red control, preference reversed:
+
+```
+NOT OK  with both installed the derived FM Towns theme is preferred
+NOT OK  --ega with no theme named still gets the preference, and keeps EGA
+NOT OK  themes/ beside the launch directory is found with nothing configured
+```
+
+Three failures, all of them the preference — which is the point: the control moves
+exactly the property under test and nothing else.
+
+`make test`: CP0..CP7 PASS.
+

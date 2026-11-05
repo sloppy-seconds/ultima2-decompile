@@ -63,10 +63,13 @@ typedef struct u2_ctx {
      *                         restart after character creation is the first one.
      * Chosen at launch with --enhanced; never switched mid-run. */
     u2_fidelity fidelity;
-    /* Art axis — independent of `fidelity` and `mode`. U2_ART_CGA (default) is
-     * the 4-colour path; U2_ART_EGA selects the fan pack's 16-colour atlas and
-     * pictures when present, falling back to CGA when not. Read once at launch
-     * by --ega; the theme and themes-dir refine where the EGA art is found. */
+    /* Art axis — independent of `fidelity` and `mode`. U2_ART_CGA is the 4-colour
+     * path; U2_ART_EGA selects the fan pack's 16-colour atlas and pictures.
+     * Read once at launch. It is no longer always a named choice: when nothing
+     * forced it, main() infers EGA from an installed themes tree (see
+     * u2_tiles_ega_autodetect in core/tiles_ega.h, which also documents why that
+     * inference deliberately skips the dev-checkout fallbacks). The theme and
+     * themes-dir refine where the EGA art is found. */
     u2_art_mode art_mode;
     const char *ega_theme;       /* --ega-theme NAME; NULL means "default" */
     const char *ega_theme_dir;   /* --ega-theme-dir PATH; NULL means use the
