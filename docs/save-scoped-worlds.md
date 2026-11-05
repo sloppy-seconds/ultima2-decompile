@@ -1,13 +1,27 @@
 # Save-scoped worlds: moving sector write-back out of the content directory
 
-Status: **proposal, not built.** Decisions D1-D5 below need the owner's ruling before any
-code changes, because this moves where a player's saved game lives.
+Status: **built, 2026-11-05.** Every decision below (D1-D6) was ruled by the owner and
+none of them was reopened. S1 (read layering), S2+S3 (write target and record path, in
+one commit — see the ordering note below), S4 (the cache) and S5 (installer and
+migration) are all shipped,
+`make -C engine test` is green, and the migration was run against a real install built
+from `references/ultima2` before it was committed.
+
+One ordering correction, recorded where the plan will be read: **S2 and S3 cannot be
+separate steps.** D1 makes the slot directory and the flat record the same path,
+`saves/PLAYER`, so while the old record is a file at that name the slot directory
+cannot exist and every sector write returns NOT_READY. The record has to move in the
+same change as the write target. This was found by the CP2 playlog gate going red, not
+by reading the plan.
 
 Owner request, 2026-11-05: "we need to make sure any changes to maps go into the save
 game path ... in fact maybe we do `./saves/PLAYER/PLAYER` ... that then also sets us up
 for multiple savegames in future, and gives us a good dir to put any changed maps into."
 
 ## 1. The problem with today's layout
+
+*This section describes the tree as it was before the change, and § 2 onward is what it
+is now.*
 
 Sector write-back currently lands in the **content** directory. `u2_world_store()`
 writes into the layer the sector was read from (`world.c:415`), which is
@@ -30,7 +44,7 @@ writes into the layer the sector was read from (`world.c:415`), which is
 
 There is also no room for a second save game. One `PLAYER` file, one world.
 
-## 2. Proposed layout
+## 2. The layout
 
 One directory per save game, holding the record and every sector that save has changed:
 
@@ -40,6 +54,8 @@ game/
     original/            # release content, treated as READ-ONLY
     updated/             # Galaxy patch layer, READ-ONLY
   themes/                # unchanged
+  cache/
+    tiles.u2tl           # D4: derived from the executable, same for every slot
   saves/
     PLAYER/              # the default save slot
       PLAYER             # the 384-byte record, spelled as the engine spells it
@@ -68,8 +84,10 @@ stops reporting content drift as "played-in" because content never drifts.
 starts with no overlay at all and reads pure content, which is what a new game should
 do anyway. That also deletes the case-collision problem in § 1.3 by construction.
 
-`resolve_save_name()` stays, but its job shrinks to finding a record inside a slot
-directory rather than guessing between two spellings in one directory.
+`resolve_save_name()` stays, and its job shrank to finding a record inside a slot
+directory rather than guessing between two spellings in one directory. It was not
+deleted: a release-spelled `player` dropped into a slot must still be found and still
+be the file written back to, and `save_check` now asserts exactly that.
 
 ## 4. Migration
 
@@ -88,7 +106,7 @@ must be **move, never copy, and never overwrite**:
 4. Migration runs once, is idempotent, and prints what it moved. A refusal must leave
    the old layout working.
 
-## 5. Decisions needed
+## 5. Decisions, all ruled
 
 | # | question | recommendation |
 | --- | --- | --- |

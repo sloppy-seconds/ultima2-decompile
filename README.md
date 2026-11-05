@@ -200,13 +200,16 @@ Win32 API, not the drivers under it — so a real GPU, a real sound device and r
 Windows filesystem behaviour are still untested. If you have actual Windows and it
 misbehaves, that report is worth more to this project than anything the CI can do.
 
-**4. Saves: there is no disk to manage.** The original ran from floppies and asked
-you to insert them; the engine keeps one file. Your character lives at
-`--save-dir DIR/PLAYER`, default `./saves`, created automatically if absent. It is
-the same 256-byte record format the original used, so a save the original wrote
-loads here and a save the engine wrote loads there — `tools/save_cross_load.py`
-proves both directions against the live game. Keep `--save-dir` somewhere writable
-even if you mount the game folder read-only.
+**4. Saves: there is no disk to manage, and one directory per game.** The original ran
+from floppies and asked you to insert them. Your character lives at
+`--save-dir DIR/PLAYER/PLAYER`, default `./saves/PLAYER/PLAYER`, and the directory is
+created the first time there is something to put in it. The slot holds the record and
+only the sector maps that save changed, so the release files in `data/` are never
+edited and deleting a slot deletes a game and nothing else. The record is the same
+256-byte format the original used, so a save the original wrote loads here and a save
+the engine wrote loads there — `tools/save_cross_load.py` proves both directions
+against the live game. Keep `--save-dir` somewhere writable even if you mount the game
+folder read-only.
 
 ### Building the engine from source
 

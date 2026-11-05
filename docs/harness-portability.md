@@ -190,6 +190,35 @@ Candidates are easy to miss because they usually look like a bug fix:
 
 Newest first. One line per learning; the detail stays in the owning document.
 
+* **2026-11-05 — A "nothing changed" gate must also prove that something was written,
+  or it passes on a run that did nothing at all.** The property worth gating in any
+  reconstruction that plays against player-supplied content is *the content tree is
+  immutable while the game runs*: hash every file under the content root, drive a
+  scripted session, hash again, require zero differences. Two transferable points.
+  (1) That assertion is vacuous in exactly the case that matters — a session that never
+  reached a write — so the gate must assert the positive half in the same run: the
+  overlay the writes were supposed to produce has to exist, and be the file that
+  carries the change. A green hash comparison with no overlay behind it is a gate that
+  checked nothing. (2) Give the comparison its own red control and run the control on
+  every invocation rather than on demand: dirty one byte of the tree between the two
+  hashes and require the diff to name it. Then demonstrate the whole gate red in the
+  position it enforces, by building the engine against the write rule it replaced.
+  Both halves together are what distinguish a gate from a ceremony.
+* **2026-11-05 — A layout change that moves a file into a directory of the same name
+  cannot be staged, and a harness that assumed one directory level breaks silently in
+  teardown.** Moving a save record from `dir/NAME` to `dir/NAME/NAME` (the record and
+  its container sharing a name is deliberate, and matches the name the original asks
+  DOS for) means the old file and the new directory cannot coexist, so the write-target
+  change and the record-path change are one commit or neither: with the flat file still
+  present, every write into the directory fails, and the failure surfaces as a game that
+  reports "drive not ready" rather than as a build error. Two transferable points.
+  (1) When planning incremental steps, check whether step N+1's destination path is
+  already occupied by step N's source — an ordering that looks reversible on paper may
+  be a name collision. (2) Teardown and verification code that walks a save directory
+  with a fixed depth (`for f in listdir(d): unlink(f)`) raises or skips once the depth
+  changes; recurse, and let the harness pass an explicit scratch directory so a
+  recorded artefact cannot depend on whatever a previous run left in a default path.
+
 * **2026-11-05 — A comparison loop that tests for a file's existence case-sensitively will
   report a confident, plausible, wrong count when the two layers spell names differently.**
   Diffing a base release against a community patch directory, a shell loop skipped every file

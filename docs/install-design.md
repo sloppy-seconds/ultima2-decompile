@@ -165,28 +165,29 @@ convention rather than added to a list.
 
 Three parts, plus the config file:
 
-* `data/` — the game content. **Not immutable**: D6 below keeps sector write-back
-  here, so an installed tree is expected to drift under play.
-* `saves/` — the live `player` file. This matters beyond tidiness: the original
-  rewrites `player` in place, which is why `AGENTS.md` says never run the game in
-  place. If `data/` keeps the installed copy and `saves/` holds the live one, a DOS
-  run and an engine run stop fighting over the same file.
+* `data/` — the game content. **Immutable after install.** D6 below used to keep
+  sector write-back here and to let an installed tree drift under play; that ruling
+  is superseded by `docs/save-scoped-worlds.md`, and every write now goes into a save
+  slot. `--install --check` treats content drift as a defect, not a state.
+* `saves/` — one directory per save game: the `PLAYER` record and only the sector
+  files that save has changed (`saves/PLAYER/mapx20`). The original rewrites
+  `player` in place, which is why `AGENTS.md` says never run the game in place, and
+  a DOS run and an engine run still do not fight over one file. The slot is created
+  by the engine on first write, never seeded by the installer.
 * `themes/` — built by `core/themes.c` in the same `--install` run (§ 10). The
   Python builder that used to do this was deleted rather than kept beside it, so
   there is one definition of the format and it is the one in the shipped binary.
 * `config.ini` in the game directory, naming the three.
 
-**D6 — sector write-back stays where it is, for now.** *measured* —
-`u2_world_store` writes changed sectors into the content directory it read from,
-using the bare prefix recorded at load, and checks writability at store time
-precisely so a read-only content dir is tolerated rather than fatal. The owner ruled
-that this stays as it is and is re-addressed when the save-game mechanisms are
-updated. The consequence is not cosmetic, and it is recorded here so the gate does
-not contradict it: **an installed tree is allowed to differ from what the installer
-wrote**, so `--install --check` must separate "these sector files have been played
-in" (expected, report as a note) from "this file is missing or a stray appeared"
-(red). A check that goes red the first time someone plays is a check that will be
-ignored.
+**D6 — superseded 2026-11-05 by `docs/save-scoped-worlds.md`.** *measured, and the
+measurement is what overturned it* — this ruled that sector write-back stayed in the
+content directory and that `--install --check` had to tolerate play drift. The drift
+was not cosmetic: `u2_world_store` writes the *stamped* grid, `map_base` loads its
+pristine terrain from that same file, and a baked creature byte became terrain. The
+owner's `mapx20` differed from the release at exactly two bytes, both stamps. Write-back
+now targets `saves/<slot>/`, content is immutable, and the gate went with it. What
+survives here is the writability-at-store-time rule: a read-only content directory is
+still playable, because it is no longer the write target.
 
 ## 4. Config file and precedence — ruled: `config.ini`, global
 
@@ -293,8 +294,8 @@ went wrong in this project.
    `RENGAL.BAT`. A transformation is a claim, and claims need evidence.
 3. **Idempotent.** A second run changes nothing and says so — which needs the § 11
    open point settled, because "a second run" and "the target must be empty" do not
-   yet agree. Note also that idempotence is about the installer's output, not about
-   the tree being frozen: D6 lets play itself change sector files.
+   yet agree. Since the save-scoped layout this is a stronger claim than it was: play
+   no longer changes the tree at all, so a second run really does change nothing.
 4. **Location-independent.** Everything resolves from argv and the ini, never from
    where the binary sits. *measured* — deriving paths from the script's own
    location is exactly what emitted `themes/ultima2/EGATHEME.C64/` when the theme
@@ -316,8 +317,8 @@ patcher's own tree), `references/fmtowns/` (the disc).
 Six assertions, each written red-first per `AGENTS.md` § 3:
 
 1. the installed tree is **exactly** the expected file set — no strays, nothing
-   missing. File set and sizes, with the D6 carve-out: content drift in the
-   writable sector files is expected once someone plays
+   missing. File set and sizes, and since the save-scoped layout there is no drift
+   carve-out at all: a content file that differs from its manifest row is a defect
 2. every copied file is byte-identical to its source
 3. the engine, pointed at the installed tree with **no other flags**, loads Earth
    *and* at least one outer planet — this is the assertion that proves the patch
@@ -360,8 +361,11 @@ it builds a new tree somewhere else.**
 
 One case survives the ruling and needs an explicit answer: if the source directory
 holds the player's own `player` save, adopting it is a **migration**, not a cleanup.
-The installer should ask, and must never silently overwrite the `player` file it
-just installed into `saves/`.
+The installer must never silently overwrite a player's record. Since the save-scoped
+layout it does not install a `player` into `saves/` at all — a new game starts with no
+slot — and the migration of `docs/save-scoped-worlds.md` § 4 is the one place that
+moves an existing record, printing every move and promoting anything it cannot prove is
+the release blank.
 
 ## 9. Self-update: ruled out
 
@@ -453,7 +457,7 @@ Ruled 2026-11-04, in the order they were asked:
 | 3 | Which builds | **both**, and `--install` is purely terminal with no SDL, so it runs headless and in CI; the code lives in `engine/src/core/` (§ 4) |
 | 4 | FM Towns disc | deferred at the time; **since built** as `--fmtowns-media-dir` (see § 10) — the derivation was ported to C rather than left in the deleted Python tool |
 | 5 | Self-update | **out** (§ 9) |
-| D6 | Sector write-back | **stays in the content dir for now**, re-addressed with the save-game mechanisms; the gate must tolerate play drift (§ 3) |
+| D6 | Sector write-back | **superseded**: write-back moved to `saves/<slot>/` and content became immutable — see `docs/save-scoped-worlds.md` and § 3 |
 | D7 | `--to` target | **empty or nonexistent only** (§ 8), with D7a below governing re-runs |
 | D7a | Re-run into our own tree | **allowed via an install manifest** — empty installs, manifested completes, foreign non-empty refuses (§ 11) |
 | D8 | Shared filenames | **the patch layer wins** when the bytes differ, and keeps the release's spelling of the name (§ 12) |
@@ -583,8 +587,10 @@ have been someone's save state being reverted. Sector files now say so:
 ```
 
 Non-sector files, where only a fix is possible, keep the plain wording. A player who
-wants their played-in world back has it in `saves/` for the character and, for the
-world itself, in the original directory, which the installer never writes to.
+wants their played-in world back has it in the save slot: `saves/<slot>/` holds the
+record and every sector that save changed, and the installer's migration (§ 4 of
+`docs/save-scoped-worlds.md`) moves a played-in content file there rather than
+overwriting it.
 
 ### 12.4 D10 -- `.pat` deltas are reported, not applied
 

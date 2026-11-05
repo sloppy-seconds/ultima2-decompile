@@ -2,6 +2,32 @@
 
 ## 0. Status
 
+**Executed 2026-11-05, the day it was written.** S1 through S5 are shipped and
+`make -C engine test` is green. What the handoff got right, what it got wrong, and what
+is now someone else's problem:
+
+* **S2 and S3 are one commit, not two.** D1 makes the slot directory and the flat
+  record the same path, `saves/PLAYER`, so the record has to move in the same change
+  as the write target or every store returns NOT_READY. The build order in § 3 could
+  not be honoured as written; § 3 is left as it was so the reasoning stays visible.
+* **The § 5 gate exists**: `engine/tests/content_immutable.py`, wired into `run_cp4.sh`,
+  with its red control running every time. It was additionally demonstrated red against
+  a store that wrote back into the layer it read from.
+* **`--install --check`'s `played-in` verdict is gone**, as § 7 said it must be, and the
+  four new controls in `install_controls.py` (content drift, delete-a-real-save,
+  overwrite-the-slot, dry-run-writes) each go red when their property breaks.
+* **Consequence nobody wrote down in advance**: an install that has *not* been migrated —
+  a flat `saves/PLAYER` file where the slot directory now goes — reports the INSERT-disk
+  analogue until `--install` runs its migration. Non-destructive and repairable, but it
+  belongs in the release notes next to D2.
+* **`tools/save_cross_load.py` was run by hand, both directions**, after the record path
+  moved: direction B booted the original and had it load the record the engine wrote at
+  the new path. It passes. Do the same on any future save-handling change.
+* Still open, and not this document's problem: `--save NAME` (D5), and the two
+  pre-existing red gates named below.
+
+Historical content follows, unchanged.
+
 - **Repo:** `/var/home/paul/Projects/decompile-u2-v2`, branch `dungeon-render-diff`,
   HEAD `694cb19` at the time of writing.
 - **Design:** `docs/save-scoped-worlds.md`. Read it first; it is the spec. Every decision
