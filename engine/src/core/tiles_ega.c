@@ -138,6 +138,9 @@ static u2_tiles_ega_result try_load_v1(const char *path, const char *dir,
     memset(t->map_n, 0, sizeof t->map_n);
     t->scope_dungeon = 1;      /* the v1 atlas is the one the game itself uses */
     t->scope_tower = 1;
+    /* The DOS art has no transparent pen: index 0 is ordinary background there, so
+     * a v1 theme draws every pixel. */
+    t->transparent_index = -1;
     snprintf(t->source, sizeof t->source, "%s", path);
     snprintf(t->dir, sizeof t->dir, "%s", dir ? dir : "");
     snprintf(t->name, sizeof t->name, "%s", theme ? theme : U2_EGA_THEME_DEFAULT);
@@ -193,6 +196,7 @@ static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
     long ini_len = 0, map_len = 0;
     char path[700], val[64];
     int tw = 0, th = 0, bpp = 0, scale = 0, dungeon = 0, tower = 0;
+    int transparent = -1;
 
     if (err && errn) err[0] = '\0';
     memset(t->map_n, 0, sizeof t->map_n);
@@ -254,6 +258,17 @@ static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
         if (parse_scope(val, &dungeon, &tower, err, errn) != 0) goto done;
     } else {
         dungeon = tower = 1;     /* unscoped means it claims nothing specific */
+    }
+    /* Optional. Absent means the art has no transparent pen and every pixel draws.
+     * Refused rather than ignored when out of range: a typo here would silently
+     * punch holes in the wrong colour, which is the kind of wrong that looks fine. */
+    if (ini_get(ini, "transparent_index", val, sizeof val) == 1) {
+        transparent = atoi(val);
+        if (transparent < 0 || transparent > 15) {
+            bad_reason(err, errn, "%s: transparent_index = %s is not a palette "
+                       "index (0..15)", path, val);
+            goto done;
+        }
     }
 
     /* --- the pool --- */
@@ -375,6 +390,7 @@ static u2_tiles_ega_result try_load_v2(const char *dirpath, const char *theme,
     t->scale = scale;
     t->scope_dungeon = dungeon;
     t->scope_tower = tower;
+    t->transparent_index = transparent;
     snprintf(t->source, sizeof t->source, "%s", path);
     snprintf(t->dir, sizeof t->dir, "%s", dir ? dir : "");
     snprintf(t->name, sizeof t->name, "%s", theme ? theme : "");

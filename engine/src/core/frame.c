@@ -195,6 +195,11 @@ void u2_frame_blit_tile_ega(u2_frame *f, const u2_tiles_ega *t, int tile, int x,
             if (dx >= f->w) break;                         /* rest of the row is off-screen */
             const uint8_t b = src[col >> 1];
             const uint8_t v = (uint8_t)((col & 1) ? (b & 0xF) : (b >> 4));
+            /* The theme's transparent pen, if it declared one. Skipping the write
+             * leaves whatever the frame already holds at that pixel, which is how
+             * terrain shows through a sprite drawn over it. -1 matches no index, so
+             * a theme that declares nothing draws every pixel as before. */
+            if ((int)v == t->transparent_index) continue;
             for (int j = 0; j < s; j++)
                 for (int i = 0; i < s; i++)
                     u2_frame_put(f, dx + i, dy + j, v);
@@ -278,6 +283,7 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
     u2_view_shape(v, &vcols, &vrows, NULL, NULL);
     const int cell_w = u2_tiles_ega_tile_w(t) * pres;
     const int cell_h = u2_tiles_ega_tile_h(t) * pres;
+    const int composites = (t->transparent_index >= 0);
 
     for (int row = 0; row < vrows; row++) {
         for (int col = 0; col < vcols; col++) {
@@ -287,8 +293,25 @@ void u2_frame_draw_view_ega(u2_frame *f, const u2_view *v, const u2_tiles_ega *t
              * which is identity for every v1 theme and a table for a v2 one. */
             const int staging = u2_view_at(v, col, row);
             if (staging < 0) continue;
-            const int tile = u2_tiles_ega_tile(t, u2_view_art(staging));
+            const int art = u2_view_art(staging);
+            const int tile = u2_tiles_ega_tile(t, art);
             if (tile < 0) continue;   /* the theme does not cover this art */
+
+            /* Composite when the theme declared a transparent pen: ground first,
+             * then the occupant letting the pen through. The DOS model is one art
+             * per cell -- the creature stamp, and 0x78 for the player, replaces the
+             * terrain byte in the grid -- so without this there is nothing behind a
+             * sprite for the pen to reveal, and keying just shows the cleared frame.
+             * A theme with no pen takes this path not at all, which is what keeps
+             * every v1 theme exactly as it was. */
+            if (composites) {
+                const int g = u2_view_ground_at(v, col, row);
+                if (g >= 0 && u2_view_art(g) != art) {
+                    const int gt = u2_tiles_ega_tile(t, u2_view_art(g));
+                    if (gt >= 0)
+                        u2_frame_blit_tile_ega(f, t, gt, col * cell_w, row * cell_h);
+                }
+            }
             u2_frame_blit_tile_ega(f, t, tile, col * cell_w, row * cell_h);
         }
     }

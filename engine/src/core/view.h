@@ -60,6 +60,12 @@ typedef struct u2_view {
     /* Staging grid, the DS:0x272 analogue: low 7 bits are the tile index,
      * bit 7 means "do not draw". Only cols*rows of it are meaningful. */
     uint8_t tile[U2_VIEW_MAX_CELLS];
+    /* The GROUND under each cell, same index form, never carrying bit 7. This is a
+     * second read of the sector (map_base rather than the stamped map) and exists
+     * only so an EGA renderer can draw terrain and then a sprite over it; the DOS
+     * model has one art per cell and the CGA path never looks at this. Zero when a
+     * view was filled by a caller that passed no world. */
+    uint8_t ground[U2_VIEW_MAX_CELLS];
     /* Count of cells actually drawable, for tests and diagnostics. */
     int     drawn;
 } u2_view;
@@ -120,6 +126,10 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
 /* The tile index to draw at window (col, row), or -1 when the cell is
  * suppressed. Out-of-range coordinates also give -1. */
 int u2_view_at(const u2_view *v, int col, int row);
+
+/* The ground staging byte under a cell, in the same form u2_view_at returns, so the
+ * caller applies u2_view_art() to it the same way. Returns -1 outside the window. */
+int u2_view_ground_at(const u2_view *v, int col, int row);
 
 /*
  * Staging byte -> art record.

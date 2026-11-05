@@ -151,6 +151,7 @@ def fmtowns_theme(xwalk_path=None):
         f"tile_h = {fx.TILE_H}\n"
         "bpp = 4\n"
         "pixel = nibble-high-left\n"
+        "transparent_index = 0\n"
         "palette = PALETTE.RGB\n"
         "map = MAP.TSV\n"
         "identity = no\n"
@@ -165,6 +166,12 @@ def fmtowns_theme(xwalk_path=None):
         "# MAP.TSV keeps every frame the crosswalk names, and the engine draws\n"
         "# list[0] until animation exists. The frames are in TILES, so nothing\n"
         "# was thrown away to get here.\n"
+        "# `transparent_index = 0` is measured, not assumed: 14 of 14 ENEMY2 tiles\n"
+        "# and 6 of 7 EXTRA tiles use index 0, covering 43 and 35 percent of their\n"
+        "# pixels, while only 2 of 43 MAP2_1 terrain tiles use it at all and one of\n"
+        "# those is a single pixel. Terrain keeps its real black at index 3, which\n"
+        "# the palette also carries -- two blacks, one of them spare. That is what\n"
+        "# makes 0 the transparent pen rather than a guess.\n"
     )
 
     # No writer name in this header, on purpose: both the Python derivation here and

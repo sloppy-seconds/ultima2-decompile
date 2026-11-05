@@ -165,6 +165,22 @@ static inline uint8_t u2_world_tile_at(const u2_world *w, int x, int y)
     return w->map[u2_world_tile_index(x, y)];
 }
 
+/* The GROUND byte, as opposed to whatever is standing on it.
+ *
+ * `map` is the stamped grid: a creature's type byte, or 0x78 for the player, sits
+ * in the cell and the terrain byte is gone from it until u2_monsters_restamp()
+ * rebuilds the grid from map_base. That is the right model for the DOS renderer,
+ * which draws exactly one art index per cell, but it means a renderer that wants to
+ * draw ground and then a sprite over it cannot ask `map` what the ground is.
+ * map_base is that answer, and it already exists for the restamp; this only exposes
+ * it. Writes that change the world rather than its occupants go through
+ * u2_world_terrain_put(), which updates both, so a boarded ship or an opened door
+ * is ground here and not a phantom. */
+static inline uint8_t u2_world_ground_at(const u2_world *w, int x, int y)
+{
+    return w->map_base[u2_world_tile_index(x, y)];
+}
+
 /* Marking dirty here is deliberate: the only way to change a tile is through
  * this function, so a sector cannot be mutated without the write-back knowing. */
 static inline void u2_world_tile_put(u2_world *w, int x, int y, uint8_t v)

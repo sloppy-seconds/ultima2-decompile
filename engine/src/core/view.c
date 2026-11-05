@@ -46,10 +46,20 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
                   uint8_t off_map, const uint8_t *underlay, int empty_gate)
 {
     if (!v) return;
-    if (v->cols <= 0 || v->rows <= 0)
+    /* A view with no usable shape falls back to the DOS window. The upper bounds are
+     * not decoration: `cols * rows` sizes the memset below, so a struct holding
+     * stack garbage would otherwise memset an arbitrary amount of memory. This was
+     * latent until the struct grew by a kilobyte and shifted what garbage landed in
+     * cols -- view_check then began segfaulting in about a third of runs while every
+     * deterministic test kept passing. An intermittent crash from a deterministic
+     * program is an uninitialised read; go find it rather than rerunning. */
+    if (v->cols <= 0 || v->cols > U2_VIEW_MAX_CELLS ||
+        v->rows <= 0 || v->rows > U2_VIEW_MAX_CELLS ||
+        (size_t)v->cols * (size_t)v->rows > U2_VIEW_MAX_CELLS)
         u2_view_init(v, U2_VIEW_COLS, U2_VIEW_ROWS,
                      U2_VIEW_PLAYER_COL, U2_VIEW_PLAYER_ROW);
     memset(v->tile, 0, (size_t)v->cols * (size_t)v->rows);
+    memset(v->ground, 0, (size_t)v->cols * (size_t)v->rows);
     v->drawn = 0;
 
     const uint8_t ox = (uint8_t)(px - v->player_col);
@@ -94,13 +104,22 @@ void u2_view_fill(u2_view *v, const u2_world *w, int px, int py,
             /* In torus mode every coordinate is already inside the sector, so the bounds test
              * below only ever fires in a site sector. */
             uint8_t map_byte = off_map;
-            if (w && w->map_loaded)
-                map_byte = (my < U2_SECTOR_EDGE && mx < U2_SECTOR_EDGE)
-                               ? u2_world_tile_at(w, mx, my)
-                               : U2_VIEW_SITE_OFFGRID;
+            uint8_t ground_byte = off_map;
+            if (w && w->map_loaded) {
+                const int in_sector = (my < U2_SECTOR_EDGE && mx < U2_SECTOR_EDGE);
+                map_byte    = in_sector ? u2_world_tile_at(w, mx, my)
+                                        : U2_VIEW_SITE_OFFGRID;
+                ground_byte = in_sector ? u2_world_ground_at(w, mx, my)
+                                        : U2_VIEW_SITE_OFFGRID;
+            }
 
             uint8_t idx = u2_view_index(map_byte);
             const int i = row * v->cols + col;
+            /* Ground goes through the same index transform as the stamped byte, so
+             * the two are directly comparable. It deliberately takes no part in the
+             * suppression rules below: those decide what the game draws, and this is
+             * only ever a background for a renderer that composites. */
+            v->ground[i] = u2_view_index(ground_byte);
 
             /* asm/5AE1 store path: a tile matching the underlay is hidden,
              * except the two escapes the asm spells out. */
@@ -125,4 +144,16 @@ int u2_view_at(const u2_view *v, int col, int row)
     const uint8_t s = v->tile[row * vcols + col];
     if (s & U2_VIEW_NO_DRAW) return -1;      /* asm/4ABB: or cl,cl; js skip */
     return s & 0x7F;
+}
+
+/* Unlike u2_view_at this never returns -1 for a suppressed cell: the ground is not
+ * something the game chose to draw, it is what is underneath, and a compositing
+ * renderer wants it even in a cell the sprite happens to fill. */
+int u2_view_ground_at(const u2_view *v, int col, int row)
+{
+    int vcols, vrows;
+    u2_view_shape(v, &vcols, &vrows, NULL, NULL);
+    if (!v || col < 0 || col >= vcols || row < 0 || row >= vrows)
+        return -1;
+    return v->ground[row * vcols + col] & 0x7F;
 }

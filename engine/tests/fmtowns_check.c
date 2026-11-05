@@ -209,10 +209,24 @@ int main(int argc, char **argv)
     snprintf(p_map, sizeof p_map, "%.400s/MAP.TSV", out);
     snprintf(p_pal, sizeof p_pal, "%.400s/PALETTE.RGB", out);
     snprintf(p_tiles, sizeof p_tiles, "%.400s/TILES", out);
-    CHECK(u2_file_size(p_ini) == 551, "THEME.INI is the expected size");
+    CHECK(u2_file_size(p_ini) == 995, "THEME.INI is the expected size");
     CHECK(u2_file_size(p_map) == 1495, "MAP.TSV is the expected size");
     CHECK(u2_file_size(p_pal) == 48, "PALETTE.RGB is 16 x 3");
     CHECK(u2_file_size(p_tiles) == 80 * 512, "TILES holds 80 tiles of 512 bytes");
+
+    /* The transparent pen has to travel with the derived theme, not be hardcoded in
+     * the engine: it is a property of the FM Towns art, and the DOS art does not
+     * share it. Asserted as text because a theme that silently lost the key would
+     * still load and still draw, just with a black square under every sprite. */
+    {
+        char ini[2048];
+        FILE *f = fopen(p_ini, "rb");
+        size_t n = f ? fread(ini, 1, sizeof ini - 1, f) : 0;
+        if (f) fclose(f);
+        ini[n] = '\0';
+        CHECK(strstr(ini, "transparent_index = 0") != NULL,
+              "derived THEME.INI declares index 0 as the transparent pen");
+    }
 
     {
         unsigned char pal[48];

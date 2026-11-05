@@ -39,8 +39,30 @@ int main(void)
 {
     printf("view_check\n");
     u2_view v;
+    /* Zeroed on purpose. An uninitialised view here is a real defect, not tidiness:
+     * u2_view_fill sizes its clearing memset from cols*rows, so stack garbage in
+     * those fields makes it write an arbitrary amount. That was latent until the
+     * struct grew and shifted what garbage landed there, and it showed up as a
+     * segfault in roughly a third of runs of a program with no randomness at all. */
+    memset(&v, 0, sizeof v);
     uint8_t no_underlay[U2_VIEW_TILES];
     memset(no_underlay, 0xFF, sizeof no_underlay); /* matches nothing below 0x7F */
+
+    /* The guard itself. A view whose shape is garbage must fall back rather than
+     * size its clearing memset from the garbage. This is the control: remove the
+     * upper-bound test in u2_view_fill and this case crashes instead of passing,
+     * which is the only reason it is here rather than assumed. */
+    {
+        u2_view junk;
+        memset(&junk, 0, sizeof junk);
+        junk.cols = 0x41414141;          /* positive, absurd: the shape that crashed */
+        junk.rows = 0x41414141;
+        u2_view_fill(&junk, &world, 33, 23, 0xFF, no_underlay, 0);
+        int c2 = 0, r2 = 0;
+        u2_view_shape(&junk, &c2, &r2, NULL, NULL);
+        CHECK(c2 == U2_VIEW_COLS && r2 == U2_VIEW_ROWS,
+              "an absurd view shape falls back to the DOS window");
+    }
 
     /* --- the mapping itself ---------------------------------------------- */
     CHECK(u2_view_index(0x00) == 0x00, "map byte 0x00 -> tile 0");

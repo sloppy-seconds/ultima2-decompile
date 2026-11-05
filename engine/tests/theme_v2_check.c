@@ -211,6 +211,9 @@ int main(void)
     CHECK(u2_tiles_ega_tile(&t, 0) == -1,
           "an art index the map does not cover returns -1, not a guess");
     CHECK(!t.scope_dungeon, "scope = overworld,towns does not claim dungeons");
+    CHECK(t.transparent_index == -1,
+          "a theme declaring no transparent_index draws every pixel (got %d)",
+          t.transparent_index);
 
     /* The player marker is an ART index and must pass through the map before it
      * addresses the atlas. Passing it raw was invisible for every v1 theme, whose
@@ -245,6 +248,102 @@ int main(void)
               uncovered);
 
         u2_frame_free(&of);
+    }
+
+    /* The transparent pen, asserted at the BLIT and not only at the parse. A loader
+     * that stores the number and a renderer that ignores it would pass every other
+     * check in this file, which is the shape of gate that lets a black square under
+     * every sprite come back. The fixture's tile is index 0 for its top half and
+     * index 4 for its bottom half, so the two halves prove opposite things: the pen
+     * must let the underlay show, and a real pixel must still cover it. */
+    {
+        mkpath("keyed");
+        char kp[512];
+        FILE *kf = NULL;
+        snprintf(kp, sizeof kp, "%s/keyed/THEME.INI", root);
+        kf = fopen(kp, "wb");
+        fputs("[theme]\nname = keyed\ntile_w = 32\ntile_h = 32\nbpp = 4\n"
+              "pixel = nibble-high-left\nmap = MAP.TSV\nidentity = no\n"
+              "transparent_index = 0\n", kf);
+        fclose(kf);
+        snprintf(kp, sizeof kp, "%s/keyed/TILES", root);
+        kf = fopen(kp, "wb");
+        {
+            char tile[512];
+            memset(tile, 0x00, sizeof tile);          /* rows 0..15 -> index 0 */
+            for (size_t i = 16 * 16; i < sizeof tile; i++) tile[i] = 0x44;  /* rows 16..31 -> 4 */
+            fwrite(tile, 1, sizeof tile, kf);
+            memset(tile, 0x22, sizeof tile);          /* tile 1: solid index 2, the ground */
+            fwrite(tile, 1, sizeof tile, kf);
+        }
+        fclose(kf);
+        snprintf(kp, sizeof kp, "%s/keyed/MAP.TSV", root);
+        kf = fopen(kp, "wb");
+        fputs("# art\ttiles\tsource\n05\t0\tFAKE/1\n07\t1\tFAKE/2\n", kf);
+        fclose(kf);
+
+        u2_tiles_ega kt;
+        char why[256];
+        CHECK(load("keyed", &kt, why, sizeof why) == U2_TILES_EGA_OK,
+              "the keyed fixture theme loads (%s)", why);
+        CHECK(kt.transparent_index == 0, "transparent_index = 0 is parsed");
+
+        u2_frame kf2;
+        memset(&kf2, 0, sizeof kf2);
+        u2_frame_init(&kf2, 2);
+        u2_frame_clear(&kf2, 7);                      /* a visible underlay */
+        u2_frame_blit_tile_ega(&kf2, &kt, 0, 0, 0);
+        int kept = 0, drawn = 0;
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 32; x++)
+                if (kf2.px[y][x] == 7) kept++;
+        for (int y = 16; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+                if (kf2.px[y][x] == 4) drawn++;
+        CHECK(kept == 16 * 32,
+              "the transparent pen leaves the underlay showing (%d of %d)", kept, 16 * 32);
+        CHECK(drawn == 16 * 32,
+              "a non-pen pixel still covers the underlay (%d of %d)", drawn, 16 * 32);
+        u2_frame_free(&kf2);
+
+        /* The ground layer. A pen alone is not enough: the DOS grid holds ONE art per
+         * cell, so a stamped creature or the player has no terrain behind it and the
+         * pen reveals the cleared frame instead. This asserts the two together --
+         * ground staging under, sprite staging over, and the pen area must show the
+         * GROUND, not black. Without the ground pass this reads 0 and the check goes
+         * red, which is the regression that would otherwise look like a dark tile. */
+        {
+            u2_view gv;
+            u2_view_init(&gv, 1, 1, 0, 0);
+            memset(gv.ground, 0, sizeof gv.ground);
+            memset(gv.tile, 0, sizeof gv.tile);
+            gv.tile[0] = 0x0A;            /* staging for art 05: the half-pen sprite */
+            gv.ground[0] = 0x0E;          /* staging for art 07: solid index 2 ground */
+
+            u2_frame gf;
+            memset(&gf, 0, sizeof gf);
+            u2_frame_init(&gf, 2);
+            u2_frame_clear(&gf, 0);
+            u2_frame_draw_view_ega(&gf, &gv, &kt, -1, -1, -1);
+            int ground_shown = 0;
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 32; x++)
+                    if (gf.px[y][x] == 2) ground_shown++;
+            CHECK(ground_shown == 16 * 32,
+                  "a stamped cell draws its ground under the sprite's pen (%d of %d)",
+                  ground_shown, 16 * 32);
+            u2_frame_free(&gf);
+        }
+
+        /* And a bad declaration is refused rather than clamped: a typo here would
+         * otherwise punch holes in whichever colour happened to land on the number. */
+        mkpath("bad_transp16");
+        snprintf(kp, sizeof kp, "%s/bad_transp16/THEME.INI", root);
+        kf = fopen(kp, "wb");
+        fputs("[theme]\ntile_w = 32\ntile_h = 32\nbpp = 4\ntransparent_index = 16\n", kf);
+        fclose(kf);
+        CHECK(load("bad_transp16", &kt, why, sizeof why) != U2_TILES_EGA_OK,
+              "transparent_index = 16 is refused, not clamped (%s)", why);
     }
 
     /* The text-ink trap. This fixture's palette has entry 3 as black (it is

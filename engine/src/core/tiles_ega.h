@@ -93,6 +93,15 @@ typedef struct u2_tiles_ega {
     uint8_t  map_n[U2_TILE_COUNT];
     int      scope_dungeon;         /* the theme claims dungeon art is mapped */
     int      scope_tower;
+    /* A palette index this theme's art uses to mean "no pixel here", or -1 when the
+     * art has no such convention. It is a property of the ART, not of the mode, and
+     * the evidence differs per source: in the FM Towns banks 14 of 14 creature
+     * tiles use index 0 (43% of their pixels) while only 2 of 43 terrain tiles use
+     * it at all and index 3 is where their real black lives -- so 0 is a transparent
+     * pen there. In the DOS EGA art index 0 is 72% of the TERRAIN tiles, so keying
+     * it globally would punch holes in the map. A theme that does not declare this
+     * draws every pixel, which is the safe default. */
+    int      transparent_index;
     int      loaded;
     char     source[760];           /* the file we read, for diagnostics; sized so
                                      * a snprintf from a path buffer cannot truncate */
