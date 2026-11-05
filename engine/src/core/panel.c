@@ -238,25 +238,49 @@ static void draw_cmd(u2_frame *f, const u2_panel_colours *c,
     if (!log) return;
 
     const int cols = U2_ENH_CMD_COLS;
-    const int first_row = (h - U2_ENH_BOX_PAD) / U2_ENH_TEXT_H;
-    /* Newest at the bottom, like a log. Lines longer than the box wrap, which is
-     * a real change from the DOS 40-column grid: the panel is narrower, so a line
-     * such as CMD: ATTACK--EAST--HIT!!! occupies more rows here. The reference
-     * lives with 17 columns, so this is normal rather than a defect. */
-    int row = first_row;
-    for (int i = 0; i < n_log && row >= 0; i++) {
-        const char *s = log[i];
-        if (!s) continue;
-        const int n = (int)strlen(s);
-        for (int off = 0; off < n || off == 0; off += cols) {
+    /* Interior rows, 0-indexed. This used to be (h - PAD) / TEXT_H, which counted
+     * the bottom padding as drawing room and returned a row too many: the line
+     * landed at y+160 on a 160-tall box, entirely below its own border. The owner
+     * saw the last CMD sitting half outside the box, which is what it was. */
+    const int last_row = (h - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_H - 1;
+    const int rows_avail = last_row + 1;
+
+    /* The log arrives in SCREEN order: oldest line first, the live command echo
+     * last. It has to be drawn that way round, because the bottom line is the one
+     * the player is typing into. The first version put log[0] on the bottom row
+     * and walked up, which mirrored the message area upside down and left the
+     * command echo floating three rows above the box floor with empty space under
+     * it. So: measure what everything costs, drop from the OLDEST end until it
+     * fits, then lay the survivors out top-to-bottom with the newest on last_row. */
+    enum { MAXL = 32 };
+    const int n = n_log < MAXL ? n_log : MAXL;
+    int nc[MAXL], total = 0;
+    for (int i = 0; i < n; i++) {
+        const int len = log[i] ? (int)strlen(log[i]) : 0;
+        nc[i] = (len + cols - 1) / cols;
+        if (nc[i] < 1) nc[i] = 1;          /* a blank line still holds its row */
+        total += nc[i];
+    }
+    int first_i = 0;
+    while (first_i < n && total > rows_avail) { total -= nc[first_i]; first_i++; }
+
+    int row = last_row - (total - 1);
+    if (row < 0) row = 0;
+    for (int i = first_i; i < n; i++, row++) {
+        const char *s = log[i] ? log[i] : "";
+        const int len = (int)strlen(s);
+        if (len == 0) continue;            /* blank line: row reserved, nothing drawn */
+        /* Lines longer than the box wrap onto the following row. That is a real
+         * change from the DOS 40-column grid: the panel is narrower, so a line
+         * such as CMD: ATTACK--EAST--HIT!!! occupies more rows here. The reference
+         * lives with 17 columns, so this is normal rather than a defect. */
+        for (int off = 0, k = 0; off < len; off += cols, k++) {
             char chunk[64];
-            const int take = n - off > cols ? cols : n - off;
+            const int take = len - off > cols ? cols : len - off;
             memcpy(chunk, s + off, (size_t)take);
             chunk[take] = '\0';
-            text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + row * U2_ENH_TEXT_H,
+            text(f, x + U2_ENH_BOX_PAD, y + U2_ENH_BOX_PAD + (row + k) * U2_ENH_TEXT_H,
                  chunk, c->text, c->box_bg);
-            row--;
-            if (row < 0) break;
         }
     }
 }

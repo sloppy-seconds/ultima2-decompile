@@ -12,8 +12,10 @@
                                      than left to the compiler's default */
 
 #include <errno.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -41,9 +43,52 @@ static const char *save_dir(const u2_ctx *ctx)
     return (ctx->save_dir && *ctx->save_dir) ? ctx->save_dir : U2_SAVE_DEFAULT_DIR;
 }
 
+/* Resolve the save file's name in a directory, case-insensitively.
+ *
+ * The original asks for "PLAYER  " in DOS FCB form (the literal is at file
+ * 0x09A2 and four more sites), and DOS filenames are case-insensitive, so the
+ * spelling a distribution happens to ship is arbitrary: this pack spells it
+ * `player`. On a case-sensitive filesystem that split is a silent fresh start,
+ * because we open PLAYER, do not find player, and go on to create a second file.
+ *
+ * So prefer the exact name the original used, and only when it is absent adopt a
+ * case variant -- for reading AND writing. Adopting it for writing is the part
+ * that matters: resolving on read alone would leave two copies diverging, which
+ * is already what a played install looks like on disk.
+ *
+ * If several variants exist, exact PLAYER wins (handled before the scan), then
+ * the pack's lowercase `player`, then whatever else matches. */
+static void resolve_save_name(const char *dir, char *out, size_t outsz)
+{
+    snprintf(out, outsz, "%s", U2_SAVE_FILE_NAME);
+
+    char exact[512];
+    snprintf(exact, sizeof exact, "%s/%s", dir, U2_SAVE_FILE_NAME);
+    struct stat st;
+    if (stat(exact, &st) == 0) return;          /* the original's own spelling */
+
+    DIR *d = opendir(dir);
+    if (!d) return;
+    char best[256] = "";
+    int best_rank = 0;
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL) {
+        if (strcasecmp(e->d_name, U2_SAVE_FILE_NAME) != 0) continue;
+        const int rank = (strcmp(e->d_name, "player") == 0) ? 2 : 1;
+        if (rank > best_rank) {
+            best_rank = rank;
+            snprintf(best, sizeof best, "%s", e->d_name);
+        }
+    }
+    closedir(d);
+    if (best_rank > 0) snprintf(out, outsz, "%s", best);
+}
+
 void u2_save_path(const u2_ctx *ctx, char *buf, size_t bufsz)
 {
-    snprintf(buf, bufsz, "%s/%s", save_dir(ctx), U2_SAVE_FILE_NAME);
+    char name[256];
+    resolve_save_name(save_dir(ctx), name, sizeof name);
+    snprintf(buf, bufsz, "%s/%s", save_dir(ctx), name);
 }
 
 /* Read the whole PLAYER file. Returns bytes read, or -1 on failure. A file
