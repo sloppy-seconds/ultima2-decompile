@@ -177,6 +177,14 @@ opening an empty map. Add `--cleanroom` to draw the substitute art instead of th
 original's, and it will always announce that it is doing so. `--renderer=terminal`
 runs the text front end in the same binary, if you want that for some reason.
 
+**Optional: build a tidy game tree instead.** `u2 --install --to DIR --original-dir
+DIR` copies the release, the Galaxy patch layer and any fan art packs into a layered
+tree with a manifest, and writes a `config.ini` that records what it was given. Keep
+the binary in that folder and a later `./u2 --install` needs no arguments at all: it
+reads the sources back out of `[install]`, completes anything missing, migrates an
+older layout, and reports a source that has moved rather than skipping it.
+`./u2 --install --check` verifies the tree against its manifest and writes nothing.
+
 **Optional: EGA graphics.** `--ega` draws the map and pictures in 16 colours using the
 fan-made *Ultima II Upgrade* art instead of the original CGA's 4. It changes no rules and
 works with or without `--enhanced`; CGA stays the default. The art is not in this repo — you

@@ -600,11 +600,127 @@ static void scan_source(const char *dir, plan *p, FILE *out, int may_override)
     }
 }
 
+/* --------------------------------------------------------- recorded sources
+ *
+ * `--install` writes what it was given into config.ini's [install] section, so a
+ * binary kept beside the game can reinstall with no arguments at all. That is the
+ * whole point of the section, and it comes with one obligation: a recorded path
+ * that has since moved must be said out loud, not skipped. An install that quietly
+ * dropped the theme source it used last time would produce a different tree under
+ * the same manifest, which is the exact shape of "installed fine, planets do not
+ * work" this installer was written to make impossible.
+ *
+ * The target is recorded as `.` rather than an absolute path, because config.ini
+ * lives in the target: the game directory can be moved and the record moves with
+ * it. The sources are recorded absolute, because they live outside it and a path
+ * relative to a directory that is not this one would mean nothing after a move.
+ */
+
+static void record_as_absolute(char *out, size_t n, const char *p)
+{
+    char resolved[1024];
+    if (!p || !*p) { *out = '\0'; return; }
+    if (realpath(p, resolved))
+        snprintf(out, n, "%.1023s", resolved);
+    else
+        snprintf(out, n, "%.447s", p);     /* gone already: record what we were told */
+}
+
+static int dir_of_self(const char *self, char *out, size_t n)
+{
+    char buf[1024];
+    struct stat st;
+
+    if (!self || !*self)
+        return 0;
+    if (stat(self, &st) == 0)
+        snprintf(buf, sizeof buf, "%.1023s", self);
+    else if (!realpath(self, buf))
+        return 0;                            /* bare argv[0] from PATH: no clue */
+
+    char *slash = strrchr(buf, '/');
+    if (!slash)
+        snprintf(buf, sizeof buf, ".");
+    else if (slash == buf)
+        buf[1] = '\0';
+    else
+        *slash = '\0';
+    snprintf(out, n, "%.1023s", buf);
+    return 1;
+}
+
+int u2_install_find_config(const char *explicit_path, const char *self_path,
+                           char *out, size_t n)
+{
+    if (explicit_path && *explicit_path) {
+        snprintf(out, n, "%.511s", explicit_path);
+        return u2_is_file(out) ? 1 : 0;
+    }
+
+    snprintf(out, n, "%s", U2_CONFIG_DEFAULT_FILE);
+    if (u2_is_file(out))
+        return 1;
+
+    char dir[1024], cand[1152];
+    if (dir_of_self(self_path, dir, sizeof dir)) {
+        snprintf(cand, sizeof cand, "%.1000s/%s", dir, U2_CONFIG_DEFAULT_FILE);
+        if (u2_is_file(cand)) {
+            snprintf(out, n, "%.511s", cand);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* One field, filled the only two ways a path may arrive: a flag, or a recorded
+ * source that still exists. Anything else is reported and left unset, which sends
+ * it on to the prompt (or to --no-prompt's refusal) rather than guessing. */
+static const char *pick_source(const char *flag, const char *recorded,
+                               const char *label, const u2_config *cfg, FILE *out)
+{
+    if (flag && *flag)
+        return flag;
+    if (!recorded || !*recorded)
+        return NULL;
+    if (!u2_is_dir(recorded)) {
+        fprintf(out, "  note    %s records %s = %s, which is not a directory any more; "
+                     "it will be asked for again\n", cfg->path, label, recorded);
+        return NULL;
+    }
+    fprintf(out, "  config  %s = %s (from %s)\n", label, recorded, cfg->path);
+    return recorded;
+}
+
+void u2_install_fill_from_config(u2_install_request *rq, const u2_config *cfg, FILE *out)
+{
+    if (!rq || !cfg || !cfg->present)
+        return;
+
+    rq->to           = pick_source(rq->to,           cfg->inst_to,       "to",       cfg, out);
+    rq->original_dir = pick_source(rq->original_dir, cfg->inst_original, "original", cfg, out);
+    rq->updated_dir  = pick_source(rq->updated_dir,  cfg->inst_updated,  "updated",  cfg, out);
+    if (!rq->fmtowns_media || !*rq->fmtowns_media)
+        rq->fmtowns_media = pick_source(rq->fmtowns_media, cfg->inst_fmtowns,
+                                        "fmtowns", cfg, out);
+
+    if (rq->n_themes_dir == 0) {
+        int n = 0;
+        for (int i = 0; i < cfg->n_inst_themes && n < U2_THEMES_MAX_SOURCES; i++) {
+            const char *t = pick_source(NULL, cfg->inst_themes[i], "themes", cfg, out);
+            if (t)
+                rq->themes_dir[n++] = t;
+        }
+        rq->n_themes_dir = n;
+    }
+}
+
 /* ------------------------------------------------------------------ config */
 
-static int write_config(const char *to, int have_themes)
+static int write_config(const char *to, int have_themes, const u2_install_request *rq)
 {
     char path[1024], tmp[1024];
+    char orig[1024], upd[1024], fm[1024], th[U2_INSTALL_MAX_RECORDED][1024];
+
     snprintf(path, sizeof path, "%.1000s/%s", to, U2_INSTALL_CONFIG);
     snprintf(tmp, sizeof tmp, "%.1010s.u2tmp", path);
     FILE *f = fopen(tmp, "wb");
@@ -623,6 +739,31 @@ static int write_config(const char *to, int have_themes)
           "\n", f);
     if (have_themes)
         fputs("[themes]\ndir = themes\ntheme = default\n", f);
+
+    /* What --install was given, so running it again from here needs no flags.
+     * `to` is this directory by construction; the sources are absolute because
+     * they live outside it. A source that has since moved is reported by the next
+     * run and asked for again, never skipped -- see the section comment. */
+    fputs("\n[install]\n"
+          "# Recorded by --install so a re-run from this directory needs no arguments.\n"
+          "# Delete this section and the installer asks again. `to` is this directory;\n"
+          "# the sources are absolute because they live outside it.\n",
+          f);
+    fputs("to = .\n", f);
+    record_as_absolute(orig, sizeof orig, rq ? rq->original_dir : NULL);
+    if (*orig) fprintf(f, "original = %s\n", orig);
+    record_as_absolute(upd, sizeof upd, rq ? rq->updated_dir : NULL);
+    if (*upd) fprintf(f, "updated = %s\n", upd);
+    static const char *const k_theme_keys[] = { "themes", "themes2", "themes3", "themes4" };
+    for (int i = 0; rq && i < rq->n_themes_dir && i < U2_INSTALL_MAX_RECORDED; i++) {
+        record_as_absolute(th[i], sizeof th[i], rq->themes_dir[i]);
+        if (*th[i])
+            fprintf(f, "%s = %s\n", k_theme_keys[i], th[i]);
+    }
+    record_as_absolute(fm, sizeof fm, rq ? rq->fmtowns_media : NULL);
+    if (*fm) fprintf(f, "fmtowns = %s\n", fm);
+    fputs("\n", f);
+
     if (fclose(f) != 0) { unlink(tmp); return -1; }
     if (rename(tmp, path) != 0) { unlink(tmp); return -1; }
     return 0;
@@ -850,7 +991,7 @@ u2_install_result u2_install_apply(const u2_install_request *rq, FILE *out,
         have_themes = 1;
     }
 
-    if (write_config(rq->to, have_themes) != 0) {
+    if (write_config(rq->to, have_themes, rq) != 0) {
         snprintf(err, errsz, "cannot write %s", U2_INSTALL_CONFIG);
         free(rows);
         return U2_INSTALL_ERROR;

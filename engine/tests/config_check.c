@@ -131,6 +131,53 @@ int main(int argc, char **argv)
               "an absolute path in the config is left alone");
     }
 
+    /* --- [install]: what --install recorded about itself -------------------
+     *
+     * The game never reads these and must never fail because of them: they name the
+     * player's media, which lives on a stick or a download folder that is not always
+     * there. So the section is parsed and known-key-checked like any other, and is
+     * exempt from the existence check that makes a typo in [paths] fatal. */
+    {
+        static const char *const rec_txt =
+            "[paths]\ndata = content\n\n"
+            "[install]\n"
+            "to = .\n"
+            "original = /tmp\n"
+            "updated = /tmp/nowhere-at-all\n"
+            "themes = themes\n"
+            "themes2 = content\n"
+            "fmtowns = /tmp/disc.iso\n";
+        u2_config rcfg;          /* not `cfg`: the precedence checks below still need
+                                  * the good.ini values loaded into it */
+        const u2_config_result r = load_from(dir, "recorded.ini", rec_txt, &rcfg, err, sizeof err);
+        CHECK(r == U2_CONFIG_OK,
+              "[install] is a known section, and a missing recorded source is not a startup error");
+        CHECK(strcmp(rcfg.inst_original, "/tmp") == 0, "[install] original parsed");
+        CHECK(strcmp(rcfg.inst_updated, "/tmp/nowhere-at-all") == 0,
+              "  a source that does not exist is still read (the installer reports it, not us)");
+        {
+            char w1[600], w2[600];
+            snprintf(w1, sizeof w1, "%.380s/themes", dir);
+            snprintf(w2, sizeof w2, "%.380s/content", dir);
+            CHECK(rcfg.n_inst_themes == 2 && strcmp(rcfg.inst_themes[0], w1) == 0
+                  && strcmp(rcfg.inst_themes[1], w2) == 0,
+                  "  theme sources are recorded in order and resolved against the file");
+        }
+        {
+            char want[600];
+            snprintf(want, sizeof want, "%.380s", dir);
+            CHECK(strcmp(rcfg.inst_to, want) == 0,
+                  "[install] to = . means the directory the config file is in, not ./.");
+        }
+    }
+    CHECK(refused(dir, "inst-typo.ini",
+                  "[install]\norginal = /tmp\n", err, sizeof err),
+          "a typo under [install] is refused, not ignored (orginal)");
+    CHECK(strstr(err, "[install]") != NULL, "  and the refusal names the section");
+    CHECK(refused(dir, "inst-dup.ini",
+                  "[install]\nto = .\nto = .\n", err, sizeof err),
+          "a duplicated [install] key is refused like any other");
+
     /* --- precedence: flag > ini > nothing ------------------------------ */
     memset(&ctx, 0, sizeof ctx);
     ctx.data_dir = "flagged";

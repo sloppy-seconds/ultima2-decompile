@@ -16,12 +16,24 @@
 
 #include "core/ctx.h"
 #include "core/ini.h"
+#include "core/themes.h"
 
 /* The known key set, per section. Anything else in the file is a refusal, because
  * a key nobody reads is indistinguishable from a typo, and a typo that is silently
  * ignored is a player editing the wrong line forever. */
 static const char *const k_paths_keys[] = { "data", "saves" };
 static const char *const k_theme_keys[] = { "dir", "theme" };
+/* What --install recorded about itself. `themes2..4` rather than one
+ * comma-separated list because the ini grammar has one value per key and the
+ * parser refuses rather than splits; four is U2_THEMES_MAX_SOURCES, asserted below
+ * so the two cannot drift. */
+static const char *const k_install_keys[] = {
+    "to", "original", "updated", "fmtowns",
+    "themes", "themes2", "themes3", "themes4",
+};
+
+_Static_assert(U2_INSTALL_MAX_RECORDED == U2_THEMES_MAX_SOURCES,
+               "config.h's recorded theme-source count must match the theme builder's");
 
 static int known(const char *const *list, size_t n, const char *key)
 {
@@ -90,10 +102,18 @@ static void resolve_against_file(char *val, size_t valsz, const char *base)
 
     if (!*val || val[0] == '/' || !*base)
         return;
-    const int n = snprintf(out, sizeof out, "%.300s/%.140s", base, val);
-    if (n < 0 || (size_t)n >= valsz)
-        return;     /* leave it as written; the existence check below will refuse it */
-    memcpy(val, out, (size_t)n + 1);
+    /* `[install] to = .` means "the directory this file is in", and saying so
+     * directly beats producing "./." in every message that prints it. */
+    if (!strcmp(val, ".")) {
+        snprintf(out, sizeof out, "%.447s", base);
+    } else {
+        const int n = snprintf(out, sizeof out, "%.300s/%.140s", base, val);
+        if (n < 0 || (size_t)n >= valsz)
+            return;     /* leave it as written; the existence check below will refuse it */
+    }
+    if ((size_t)strlen(out) >= valsz)
+        return;
+    memcpy(val, out, strlen(out) + 1);
 }
 
 static char *slurp(const char *path)
@@ -154,20 +174,38 @@ u2_config_result u2_config_load(const char *path, u2_config *out,
     }
     if (r == U2_CONFIG_OK &&
         count_keys(buf, NULL) !=
-            count_keys(buf, "paths") + count_keys(buf, "themes")) {
+            count_keys(buf, "paths") + count_keys(buf, "themes") + count_keys(buf, "install")) {
         snprintf(err, errsz,
-                 "%s: a key sits outside [paths] and [themes]; every setting belongs "
-                 "under one of them", path);
+                 "%s: a key sits outside [paths], [themes] and [install]; every setting "
+                 "belongs under one of them", path);
         r = U2_CONFIG_REFUSED;
+    }
+
+    /* 1b. the [install] section, same refusals for the same reason. */
+    cur = 0;
+    while (r == U2_CONFIG_OK && u2_ini_next_key(buf, "install", &cur, key, sizeof key)) {
+        if (!known(k_install_keys, sizeof k_install_keys / sizeof k_install_keys[0], key)) {
+            snprintf(err, errsz, "%s: unknown key '%s' in [install]", path, key);
+            r = U2_CONFIG_REFUSED;
+            break;
+        }
     }
 
     /* 2. read the values we know about */
     if (r == U2_CONFIG_OK) {
         struct { const char *sec, *key; char *dst; size_t n; } want[] = {
-            { "paths",  "data",  out->data,  sizeof out->data  },
-            { "paths",  "saves", out->saves, sizeof out->saves },
-            { "themes", "dir",   out->themes,sizeof out->themes},
-            { "themes", "theme", out->theme, sizeof out->theme },
+            { "paths",   "data",    out->data,  sizeof out->data  },
+            { "paths",   "saves",   out->saves, sizeof out->saves },
+            { "themes",  "dir",     out->themes,sizeof out->themes},
+            { "themes",  "theme",   out->theme, sizeof out->theme },
+            { "install", "to",      out->inst_to,      sizeof out->inst_to },
+            { "install", "original",out->inst_original,sizeof out->inst_original },
+            { "install", "updated", out->inst_updated, sizeof out->inst_updated },
+            { "install", "fmtowns", out->inst_fmtowns, sizeof out->inst_fmtowns },
+            { "install", "themes",  out->inst_themes[0], sizeof out->inst_themes[0] },
+            { "install", "themes2", out->inst_themes[1], sizeof out->inst_themes[1] },
+            { "install", "themes3", out->inst_themes[2], sizeof out->inst_themes[2] },
+            { "install", "themes4", out->inst_themes[3], sizeof out->inst_themes[3] },
         };
         for (size_t i = 0; i < sizeof want / sizeof want[0] && r == U2_CONFIG_OK; i++) {
             const int dup = count_key(buf, want[i].sec, want[i].key);
@@ -185,17 +223,37 @@ u2_config_result u2_config_load(const char *path, u2_config *out,
                 }
             }
         }
+        /* Keep the recorded theme sources contiguous: `themes2` without `themes`
+         * is a hole, and a reader that walked the array would stop at the empty
+         * first slot and never see the value that is there. */
+        for (int i = 0; i < U2_INSTALL_MAX_RECORDED && r == U2_CONFIG_OK; i++) {
+            if (*out->inst_themes[i])
+                out->n_inst_themes = i + 1;
+        }
     }
 
     /* 3. a relative path means relative to the file, then every path that is
      *    named and does not exist is an error at startup, not a silent default.
      *    `saves` is resolved but exempt from the check: it is output, and save.c
-     *    creates it on first write the way the original would have. */
+     *    creates it on first write the way the original would have.
+     *
+     *    The [install] paths are exempt for a different reason and it is worth
+     *    keeping them apart: they name the player's *media*, which lives on a stick
+     *    or a download folder that is not always mounted. A game you can play must
+     *    not depend on the disc being present; only a re-install does, and
+     *    u2_install_fill_from_config reports a recorded source it cannot find
+     *    instead of pretending the section was empty. */
     char base[300];
     config_base(path, base, sizeof base);
     resolve_against_file(out->data,  sizeof out->data,  base);
     resolve_against_file(out->saves, sizeof out->saves, base);
     resolve_against_file(out->themes,sizeof out->themes,base);
+    resolve_against_file(out->inst_to,       sizeof out->inst_to,       base);
+    resolve_against_file(out->inst_original, sizeof out->inst_original, base);
+    resolve_against_file(out->inst_updated,  sizeof out->inst_updated,  base);
+    resolve_against_file(out->inst_fmtowns,  sizeof out->inst_fmtowns,  base);
+    for (int i = 0; i < U2_INSTALL_MAX_RECORDED; i++)
+        resolve_against_file(out->inst_themes[i], sizeof out->inst_themes[i], base);
 
     if (r == U2_CONFIG_OK && *out->data && !is_dir(out->data)) {
         snprintf(err, errsz, "%s: [paths] data = %s is not a directory", path, out->data);

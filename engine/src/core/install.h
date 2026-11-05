@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "core/config.h"
 #include "core/themes.h"
 
 typedef enum {
@@ -94,6 +95,28 @@ typedef struct {
  * prevent. Returns 1 to proceed, 0 if the player declined, -1 to refuse. */
 int u2_install_prompt(u2_install_request *rq, u2_install_answers *ans,
                       FILE *out, char *err, size_t errsz);
+
+/* Where --install should look for the paths it recorded on a previous run.
+ *
+ * The rule is "keep the binary beside the game and --install needs no arguments",
+ * so the candidates are, in order: an explicit --config, `config.ini` in the
+ * directory being run from, and `config.ini` beside the running executable
+ * (resolved through PATH and symlinks, because argv[0] is often bare). Writes
+ * `out` with the candidate that exists, or with the plain default and returns 0
+ * when none does — a tree that was never installed has no opinion, which is not an
+ * error. Returns 1 when a file was found. */
+int u2_install_find_config(const char *explicit_path, const char *self_path,
+                           char *out, size_t n);
+
+/* Fill whatever the request leaves unset from config.ini's [install] section.
+ *
+ * Precedence is the engine's standing one and nothing else: flag > config.ini >
+ * prompt. A recorded source that no longer exists is reported and left unset, so
+ * the prompt asks for it or --no-prompt refuses; it is never silently dropped, and
+ * an install that quietly skipped the theme source it used last time would be a
+ * different tree wearing the same manifest. */
+void u2_install_fill_from_config(u2_install_request *rq, const u2_config *cfg,
+                                 FILE *out);
 
 /* Install, or complete an install that already carries our manifest. With
  * themes_dir supplied, themes/ is built in the same run by core/themes.c. */

@@ -247,6 +247,45 @@ launch directory resolves against `.`, which is the original's default-drive mod
 directory that does not exist yet: it is output, and `save.c` creates it on first
 write the way the original would have.
 
+**`[install]` — what `--install` was given, recorded so a re-run needs no arguments.**
+*added 2026-11-05, owner request: "the install should put all the install paths in
+config.ini so if you keep it alongside your .exe it can reinstall without asking
+questions."* The installer emits the sources it used alongside the sections it already
+wrote:
+
+```ini
+[install]
+to = .                    # this directory; the file lives in the target, so it moves with it
+original = /abs/path/to/release
+updated = /abs/path/to/release/updated     # only when it was given explicitly
+themes = /abs/path/to/U2Upgrade            # themes2..4 for further sources
+fmtowns = /abs/path/to/disc
+```
+
+Four things follow from that, and each is a rule rather than an implication:
+
+* **Discovery.** `--install` with no `--to` looks for `config.ini` in the directory it is
+  run from, then beside the running executable (resolved through PATH and symlinks).
+  That is what makes "keep the binary in the game folder" the whole configuration. A
+  tree with no config has no opinion, which is not an error: the installer asks, or
+  refuses under `--no-prompt`.
+* **Precedence does not change.** flag > config.ini > prompt, the same rule every other
+  path in the engine follows. A recorded value never overrides a flag.
+* **A recorded source that has moved is reported and left unset**, so the prompt asks for
+  it or a script refuses. Silently dropping the theme source used last time would build
+  a different tree under the same manifest, which is the one outcome an installer must
+  never produce.
+* **The section is exempt from the startup existence check**, and for a different reason
+  than `saves`. These paths name the player's *media* — a stick, a download folder — and
+  a game you can play must not depend on the disc being mounted. Only a re-install
+  depends on it, and that is where the missing path gets reported. The keys are still
+  known-key checked and duplicate-checked like every other section, so a typo in
+  `[install]` is a refusal at startup rather than a mystery later.
+
+`to` is recorded as `.` on purpose: the config file is inside the target, so the game
+directory can be moved wholesale and the record moves with it. The sources are absolute
+because they live outside it and a relative path would mean nothing after a move.
+
 Two refusals worth naming, because both are the difference between a config that
 can lie and one that cannot. An **unknown key is a refusal**, not an ignore: a key
 nobody reads is indistinguishable from a typo, and a silently ignored typo is a

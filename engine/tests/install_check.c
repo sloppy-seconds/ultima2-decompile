@@ -14,6 +14,7 @@
  */
 
 #define _POSIX_C_SOURCE 200809L   /* mkdir, unlink, opendir under -std=c11 */
+#define _DEFAULT_SOURCE           /* realpath, for the recorded-source comparison */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -437,6 +438,85 @@ int main(int argc, char **argv)
               "  and it pins the content root to the installed tree");
         CHECK(ctx.save_dir && strstr(ctx.save_dir, "saves") != NULL,
               "  and the saves directory");
+    }
+
+    /* --- the installer records what it was given ----------------------------
+     *
+     * The point of [install] is that a binary kept beside the game can reinstall
+     * with no arguments, so the assertions are about the whole loop: the section is
+     * written, it is found beside the executable, it fills an empty request, and a
+     * request filled from it reproduces the same tree. Precedence is the engine's
+     * standing flag > config.ini > nothing, and a source that has moved is left
+     * unset for the prompt rather than silently dropped. */
+    {
+        char cpath[1024], line[1024], relabs[1024], selfside[1024];
+        int has_to = 0, has_orig = 0;
+        snprintf(cpath, sizeof cpath, "%.1000s/config.ini", to);
+        FILE *cf = fopen(cpath, "rb");
+        while (cf && fgets(line, sizeof line, cf)) {
+            if (!strncmp(line, "to = .", 6)) has_to = 1;
+            if (!strncmp(line, "original = ", 11)) has_orig = 1;
+        }
+        if (cf) fclose(cf);
+        CHECK(has_to && has_orig,
+              "config.ini records the target and the source --install used");
+
+        CHECK(u2_install_find_config(NULL, NULL, line, sizeof line) == 0
+              || strcmp(line, U2_CONFIG_DEFAULT_FILE) == 0,
+              "with no config beside the run, --install falls back to asking");
+        snprintf(selfside, sizeof selfside, "%.1000s/u2check", to);
+        write_bytes(selfside, 0x7f, 8);
+        CHECK(u2_install_find_config(NULL, selfside, cpath, sizeof cpath) == 1
+              && strstr(cpath, "config.ini") != NULL,
+              "a binary kept inside the game directory finds its config.ini");
+
+        u2_config icfg;
+        char ierr2[512];
+        CHECK(u2_config_load(cpath, &icfg, ierr2, sizeof ierr2) == U2_CONFIG_OK,
+              "  and that file loads through the game's own config reader");
+        u2_install_request filled;
+        memset(&filled, 0, sizeof filled);
+        u2_install_fill_from_config(&filled, &icfg, log);
+        CHECK(filled.to && strcmp(filled.to, to) == 0,
+              "  an empty request gets the target back, resolved to the tree itself");
+        if (!realpath(rel, relabs)) snprintf(relabs, sizeof relabs, "%.1023s", rel);
+        CHECK(filled.original_dir && strcmp(filled.original_dir, relabs) == 0,
+              "  and the source it was built from");
+
+        u2_install_request flagged;
+        memset(&flagged, 0, sizeof flagged);
+        flagged.to = "somewhere-else";
+        u2_install_fill_from_config(&flagged, &icfg, log);
+        CHECK(flagged.to && strcmp(flagged.to, "somewhere-else") == 0,
+              "  a flag still outranks the recorded path (flag > config.ini)");
+
+        /* The reinstall with no arguments at all: same tree, nothing changed. */
+        entry pre2[512];
+        const int npre2 = collect(to, "", pre2, 0, 512);
+        CHECK(u2_install_apply(&filled, log, err, sizeof err) == U2_INSTALL_OK,
+              "--install with no arguments reinstalls the recorded tree");
+        const int npost2 = collect(to, "", files, 0, 512);
+        CHECK(npre2 == npost2, "  and it changes nothing (idempotent through the record)");
+        unlink(selfside);
+
+        /* A source that has moved is reported and left unset, so the prompt asks or
+         * --no-prompt refuses. Silently dropping it would build a different tree
+         * under the same manifest. */
+        {
+            u2_config stale;
+            memset(&stale, 0, sizeof stale);
+            stale.present = 1;
+            snprintf(stale.inst_original, sizeof stale.inst_original,
+                     "%.400s/no-such-source-anywhere", base);
+            snprintf(stale.inst_to, sizeof stale.inst_to, "%.447s", to);
+            u2_install_request srq;
+            memset(&srq, 0, sizeof srq);
+            u2_install_fill_from_config(&srq, &stale, log);
+            CHECK(srq.original_dir == NULL,
+                  "a recorded source that no longer exists is not used");
+            CHECK(srq.to && strcmp(srq.to, to) == 0,
+                  "  while the sources that are still there still fill");
+        }
     }
 
     /* --- themes: the v1 reshape, built by the same installer ---------------- */

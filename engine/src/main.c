@@ -147,10 +147,16 @@ static void usage(const char *argv0)
         "                    installer's own manifest, in which case the missing\n"
         "                    layers are added. A directory that is not ours is never\n"
         "                    merged into, overwritten or deleted.\n"
-        "  --install --check --to DIR\n"
+        "  --install         with no --to: reinstall the tree whose config.ini records\n"
+        "                    this install. An install writes the sources it used into\n"
+        "                    [install] there, so a binary kept beside the game needs no\n"
+        "                    arguments. A recorded source that has moved is reported and\n"
+        "                    asked for again, never skipped.\n"
+        "  --install --check [--to DIR]\n"
         "                    verify a tree against its manifest and write nothing.\n"
-        "                    Sector files that differ are reported as played-in,\n"
-        "                    because the game rewrites those by design.\n"
+        "                    Content is immutable after install, so a sector file that\n"
+        "                    differs is a defect, and the message names --install as the\n"
+        "                    repair: play writes into saves/<slot>/ now, not data/.\n"
         "  --dry-run         with --install: plan and report, write nothing. Shows which\n"
         "                    copy of a shared filename wins and what the theme step\n"
         "                    would do, before anything is copied.\n"
@@ -477,6 +483,8 @@ int main(int argc, char **argv)
         }
         char ierr[512];
         u2_install_request rq;
+        u2_config icfg;
+        char iconfig[1024];
         memset(&rq, 0, sizeof rq);
         rq.to = install_to;
         rq.original_dir = install_orig;
@@ -487,6 +495,22 @@ int main(int argc, char **argv)
         for (int k = 0; k < n_install_themes; k++)
             rq.themes_dir[k] = install_themes[k];
         rq.self_path = argv[0];
+
+        /* Whatever the command line did not say, the tree may already know: an
+         * install records its sources in config.ini, so a binary kept beside the
+         * game reinstalls with no arguments. Same precedence as every other path in
+         * the engine -- flag > config.ini > prompt -- and a recorded source that has
+         * moved is reported and asked for again, never skipped. */
+        memset(&icfg, 0, sizeof icfg);
+        if (u2_install_find_config(config_path, argv[0], iconfig, sizeof iconfig)) {
+            char cerr[512];
+            const u2_config_result cr = u2_config_load(iconfig, &icfg, cerr, sizeof cerr);
+            if (cr != U2_CONFIG_OK) {
+                fprintf(stderr, "u2: %s\n", cerr);
+                return 2;
+            }
+            u2_install_fill_from_config(&rq, &icfg, stdout);
+        }
 
         /* Prompts are the fallback for a flag that was not given, never a replacement
          * for one, and they are off unless stdin is really a terminal. A piped or
@@ -506,7 +530,7 @@ int main(int argc, char **argv)
                 return 0;
         }
         const u2_install_result r = install_check_only
-            ? u2_install_check(install_to, stdout, ierr, sizeof ierr)
+            ? u2_install_check(rq.to, stdout, ierr, sizeof ierr)
             : u2_install_apply(&rq, stdout, ierr, sizeof ierr);
         if (r != U2_INSTALL_OK && *ierr)
             fprintf(stderr, "u2: %s\n", ierr);

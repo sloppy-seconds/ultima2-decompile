@@ -32,6 +32,13 @@
 
 typedef struct u2_ctx u2_ctx;
 
+/* How many theme sources config.ini can record. Must stay in step with
+ * U2_THEMES_MAX_SOURCES in core/themes.h; it is spelled out here rather than
+ * included because config.h must not depend on the theme builder to describe a
+ * config file, and the compile-time check lives in config.c where a mismatch
+ * cannot be missed. */
+#define U2_INSTALL_MAX_RECORDED 4
+
 typedef enum {
     U2_CONFIG_OK      = 0,   /* read, or simply absent (the drop-in case) */
     U2_CONFIG_REFUSED = 1,   /* read but unusable; `err` names the key or line */
@@ -43,6 +50,20 @@ typedef struct {
     char saves[448];     /* [paths] saves  — where the player record goes */
     char themes[448];    /* [themes] dir   — the themes directory */
     char theme[64];      /* [themes] theme — the selected theme name */
+    /* [install] — the sources `--install` was given, recorded so the same command
+     * works again with no flags from beside the game directory. The game never
+     * reads these; the installer does, through core/install.h.
+     *
+     * They are exempt from the startup existence check, for the same reason `saves`
+     * is: a source on a stick that is not plugged in must not stop a game being
+     * played. The installer reports a recorded source it cannot find and asks for
+     * it again — see u2_install_fill_from_config. */
+    char inst_to[448];
+    char inst_original[448];
+    char inst_updated[448];
+    char inst_fmtowns[448];
+    char inst_themes[U2_INSTALL_MAX_RECORDED][448];
+    int  n_inst_themes;
     char path[512];      /* where this came from, for the message */
     int  present;        /* 0 when the file did not exist at all */
 } u2_config;
