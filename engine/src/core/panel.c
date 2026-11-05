@@ -135,10 +135,10 @@ static void value_right(u2_frame *f, int right_x, int y, const char *s,
 
 /* --------------------------------------------------------------- boxes */
 
-static void draw_box1(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
-                      const u2_panel_colours *c, int avatar_art)
+static void draw_vitals(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
+                        const u2_panel_colours *c, int avatar_art)
 {
-    const int x = U2_ENH_PANEL_X, y = U2_ENH_BOX1_Y, w = U2_ENH_PANEL_W, h = U2_ENH_BOX1_H;
+    const int x = U2_ENH_VIT_X, y = U2_ENH_VIT_Y, w = U2_ENH_VIT_W, h = U2_ENH_VIT_H;
     box(f, x, y, w, h, c->box_bg, c->border);
 
     char name[17];
@@ -146,6 +146,9 @@ static void draw_box1(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
     /* The name field is not guaranteed NUL-terminated in a hand-edited save, so
      * bound it by the field rather than trusting the bytes. */
     while (len < (int)sizeof ctx->state.name && ctx->state.name[len]) len++;
+    /* And bound it by the box: the interior is 12 cells, a 16-char name would run
+     * under the avatar, and clipped text beats overlapping text. */
+    if (len > U2_ENH_VIT_COLS) len = U2_ENH_VIT_COLS;
     if (len > (int)sizeof name - 1) len = (int)sizeof name - 1;
     memcpy(name, ctx->state.name, (size_t)len);
     name[len] = '\0';
@@ -156,25 +159,22 @@ static void draw_box1(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
     bcd4(ctx->state.food_hi, ctx->state.food_lo, f1, sizeof f1);
     bcd4(ctx->state.gold_lo, ctx->state.gold_hi, g1, sizeof g1);
 
-    /* Column arithmetic in whole text cells. The box interior is 18 cells wide and
-     * the avatar takes the last two, so the two label/value pairs live in the first
-     * sixteen. Hand-derived pixel offsets were what put the E and G values off the
-     * edge on the first attempt. */
+    /* One column, per the owner: H E G F top to bottom. The reference uses a 2x2
+     * grid only because its panel is narrow; ours is a tall thin box now, so the
+     * single column is both the request and the better fit. Values right-align on
+     * one edge so four- and five-digit numbers still line up. */
     const int cx = x + U2_ENH_BOX_PAD;          /* first text column, pixels */
     const int r0 = y + U2_ENH_BOX_PAD;
-    const int r1 = r0 + U2_ENH_TEXT_H;
-    const int r2 = r1 + U2_ENH_TEXT_H;
-    const int c_lbl = 0, c_val = 5, c_lbl2 = 7, c_val2 = 12;
-    /* Labels are ours. The reference uses bare H F E G in a 2x2 grid; keeping the
-     * letters matches it closely enough to be recognised and costs nothing. */
-    text(f, cx + c_lbl  * U2_ENH_TEXT_W, r1, "H:", c->text, c->box_bg);
-    text(f, cx + c_lbl  * U2_ENH_TEXT_W, r2, "F:", c->text, c->box_bg);
-    text(f, cx + c_lbl2 * U2_ENH_TEXT_W, r1, "E:", c->text, c->box_bg);
-    text(f, cx + c_lbl2 * U2_ENH_TEXT_W, r2, "G:", c->text, c->box_bg);
-    value_right(f, cx + (c_val  + 1) * U2_ENH_TEXT_W, r1, h1, c->text, c->box_bg);
-    value_right(f, cx + (c_val  + 1) * U2_ENH_TEXT_W, r2, f1, c->text, c->box_bg);
-    value_right(f, cx + (c_val2 + 1) * U2_ENH_TEXT_W, r1, h2, c->text, c->box_bg);
-    value_right(f, cx + (c_val2 + 1) * U2_ENH_TEXT_W, r2, g1, c->text, c->box_bg);
+    static const char *const vl[4] = { "H:", "E:", "G:", "F:" };
+    const char *vv[4] = { h1, h2, g1, f1 };
+    /* Column 7 is the right edge of the value field: the avatar owns the last two
+     * interior cells, and stopping here keeps a 5-digit EXP from touching it. */
+    const int vright = cx + 7 * U2_ENH_TEXT_W;
+    for (int i = 0; i < 4; i++) {
+        const int ry = r0 + (i + 1) * U2_ENH_TEXT_H;
+        text(f, cx, ry, vl[i], c->text, c->box_bg);
+        value_right(f, vright, ry, vv[i], c->text, c->box_bg);
+    }
 
     if (avatar_art >= 0 && tiles) {
         /* Through the theme's map, not raw: art 60 is the avatar and pool index 60
@@ -187,9 +187,9 @@ static void draw_box1(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
     }
 }
 
-static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
+static void draw_stats(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
 {
-    const int x = U2_ENH_PANEL_X, y = U2_ENH_BOX2_Y, w = U2_ENH_PANEL_W, h = U2_ENH_BOX2_H;
+    const int x = U2_ENH_STA_X, y = U2_ENH_STA_Y, w = U2_ENH_STA_W, h = U2_ENH_STA_H;
     box(f, x, y, w, h, c->box_bg, c->border);
 
     /* Our order and our labels, per the ruling. The reference truncates
@@ -206,11 +206,12 @@ static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
         const int ry = y + U2_ENH_BOX_PAD + i * U2_ENH_TEXT_H;
         text(f, x + U2_ENH_BOX_PAD, ry, labels[i], c->text, c->box_bg);
         /* The dotted leader the reference puts between label and value, drawn
-         * rather than assumed: fill the gap the label left with dots. */
+         * rather than assumed: fill the gap the label left with dots. Only if a
+         * whole cell is left over, or the dots crowd the value in a narrow box. */
         const int dots_from = x + U2_ENH_BOX_PAD
                             + (int)strlen(labels[i]) * U2_ENH_TEXT_W + U2_ENH_TEXT_W;
         const int dots_to   = right - 3 * U2_ENH_TEXT_W;
-        for (int dx = dots_from; dx < dots_to; dx += U2_ENH_TEXT_W)
+        for (int dx = dots_from; dx + U2_ENH_TEXT_W <= dots_to; dx += U2_ENH_TEXT_W)
             text(f, dx, ry, ".", c->text, c->box_bg);
         char num[4];
         snprintf(num, sizeof num, "%u", v[i]);
@@ -229,14 +230,14 @@ static void draw_box2(u2_frame *f, const u2_ctx *ctx, const u2_panel_colours *c)
     text(f, x + U2_ENH_BOX_PAD, ey + U2_ENH_TEXT_H, line, c->text, c->box_bg);
 }
 
-static void draw_box3(u2_frame *f, const u2_panel_colours *c,
-                      const char *const *log, int n_log)
+static void draw_cmd(u2_frame *f, const u2_panel_colours *c,
+                     const char *const *log, int n_log)
 {
-    const int x = U2_ENH_PANEL_X, y = U2_ENH_BOX3_Y, w = U2_ENH_PANEL_W, h = U2_ENH_BOX3_H;
+    const int x = U2_ENH_CMD_X, y = U2_ENH_CMD_Y, w = U2_ENH_CMD_W, h = U2_ENH_CMD_H;
     box(f, x, y, w, h, c->box_bg, c->border);
     if (!log) return;
 
-    const int cols = U2_ENH_TEXT_COLS;
+    const int cols = U2_ENH_CMD_COLS;
     const int first_row = (h - U2_ENH_BOX_PAD) / U2_ENH_TEXT_H;
     /* Newest at the bottom, like a log. Lines longer than the box wrap, which is
      * a real change from the DOS 40-column grid: the panel is narrower, so a line
@@ -269,9 +270,9 @@ void u2_panel_draw(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tiles,
     if (!f || !c) return;
     /* The backdrop is the field the boxes sit in, so it is painted before them. */
     fill(f, U2_ENH_PANEL_X, 0, U2_ENH_PANEL_W, U2_ENH_MAP_ROWS * 32, c->backdrop);
-    draw_box1(f, ctx, tiles, c, avatar_art);
-    draw_box2(f, ctx, c);
-    draw_box3(f, c, log, n_log);
+    draw_vitals(f, ctx, tiles, c, avatar_art);
+    draw_stats(f, ctx, c);
+    draw_cmd(f, c, log, n_log);
 
     /* Constant chrome in the reference: identical at H:258 and H:4922, so it is
      * not a health bar. Ruled to stay meaningless until there is a use for it. */

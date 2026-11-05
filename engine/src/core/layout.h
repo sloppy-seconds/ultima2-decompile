@@ -53,7 +53,7 @@
 /* Panel column, and the three boxes inside it. Widths are in whole text cells so
  * the text never clips mid-glyph. */
 #define U2_ENH_PANEL_X     (U2_ENH_MAP_COLS * 32)          /* 448 */
-#define U2_ENH_PANEL_W     (U2_ENH_W - U2_ENH_PANEL_X)     /* 320 */
+#define U2_ENH_PANEL_W     (U2_ENH_W - U2_ENH_PANEL_X)     /* 576 = 36 text cells */
 
 /* Padding is a WHOLE text cell, not 4px. The font API snaps to the glyph grid, so
  * a sub-cell pad collapses to 0 and the first glyph lands on the box border —
@@ -61,14 +61,51 @@
 #define U2_ENH_BOX_PAD     U2_ENH_TEXT_W
 #define U2_ENH_BOX_BORDER  1
 #define U2_ENH_BOX_GAP     4
-#define U2_ENH_TEXT_COLS   ((U2_ENH_PANEL_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W)
 
-#define U2_ENH_BOX1_Y      0
-#define U2_ENH_BOX1_H      (5 * U2_ENH_TEXT_H)  /* name, H/E, F/G, and the avatar */
-#define U2_ENH_BOX2_Y      (U2_ENH_BOX1_Y + U2_ENH_BOX1_H + U2_ENH_BOX_GAP)
-#define U2_ENH_BOX2_H      (9 * U2_ENH_TEXT_H)  /* six stats with leaders, then WEA:/ARM: */
-#define U2_ENH_BOX3_Y      (U2_ENH_BOX2_Y + U2_ENH_BOX2_H + U2_ENH_BOX_GAP)
-#define U2_ENH_BOX3_H      (U2_ENH_MAP_Y + U2_ENH_MAP_ROWS * 32 - U2_ENH_BOX3_Y)
+/* ---- the panel, as ruled 2026-11-05 -------------------------------------
+ *
+ * The first shape stacked three full-width boxes, and the owner's verdict was that
+ * the top two were far too wide for what they hold. They now sit side by side, the
+ * vitals as a single column of H E G F rather than a 2x2 grid, with the command log
+ * pushed to the bottom and a deliberate empty band between them.
+ *
+ * That band is not unfinished work. The owner asked for the room specifically to
+ * spend on ideas later, so nothing here should feel obliged to fill it.
+ *
+ * The panel is 36 text cells wide (576 px / 16) and divides as 1 + 14 + 1 + 19 + 1:
+ * a one-cell gutter on each side, then the two boxes. Every width below is a whole
+ * number of cells because the font API snaps to that grid: a box edge landing
+ * between cells is how borders went missing once already. The outer gutters are not
+ * decoration — with the boxes flush to the frame edge their right border was the
+ * last pixel column and read as an open box.
+ */
+#define U2_ENH_TOP_Y     0
+#define U2_ENH_TOP_H     (10 * U2_ENH_TEXT_H)   /* 160: the taller of the two boxes */
+#define U2_ENH_GUT       U2_ENH_TEXT_W          /* 16: one cell, either side */
+
+/* Vitals: name, then H E G F down one column, then the avatar at the right. */
+#define U2_ENH_VIT_X     (U2_ENH_PANEL_X + U2_ENH_GUT)
+#define U2_ENH_VIT_W     (14 * U2_ENH_TEXT_W)                        /* 224 */
+#define U2_ENH_VIT_Y     U2_ENH_TOP_Y
+#define U2_ENH_VIT_H     U2_ENH_TOP_H
+#define U2_ENH_VIT_COLS  ((U2_ENH_VIT_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W) /* 12 */
+
+/* Stats: six with dotted leaders, then WEA: and ARM:. */
+#define U2_ENH_STA_X     (U2_ENH_VIT_X + U2_ENH_VIT_W + U2_ENH_TEXT_W)  /* 1-cell gap */
+#define U2_ENH_STA_W     (U2_ENH_PANEL_W - U2_ENH_VIT_W - 3 * U2_ENH_TEXT_W) /* 304 */
+#define U2_ENH_STA_Y     U2_ENH_TOP_Y
+#define U2_ENH_STA_H     U2_ENH_TOP_H
+#define U2_ENH_STA_COLS  ((U2_ENH_STA_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W) /* 19 */
+
+/* Command log, bottom-aligned with the map so the two bottoms read as one line.
+ * Everything between U2_ENH_TOP_H and this is the reserved band. */
+#define U2_ENH_CMD_X     (U2_ENH_PANEL_X + U2_ENH_GUT)
+#define U2_ENH_CMD_W     (U2_ENH_PANEL_W - 2 * U2_ENH_GUT) /* 544 */
+#define U2_ENH_CMD_H     (10 * U2_ENH_TEXT_H)   /* 160 */
+#define U2_ENH_CMD_Y     (U2_ENH_MAP_Y + U2_ENH_MAP_ROWS * 32 - U2_ENH_CMD_H)
+#define U2_ENH_CMD_COLS  ((U2_ENH_CMD_W - 2 * U2_ENH_BOX_PAD) / U2_ENH_TEXT_W) /* 34 */
+
+#define U2_ENH_TEXT_COLS U2_ENH_CMD_COLS
 
 /* The bottom bar. Measured as constant full-width chrome in the reference (it does
  * not track HP: identical in frames at H:258 and H:4922), and ruled to stay
