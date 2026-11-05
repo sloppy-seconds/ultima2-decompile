@@ -230,6 +230,28 @@ int main(void)
     ok(strcmp(status_text(&ctx, 21, buf), "FOOD=0359") == 0, "FOOD= row");
     ok(strcmp(status_text(&ctx, 22, buf), "EXP.=0007") == 0, "EXP.= row");
     ok(strcmp(status_text(&ctx, 23, buf), "GOLD=0000") == 0, "GOLD= row");
+
+    /* The shared byte-pair definition, asserted against status.h's table. The
+     * enhanced panel prints the same four fields through the same helper, so this is
+     * what stops a repeat of the FOOD bug, where the panel read [0x54],[0x55] and
+     * put the fractional low byte on screen -- every step then looked like it burned
+     * 19 food. food_lo is set to something visible here on purpose: if it ever leaks
+     * into the printed row, this goes red. */
+    {
+        ctx.state.food_lo = 0x11;          /* must NEVER appear in FOOD= */
+        uint8_t msb = 0, lsb = 0;
+        u2_state_bcd_pair(&ctx.state, U2_BCD_FOOD, &msb, &lsb);
+        ok(msb == 0x03 && lsb == 0x59, "FOOD pair is [0x53],[0x54], not the fractional byte");
+        u2_state_bcd_pair(&ctx.state, U2_BCD_HP, &msb, &lsb);
+        ok(msb == 0x99 && lsb == 0x97, "H.P. pair is [0x51],[0x52]");
+        u2_state_bcd_pair(&ctx.state, U2_BCD_EXP, &msb, &lsb);
+        ok(msb == 0x00 && lsb == 0x07, "EXP pair is [0x56],[0x57]");
+        u2_state_bcd_pair(&ctx.state, U2_BCD_GOLD, &msb, &lsb);
+        ok(msb == 0x00 && lsb == 0x00, "GOLD pair is [0x58],[0x59]");
+        u2_status_draw(&ctx);
+        ok(strcmp(status_text(&ctx, 21, buf), "FOOD=0359") == 0,
+           "FOOD= prints 0359 even with food_lo set: the low byte stays hidden");
+    }
     ok(ctx.state.right_margin == 0x1d,
        "GOLD= tail restores the right margin to 0x1d (scroll rect stops at col 29)");
 

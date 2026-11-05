@@ -36,11 +36,21 @@ static void draw_line(u2_ctx *ctx, int row, const char *label, uint8_t lo, uint8
     seam_str_out_at(ctx, 30, row, buf);
 }
 
+/* One status line, with the byte pair taken from the single shared definition in
+ * core/state.h rather than named here. That is the whole point of the indirection:
+ * the enhanced panel prints the same four fields and must not disagree. */
+static void draw_field(u2_ctx *ctx, int row, const char *label, u2_bcd_field f)
+{
+    uint8_t msb = 0, lsb = 0;
+    u2_state_bcd_pair(&ctx->state, f, &msb, &lsb);
+    draw_line(ctx, row, label, msb, lsb);
+}
+
 void u2_status_draw_hp(u2_ctx *ctx)
 {
     /* asm/50F9 sets the right margin to 0x28 before drawing H.P.= . */
     ctx->state.right_margin = 0x28;
-    draw_line(ctx, 20, U2_S_STATUS_HP, ctx->state.hp, ctx->state.unk_52);
+    draw_field(ctx, 20, U2_S_STATUS_HP, U2_BCD_HP);
 }
 
 /* One packed-decimal byte as its two digits, the way asm/55B5 renders it. */
@@ -112,9 +122,9 @@ void u2_status_draw(u2_ctx *ctx)
     const uint8_t col = ctx->state.cursor_col;
 
     u2_status_draw_hp(ctx);
-    draw_line(ctx, 21, U2_S_STATUS_FOOD, ctx->state.food, ctx->state.food_hi);
-    draw_line(ctx, 22, U2_S_STATUS_EXP, ctx->state.exp_lo, ctx->state.exp_hi);
-    draw_line(ctx, 23, U2_S_STATUS_GOLD, ctx->state.gold_lo, ctx->state.gold_hi);
+    draw_field(ctx, 21, U2_S_STATUS_FOOD, U2_BCD_FOOD);
+    draw_field(ctx, 22, U2_S_STATUS_EXP,  U2_BCD_EXP);
+    draw_field(ctx, 23, U2_S_STATUS_GOLD, U2_BCD_GOLD);
     /* The GOLD= tail restores the margin to 0x1d (file 0x5396). */
     ctx->state.right_margin = 0x1d;
 

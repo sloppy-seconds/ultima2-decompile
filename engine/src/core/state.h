@@ -517,6 +517,33 @@ typedef struct u2_state {
     /* 0x5A8 */ uint8_t reserved_5A8[0xA8];  /* 0x5A8..0x64F */
 } u2_state;
 
+/* The two packed-decimal bytes behind each status field, most-significant pair
+ * first. Proven in game/status.h's table: H.P.= [0x51],[0x52], FOOD= [0x53],[0x54],
+ * EXP.= [0x56],[0x57], GOLD= [0x58],[0x59].
+ *
+ * This exists as ONE definition because the classic status band and the enhanced
+ * panel used to choose their bytes independently, and FOOD drifted: the panel read
+ * [0x54],[0x55] instead of [0x53],[0x54]. Food is a six-digit triple and a step
+ * costs 19 on the LOW byte, so showing that byte made every single step look like
+ * it burned 19 food, when the original hides it and the displayed number only moves
+ * about once every five steps. A shared accessor is the fix; a test that re-asserts
+ * my reading of the same table would not have caught the next one. */
+typedef enum {
+    U2_BCD_HP, U2_BCD_FOOD, U2_BCD_EXP, U2_BCD_GOLD
+} u2_bcd_field;
+
+static inline void u2_state_bcd_pair(const u2_state *st, u2_bcd_field f,
+                                     uint8_t *msb, uint8_t *lsb)
+{
+    switch (f) {
+    case U2_BCD_HP:   *msb = st->hp;       *lsb = st->unk_52;  break;
+    case U2_BCD_FOOD: *msb = st->food;     *lsb = st->food_hi; break;
+    case U2_BCD_EXP:  *msb = st->exp_lo;   *lsb = st->exp_hi;  break;
+    case U2_BCD_GOLD: *msb = st->gold_lo;  *lsb = st->gold_hi; break;
+    default:          *msb = 0;            *lsb = 0;           break;
+    }
+}
+
 #define U2_OFF(f) ((int)offsetof(u2_state, f))
 
 /* Compile-time proof that the struct still matches the asm offsets. */

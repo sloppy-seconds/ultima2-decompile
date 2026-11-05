@@ -157,10 +157,15 @@ static void draw_vitals(u2_frame *f, const u2_ctx *ctx, const u2_tiles_ega *tile
     text(f, cx, r0, name, c->text, c->box_bg);
 
     char hp[8], xp[8], gd[8], fd[8];
-    bcd4(ctx->state.hp, ctx->state.unk_52, hp, sizeof hp);
-    bcd4(ctx->state.exp_lo, ctx->state.exp_hi, xp, sizeof xp);
-    bcd4(ctx->state.gold_lo, ctx->state.gold_hi, gd, sizeof gd);
-    bcd4(ctx->state.food_hi, ctx->state.food_lo, fd, sizeof fd);
+    /* The byte pairs come from the one definition the classic status band also uses,
+     * so the two renderers cannot disagree about which bytes a field is. FOOD is
+     * the case this fixes: the panel used to print [0x54],[0x55], which exposed the
+     * fractional low byte and made every step look like it burned 19 food. */
+    uint8_t a = 0, b = 0;
+    u2_state_bcd_pair(&ctx->state, U2_BCD_HP,   &a, &b);  bcd4(a, b, hp, sizeof hp);
+    u2_state_bcd_pair(&ctx->state, U2_BCD_EXP,  &a, &b);  bcd4(a, b, xp, sizeof xp);
+    u2_state_bcd_pair(&ctx->state, U2_BCD_GOLD, &a, &b);  bcd4(a, b, gd, sizeof gd);
+    u2_state_bcd_pair(&ctx->state, U2_BCD_FOOD, &a, &b);  bcd4(a, b, fd, sizeof fd);
 
     /* The original's own four labels, taken from the status block (asm/50F9):
      * H.P.= EXP.= GOLD= FOOD=. Used verbatim rather than abbreviated, and the
