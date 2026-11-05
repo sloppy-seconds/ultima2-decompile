@@ -35,6 +35,14 @@ typedef struct sdl_video {
     SDL_Renderer *ren;
     SDL_Texture  *tex;
     uint32_t     * staging;   /* w*h RGBA, filled from the indexed frame */
+    int           tex_w, tex_h;   /* the size tex and staging are actually built for.
+                                   * They MUST be the frame's size, not a constant:
+                                   * the classic frame is 640x400 and the enhanced
+                                   * one is 1024x512, and filling or uploading a
+                                   * 1024x512 frame into a 640x400 buffer is a heap
+                                   * overflow that only shows up when a frame is
+                                   * really presented, so every headless path passes
+                                   * and the windowed build segfaults. */
     Uint32        pal[16];    /* CGA fills 0..3 (rest black); EGA fills all 16.
                                * The upload indexes with & 15, so a CGA frame
                                * (values 0..3) reads the same four entries. */
@@ -185,6 +193,8 @@ static int sdl_init(u2_ctx *ctx)
                         " 2bpp art will be smeared\n", SDL_GetError());
     v->staging = malloc(sizeof(uint32_t) * (size_t)(U2_SCREEN_W * fs) *
                         (size_t)(U2_SCREEN_H * fs));
+    v->tex_w = U2_SCREEN_W * fs;
+    v->tex_h = U2_SCREEN_H * fs;
     if (!v->staging) {
         SDL_DestroyTexture(v->tex);
         SDL_DestroyRenderer(v->ren);
@@ -245,6 +255,44 @@ static int sdl_init(u2_ctx *ctx)
 /* Upload one composed frame and present it. Shared by the game-frame path
  * (present_frame) and the text-layer path (flush), so both screens show the
  * same palette and the same scaling and neither can drift from the other. */
+/* Build (or rebuild) the texture and staging buffer for this frame's size.
+ *
+ * They used to be allocated once at init from U2_SCREEN_W/H * scale, which was
+ * true only while every frame was a scaled 320x200. The enhanced layout is
+ * 1024x512, so the fill loop wrote 1024*512 pixels into a 640*400 buffer and
+ * SDL_UpdateTexture read past the end of it at a row pitch the texture did not
+ * have. That is a heap overflow, and it only happens on a real present, so every
+ * headless and scripted path passed and the windowed build segfaulted the moment a
+ * frame reached the screen. Deriving the buffers from the frame that is about to
+ * be uploaded removes the whole class: any future frame size is correct by
+ * construction instead of by remembering to update a constant. */
+static int sdl_ensure_surface(sdl_video *v, const struct u2_frame *f)
+{
+    if (v->tex && v->staging && v->tex_w == f->w && v->tex_h == f->h)
+        return 0;
+    if (f->w <= 0 || f->h <= 0) return -1;
+
+    SDL_Texture *tex = SDL_CreateTexture(v->ren, SDL_PIXELFORMAT_RGBA8888,
+                                        SDL_TEXTUREACCESS_STREAMING, f->w, f->h);
+    if (!tex) {
+        fprintf(stderr, "u2: texture %dx%d: %s\n", f->w, f->h, SDL_GetError());
+        return -1;
+    }
+    uint32_t *st = malloc(sizeof(uint32_t) * (size_t)f->w * (size_t)f->h);
+    if (!st) { SDL_DestroyTexture(tex); return -1; }
+
+    if (v->tex) SDL_DestroyTexture(v->tex);
+    free(v->staging);
+    v->tex = tex;
+    v->staging = st;
+    v->tex_w = f->w;
+    v->tex_h = f->h;
+    if (!SDL_SetTextureScaleMode(v->tex, SDL_SCALEMODE_NEAREST))
+        fprintf(stderr, "u2: WARNING: nearest-neighbour scaling refused (%s)\n",
+                SDL_GetError());
+    return 0;
+}
+
 static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
 {
     sdl_video *v = sv(ctx);
@@ -270,12 +318,13 @@ static void sdl_upload(u2_ctx *ctx, const struct u2_frame *f)
         }
     }
 
+    if (sdl_ensure_surface(v, f) != 0) return;
+
     for (int y = 0; y < fr->h; y++) {
         const uint8_t *src = fr->px[y];
         uint32_t *dst = v->staging + (size_t)y * (size_t)fr->w;
         for (int x = 0; x < fr->w; x++) dst[x] = v->pal[src[x] & 15];
     }
-
     /* Destination is computed, not NULL. NULL means "fill the output rect", which
      * does scale, but it stretches 320x200 to whatever aspect the window happens
      * to be and makes source pixels rectangular. The fit is integer and centred,

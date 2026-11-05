@@ -593,6 +593,37 @@ PY
     else
         bad "SDL build did not default to the SDL renderer (flagless --dump-screen gave '${def_size:-nothing}')"
     fi
+
+    # The enhanced overworld, presented for real. This is the case every other
+    # SDL check missed: they all present the title frame, which is a scaled
+    # 320x200, so a renderer whose staging buffer is sized from a constant
+    # instead of from the frame looks fine forever. The enhanced frame is
+    # 1024x512, and when it was, filling a 640x400 staging buffer with it was a
+    # 1 MB heap overflow that aborted on the next free() the first time a player
+    # pressed P at the menu and entered the world. Needs sector files, so it
+    # skips out loud where the media is absent.
+    if [ -d ../original ] && [ -f ../original/mapx20 ]; then
+        rm -rf "$WORK/cp4th"; mkdir -p "$WORK/cp4th"
+        # A v1 theme is a bare EGATILES: 128 tiles of 16x16 2bpp = 128 B each.
+        python3 -c "open('$WORK/cp4th/EGATILES','wb').write(bytes(128*128))" 2>/dev/null \
+          || head -c 16384 /dev/zero > "$WORK/cp4th/EGATILES"
+        rm -f "$WORK/enh.ppm"
+        SDL_VIDEODRIVER=dummy timeout -s KILL 25 "$SDL_BIN" --sdl --play-map --enhanced \
+            --ega-theme default --ega-theme-dir "$WORK/cp4th" \
+            --data-dir ../original --save-dir saves --dump-screen "$WORK/enh.ppm" \
+            >/dev/null 2>&1
+        enh_rc=$?
+        enh_size=$( [ -s "$WORK/enh.ppm" ] && wc -c < "$WORK/enh.ppm" | tr -d ' ' )
+        if [ "$enh_rc" -ne 0 ]; then
+            bad "enhanced overworld present exited $enh_rc (heap corruption here shows as an abort on free)"
+        elif [ "$enh_size" = "1572880" ]; then
+            ok "headless SDL: enhanced overworld presents a 1024x512 frame"
+        else
+            bad "enhanced SDL frame is ${enh_size:-nothing}, expected 1572880 (P6 1024x512)"
+        fi
+    else
+        printf '  SKIP  no ../original sector files — enhanced present path not exercised\n'
+    fi
 else
     printf '  SKIP  no u2-sdl or u2-sdl-static built — headless SDL path not exercised\n'
 fi
