@@ -27,6 +27,7 @@
 #include "core/world.h"
 #include "core/compat.h"
 #include "core/roots.h"
+#include "core/slot.h"
 
 /* Spelling candidates for the sector name. DOS names are case-insensitive, the
  * shipped pack is lowercase, and the Galaxy patch in the fan pack renames
@@ -107,6 +108,23 @@ static int build_cands(int off_earth, const char *const *patch_pfx, size_t n_pat
         for (size_t p = 0; p < n_rel && n < max; p++)
             out[n++] = (struct cand){ u2_roots[r].sub, rel_pfx[p], rel_pfx[p] };
     }
+    return n;
+}
+
+/* The slot's filename spellings for one kind, rotated so the patched spelling
+ * comes first off Earth and the release spelling first on Earth — the same order
+ * the content layers are tried in, because the slot holds whatever spelling the
+ * sector was read from when it was written back. The four spellings of every
+ * release list are mapx MAPX mapg MAPG (and monx MONX mong MONG), so the patched
+ * pair is the trailing two and a rotation is the whole rule. */
+static size_t slot_prefixes(int off_earth, int is_map, const char **out, int max)
+{
+    size_t nall = 0;
+    const char *const *all = prefix_list(is_map, &nall);
+    const size_t first = off_earth ? nall - 2 : 0;
+    size_t n = 0;
+    for (size_t i = 0; i < nall && n < (size_t)max; i++)
+        out[n++] = all[(first + i) % nall];
     return n;
 }
 
@@ -241,12 +259,44 @@ u2_world_result u2_world_load(u2_ctx *ctx, u2_world *w, int is_map, u2_sector_id
      * (monx/mong mirror mapx/mapg), so the same patched-first order applies to
      * both kinds. */
     struct cand list[N_CAND];
-    int off_earth = ctx && ctx->state.world != 0 && ctx->state.world != 0x0A;
+    const int off_earth = ctx && ctx->state.world != 0 && ctx->state.world != 0x0A;
     int n = build_cands(off_earth,
                         is_map ? k_map_patch : k_mon_patch,
                         is_map ? (int)(sizeof k_map_patch / sizeof k_map_patch[0])
                                : (int)(sizeof k_mon_patch / sizeof k_mon_patch[0]),
                         prefixes, nprefixes, list, N_CAND);
+
+    /* The save slot's overlay is tried before any content root. This is the read
+     * half of docs/save-scoped-worlds.md: a sector this save has changed lives in
+     * the slot, and it outranks the release copy because it *is* that player's
+     * world. A slot with nothing in it — every fresh game, and every install that
+     * has never saved — falls straight through to the content roots and behaves
+     * exactly as it did before the layer existed.
+     *
+     * mapx/monx only, and that is a ruling rather than an oversight: tlkx, pic*
+     * and the executable are never written by anything, so overlaying them would
+     * buy a second place for content to disagree with itself (D3). */
+    {
+        char sdir[448];
+        const char *spfx[4];
+        const size_t ns = slot_prefixes(off_earth, is_map, spfx, 4);
+        u2_slot_dir(ctx, sdir, sizeof sdir);
+        for (size_t i = 0; i < ns && !found; i++) {
+            /* %.4s because a prefix is four characters at most, and gcc's
+             * format-truncation check only accepts the arithmetic when it can
+             * bound every field: 447 + 1 + 4 + 2 digits < the 512-byte path. */
+            snprintf(path, sizeof path, "%.447s/%.4s%u%u", sdir, spfx[i],
+                     (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
+            FILE *f = fopen(path, "rb");
+            if (!f)
+                continue;
+            got = fread(is_map ? w->map : w->mon, 1, want, f);
+            fclose(f);
+            found = 1;
+            used = spfx[i];
+            used_root = U2_WORLD_SLOT_LAYER;
+        }
+    }
 
     for (int i = 0; i < n && !found; i++) {
         FILE *f;

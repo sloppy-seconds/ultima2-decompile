@@ -143,7 +143,7 @@ fi
 # the player's content is present, because that is the only input that can
 # falsify the offset table rather than check the copy.
 if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/monsters_check" \
-        tests/monsters_check.c src/game/monsters.c src/core/world.c src/core/roots.c src/core/state.c \
+        tests/monsters_check.c src/game/monsters.c src/core/world.c src/core/roots.c src/core/slot.c src/core/state.c \
         src/core/save.c src/core/rng.c 2>"$WORK/mon.build"; then
     MONREAL=""
     [ -f ../original/monx31 ] && MONREAL="../original/monx31"
@@ -169,7 +169,7 @@ fi
 # which matter more than its successes, because a wrong refusal rate is a wrong
 # monster density and nothing else would notice.
 if cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/wander_check" \
-        tests/wander_check.c src/game/monsters.c src/core/world.c src/core/roots.c src/core/state.c \
+        tests/wander_check.c src/game/monsters.c src/core/world.c src/core/roots.c src/core/slot.c src/core/state.c \
         src/core/save.c src/core/rng.c 2>"$WORK/wander.build"; then
     if "$WORK/wander_check" > "$WORK/wander.out" 2>&1; then
         n=$(sed -n 's/^wander_check: \([0-9]\{1,\}\) checks.*/\1/p' "$WORK/wander.out")

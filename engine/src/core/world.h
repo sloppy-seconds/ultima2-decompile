@@ -51,6 +51,14 @@
 #define U2_TLKX_BYTES   256
 #define U2_MAP_PREFIXES 4                        /* mapx / MAPX / mapg / MAPG */
 
+/* What `map_root` / `mon_root` hold when the bytes came from the save slot's
+ * overlay instead of a content layer. A distinct value rather than "" because
+ * "where did this sector come from" is a question a report and a test both ask,
+ * and a slot is a different kind of place from a content root: it is the
+ * player's, it is deletable, and it is where every write lands.
+ * docs/save-scoped-worlds.md. */
+#define U2_WORLD_SLOT_LAYER "slot"
+
 /* Site kinds, i.e. the second digit. Proven for 0, 2 and 4 by the strings at
  * asm/243E and asm/343F; 1, 3 and 5 come from the fan pack's file list and are
  * marked inferred until the asm says so directly. */
@@ -129,12 +137,17 @@ typedef struct u2_world {
      * monx/MONX/mong/MONG. u2_world_store refuses a prefix that is not one of them. */
     const char  *map_prefix;  /* spelling the map sector was found under */
     const char  *mon_prefix;  /* spelling the creature table was found under */
-    /* Which content layer each kind was found in, as the subdirectory of the
-     * content root ("" is the root itself). Recorded for the same reason the
-     * prefixes are and per kind for the same trap: write-back goes to the layer it
-     * was read from, so a sector read from a patch layer is not stored somewhere
-     * the patch layer then hides again. Points into a static table, never
-     * allocated. docs/install-design.md § 3. */
+    /* Which layer each kind was found in, as the subdirectory of the content root
+     * ("" is the root itself), or U2_WORLD_SLOT_LAYER for the save slot. Recorded
+     * for the same reason the prefixes are and per kind for the same trap: a
+     * shared field read "monx" by save time and the store wrote map bytes over
+     * the creature table.
+     *
+     * It no longer chooses the write target — sector writes always go to the slot
+     * (docs/save-scoped-worlds.md § 3) — but it is still load-bearing: it names
+     * the file whose bytes past the read length have to be carried through into
+     * the overlay, and it is the provenance a report answers to. Points into a
+     * static table or a string literal, never allocated. */
     const char  *map_root;    /* layer the map sector was found in */
     const char  *mon_root;    /* layer the creature table was found in */
     /* The sector's scripted dialogue, asm/22D5's second read into [DS:476]. Read-only and

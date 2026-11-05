@@ -54,7 +54,7 @@ CONFIG_CONTROLS = [
 
 INSTALL_SRCS = ["src/core/install.c", "src/core/themes.c", "src/core/fmtowns.c",
                 "src/core/copy.c", "src/core/roots.c", "src/core/sha256.c",
-                "src/core/world.c", "src/core/config.c", "src/core/ini.c"]
+                "src/core/world.c", "src/core/slot.c", "src/core/config.c", "src/core/ini.c"]
 
 INSTALL_CONTROLS = [
     ("no-manifest", "src/core/install.c",

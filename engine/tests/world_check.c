@@ -58,7 +58,7 @@ static int write_file(const char *p, const uint8_t *buf, size_t n)
 int main(int argc, char **argv)
 {
     const char *base = argc > 1 ? argv[1] : ".";
-    char dir[512], missing[512], p[512];
+    char dir[512], missing[512], p[512], saves[512];
     uint8_t buf[U2_SECTOR_TILES + 256];
     uint8_t readback[U2_SECTOR_TILES + 256];
     u2_ctx ctx;
@@ -68,10 +68,16 @@ int main(int argc, char **argv)
 
     snprintf(dir, sizeof dir, "%s/content", base);
     snprintf(missing, sizeof missing, "%s/nope", base);
+    /* The save slot lives here, and it is named rather than left to the "saves"
+     * default on purpose: the default is relative to the cwd, and a test that
+     * writes into whatever directory it happens to be run from is a test that
+     * litters the engine tree. */
+    snprintf(saves, sizeof saves, "%s/saves_check", base);
     mkdir(dir, 0755);
 
     memset(&ctx, 0, sizeof ctx);
     ctx.data_dir = dir;
+    ctx.save_dir = saves;
     memset(&w, 0, sizeof w);
     id.hi = 3; id.lo = 0;          /* the sector the live capture was standing in */
 
@@ -279,6 +285,67 @@ int main(int argc, char **argv)
         memset(&w, 0, sizeof w);
         CHECK(u2_world_load_strokes(&ctx, &w) == U2_WORLD_OK,
               "layout B: the stroke table is found in the release layer, not only beside the binary");
+    }
+
+    /* --- the save slot is a layer, and it is the first one ----------------
+     *
+     * docs/save-scoped-worlds.md § 3. A sector this save has changed lives in
+     * saves/<slot>/ and outranks every content copy, because it is that player's
+     * world; a slot with nothing in it reads pure content, which is the property
+     * that keeps every pre-slot fixture in this file behaving as it always did.
+     *
+     * The overlay is mapx/monx only (D3), so the tlkx assertion below is not
+     * decoration: a slot that overlaid dialogue would give a stale line back and
+     * nothing else in this file would notice. */
+    {
+        u2_sector_id ov = { .hi = 6, .lo = 0 };
+        static uint8_t under[U2_SECTOR_TILES], over[U2_SECTOR_TILES];
+        char slot[600], q[600], d[600];
+        for (size_t i = 0; i < U2_SECTOR_TILES; i++) { under[i] = 0x66; over[i] = 0x77; }
+
+        snprintf(slot, sizeof slot, "%.400s/PLAYER", saves);
+        mkdir(saves, 0755);
+        mkdir(slot, 0755);
+
+        snprintf(d, sizeof d, "%.400s/data/original", dir);
+        snprintf(q, sizeof q, "%.400s/mapx60", d);
+        CHECK(write_file(q, under, U2_SECTOR_TILES) == 0,
+              "slot layer: a content mapx60 written");
+        snprintf(q, sizeof q, "%.400s/monx60", d);
+        CHECK(write_file(q, under, U2_MON_TILES) == 0, "slot layer: a content monx60 written");
+        snprintf(q, sizeof q, "%.400s/tlkx60", d);
+        CHECK(write_file(q, under, U2_TLKX_BYTES) == 0, "slot layer: a content tlkx60 written");
+
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, ov) == U2_WORLD_OK && w.map[0] == 0x66,
+              "slot layer: an empty slot reads pure content");
+        CHECK(w.map_root && strcmp(w.map_root, "data/original") == 0,
+              "  and reports the content layer it came from");
+
+        snprintf(q, sizeof q, "%.400s/mapx60", slot);
+        CHECK(write_file(q, over, U2_SECTOR_TILES) == 0, "slot layer: an overlaid mapx60 written");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, ov) == U2_WORLD_OK && w.map[0] == 0x77,
+              "slot layer: the slot shadows the content copy");
+        CHECK(w.map_root && strcmp(w.map_root, U2_WORLD_SLOT_LAYER) == 0,
+              "  and the provenance says slot, not a content root");
+
+        /* The creature table overlays too, at its own size, and a kind the slot
+         * does not hold still comes from content. */
+        snprintf(q, sizeof q, "%.400s/tlkx60", slot);
+        CHECK(write_file(q, over, U2_TLKX_BYTES) == 0, "slot layer: a tlkx60 placed in the slot");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load_tlkx(&ctx, &w, ov) == U2_WORLD_OK && w.tlkx[0] == 0x66,
+              "slot layer: tlkx is content, so the slot copy is NOT read (D3)");
+        unlink(q);
+
+        snprintf(q, sizeof q, "%.400s/monx60", slot);
+        CHECK(write_file(q, over, U2_MON_TILES) == 0, "slot layer: an overlaid monx60 written");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 0, ov) == U2_WORLD_OK && w.mon[0] == 0x77,
+              "slot layer: the creature table overlays at 256 bytes");
+        CHECK(u2_world_load(&ctx, &w, 1, ov) == U2_WORLD_OK && w.map[0] == 0x77,
+              "  and a both-kind load keeps the map overlay (per-kind, not last-wins)");
     }
 
     /* --- write-back: dirty tracking, tail preservation, atomicity ---- */

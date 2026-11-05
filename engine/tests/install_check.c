@@ -396,8 +396,14 @@ int main(int argc, char **argv)
     {
         u2_ctx ctx;
         u2_world w;
+        char sv[1024];
         memset(&ctx, 0, sizeof ctx);
         ctx.data_dir = to;
+        /* Pinned, not left to the "saves" default: the default is relative to the
+         * cwd, and a gate that writes a slot into whatever directory it happens to
+         * be run from is a gate that dirties the engine tree. */
+        snprintf(sv, sizeof sv, "%.1000s/saves", to);
+        ctx.save_dir = sv;
         CHECK(u2_world_open(&ctx) == U2_WORLD_OK, "the installed tree opens as a content dir");
 
         u2_sector_id earth = { .hi = 0, .lo = 0 };

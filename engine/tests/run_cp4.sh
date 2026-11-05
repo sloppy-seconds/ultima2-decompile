@@ -19,7 +19,7 @@ printf 'engine CP4 test\n'
 
 # --- the sector loader ----------------------------------------------------
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/world_check" \
-   tests/world_check.c src/core/world.c src/core/roots.c 2>"$WORK/cc.err"
+   tests/world_check.c src/core/world.c src/core/roots.c src/core/slot.c 2>"$WORK/cc.err"
 if [ $? -ne 0 ]; then
     bad "world test harness did not build: $(head -5 "$WORK/cc.err")"
 else
@@ -33,7 +33,7 @@ fi
 # to reject invention: slots 0 and 3 have never been transited and must report unknown.
 # Evidence: docs/moongates.md, captures/spice86/moongate-cycle.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/gate_check" \
-   tests/gate_check.c src/game/gates.c src/core/world.c src/core/roots.c src/core/state.c 2>"$WORK/cc-gate.err"
+   tests/gate_check.c src/game/gates.c src/core/world.c src/core/roots.c src/core/slot.c src/core/state.c 2>"$WORK/cc-gate.err"
 if [ $? -ne 0 ]; then
     bad "gate test harness did not build: $(head -5 "$WORK/cc-gate.err")"
 else
@@ -238,7 +238,7 @@ fi
 # P lands where the player stood. Plus the outdoors guard and the CP11
 # save-anywhere policy hook.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/save_q_check" \
-   tests/save_q_check.c src/game/overworld.c src/core/panel.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c \
+   tests/save_q_check.c src/game/overworld.c src/core/panel.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c src/core/slot.c \
    src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -258,7 +258,7 @@ fi
 # file 0x0B0D spends 10 food per PASS and file 0x0B2E sends a borrow to the
 # death handler at runtime 0x0E62 (asm/0C62), which zeroes DS:51..59.
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/food_check" \
-   tests/food_check.c src/game/overworld.c src/core/panel.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c \
+   tests/food_check.c src/game/overworld.c src/core/panel.c src/game/commands.c src/game/space.c src/debug/turnlog.c src/game/ai.c src/game/combat.c src/game/monsters.c src/game/gates.c src/game/commerce.c src/game/dungeon.c src/game/flash.c src/game/feedback.c src/core/tiles_builtin.c src/game/status.c src/core/world.c src/core/roots.c src/core/slot.c \
    src/core/save.c src/core/tiles.c src/core/tiles_ega.c src/core/ini.c src/core/sha256.c src/core/seam.c \
    src/core/vram.c src/core/state.c src/core/font.c src/core/frame.c \
    src/core/view.c src/core/rng.c src/core/timer.c src/core/replay.c \
@@ -420,7 +420,7 @@ cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/config_check" \
 cc -std=c11 -Wall -Wextra -Werror -Isrc -Icontent -o "$WORK/install_check" \
    tests/install_check.c src/core/install.c src/core/themes.c src/core/fmtowns.c \
    src/core/copy.c src/core/roots.c src/core/sha256.c \
-   src/core/world.c src/core/config.c src/core/ini.c >"$WORK/cc-inst.err" 2>&1 \
+   src/core/world.c src/core/slot.c src/core/config.c src/core/ini.c >"$WORK/cc-inst.err" 2>&1 \
     && "$WORK/install_check" "$WORK" >"$WORK/inst.out" 2>&1 \
     && ok "--install: layout, manifest, idempotence, --check refusals ($(grep -c '^  ok' "$WORK/inst.out") checks)" \
     || { bad "--install check failed:"; tail -25 "$WORK/inst.out" 2>/dev/null | sed 's/^/        /'; tail -4 "$WORK/cc-inst.err" | sed 's/^/        /'; }
