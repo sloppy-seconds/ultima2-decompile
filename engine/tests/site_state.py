@@ -64,7 +64,7 @@ def build(work):
     mon[160] = 1
     open(os.path.join(content, "monx01"), "wb").write(bytes(mon))
 
-    pp = os.path.join(work, "save", "PLAYER")
+    pp = G.record(work)
     p = bytearray(open(pp, "rb").read())
     p[DS4A] = 1                        # sector 01: a site, so the edge leaves the site
     p[DS5A], p[DS5A + 1] = SITE_X, SITE_Y
@@ -72,6 +72,20 @@ def build(work):
 
     return {n: open(os.path.join(content, n), "rb").read()
             for n in ("mapx01", "monx01")}
+
+
+def sector(work, name):
+    """The bytes the next load of this save would read for one sector file.
+
+    The slot overlay when this save has written that sector, the content copy when it
+    has not — the read order engine/src/core/world.c implements, and the reason this
+    is a function rather than a path. Reading the content copy directly would assert
+    the layout docs/save-scoped-worlds.md replaced: a write now lands in the slot, so
+    "the file did not change" and "nothing was written" are no longer the same claim.
+    """
+    ov = os.path.join(work, "save", "PLAYER", name)
+    src = ov if os.path.exists(ov) else os.path.join(work, "content", name)
+    return open(src, "rb").read()
 
 
 def run(work, keys, extra=(), name="case"):
@@ -109,8 +123,7 @@ def main():
     try:
         before = build(work)
         run(work, KEYS, name="a")
-        after = {n: open(os.path.join(work, "content", n), "rb").read()
-                 for n in before}
+        after = {n: sector(work, n) for n in before}
         check(before["mapx01"] == after["mapx01"],
               "original: mapx01 on disk untouched by the transition "
               "(cell (%d,%d) still %#02x, saw %#02x)"
@@ -128,7 +141,7 @@ def main():
         before = build(work)
         run(work, KEYS,
             extra=["--enhanced", "--keep-site-state"], name="b")
-        after = open(os.path.join(work, "content", "mapx01"), "rb").read()
+        after = sector(work, "mapx01")
         check(after[SITE_Y * 64 + SITE_X] == BOARD_LEAVES,
               "enhanced --keep-site-state: the paved tile reached the file "
               "(cell (%d,%d) = %#02x, expected %#02x)"
@@ -149,11 +162,11 @@ def main():
     work = tempfile.mkdtemp(prefix="u2-site-c-")
     try:
         G.seed(work, tiles={(3, 0): 0xA0})          # a door one cell east of the player
-        pp = os.path.join(work, "save", "PLAYER")
+        pp = G.record(work)
         p = bytearray(open(pp, "rb").read())
         p[0x65 - 0x36] = 0x05                        # keys: the unlock costs one
         open(pp, "wb").write(bytes(p))
-        mon_before = open(os.path.join(work, "content", "monx00"), "rb").read()
+        mon_before = sector(work, "monx00")
 
         run(work, ["U", "RIGHT"] + ["DOWN"] * 6 + ["Q"], name="c")
 
@@ -163,7 +176,7 @@ def main():
               "(cell (3,0) = %#02x, expected %#02x)" % (paved, GRASS))
         # Precondition, asserted rather than assumed: if nothing moved, the restamp never ran
         # and the case above would pass without proving anything.
-        mon_after = open(os.path.join(work, "content", "monx00"), "rb").read()
+        mon_after = sector(work, "monx00")
         check(mon_after != mon_before,
               "precondition: a creature moved, so the restamp really ran between the unlock "
               "and the save")

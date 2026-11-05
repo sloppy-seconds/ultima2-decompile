@@ -196,7 +196,9 @@ def main(out_dir: str) -> int:
             shutil.copyfile(cand, os.path.join(content, "monsters"))
             break
 
-    with open(os.path.join(save, "PLAYER"), "wb") as f:
+    rec = os.path.join(save, "PLAYER", "PLAYER")   # saves/<slot>/PLAYER; core/slot.h
+    os.makedirs(os.path.dirname(rec), exist_ok=True)
+    with open(rec, "wb") as f:
         f.write(player())
     return 0
 

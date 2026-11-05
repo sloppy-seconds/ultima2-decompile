@@ -311,8 +311,15 @@ u2_world_result u2_world_load_tlkx(u2_ctx *ctx, u2_world *w, u2_sector_id id);
  * the 256-byte read does). */
 int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz);
 
-/* Write a sector back, atomically (temp file + rename in the same directory).
- * Callers must only store sectors that are dirty. */
+/* Write a sector back into the save slot, atomically (temp file + rename in the
+ * same directory). Callers must only store sectors that are dirty.
+ *
+ * The target is always `saves/<slot>/<prefix><NN>`, whatever layer the sector was
+ * read from, and the slot directory is created on demand. That is the property
+ * docs/save-scoped-worlds.md exists for: the content directory is an immutable
+ * base, so a write can never damage the player's only copy of the release maps.
+ * The bytes themselves are faithful to asm/2305, which writes the stamped grid —
+ * what changed is where they land, not what they are. */
 u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map);
 
 /* Human-readable reason for the last failure, for the INSERT-style message. */

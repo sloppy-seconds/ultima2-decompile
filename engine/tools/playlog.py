@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -57,15 +58,11 @@ def rerun(rep, out_path):
             sys.exit(f"playlog: engine exit {proc.returncode}: {proc.stderr.strip()[:200]}")
         return load(out_path)
     finally:
-        for name in os.listdir(tmp):
-            p = os.path.join(tmp, name)
-            if os.path.isfile(p):
-                os.unlink(p)
-            else:
-                for sub in os.listdir(p):
-                    os.unlink(os.path.join(p, sub))
-                os.rmdir(p)
-        os.rmdir(tmp)
+        # Recursive, because the save directory now holds a slot: disk/PLAYER/PLAYER
+        # is two levels deep, and the one-level unlink-and-rmdir this replaced
+        # raised IsADirectoryError on it. The rule it was protecting — every run
+        # starts from a blank disk — is unchanged.
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def cmd_verify(args):

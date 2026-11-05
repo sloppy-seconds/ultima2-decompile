@@ -44,7 +44,7 @@ static long slurp(const char *p, uint8_t *buf, size_t cap)
 
 int main(int argc, char **argv)
 {
-    char base[256], dir[1024], path[1120];
+    char base[256], dir[1024], slot[1088], path[1120];
     uint8_t buf[U2_PLAYER_FILE_SIZE + 8];
 
     /* Scratch lives where the caller says (tests pass a /var/tmp dir); the
@@ -52,7 +52,12 @@ int main(int argc, char **argv)
     snprintf(base, sizeof base, "%s", argc > 1 ? argv[1] : ".");
     snprintf(dir, sizeof dir, "%s/saves_check.XXXXXX", base);
     if (!mkdtemp(dir)) { printf("  FAIL  mkdtemp in %s\n", base); return 1; }
-    snprintf(path, sizeof path, "%s/PLAYER", dir);
+    /* saves/<slot>/PLAYER, the shape docs/save-scoped-worlds.md rules. The slot
+     * and the record share a name on purpose (D1), so the two paths below differ
+     * by exactly that repetition, and a test that spelled only one of them would
+     * be asserting the old layout. */
+    snprintf(slot, sizeof slot, "%s/PLAYER", dir);
+    snprintf(path, sizeof path, "%s/PLAYER", slot);
 
     /* --- the blank template is the shipped disk image -------------------- */
     u2_save_blank_template(buf);
@@ -63,13 +68,18 @@ int main(int argc, char **argv)
     CHECK(shape_ok, "blank template: 384 bytes, one non-zero byte (0x1a at 0x100)");
     CHECK(U2_REC(&((u2_state){0}))[0] == 0, "a fresh state reads as a blank record");
 
-    /* --- ensure() creates the directory and seeds the file --------------- */
+    /* --- ensure() creates the slot and seeds the record ------------------ */
     u2_ctx ctx;
     memset(&ctx, 0, sizeof ctx);
     ctx.save_dir = dir;
     rmdir(dir);                       /* ensure() must be able to recreate it */
     CHECK(u2_save_ensure(&ctx) == U2_SAVE_BLANK, "ensure() on a missing dir seeds a blank");
     CHECK(ctx.save_seeded == 1, "ensure() reports that it seeded the file");
+    {
+        struct stat st;
+        CHECK(stat(slot, &st) == 0 && S_ISDIR(st.st_mode),
+              "ensure() created the slot directory, not just the save directory (D6)");
+    }
     CHECK(filesize(path) == U2_PLAYER_FILE_SIZE, "seeded PLAYER file is 384 bytes");
     CHECK(slurp(path, buf, sizeof buf) == U2_PLAYER_FILE_SIZE &&
           buf[0] == 0 && buf[U2_PLAYER_BLANK_MARK_OFF] == U2_PLAYER_BLANK_MARK_BYTE,
@@ -125,10 +135,12 @@ int main(int argc, char **argv)
     bad.save_dir = path;               /* a file, not a directory */
     CHECK(u2_save_ensure(&bad) == U2_SAVE_NOT_READY, "save-dir pointing at a file is NOT_READY");
 
-    char shortdir[1200], shortfile[1300];
+    char shortdir[1200], shortslot[1260], shortfile[1300];
     snprintf(shortdir, sizeof shortdir, "%s/short", dir);
     mkdir(shortdir, 0755);
-    snprintf(shortfile, sizeof shortfile, "%s/PLAYER", shortdir);
+    snprintf(shortslot, sizeof shortslot, "%s/PLAYER", shortdir);
+    mkdir(shortslot, 0755);
+    snprintf(shortfile, sizeof shortfile, "%s/PLAYER", shortslot);
     FILE *f = fopen(shortfile, "wb");
     if (f) { fwrite("junk", 1, 4, f); fclose(f); }
     memset(&bad, 0, sizeof bad);
@@ -137,19 +149,56 @@ int main(int argc, char **argv)
     CHECK(slurp(shortfile, buf, sizeof buf) == 4, "a short PLAYER file is not clobbered");
 
     /* --- a too-large file is refused, not truncated ---------------------- */
-    char bigdir[1300], bigfile[1400];
+    char bigdir[1300], bigslot[1360], bigfile[1400];
     snprintf(bigdir, sizeof bigdir, "%s/big", dir);
     mkdir(bigdir, 0755);
-    snprintf(bigfile, sizeof bigfile, "%s/PLAYER", bigdir);
+    snprintf(bigslot, sizeof bigslot, "%s/PLAYER", bigdir);
+    mkdir(bigslot, 0755);
+    snprintf(bigfile, sizeof bigfile, "%s/PLAYER", bigslot);
     f = fopen(bigfile, "wb");
     if (f) { memset(buf, 0xEE, sizeof buf); fwrite(buf, 1, 500, f); fclose(f); }
     memset(&bad, 0, sizeof bad);
     bad.save_dir = bigdir;
     CHECK(u2_save_load(&bad) == U2_SAVE_NOT_READY, "an oversized PLAYER file is refused");
 
+    /* --- the release spelling inside a slot is still found ---------------
+     *
+     * resolve_save_name()'s job shrank with the layout but did not go away: DOS
+     * names are case-insensitive and this pack spells the record `player`, so a
+     * hand-copied release save dropped into a slot has to be read AND written
+     * under the name it actually has. Deleting that function would reintroduce a
+     * silent fresh start, which is the bug it was written for. */
+    {
+        char reldir[1200], relslot[1260], relfile[1300], other[1320];
+        snprintf(reldir, sizeof reldir, "%s/release", dir);
+        mkdir(reldir, 0755);
+        snprintf(relslot, sizeof relslot, "%s/PLAYER", reldir);
+        mkdir(relslot, 0755);
+        snprintf(relfile, sizeof relfile, "%s/player", relslot);
+        snprintf(other, sizeof other, "%s/PLAYER", relslot);
+        u2_save_blank_template(buf);
+        f = fopen(relfile, "wb");
+        if (f) { fwrite(buf, 1, U2_PLAYER_FILE_SIZE, f); fclose(f); }
+
+        u2_ctx rel;
+        memset(&rel, 0, sizeof rel);
+        rel.save_dir = reldir;
+        CHECK(u2_save_load(&rel) == U2_SAVE_BLANK,
+              "a release-spelled `player` in a slot is found, not skipped");
+        memcpy(rel.state.name, "SLOTTEST", 8);
+        CHECK(u2_save_store(&rel) == U2_SAVE_OK, "  and storing to it succeeds");
+        CHECK(slurp(relfile, buf, sizeof buf) == U2_PLAYER_FILE_SIZE &&
+              memcmp(buf, "SLOTTEST", 8) == 0,
+              "  the write went to the file that was there, under its own spelling");
+        CHECK(filesize(other) == -1,
+              "  and no second, differently spelled record was created beside it");
+        unlink(relfile); rmdir(relslot); rmdir(reldir);
+    }
+
     /* --- cleanup ---------------------------------------------------------- */
     unlink(path); unlink(shortfile); unlink(bigfile);
-    rmdir(shortdir); rmdir(bigdir); rmdir(dir);
+    rmdir(shortslot); rmdir(shortdir); rmdir(bigslot); rmdir(bigdir);
+    rmdir(slot); rmdir(dir);
 
     printf(fails ? "SAVE CHECK: FAIL (%d)\n" : "SAVE CHECK: PASS\n", fails);
     return fails ? 1 : 0;

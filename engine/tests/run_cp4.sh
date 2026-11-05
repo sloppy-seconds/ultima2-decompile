@@ -434,6 +434,17 @@ python3 tests/install_controls.py "$WORK/controls" >"$WORK/ctl.out" 2>&1 \
     && ok "$(cat "$WORK/ctl.out")" \
     || { bad "installer controls are not all able to fail:"; sed 's/^/        /' "$WORK/ctl.out"; }
 
+# --- content is immutable once installed ---------------------------------------
+# docs/save-scoped-worlds.md § 5 calls this the property worth gating hardest, and
+# it is the one nothing else can see: the write-back is faithful to asm/2305, so
+# what changed is only *where* the bytes land, and a wrong destination is invisible
+# on screen. Hash the content tree, play a session that writes a sector, hash again.
+# The gate carries its own red control and runs it every time, because a comparison
+# that cannot fail is the failure mode AGENTS.md § 3 exists to stop.
+python3 tests/content_immutable.py "$WORK/immutable" >"$WORK/imm.out" 2>&1 \
+    && ok "content immutable after install: a played session writes only the save slot" \
+    || { bad "content-immutability gate failed:"; sed 's/^/        /' "$WORK/imm.out"; }
+
 # The v2 player marker gets the same treatment for the same reason. The raw-blit
 # bug passed every check the format had, because every theme in existence at the
 # time had an identity map; the assertion that would have caught it is only worth

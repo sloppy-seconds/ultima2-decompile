@@ -24,7 +24,7 @@ printf 'engine CP3 test\n'
 
 # --- the save record is byte-compatible with the original -----------------
 cc -std=c11 -Wall -Wextra -Werror -Isrc -o "$WORK/save_check" \
-   tests/save_check.c src/core/save.c src/core/state.c 2>"$WORK/cc.err"
+   tests/save_check.c src/core/save.c src/core/slot.c src/core/state.c 2>"$WORK/cc.err"
 if [ $? -ne 0 ]; then
     bad "save test harness did not build: $(head -3 "$WORK/cc.err")"
 else
@@ -84,11 +84,13 @@ printf '0x0d\n0x0d\n' >> "$WORK/longname.keys"
 mkdir -p "$WORK/longname"
 ./u2 --headless --script "$WORK/longname.keys" --save-dir "$WORK/longname" \
      > /dev/null 2>&1
-HEX=$(od -An -tx1 -N16 "$WORK/longname/PLAYER" 2>/dev/null | tr -d ' \n')
+# <save-dir>/<slot>/PLAYER: the record is inside its slot directory, which shares
+# the name (docs/save-scoped-worlds.md D1, engine/src/core/slot.h).
+HEX=$(od -An -tx1 -N16 "$WORK/longname/PLAYER/PLAYER" 2>/dev/null | tr -d ' \n')
 [ "$HEX" = "4142434445464748494a4b4c00000000" ] \
     && ok "name capped at 12 with 4 zero pad bytes, no overflow" \
     || bad "name field wrong: got $HEX want 4142434445464748494a4b4c00000000"
-SEX=$(od -An -tx1 -j16 -N1 "$WORK/longname/PLAYER" 2>/dev/null | tr -d ' \n')
+SEX=$(od -An -tx1 -j16 -N1 "$WORK/longname/PLAYER/PLAYER" 2>/dev/null | tr -d ' \n')
 [ "$SEX" = "4d" ] \
     && ok "bytes after the name field survived a long name (sex = M)" \
     || bad "name overflowed into the next fields: got $SEX want 4d"
@@ -121,13 +123,13 @@ if command -v script >/dev/null 2>&1; then
         || bad "C produced no more screen output than an invalid key (${create_bytes}B vs ${invalid_bytes}B)"
     # The pty run above completed a whole character and then quit on Ctrl-Q;
     # prove it reached the disk.
-    if [ -s "$WORK/d_create/PLAYER" ]; then
-        nz=$(python3 -c "import sys;d=open('$WORK/d_create/PLAYER','rb').read();print(sum(1 for b in d if b))")
+    if [ -s "$WORK/d_create/PLAYER/PLAYER" ]; then
+        nz=$(python3 -c "import sys;d=open('$WORK/d_create/PLAYER/PLAYER','rb').read();print(sum(1 for b in d if b))")
         [ "$nz" -gt 1 ] \
             && ok "the pty creation run wrote a populated player record ($nz non-zero bytes)" \
             || bad "pty creation run left a blank record ($nz non-zero bytes)"
     else
-        bad "pty creation run produced no PLAYER file"
+        bad "pty creation run produced no PLAYER file in its slot"
     fi
 else
     printf '  SKIP  script(1) unavailable, interactive pty test not run\n'

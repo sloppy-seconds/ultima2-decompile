@@ -48,11 +48,16 @@ def main() -> int:
 
     save = os.path.join(work, "save")
     shutil.rmtree(work, ignore_errors=True)
-    os.makedirs(save)
-    shutil.copy(os.path.join(data, "player"), os.path.join(save, "PLAYER"))
+    # saves/<slot>/PLAYER, the shape core/slot.h owns. The slot directory and the
+    # record inside it share the name "PLAYER" by ruling D1, so this is one path
+    # spelled twice and not a typo.
+    slot = os.path.join(save, "PLAYER")
+    rec = os.path.join(slot, "PLAYER")
+    os.makedirs(slot)
+    shutil.copy(os.path.join(data, "player"), rec)
     for args in (["set", "sector", "31"], ["setpos", str(X), str(Y)]):
         subprocess.run([sys.executable, editor, args[0],
-                        os.path.join(save, "PLAYER"), *args[1:]],
+                        rec, *args[1:]],
                        capture_output=True, check=False)
     with open(os.path.join(work, "k.keys"), "wb") as f:
         f.write(b"T\n" + UP + b"\n")

@@ -46,7 +46,7 @@ def main():
         work = tempfile.mkdtemp(prefix="u2-stamp-")
         try:
             G.seed(work)
-            pp = os.path.join(work, "save", "PLAYER")
+            pp = G.record(work)
             p = bytearray(open(pp, "rb").read())
             p[CLASS_OFF] = cls
             open(pp, "wb").write(bytes(p))

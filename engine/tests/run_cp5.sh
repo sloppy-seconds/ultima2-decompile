@@ -1025,7 +1025,7 @@ if bytearray(open(p, 'rb').read())[off] != val:
     sys.exit(f'patch_player: write to {off} did not land')
 PYEOF
 }
-PLAYER="$WORK/wv/save/PLAYER"
+PLAYER="$WORK/wv/save/PLAYER/PLAYER"   # saves/<slot>/PLAYER; engine/src/core/slot.h
 run_wv() {   # run_wv EXTRA_FLAGS SCRIPT OUTFILE
     ./u2 --headless $1 --play-map --cleanroom --data-dir "$WORK/wv/content" \
          --save-dir "$WORK/wv/save" --script "$2" --dump-each > "$3" 2>&1

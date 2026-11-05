@@ -4,8 +4,8 @@
 Everything written here is engine-authored filler — the same rule monsters_check.c
 and world_check.c follow, so that a fight can be gated in CI without touching the
 player's own game files. The bytes are shaped like the real ones because the engine
-reads them the same way: a 4096-byte mapx, a 256-byte monx, a 384-byte PLAYER
-record whose byte i is DS[0x36+i] (docs/save-format.md).
+reads them the same way: a 4096-byte mapx, a 256-byte monx, and a 384-byte PLAYER
+record at saves/<slot>/PLAYER whose byte i is DS[0x36+i] (docs/save-format.md).
 
 Usage: cp5_fight_seed.py DIR
 """
@@ -61,7 +61,14 @@ def main(out_dir: str) -> int:
     #                                       asm/2E3D rolls (rand>>1) < agi and the
     #                                       roll maxes at 127, so a hit is certain.
     p[0x4B - 0x36] = 0x40                 # strength, plenty for a one-hit kill
-    with open(os.path.join(save, "PLAYER"), "wb") as f:
+    # saves/<slot>/PLAYER: the record lives inside its slot directory, which is
+    # also where this seed's dirty sectors will be written. engine/src/core/slot.h
+    # is the authority for the shape; a seed that spelled the old flat path would
+    # leave the engine seeding a fresh blank and every gate below reading a
+    # character that is not the one it authored.
+    rec = os.path.join(save, "PLAYER", "PLAYER")
+    os.makedirs(os.path.dirname(rec), exist_ok=True)
+    with open(rec, "wb") as f:
         f.write(bytes(p))
     return 0
 

@@ -71,7 +71,7 @@ def main(out_dir, arm):
         patch(os.path.join(content, "mapx00"),
               [(0 * 64 + 1, 0x08, 0x00)], "mapx00")
 
-    patch(os.path.join(save, "PLAYER"),
+    patch(os.path.join(save, "PLAYER", "PLAYER"),      # saves/<slot>/PLAYER; core/slot.h
           [(F0, 0x99, food[0]), (F0 + 1, 0x99, food[1]),
            (F0 + 2, 0x99, food[2])], "PLAYER")
     return 0

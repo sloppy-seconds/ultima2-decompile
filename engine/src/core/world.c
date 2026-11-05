@@ -8,8 +8,11 @@
  *     a tile byte or a map string;
  *   - the original rewrites its own sector files (asm/2305, AH=28h), and the
  *     owner chose the faithful behaviour for `original` mode, so a write-back
- *     has to survive a crash: a half-written world file has no pristine copy in
- *     the save directory the way the PLAYER record does;
+ *     has to survive a crash: a half-written world file has no pristine copy the
+ *     way the PLAYER record does, which is why every write here is temp+rename;
+ *   - and it has to land in the save slot, never in the content directory, so a
+ *     player's release maps stay an immutable base and a stamped sector is a
+ *     deletable overlay. docs/save-scoped-worlds.md;
  *   - a content directory that cannot be used is reported, never worked around.
  *     A silently empty map would be worse than the original, which has no way to
  *     lose a map change.
@@ -221,9 +224,10 @@ u2_world_result u2_world_open(const u2_ctx *ctx)
 /* Writability is checked at store time, not at open time: a read-only content
  * directory is perfectly playable right up until the game needs to write a
  * sector, and that is exactly when the original would have shown its INSERT
- * prompt. Refusing to start would be a deviation nobody asked for. The store
- * checks the directory it is about to write into, which is the layer the sector
- * was read from -- see u2_world_store. */
+ * prompt. Refusing to start would be a deviation nobody asked for. Under the
+ * save-slot layout the directory that has to be writable is the slot, not the
+ * content: content is read-only by design and a game can be played to the end
+ * without ever writing to it. */
 static int dir_writable(const char *dir)
 {
     return access(dir, W_OK | X_OK) == 0;
@@ -438,16 +442,22 @@ int u2_world_tlkx_record(const u2_world *w, int index, char *out, size_t outsz)
  * matters — rename(2) is atomic only within one filesystem, and a cross-device
  * rename would fail or degrade into a copy.
  *
- * The file is laid down as [live sector][whatever the original file had past the
- * read length]. A shipped 4224-byte file keeps its 128-byte tail because the
- * engine replaces only the 4096 bytes the original reads and copies the rest
- * through verbatim — the same rule the save path follows for the PLAYER record's
- * tail. A file that is exactly 4096 bytes (the Galaxy content) stays 4096.
+ * The file is laid down as [live sector][whatever the file had past the read
+ * length]. A shipped 4224-byte map keeps its 128-byte tail because the engine
+ * replaces only the 4096 bytes the original reads and copies the rest through
+ * verbatim — the same rule the save path follows for the PLAYER record's tail.
+ * A file that is exactly 4096 bytes (the Galaxy content) stays 4096.
+ *
+ * The tail comes from the overlay when one already exists, and otherwise from the
+ * content file the sector was read from. Without that second source the first
+ * write of a fresh save would produce a 4096-byte overlay out of a 4224-byte
+ * release file, and the tail — which the original never reads but always keeps —
+ * would quietly disappear the first time anyone played.
  */
 u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
 {
     u2_sector_id id;
-    char path[544], tmp[576], dir[448];
+    char path[544], tmp[576];
     size_t want = want_bytes(is_map);
     size_t nprefixes = 0;
     const uint8_t *buf = is_map ? w->map : w->mon;
@@ -456,15 +466,23 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
     if (!id_of(w, is_map, &id))
         return U2_WORLD_ERROR;
 
-    /* Write back into the layer the sector was read from, not always the game
-     * root. Under the explicit-layer layout a planet map read from data/updated
-     * would otherwise be stored at the root and shadowed forever by the very copy
-     * it came from, and a write the player can never see is the defect this file's
-     * header refuses to produce. It also fixes the same hazard in the older
-     * layout: a sector read from ./updated used to store at the root, where the
-     * patched copy still outranked it. */
-    root_path(dir, sizeof dir, ctx, is_map ? w->map_root : w->mon_root);
-    if (!dir_writable(dir))
+    /* The write target is the save slot, always, and never a content directory.
+     * This is the whole point of docs/save-scoped-worlds.md: the original does
+     * bake creature bytes into its sector files (asm/2305 writes the stamped
+     * grid), so a write-back has to land somewhere — the only question is whose
+     * copy it damages. In the content directory it was the player's only copy of
+     * the release data, and it was sticky, because map_base is loaded from that
+     * same file and a baked stamp becomes terrain. In the slot it is this save's
+     * overlay: read back ahead of content, and deletable.
+     *
+     * The slot is created here rather than by the installer (D6): a slot that
+     * exists and holds nothing would be a claim about a game that does not exist,
+     * and a sector write is the first moment one genuinely does. */
+    char slot[448];
+    u2_slot_dir(ctx, slot, sizeof slot);
+    if (u2_slot_ensure(ctx) != 0)
+        return U2_WORLD_NOT_READY;
+    if (!dir_writable(slot))
         return U2_WORLD_NOT_READY;
 
     /* The prefix must belong to the kind being written. This is the loud version of the
@@ -477,6 +495,7 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
      * 256), so a mismatch here is the other half of the same class of mistake. */
     const char *const *ok_prefixes = prefix_list(is_map, &nprefixes);
     const char *want_prefix = is_map ? w->map_prefix : w->mon_prefix;
+    const char *used_root = is_map ? w->map_root : w->mon_root;
     if (want_prefix) {
         int legal = 0;
         for (size_t i = 0; i < nprefixes; i++)
@@ -485,9 +504,12 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
             return U2_WORLD_ERROR;
     }
 
-    sector_path(path, sizeof path, ctx, is_map ? w->map_root : w->mon_root,
-                want_prefix ? want_prefix : prefix_list(is_map, &nprefixes)[0], id);
-    snprintf(tmp, sizeof tmp, "%s.u2tmp", path);
+    /* The overlay keeps the spelling the sector was read under, so a planet map
+     * that came from a patch layer is stored as MAPGnn and the read side finds it
+     * again with the same rotation, ahead of every content layer. */
+    snprintf(path, sizeof path, "%.437s/%.4s%u%u", slot, want_prefix ? want_prefix : ok_prefixes[0],
+             (unsigned)(id.hi & 0x0F), (unsigned)(id.lo & 0x0F));
+    snprintf(tmp, sizeof tmp, "%.575s.u2tmp", path);
 
     dst = fopen(tmp, "wb");
     if (!dst)
@@ -498,6 +520,13 @@ u2_world_result u2_world_store(u2_ctx *ctx, u2_world *w, int is_map)
     }
 
     src = fopen(path, "rb");
+    if (!src && used_root && strcmp(used_root, U2_WORLD_SLOT_LAYER) != 0) {
+        /* First write of this sector: the overlay does not exist yet, so the tail
+         * comes from the content file the bytes were read from. */
+        char under[544];
+        sector_path(under, sizeof under, ctx, used_root, want_prefix, id);
+        src = fopen(under, "rb");
+    }
     if (src) {
         if (fseek(src, (long)want, SEEK_SET) == 0) {
             uint8_t chunk[512];

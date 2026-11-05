@@ -602,9 +602,9 @@ else
     #
     # It SKIPs without the player's copy rather than passing vacuously on synthetic data.
     if [ -r ../original/mapx20 ] && [ -r ../original/mapx22 ]; then
-        rm -rf "$WORK/realtown"; mkdir -p "$WORK/realtown/save"
-        python3 ../tools/u2_edit.py set ../original/player sector 20 -o "$WORK/realtown/save/PLAYER" >/dev/null 2>&1
-        python3 ../tools/u2_edit.py setpos "$WORK/realtown/save/PLAYER" 36 29 >/dev/null 2>&1
+        rm -rf "$WORK/realtown"; mkdir -p "$WORK/realtown/save/PLAYER"
+        python3 ../tools/u2_edit.py set ../original/player sector 20 -o "$WORK/realtown/save/PLAYER/PLAYER" >/dev/null 2>&1
+        python3 ../tools/u2_edit.py setpos "$WORK/realtown/save/PLAYER/PLAYER" 36 29 >/dev/null 2>&1
         printf 'E\n' > "$WORK/realtown/k.keys"
         real=$(./u2 --headless --play-map --data-dir ../original \
                     --save-dir "$WORK/realtown/save" --script "$WORK/realtown/k.keys" \
@@ -653,9 +653,9 @@ printf '\n'
     # Needs the player's tlkx22: the synthetic seed ships no dialogue file, and a talk test
     # against an absent tlkx would assert only that the fallback message prints.
     if [ -r ../original/tlkx22 ] && [ -r ../original/monx22 ]; then
-        rm -rf "$WORK/talk"; mkdir -p "$WORK/talk/save"
-        python3 ../tools/u2_edit.py set ../original/player sector 22 -o "$WORK/talk/save/PLAYER" >/dev/null 2>&1
-        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER" 53 56 >/dev/null 2>&1
+        rm -rf "$WORK/talk"; mkdir -p "$WORK/talk/save/PLAYER"
+        python3 ../tools/u2_edit.py set ../original/player sector 22 -o "$WORK/talk/save/PLAYER/PLAYER" >/dev/null 2>&1
+        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER/PLAYER" 53 56 >/dev/null 2>&1
         printf 'T\n' > "$WORK/talk/k.keys"
         printf '\360\n' >> "$WORK/talk/k.keys"        # 0xF0 = up, toward John Mayer at (53,55)
         talk=$(./u2 --headless --play-map --data-dir ../original \
@@ -671,7 +671,7 @@ printf '\n'
         # unmatched creature answers with FUNNY, NO RESPONSE!, and a matched type answers
         # with its own fixed line. The merchant at (51,51) is type 0x68 with role 0x02, so
         # it takes asm/412C rather than the tlkx path.
-        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER" 51 52 >/dev/null 2>&1
+        python3 ../tools/u2_edit.py setpos "$WORK/talk/save/PLAYER/PLAYER" 51 52 >/dev/null 2>&1
         talk2=$(./u2 --headless --play-map --data-dir ../original \
                      --save-dir "$WORK/talk/save" --script "$WORK/talk/k.keys" \
                      --dump-state 2>&1)

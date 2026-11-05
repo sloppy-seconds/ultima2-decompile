@@ -47,7 +47,7 @@ def hp(dump):
 def seed_case(name, tiles=None, items=None, hp_pair=None):
     work = G.seed("/var/tmp/u2-swamp-%s" % name, tiles=tiles, items=items)
     if hp_pair:
-        pp = os.path.join(work, "save", "PLAYER")
+        pp = G.record(work)
         p = bytearray(open(pp, "rb").read())
         p[HP_HI_OFF], p[HP_LO_OFF] = hp_pair
         open(pp, "wb").write(bytes(p))

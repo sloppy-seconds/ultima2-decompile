@@ -243,16 +243,22 @@ int main(int argc, char **argv)
         u2_world_tile_put(&w, 3, 4, 0x77);
         CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_OK,
               "layout B: the patched sector stores");
+        /* The old rule was "write back into the layer it was read from", and it
+         * existed to stop a write being shadowed forever by the patch it came
+         * from. The slot serves that purpose better — it outranks every layer —
+         * and it also stops the write editing the player's release data, which is
+         * the thing docs/save-scoped-worlds.md was written to stop. */
         snprintf(q, sizeof q, "%.400s/data/updated/MAPG51", dir);
         f = fopen(q, "rb");
-        int landed_in_layer = 0;
+        int layer_untouched = 0;
         if (f) {
             size_t n = fread(readback, 1, sizeof readback, f);
             fclose(f);
-            landed_in_layer = n >= U2_SECTOR_TILES && readback[4 * U2_SECTOR_EDGE + 3] == 0x77;
+            layer_untouched = n >= U2_SECTOR_TILES && readback[0] == 0x44
+                           && readback[4 * U2_SECTOR_EDGE + 3] != 0x77;
         }
-        CHECK(landed_in_layer,
-              "layout B: the write landed in the layer it was read from");
+        CHECK(layer_untouched,
+              "S2: the patch layer kept its installed bytes; the write went to the slot");
         snprintf(q, sizeof q, "%.400s/mapx51", dir);
         f = fopen(q, "rb");
         int root_untouched = 0;
@@ -263,6 +269,16 @@ int main(int argc, char **argv)
         }
         CHECK(root_untouched,
               "layout B: storing a patched sector wrote nothing beside the root mapx");
+        snprintf(q, sizeof q, "%.400s/PLAYER/MAPG51", saves);
+        f = fopen(q, "rb");
+        int landed_in_slot = 0;
+        if (f) {
+            size_t n = fread(readback, 1, sizeof readback, f);
+            fclose(f);
+            landed_in_slot = n >= U2_SECTOR_TILES && readback[4 * U2_SECTOR_EDGE + 3] == 0x77;
+        }
+        CHECK(landed_in_slot,
+              "S2: the overlay took the spelling the sector was read under, so the read side finds it");
         memset(&w, 0, sizeof w);
         CHECK(u2_world_load(&ctx, &w, 1, jup) == U2_WORLD_OK &&
               w.map[4 * U2_SECTOR_EDGE + 3] == 0x77,
@@ -357,12 +373,28 @@ int main(int argc, char **argv)
     CHECK(u2_world_tile_at(&w, 7, 9) == 0xA5, "the tile change is visible");
     CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_OK, "dirty sector stores");
     CHECK(w.map_dirty == 0, "storing clears dirty");
+
+    /* The property the whole slot change exists for, asserted at the unit level so
+     * a regression names the file that moved rather than just a hash. */
+    path_for(p, sizeof p, dir, "mapx30");
+    f = fopen(p, "rb");
+    int content_untouched = 0;
+    if (f) {
+        size_t n = fread(readback, 1, sizeof readback, f);
+        fclose(f);
+        content_untouched = n == U2_SECTOR_TILES + 128 && readback[0] == buf[0]
+                         && readback[9 * U2_SECTOR_EDGE + 7] != 0xA5;
+    }
+    CHECK(content_untouched,
+          "S2: the content mapx30 is byte-identical to what was written into it");
+
+    snprintf(p, sizeof p, "%.400s/PLAYER/mapx30", saves);
     CHECK(filesize(p) == U2_SECTOR_TILES + 128,
-          "write-back preserves the 128-byte tail the original never reads");
-    snprintf(p, sizeof p, "%.400s/mapx30.u2tmp", dir);
+          "S2: the overlay is 4096 + the 128-byte tail carried from the content file");
+    snprintf(p, sizeof p, "%.400s/PLAYER/mapx30.u2tmp", saves);
     CHECK(filesize(p) == -1, "write-back leaves no temp file behind");
 
-    path_for(p, sizeof p, dir, "mapx30");
+    snprintf(p, sizeof p, "%.400s/PLAYER/mapx30", saves);
     f = fopen(p, "rb");
     CHECK(f != NULL, "stored sector reopens");
     if (f) {
@@ -375,16 +407,35 @@ int main(int argc, char **argv)
         CHECK(readback[U2_SECTOR_TILES + 127] == buf[U2_SECTOR_TILES + 127],
               "the last tail byte survived untouched");
     }
+    memset(&w, 0, sizeof w);
+    CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK && w.map[9 * U2_SECTOR_EDGE + 7] == 0xA5,
+          "S2: the overlay is what the next load of this save reads");
 
-    /* --- a read-only content dir is reported when a write is needed --- */
+    /* --- what has to be writable, and what no longer does ---------------
+     *
+     * Content is read-only by design now, so a mounted-down-the-road release must
+     * not stop a game being saved; the slot is the thing that has to accept a
+     * write, and refusing with the INSERT analogue is its honest failure. */
     CHECK(chmod(dir, 0555) == 0, "content dir made read-only");
     memset(&w, 0, sizeof w);
     CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK,
           "a read-only content dir still plays (load succeeds)");
     u2_world_tile_put(&w, 1, 1, 0x5A);
-    CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_NOT_READY,
-          "storing into a read-only dir reports NOT_READY, the INSERT analogue");
+    CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_OK,
+          "S2: a read-only content dir does not stop a save, because content is not the target");
     CHECK(chmod(dir, 0755) == 0, "content dir restored");
+
+    {
+        char slotdir[600];
+        snprintf(slotdir, sizeof slotdir, "%.400s/PLAYER", saves);
+        CHECK(chmod(slotdir, 0555) == 0, "save slot made read-only");
+        memset(&w, 0, sizeof w);
+        CHECK(u2_world_load(&ctx, &w, 1, id) == U2_WORLD_OK, "a read-only slot still plays");
+        u2_world_tile_put(&w, 1, 2, 0x5B);
+        CHECK(u2_world_store(&ctx, &w, 1) == U2_WORLD_NOT_READY,
+              "storing into a read-only slot reports NOT_READY, the INSERT analogue");
+        CHECK(chmod(slotdir, 0755) == 0, "save slot restored");
+    }
 
     /* --- the monster table is the same shape at 256 bytes (asm/22D5) -- */
     id.hi = 3; id.lo = 0;
@@ -442,9 +493,19 @@ int main(int argc, char **argv)
     if (f) {
         size_t n = fread(readback, 1, sizeof readback, f);
         fclose(f);
-        tile_on_disk = (n >= U2_SECTOR_TILES && readback[0 * U2_SECTOR_EDGE + 2] == 0x44);
+        tile_on_disk = (n >= U2_SECTOR_TILES && readback[0 * U2_SECTOR_EDGE + 2] != 0x44);
     }
-    CHECK(tile_on_disk, "storing the MAP writes the MAP file, where the change belongs");
+    CHECK(tile_on_disk, "storing the MAP left the content mapx30 alone");
+
+    snprintf(p, sizeof p, "%.400s/PLAYER/mapx30", saves);
+    f = fopen(p, "rb");
+    int overlay_has_it = 0;
+    if (f) {
+        size_t n = fread(readback, 1, sizeof readback, f);
+        fclose(f);
+        overlay_has_it = (n >= U2_SECTOR_TILES && readback[0 * U2_SECTOR_EDGE + 2] == 0x44);
+    }
+    CHECK(overlay_has_it, "storing the MAP wrote the slot's MAPX file, where the change belongs");
 
     printf(fails ? "world check: FAIL (%d)\n" : "world check: all checks passed\n",
            fails);

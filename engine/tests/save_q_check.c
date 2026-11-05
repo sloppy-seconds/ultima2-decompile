@@ -94,7 +94,10 @@ int main(int argc, char **argv)
     char data[256], saves[256], saves_path[300];
     snprintf(data, sizeof data, "%s/data", tmp);
     snprintf(saves, sizeof saves, "%s/saves", tmp);
-    snprintf(saves_path, sizeof saves_path, "%s/PLAYER", saves);
+    /* The record is inside its slot, and the slot shares the record's name (D1).
+     * engine/src/core/slot.h owns the shape; a gate that spelled the old flat path
+     * would read a file the engine no longer opens and call it a save. */
+    snprintf(saves_path, sizeof saves_path, "%s/PLAYER/PLAYER", saves);
     mkdir(tmp, 0755); mkdir(data, 0755); mkdir(saves, 0755);
     make_sector(data, "mapx20");
     make_mon_sector(data, "monx20");
@@ -145,7 +148,10 @@ int main(int argc, char **argv)
      * came back on reload. */
     {
         char monpath[300];
-        snprintf(monpath, sizeof monpath, "%s/monx20", data);
+        /* The creature block this save dirtied lands in the slot, not beside the
+         * content copy it was read from — that is the property, and reading the
+         * content file here would assert the layout this change replaced. */
+        snprintf(monpath, sizeof monpath, "%s/PLAYER/monx20", saves);
         u2_sector_id id = { 2, 0 };
         if (u2_world_load(&a, &ow.world, 0, id) != U2_WORLD_OK) {
             ok(0, "the synthetic monx20 did not load");

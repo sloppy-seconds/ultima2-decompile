@@ -134,7 +134,11 @@ def build_town_save(dst_dir, player_src):
     rec[OFF_ENTRY_Y] = TOWN_Y
     rec[OFF_WORLD] = 0
     os.makedirs(dst_dir, exist_ok=True)
-    with open(os.path.join(dst_dir, 'PLAYER'), 'wb') as f:
+    # saves/<slot>/PLAYER: the slot directory and the record inside it share the
+    # name (docs/save-scoped-worlds.md D1), and core/slot.h owns the shape.
+    slot = os.path.join(dst_dir, 'PLAYER')
+    os.makedirs(slot, exist_ok=True)
+    with open(os.path.join(slot, 'PLAYER'), 'wb') as f:
         f.write(bytes(rec))
 
 

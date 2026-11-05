@@ -77,13 +77,25 @@ def seed(work, tiles=None, items=None, monx=None):
     open(fp, "wb").write(bytes(m))
 
     if items:
-        pp = os.path.join(work, "save", "PLAYER")
+        pp = record(work)
         p = bytearray(open(pp, "rb").read())
         for slot, n in items.items():
             p[0xA0 + slot] = n
         open(pp, "wb").write(bytes(p))
 
     return work
+
+
+def record(work):
+    """The save record inside a seed dir: `save/<slot>/PLAYER`.
+
+    One function, because a dozen gates that each spell the path are a dozen gates
+    that would silently test the old flat layout when it moved: the engine would
+    seed its own blank, the gate would read a character it never authored, and
+    both halves would still look like a result. engine/src/core/slot.h is the
+    authority for the shape (docs/save-scoped-worlds.md D1).
+    """
+    return os.path.join(work, "save", "PLAYER", "PLAYER")
 
 
 def pos(dump):
@@ -111,10 +123,21 @@ def stamp(dump):
     return raw(dump, "stamp")[0]
 
 
-def map_byte(work, x, y):
+def map_byte(work, x, y, overlay=True):
     """Read a cell back out of the sector file after a save: what the world looks like to
     the next player who loads this sector. Only meaningful after a Q, because the engine
-    stores a sector when it is dirty and nothing else writes the file."""
+    stores a sector when it is dirty and nothing else writes the file.
+
+    With the save-scoped layout that byte lives in the slot overlay when the save has
+    changed the sector, and in the content copy when it has not — the same order the
+    engine reads in (docs/save-scoped-worlds.md § 3), and the reason this asks the
+    question rather than returning one path. Pass overlay=False for the content copy,
+    which is the file that must never change.
+    """
+    if overlay:
+        ov = os.path.join(work, "save", "PLAYER", "mapx00")
+        if os.path.exists(ov):
+            return open(ov, "rb").read()[y * 64 + x]
     return open(os.path.join(work, "content", "mapx00"), "rb").read()[y * 64 + x]
 
 

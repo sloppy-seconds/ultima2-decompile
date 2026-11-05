@@ -79,6 +79,19 @@ def excluded_at(off, n):
     return any(off < e0 + e1 and off + n > e0 for e0, e1, _ in EXCLUDED)
 
 
+def record_in(save_dir):
+    """The record path inside a save directory: `<save_dir>/<slot>/PLAYER`.
+
+    docs/save-scoped-worlds.md D1, and engine/src/core/slot.h is the authority.
+    This is the harness AGENTS.md § 3 names as the one that passes vacuously when
+    save handling moves and the harness does not: it copies a record in, runs the
+    engine, and reads a record back, so pointing at the old flat path would make it
+    compare a file the engine never opened and still print PASS. One function, so
+    the harness and the engine move together or not at all.
+    """
+    return os.path.join(save_dir, "PLAYER", "PLAYER")
+
+
 def hexs(b):
     return " ".join("%02x" % x for x in b)
 
@@ -135,9 +148,9 @@ def engine_loads_record(player_file, work):
     """Load a real PLAYER into the engine and return the DS mirror bytes it produced."""
     save_dir = os.path.join(work, "save")
     data_dir = os.path.join(work, "content")
-    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(record_in(save_dir)), exist_ok=True)
     os.makedirs(data_dir, exist_ok=True)
-    shutil.copy(player_file, os.path.join(save_dir, "PLAYER"))
+    shutil.copy(player_file, record_in(save_dir))
     # The engine needs a sector to open. Copy the real mapx/monx so the record's own sector
     # digits resolve to the real files rather than to a synthetic grid.
     src = os.path.join(REPO, "original")
@@ -188,9 +201,9 @@ def engine_write_save(work, player_src, tag):
     """
     save_dir = os.path.join(work, "write-%s" % tag)
     data_dir = os.path.join(work, "content-%s" % tag)
-    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(record_in(save_dir)), exist_ok=True)
     os.makedirs(data_dir, exist_ok=True)
-    shutil.copy(player_src, os.path.join(save_dir, "PLAYER"))
+    shutil.copy(player_src, record_in(save_dir))
     src = os.path.join(REPO, "original")
     for name in os.listdir(src):
         if name.startswith(("mapx", "monx", "MAPX", "MONX", "mapg", "mong")):
@@ -204,7 +217,7 @@ def engine_write_save(work, player_src, tag):
                     "--data-dir", data_dir, "--save-dir", save_dir,
                     "--script", keys, "--dump-ds", ds_path],
                    capture_output=True, text=True)
-    written = open(os.path.join(save_dir, "PLAYER"), "rb").read()
+    written = open(record_in(save_dir), "rb").read()
     return written, (parse_ds_dump(ds_path) if os.path.exists(ds_path) else b"")
 
 
@@ -222,7 +235,7 @@ def engine_authored_record(work):
     subprocess.run([sys.executable, os.path.join(REPO, "engine", "tests",
                                                  "cp5_fight_seed.py"), seed_dir], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    written, _ = engine_write_save(work, os.path.join(seed_dir, "save", "PLAYER"), "b")
+    written, _ = engine_write_save(work, os.path.join(seed_dir, "save", "PLAYER", "PLAYER"), "b")
     return written
 
 
@@ -249,7 +262,7 @@ def direction_b(work, player_src, http_port, mcp_port):
         print("   FAIL  cannot import read_mem from tools/spice86_type.py: %s" % e)
         return False
 
-    our_file = os.path.join(work, "write-b", "PLAYER")
+    our_file = record_in(os.path.join(work, "write-b"))
     start = ["bash", os.path.join(REPO, "tools", "spice86_start.sh"), "--headless",
              "--name", "xload", "--player", our_file,
              "--auto-play", "--patch-arrows",

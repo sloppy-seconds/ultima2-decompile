@@ -22,8 +22,11 @@
  *
  * Engine mapping (owner-approved, docs/phase4-plan.md § CP3 design):
  *
- *   - "default drive" becomes a save directory (--save-dir, default "saves"),
- *     created if absent.
+ *   - "default drive" becomes a save directory (--save-dir, default "saves"), and
+ *     inside it one directory per save game: the record lives at
+ *     `saves/<slot>/PLAYER` and only the sectors that save has changed share the
+ *     directory with it (docs/save-scoped-worlds.md). The slot is created when the
+ *     engine first needs one, never in advance.
  *   - A missing PLAYER file is seeded from the blank template below, which is
  *     byte-identical to the pristine shipped disk image. A blank record has
  *     DS:36 == 0, which is exactly the original's own "generate a character"

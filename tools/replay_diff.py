@@ -185,8 +185,13 @@ def run_engine(args, keys, rng_state, work):
     eng_dir = os.path.join(work, "engine-turns")
     os.makedirs(eng_dir, exist_ok=True)
     # The engine rewrites the save in place, so every run starts from a fresh copy or state compounds
-    # across runs and reads as a trend.
-    shutil.copyfile(os.path.join(args.save_dir, "PLAYER"), os.path.join(work, "PLAYER"))
+    # across runs and reads as a trend. The record is <save-dir>/<slot>/PLAYER, the slot
+    # directory and the file inside it sharing one name (docs/save-scoped-worlds.md D1);
+    # engine/src/core/slot.h is the authority, and tools/save_cross_load.py has the same
+    # path spelled once.
+    dst = os.path.join(work, "PLAYER", "PLAYER")
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copyfile(os.path.join(args.save_dir, "PLAYER", "PLAYER"), dst)
     script = os.path.join(work, "keys.engine")
     with open(script, "w") as f:
         f.write("\n".join(keys) + "\n")

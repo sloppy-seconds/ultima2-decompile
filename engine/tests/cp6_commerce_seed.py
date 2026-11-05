@@ -178,7 +178,9 @@ def main(out_dir: str, case: str) -> int:
     p[0xE3 - 0x36] = 1                       # items_held[13] = STRANGE COIN, which is what
     #                                       # NEGATE TIME spends. DS:E3 is inside items_held;
     #                                       # it is not a separate counter (see commands.c).
-    with open(os.path.join(save, "PLAYER"), "wb") as f:
+    rec = os.path.join(save, "PLAYER", "PLAYER")   # saves/<slot>/PLAYER; core/slot.h
+    os.makedirs(os.path.dirname(rec), exist_ok=True)
+    with open(rec, "wb") as f:
         f.write(bytes(p))
     return 0
 
@@ -245,7 +247,9 @@ def main_site(out_dir: str, case: str) -> int:
         p[0x59 - 0x36] = gold & 0xFF
     # No [DS:25]: it is below the saved record, so the floor always starts at whatever the
     # loader leaves there. See the SITE_CASES comment.
-    with open(os.path.join(save, "PLAYER"), "wb") as f:
+    rec = os.path.join(save, "PLAYER", "PLAYER")   # saves/<slot>/PLAYER; core/slot.h
+    os.makedirs(os.path.dirname(rec), exist_ok=True)
+    with open(rec, "wb") as f:
         f.write(bytes(p))
     return 0
 

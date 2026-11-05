@@ -38,8 +38,16 @@ PY
 fi
 
 # --- the report: emitted, parseable, and free of game content ------------
+# An explicit --save-dir, and a fresh one each time. Without it the run uses
+# "saves" beside the binary, so the report depends on whatever a previous session
+# left there — and tools/playlog.py verifies against a blank disk it makes itself,
+# so a recording that started from a dirty one can never reproduce. The same
+# reason the engine needs a blank disk is in playlog.py's own docstring: the route
+# reaches P, and P's whole behaviour is to read the player record.
+blank_disk() { rm -rf "$WORK/$1"; mkdir -p "$WORK/$1"; }
+blank_disk disk-run
 ./u2 --headless --script tests/play_to/menu_all_choices.keys --seed 0 \
-     --replay-report "$WORK/run.json" >/dev/null
+     --save-dir "$WORK/disk-run" --replay-report "$WORK/run.json" >/dev/null
 [ -s "$WORK/run.json" ] && ok "replay report written" || bad "no replay report"
 
 python3 tools/extract/extractor.py --emit text > "$WORK/strings" 2>/dev/null
@@ -62,15 +70,17 @@ PY
              || bad "report is malformed or leaks game text"
 
 # --- determinism: the same inputs give the same evidence -----------------
+blank_disk disk-run2
 ./u2 --headless --script tests/play_to/menu_all_choices.keys --seed 0 \
-     --replay-report "$WORK/run2.json" >/dev/null
+     --save-dir "$WORK/disk-run2" --replay-report "$WORK/run2.json" >/dev/null
 cmp -s "$WORK/run.json" "$WORK/run2.json" \
     && ok "two runs produce identical reports" \
     || bad "reports differ between identical runs"
 
 # --- the check has teeth: a different seed must diverge ------------------
+blank_disk disk-seed37
 ./u2 --headless --script tests/play_to/menu_all_choices.keys --seed 37 \
-     --replay-report "$WORK/seed37.json" >/dev/null
+     --save-dir "$WORK/disk-seed37" --replay-report "$WORK/seed37.json" >/dev/null
 if cmp -s "$WORK/run.json" "$WORK/seed37.json"; then
     bad "changing --seed did not change the report (digests are not sensitive)"
 else

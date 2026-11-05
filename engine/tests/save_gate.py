@@ -75,7 +75,7 @@ def build(work, site=False, tiles=None, ds6d=0):
             d[y * 64 + x] = v
         open(mp, "wb").write(bytes(d))
 
-    pp = os.path.join(work, "save", "PLAYER")
+    pp = G.record(work)
     p = bytearray(open(pp, "rb").read())
     if site:
         p[0x4A - 0x36] = 1
@@ -99,7 +99,7 @@ def run(work, keys, extra=(), name="case"):
 
 
 def saved_record(work):
-    return bytearray(open(os.path.join(work, "save", "PLAYER"), "rb").read())
+    return bytearray(open(G.record(work), "rb").read())
 
 
 def case(label, work, keys, expect, extra=(), site=False, tiles=None, ds6d=0):
