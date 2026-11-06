@@ -586,11 +586,18 @@ int main(int argc, char **argv)
             return 2;
         }
         u2_config_apply(&ctx, &cfg);
-        /* A theme named in config.ini is the player's choice, exactly as --ega-theme
-         * on the command line, so it suppresses the preference. A `dir` alone says
-         * where to look, not what to look for, so it does not. */
-        if (*cfg.theme)
+        /* A theme named in config.ini must behave exactly like --ega-theme on the
+         * command line, and the first version of this only half did it: it set
+         * theme_named, which suppresses auto-detection, without selecting the art
+         * axis -- so `theme = fmtowns` in a config produced CGA, which is worse
+         * than saying nothing at all. Found by deploying to a real installed tree
+         * rather than by the fixture tests, which is the whole reason the deploy
+         * step exists. Naming a theme is asking for themed art, from either place. */
+        if (*cfg.theme) {
             theme_named = 1;
+            art_mode_forced = 1;
+            ctx.art_mode = U2_ART_EGA;
+        }
     }
 
     /* The renderer default is a property of the *build*, not of the run. The

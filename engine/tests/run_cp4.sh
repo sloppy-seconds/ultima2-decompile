@@ -421,6 +421,40 @@ else
     tail -4 "$WORK/cc-artauto.err" | sed 's/^/        /'
 fi
 
+# ...and the same rule through config.ini, which the unit test above cannot see
+# because it drives the theme layer and the defect lives in main()'s argument order.
+# A config that names a theme must select themed art, exactly as --ega-theme does;
+# the first version set only the name, so `theme = fmtowns` produced CGA -- worse
+# than silence. This was found on a deployed tree, not in a fixture.
+rm -rf "$WORK/cfgtheme"; mkdir -p "$WORK/cfgtheme/themes/default"
+# A real v2 theme, copied from the repo's own tree (../themes, not ./themes: the
+# script's cwd is engine/). An empty fixture directory makes the strict launch
+# check refuse, and a refusal prints no art-mode line, which would fail the gate
+# for a fixture reason rather than the one under test.
+cp ../themes/default/THEME.INI ../themes/default/TILES \
+   "$WORK/cfgtheme/themes/default/" 2>/dev/null
+if [ ! -s "$WORK/cfgtheme/themes/default/TILES" ]; then
+    printf '  SKIP  no ../themes/default to build a config fixture from\n'
+else
+printf '[themes]\ndir = themes\ntheme = default\n' > "$WORK/cfgtheme/config.ini"
+U2_ABS="$PWD/u2"   # the checks below cd into the fixture, so ./u2 would not resolve
+cfg_line=$( (cd "$WORK/cfgtheme" && "$U2_ABS" --headless --config config.ini 2>&1 | grep '^u2: art mode' | head -1) )
+case "$cfg_line" in
+    *ega*) ok "config.ini naming a theme selects the EGA axis: $cfg_line" ;;
+    *)     bad "config.ini named a theme but the run is not EGA: '${cfg_line:-no art-mode line}'" ;;
+esac
+# And a config that names no theme, in a tree with no themes at all, must stay on
+# CGA. The directory matters: pointed at the fixture above it would correctly find
+# themes/default and select EGA, which is the auto-detection working, not failing.
+rm -rf "$WORK/cfgbare"; mkdir -p "$WORK/cfgbare"
+printf '[paths]\ndata = .\n' > "$WORK/cfgbare/config.ini"
+cfg_bare=$( (cd "$WORK/cfgbare" && "$U2_ABS" --headless --config config.ini 2>&1 | grep '^u2: art mode' | head -1) )
+case "$cfg_bare" in
+    *cga*) ok "a config naming no theme leaves the run on CGA: $cfg_bare" ;;
+    *)     bad "a themeless config should not have selected EGA: '${cfg_bare:-no art-mode line}'" ;;
+esac
+fi
+
 # --- config.ini -------------------------------------------------------------
 # The one place a shipped binary learns where content lives, so the property under
 # test is that it cannot lie: an unknown key, a misplaced key, a duplicated key, a

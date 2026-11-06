@@ -2203,3 +2203,43 @@ inline correction rather than being left to contradict the engine.
 
 `make test`: CP0..CP7 PASS.
 
+---
+
+## `config.ini` naming a theme left the run on CGA — found on deploy, 2026-11-06
+
+The rule in `docs/theme-format.md` § 5c says naming a theme selects the art axis,
+because naming a theme is asking for themed art. `--ega-theme` on the command line
+did that. The config path did not: it set `theme_named`, which suppresses
+auto-detection, and stopped there — so a tree whose `config.ini` said
+`theme = fmtowns` suppressed the inference *without* selecting EGA, and drew CGA.
+
+Same defect shape as `--ega-theme default` downgrading a run, in the path the unit
+test could not see: `artauto_check.c` drives the theme layer, and this bug lives in
+`main()`'s argument handling. It surfaced only when the deployed binary was pointed
+at a real installed tree, which printed `u2: art mode: cga (original 4-colour)`
+where the doc said it should print `ega`.
+
+**Fix.** A config-named theme now does exactly what the flag does: names the theme,
+marks the axis chosen, selects EGA.
+
+**Gate.** `run_cp4.sh` builds a fixture tree with a real v2 theme and a `config.ini`
+naming it, runs the binary from inside it, and requires the art-mode line to say
+`ega`; a second check points at a themeless tree with a themeless config and requires
+`cga`. Red control, fix reverted:
+
+```
+FAIL  config.ini named a theme but the run is not EGA: 'u2: art mode: cga (original 4-colour)'
+CP4 TEST: FAIL
+```
+
+Two fixture mistakes worth recording, because each produced a plausible wrong verdict
+rather than an error. The first copied the theme from `themes/` while the script's
+cwd is `engine/`, so the strict launch check refused and printed no art-mode line —
+which read as a failing assertion when it was a missing fixture. The second pointed
+the themeless-config check at the *themed* fixture, so it reported EGA and looked
+like the bug was unfixed when the auto-detection was in fact working correctly. A
+gate that fails for a fixture reason teaches the wrong lesson; both now use the right
+directory, or skip and say why.
+
+`make test`: CP0..CP7 PASS.
+
