@@ -67,7 +67,7 @@ check() {
     out=$(bash "$PROBE" "$@" --quiet 2>&1) || rc=$?
     if [ "$rc" -ne "$want_rc" ]; then
         bad "$what: exit $rc, wanted $want_rc"
-    elif [ -n "$want" ] && ! printf '%s\n' "$out" | grep -qF "$want"; then
+    elif [ -n "$want" ] && ! grep -qF "$want" <<< "$out"; then
         bad "$what: no '$want' in: $(printf '%s' "$out" | tr '\n' ' ')"
     elif [ -z "$want" ] && [ -n "$out" ]; then
         bad "$what: wanted no output, got: $(printf '%s' "$out" | tr '\n' ' ')"

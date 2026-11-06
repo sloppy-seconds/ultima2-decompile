@@ -166,7 +166,7 @@ print(subprocess.run(['python3','$ROOT/engine/tests/asm_body_guard.py'],
                      capture_output=True,text=True).stdout.strip())")
 if [ -z "$sub_clean" ]; then
     no "7  guard produced no output when called from engine/"
-elif printf '%s' "$sub_clean" | grep -qE '\(0 lines'; then
+elif grep -qE '\(0 lines' <<< "$sub_clean"; then
     no "7  vacuous when called from engine/ -- got: $sub_clean"
 else
     ok "7  guard inspects the real tree when called from engine/"

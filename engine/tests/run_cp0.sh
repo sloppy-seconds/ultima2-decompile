@@ -13,6 +13,15 @@ fail=0
 ok()   { printf '  PASS  %s\n' "$1"; }
 bad()  { printf '  FAIL  %s\n' "$1"; fail=1; }
 
+# Do not "tidy" the greps below back into `printf '%s\n' "$x" | grep -q ...`.
+# This script runs under `set -uo pipefail`, and `grep -q` exits at the first
+# match and closes the pipe; the writer then dies of SIGPIPE with 141, pipefail
+# reports the pipeline as failed, and the assertion goes red although grep found
+# the text. It is a race, so it passes on small payloads and fails on big ones —
+# --licenses at 17 KB lost it five times out of five while the same grep on a
+# 200-byte payload never did. A herestring has no separate writer process, so
+# there is nothing to signal. The same shape was fixed in
+# asm_body_guard_selftest.sh and sdl_probe_selftest.sh.
 SCRIPT="tests/selftest.keys"
 ARGS=(--headless --selftest --script "$SCRIPT" --dump-state)
 
@@ -23,17 +32,17 @@ rc=$?
 
 [ "$rc" = "0" ] && ok "exit status 0" || bad "exit status $rc"
 
-printf '%s\n' "$out1" | grep -q 'CP0 SKELETON' \
+grep -q 'CP0 SKELETON' <<< "$out1" \
     && ok "screen grid rendered (banner row present)" \
     || bad "banner row missing"
 
-printf '%s\n' "$out1" | grep -q 'rand_byte(5217)' \
+grep -q 'rand_byte(5217)' <<< "$out1" \
     && ok "rand_byte seam exercised" || bad "rand_byte probe missing"
 
-printf '%s\n' "$out1" | grep -q 'speaker_freq(5CD2)' \
+grep -q 'speaker_freq(5CD2)' <<< "$out1" \
     && ok "speaker_freq seam exercised" || bad "speaker_freq probe missing"
 
-printf '%s\n' "$out1" | grep -q '"engine"' \
+grep -q '"engine"' <<< "$out1" \
     && ok "state dump emitted" || bad "state dump missing"
 
 printf '%s\n' "$out1" | sed -n '/^{/,$p' | python3 -c '
@@ -234,13 +243,13 @@ if ver=$(./u2 --version 2>&1); then
         *unstamped*) bad "--version says 'unstamped': the Makefile stopped passing the build stamp ($ver)" ;;
         *) ok "--version is stamped (not the unstamped fallback)" ;;
     esac
-    printf '%s\n' "$ver" | grep -q 'build=terminal' \
+    grep -q 'build=terminal' <<< "$ver" \
         && ok "--version names the build target" \
         || bad "--version does not name the build target: $ver"
-    printf '%s\n' "$ver" | grep -q 'sdl=none' \
+    grep -q 'sdl=none' <<< "$ver" \
         && ok "--version says this cc-only build has no SDL" \
         || bad "--version claims SDL in a build compiled without it: $ver"
-    printf '%s\n' "$ver" | grep -q 'artifact=' \
+    grep -q 'artifact=' <<< "$ver" \
         && ok "--version declares whether it is the shipped artifact" \
         || bad "--version omits the artifact field: $ver"
 else
@@ -253,16 +262,16 @@ fi
 # exactly like a complete list, which is the only failure mode of this feature worth
 # gating for, so the checks are about presence and byte-fidelity rather than style.
 if lic=$(./u2 --licenses 2>&1); then
-    printf '%s\n' "$lic" | grep -q "Apache License 2.0" \
+    grep -q "Apache License 2.0" <<< "$lic" \
         && ok "--licenses carries our own Apache-2.0 notice" \
         || bad "--licenses omits the project's own licence"
-    printf '%s\n' "$lic" | grep -q "Sam Lantinga" \
+    grep -q "Sam Lantinga" <<< "$lic" \
         && ok "--licenses names the SDL3 copyright holder" \
         || bad "--licenses omits SDL3"
-    printf '%s\n' "$lic" | grep -q "font8x8" \
+    grep -q "font8x8" <<< "$lic" \
         && ok "--licenses records the font's provenance" \
         || bad "--licenses omits font8x8"
-    printf '%s\n' "$lic" | grep -q "cleanroom" \
+    grep -q "cleanroom" <<< "$lic" \
         && ok "--licenses records how the substitute art was made" \
         || bad "--licenses omits the tile-art provenance"
 
