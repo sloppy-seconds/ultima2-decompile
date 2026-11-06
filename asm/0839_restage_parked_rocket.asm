@@ -15,6 +15,7 @@
 #           full semantics and for why the launch has to save.
 # func 0839..084F  len 0017 B  evidence: seed+reko
 # calls: L_0052b3
+# provenance: static (reader/writer sweep 2026-11-03); never seen executing in 216 harvested ExecutedInstructions dumps, so the 'P' load-path entry above is inferred from asm/080D's bytes rather than observed
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_0839:

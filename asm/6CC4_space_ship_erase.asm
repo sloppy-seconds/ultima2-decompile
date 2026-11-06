@@ -19,6 +19,7 @@
 #           sprite update. Naming it "movement" would have been a wrong name on a real stub.
 # func 6CC4..6D3D  len 007A B  evidence: call+reko
 # calls: L_004daa
+# provenance: live:g39-rocket-flight (+1 other harvest: g62h), static
 # confidence: medium (the erase-only behaviour is settled by the single callee and the two
 #           sweeps; the exact sprite shape depends on the disputed first three bytes below)
 # body corrected: 2026-10-28e -- evidence: the first three bytes are the tail of

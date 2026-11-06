@@ -24,6 +24,7 @@
 #           See asm/38B0_cmd_L for the DS:69/6A/6B triple's semantics.
 # func 245A..2473  len 001A B  evidence: seed+reko
 # calls: L_000c33, L_0052b3
+# provenance: live:flight-launched-live (+6 other harvests: airport32, dungeon-35-live, edge23, edge31, south31, west31), static
 # confidence: low (bytes proven by check_func.py)
 # bulk wave: L_<addr> labels kept as cross-reference anchors (CP3)
 sub_245a:
