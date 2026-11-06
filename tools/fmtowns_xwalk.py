@@ -70,7 +70,24 @@ import re
 import struct
 import sys
 
-from PIL import Image
+
+def _pil_image():
+    """Pillow, imported where it is used rather than at module scope.
+
+    Only the art readers need it. `--check` validates the committed crosswalk and
+    touches no image, but a top-level `from PIL import Image` made it die with
+    ModuleNotFoundError on any host without Pillow -- which turned a passing
+    structural gate into a red CI job for a reason unrelated to the property being
+    gated. Importing on demand keeps `--check` runnable everywhere and names the
+    missing dependency in the one mode that genuinely needs it.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        sys.exit("this mode needs Pillow (python3 -m pip install Pillow); "
+                 "--check does not")
+    return Image
+
 
 ROOT = os.path.normpath(os.path.dirname(os.path.abspath(__file__)) + "/..")
 DISC = os.path.join(ROOT, "references/fmtowns")
@@ -228,7 +245,7 @@ def decode_bank(blob):
 
 
 def png_from_indices(px, pal):
-    im = Image.new("RGB", (TILE_W, TILE_H))
+    im = _pil_image().new("RGB", (TILE_W, TILE_H))
     im.putdata([pal[i] for i in px])
     buf = io.BytesIO()
     im.save(buf, "PNG")
@@ -296,7 +313,7 @@ def bestiary_names():
 # --------------------------------------------------------------------------
 def silhouette(png_path):
     """The Codex FM frames carry no alpha; the background is the corner colour."""
-    im = Image.open(png_path).convert("RGB")
+    im = _pil_image().open(png_path).convert("RGB")
     if im.size != (TILE_W, TILE_H):
         im = im.resize((TILE_W, TILE_H))
     a = im.load()
