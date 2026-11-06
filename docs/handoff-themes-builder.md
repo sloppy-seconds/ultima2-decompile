@@ -410,6 +410,12 @@ Four decisions the plan left open, and why:
    prints `THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in CGA. Refusing
    the mode outright makes the game unwinnable behind an art flag; the owner's rule
    is that the player is told, and they are.
+   > **Corrected 2026-11-06: the in-game notice was removed.** The dungeon is a CGA
+   > wireframe under every theme and `dungeon.c` consults no theme atlas, so the
+   > notice said the art was wrong where the theme makes no difference — and it fired
+   > on every entry once fmtowns became the automatic theme. The fallback is logged to
+   > `stderr` only. "Refuse to enter, not to draw" still stands. Current record:
+   > `docs/theme-format.md` § 6.
 4. **No new art-mode enum.** `--ega-theme-dir` reads `THEME.INI` when a theme
    directory has one and falls back to the legacy `EGATILES` assumption when it does
    not, so `U2_ART_EGA` still means "the 16-colour axis" and Ctrl-T cycles five

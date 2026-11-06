@@ -2150,3 +2150,56 @@ exactly the property under test and nothing else.
 
 `make test`: CP0..CP7 PASS.
 
+---
+
+## The dungeon scope notice was removed — 2026-11-06
+
+**Owner ruling:** the dungeon should just play the same under every theme, so kill
+the fmtowns notice.
+
+`THEME ART DOES NOT COVER DUNGEONS` was printed in the message band on every dungeon
+entry under a theme whose manifest omitted `dungeon`. It was worth checking whether
+it said anything true, and it did not:
+
+| theme | claims `scope = dungeon` | what the dungeon draws |
+| --- | --- | --- |
+| `default` | yes | CGA wireframe |
+| `EGATHEME.C64` / `.10` / `.ALT` | yes, by the v1 default at `tiles_ega.c:140` | CGA wireframe |
+| `fmtowns` | no | CGA wireframe |
+
+Identical, because the dungeon is a first-person wireframe drawn by `dg_line` in CGA
+colour 3 (asm/4B76) and `dungeon.c` consults no theme atlas — not one reference to
+`tiles`, `ega` or an art index in the file. The only reader of `scope_dungeon` in the
+whole engine was the notice itself. So `default` stayed silent for a reason that was a
+claim in a manifest rather than a difference on screen, and the notice warned about
+the one thing that does not change between themes. Making fmtowns the automatic theme
+had turned it into a message on every dungeon entry.
+
+**Change.** The in-game `u2_feedback` is gone. The `stderr` line stays: it is honest,
+it is what a theme author needs when a scope is genuinely wrong, and the player never
+sees it. "Refuse to draw, not to enter" is untouched and still right — refusing entry
+would make the game unwinnable behind an art flag.
+
+The owner's rule that a state change never happens silently is not engaged: entering a
+dungeon still prints its own entry text, and that is the message. Nothing about the
+dungeon changed between themes, so there was no change to report.
+
+**Gate.** The removal is safe for one reason, and the reason is a fact about the
+renderer that a future change could undo — themed dungeon art would make scope real
+again and the notice would have to come back. So `engine/tests/dungeon_art_neutral.py`
+asserts the structural claim: the dungeon renderer must not consult a theme atlas.
+Wired into CP7, with its own selftest that feeds it a synthetic themed wall renderer
+and requires a finding, because a gate that has never gone red is not a gate.
+
+```
+SELFTEST ok    a themed dungeon renderer is detected (2 hit(s))
+SELFTEST ok    comment prose is not counted
+ok    1 file(s): the dungeon draws no theme art, so it plays the same under every theme
+```
+
+Docs corrected: `theme-format.md` § 6 rewritten to carry the ruling, `ega-graphics.md`
+updated, and `handoff-themes-builder.md` item 3 — the origin of the notice — given an
+inline correction rather than being left to contradict the engine.
+
+`make test`: CP0..CP7 PASS.
+

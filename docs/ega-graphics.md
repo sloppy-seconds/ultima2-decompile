@@ -192,13 +192,15 @@ Three consequences worth knowing before you try it:
   black — so the status band was invisible. A theme that ships a palette now also
   supplies the ink the text is drawn in (the brightest entry, white for FM Towns).
   That is a choice, not a capture; `docs/theme-format.md` § 5 says so.
-* **Scope is enforced by telling you.** The crosswalk covers the overworld and towns
-  only, so `THEME.INI` says `scope = overworld,towns`, and entering a dungeon prints
-  `THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in the original CGA art.
-  The handoff said "refuse the mode"; refusing to *enter* would make the game
-  unwinnable behind an art flag, so the engine says out loud what is about to be
-  drawn in the wrong art and carries on. Silence is the failure the owner's rule
-  forbids, not the fallback.
+* **Scope is recorded, and the dungeon does not use it.** The crosswalk covers the
+  overworld and towns only, so `THEME.INI` says `scope = overworld,towns`. Entering a
+  dungeon with such a theme logs the fallback to `stderr` only: the in-game
+  `THEME ART DOES NOT COVER DUNGEONS` notice was removed 2026-11-06, because the
+  dungeon is a CGA wireframe under every theme and the notice was saying the art was
+  wrong where the theme makes no difference. See `docs/theme-format.md` § 6, which
+  carries the ruling, the reasoning and the gate that keeps it honest. The handoff
+  said "refuse the mode"; refusing to *enter* would make the game unwinnable behind
+  an art flag, and that remains rejected.
 
 What v2 does **not** do yet: animation. `MAP.TSV` keeps every frame the crosswalk
 names — `art 0C` really does carry `ENEMY2/17,ENEMY2/16` — and the engine draws

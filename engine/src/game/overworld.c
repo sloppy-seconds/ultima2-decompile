@@ -1564,18 +1564,27 @@ int u2_overworld_init_state(u2_ctx *ctx, u2_overworld *ow)
                              ctx->state.rocket_parked_y, U2_TILE_ROCKET);
     }
 
-    /* Scope, not decoration (docs/handoff-themes-builder.md § 4.1). A theme that
-     * covers the overworld and towns only — which is every theme the FM Towns
-     * crosswalk can build today — has nothing to draw a dungeon with, and the
-     * dungeon is CGA art regardless of theme. The handoff said "refuse the mode";
-     * refusing to enter would make the game unwinnable behind an art flag, so this
-     * says out loud what is about to be drawn in the wrong art and carries on.
-     * Silence is the failure the owner's rule forbids, not the fallback. */
+    /* Scope, not decoration (docs/handoff-themes-builder.md § 4.1) — but the
+     * in-game notice for it was removed 2026-11-06 on the owner's ruling that the
+     * dungeon should simply play the same under every theme, and it was right:
+     * the dungeon is a first-person wireframe drawn by dg_line in CGA colour 3
+     * (asm/4B76), and dungeon.c consults no theme atlas at all. So the notice told
+     * the player the art was wrong in the one screen where the theme makes no
+     * difference, and it fired on every dungeon entry once fmtowns became the
+     * automatic theme. `default` stayed silent only because it CLAIMS the scope,
+     * not because it draws anything different.
+     *
+     * The stderr line stays: it is honest, it is what a theme author needs when a
+     * theme's scope is wrong, and it costs the player nothing. The owner's rule
+     * that a state change never happens silently is not engaged here, because
+     * nothing about the dungeon changed — entering a dungeon still prints its own
+     * entry text, and that is the message. engine/tests/run_cp4.sh guards the
+     * structural claim, because if the dungeon ever does draw theme art this
+     * decision has to be revisited rather than inherited. */
     if (u2_site_is_dungeon(ctx) && ow->use_ega && !ow->tiles_ega.scope_dungeon) {
         fprintf(stderr, "u2: theme '%s' does not cover dungeons; the dungeon draws "
                         "in the original CGA art\n",
                 ow->tiles_ega.name[0] ? ow->tiles_ega.name : ow->ega_theme);
-        u2_feedback(ctx, "THEME ART DOES NOT COVER DUNGEONS");
     }
 
     if (u2_site_is_dungeon(ctx)) u2_dungeon_enter(ctx, ow);

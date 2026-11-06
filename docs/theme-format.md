@@ -256,14 +256,31 @@ preference checks and nothing else.
 
 `scope` is not decoration. The FM Towns crosswalk covers the overworld and towns
 only, so its manifest says `scope = overworld,towns` and `scope_dungeon` is false.
-Entering a dungeon with such a theme active prints
-`THEME ART DOES NOT COVER DUNGEONS` and draws the dungeon in the original CGA art,
-which is what the dungeon does under every theme anyway.
+
+**The dungeon is theme-neutral, so a missing dungeon scope is silent.** Until
+2026-11-06 entering a dungeon with a scope-less theme active printed
+`THEME ART DOES NOT COVER DUNGEONS` in the message band. That was removed on the
+owner's ruling that the dungeon should simply play the same under every theme, and
+the bytes agree: the dungeon is a first-person wireframe drawn by `dg_line` in CGA
+colour 3 (asm/4B76), and `dungeon.c` consults no theme atlas at all. The notice was
+saying the art was wrong in the one screen where the theme makes no difference — and
+it fired on every dungeon entry once fmtowns became the automatic theme, while
+`default` stayed silent only because its manifest *claims* `scope = dungeon`.
+
+What remains: a `stderr` line naming the theme and the fallback, which is what a
+theme author needs and costs the player nothing. `engine/tests/dungeon_art_neutral.py`
+guards the structural claim (with its own selftest, wired into CP7), so if themed
+dungeon art ever lands the scope question becomes real again and the gate says so
+rather than letting the silence be inherited.
 
 Refusing to *enter* was the literal reading of the handover's "refuse the mode" and
-was rejected: it makes the game unwinnable behind an art flag. The owner's rule is
-that a state change never happens silently, and it is satisfied by saying what is
-about to be drawn in the wrong art.
+remains rejected: it makes the game unwinnable behind an art flag. The owner's rule
+that a state change never happens silently is not engaged, because entering a dungeon
+still prints its own entry text — that is the message — and nothing about the dungeon
+changed between themes.
+
+Towers and dungeons are the only scopes the format carries today, and only `dungeon`
+has a reader.
 
 ## 7. Building themes, and the gates
 

@@ -57,6 +57,24 @@ else
     field_of() { sed -n 's/.*"'"$2"'":"\([^"]*\)".*/\1/p' "$1" | tail -1; }
     pos_of()   { sed -n 's/.*"pos":{"x":\([0-9]*\),"y":\([0-9]*\)}.*/\1 \2/p' "$1" | tail -1; }
 
+    # ---- 0. the dungeon is theme-neutral -----------------------------------
+    # The in-game notice `THEME ART DOES NOT COVER DUNGEONS` was removed
+    # 2026-11-06 because the dungeon draws the same under every theme: it is a
+    # wireframe, and dungeon.c touches no theme atlas. That reasoning is a fact
+    # about the renderer, so it is checked as one. If themed dungeon art ever
+    # lands, theme scope becomes real again and this goes red.
+    if python3 tests/dungeon_art_neutral.py --selftest >"$WORK/dan-st.out" 2>&1; then
+        if python3 tests/dungeon_art_neutral.py >"$WORK/dan.out" 2>&1; then
+            ok "the dungeon draws no theme art, so it plays the same under every theme (selftest passed)"
+        else
+            bad "the dungeon now consults the theme atlas — the removed scope notice must be revisited:"
+            sed 's/^/        /' "$WORK/dan.out"
+        fi
+    else
+        bad "dungeon art-neutrality check cannot fail (selftest broke):"
+        sed 's/^/        /' "$WORK/dan-st.out"
+    fi
+
     # ---- 1. entering -------------------------------------------------------
     # The mouth is a tile in the world sector, so this is the route a player takes
     # and not a seeded state. The CP6 lock that used to refuse kinds 4 and 5 is gone.
