@@ -94,14 +94,33 @@ int main(void)
             ink += f.px[y][x] != U2_CGA_BLACK;
     ok(ink == 0, "out-of-grid cells draw nothing");
 
-    /* Determinism: the same string twice gives byte-identical frames. */
+    /* Determinism: the same string twice gives an identical pixel store.
+     *
+     * This used to declare two bare `u2_frame a, b;` and memcmp the structs. Both
+     * halves were wrong: `px` is a heap pointer that only u2_frame_init sets, so
+     * u2_frame_clear was writing through uninitialised memory, and memcmp over a
+     * struct compares padding bytes that were never written to anything, which
+     * differ between compilers and optimisation levels rather than between
+     * renderings. It passed here and failed in CI on the same code — a check whose
+     * verdict depends on the toolchain is not measuring the property. Compare the
+     * store, and initialise what is compared. */
     u2_frame a, b;
-    u2_frame_clear(&a, U2_CGA_BLACK);
-    u2_frame_clear(&b, U2_CGA_BLACK);
-    u2_font_draw_text(&a, 20, 30, "H.P.=9997", U2_CGA_WHITE, U2_CGA_BLACK);
-    u2_font_draw_text(&b, 20, 30, "H.P.=9997", U2_CGA_WHITE, U2_CGA_BLACK);
-    ok(memcmp(&a, &b, sizeof a) == 0, "text rendering is deterministic");
+    if (u2_frame_init(&a, 1) != 0 || u2_frame_init(&b, 1) != 0) {
+        printf("  FAIL  could not allocate the determinism frames\n");
+        fails++;
+    } else {
+        u2_frame_clear(&a, U2_CGA_BLACK);
+        u2_frame_clear(&b, U2_CGA_BLACK);
+        u2_font_draw_text(&a, 20, 30, "H.P.=9997", U2_CGA_WHITE, U2_CGA_BLACK);
+        u2_font_draw_text(&b, 20, 30, "H.P.=9997", U2_CGA_WHITE, U2_CGA_BLACK);
+        const int same = a.w == b.w && a.h == b.h
+                      && memcmp(a.px, b.px, (size_t)a.h * U2_FRAME_MAX_W) == 0;
+        ok(same, "text rendering is deterministic");
+        u2_frame_free(&a);
+        u2_frame_free(&b);
+    }
 
+    u2_frame_free(&f);
     printf("font_check: %s\n", fails ? "FAIL" : "PASS");
     return fails ? 1 : 0;
 }
