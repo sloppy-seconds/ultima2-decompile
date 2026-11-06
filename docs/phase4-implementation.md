@@ -1993,9 +1993,14 @@ the harness rather than the game. `setsid` fixed it. That is the same trap as
 `/proc/<pid>/status`'s `SigIgn` bit the SDL backend's own comment already warns
 about.
 
-What remains unproven by automation is registered as **G65**: the `SDL_EVENT_QUIT`
-half, in a real window, on the creation form specifically. Five seconds of anyone
-pressing Ctrl-C and the close button.
+What remains unproven by automation was registered as **G65**: the `SDL_EVENT_QUIT`
+half, in a real window, on the creation form specifically. **Closed the same day by
+the owner** — `./u2-sdl-static --enhanced`, `C`, walked a couple of fields with Down,
+then both the window close and Ctrl-C. Both exited instead of moving the cursor. No
+capture directory is named because none is possible: SDL cannot be driven headlessly
+without a script and `main` refuses `--script` outside headless, so the closure is a
+direct observation by the person who reported the bug, which outranks inference but
+is not a byte trail.
 
 `make test`: CP0..CP7 PASS.
 
