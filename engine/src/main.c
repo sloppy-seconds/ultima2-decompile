@@ -297,6 +297,15 @@ int main(int argc, char **argv)
      *     but names no theme, so it still gets the preference. */
     int art_mode_forced = 0;
     int theme_named = 0;
+    /* Set only when the player *demanded* themed art -- --ega, or a theme named by
+     * flag or config. It is what makes the strict launch check fire, and the
+     * distinction is load-bearing: --enhanced prefers EGA but must not require it.
+     * Before these were separated, --enhanced in a tree with no themes installed
+     * refused to start at all ("--ega refused: theme 'default' not found"), because
+     * the 2026-11-05 ruling made enhanced imply the EGA axis and the 2026-11-04
+     * ruling made that axis strict. themes/ is gitignored, so that was every clean
+     * checkout, every CI run, and any player who installed without the fan pack. */
+    int ega_required = 0;
     int install_mode = 0, install_check_only = 0, install_dry_run = 0, install_no_prompt = 0;
     const char *install_to = NULL, *install_orig = NULL;
     const char *install_upd = NULL;
@@ -363,6 +372,7 @@ int main(int argc, char **argv)
             /* Art axis only; independent of --enhanced and --cleanroom. Strict
              * (owner, 2026-11-04): an explicit request never downgrades quietly. */
             art_mode_forced = 1;
+            ega_required = 1;
             ctx.art_mode = U2_ART_EGA;
         } else if (strcmp(a, "--ega-theme") == 0 && i + 1 < argc) {
             /* Naming a theme is asking for themed art, so it selects the axis too.
@@ -374,6 +384,7 @@ int main(int argc, char **argv)
             ctx.ega_theme = argv[++i];
             theme_named = 1;
             art_mode_forced = 1;
+            ega_required = 1;
             ctx.art_mode = U2_ART_EGA;
         } else if (strcmp(a, "--ega-theme-dir") == 0 && i + 1 < argc) {
             ctx.ega_theme_dir = argv[++i];
@@ -596,6 +607,7 @@ int main(int argc, char **argv)
         if (*cfg.theme) {
             theme_named = 1;
             art_mode_forced = 1;
+            ega_required = 1;
             ctx.art_mode = U2_ART_EGA;
         }
     }
@@ -665,13 +677,26 @@ int main(int argc, char **argv)
         art_auto = u2_tiles_ega_autodetect(&ctx, art_theme, sizeof art_theme,
                                            !art_mode_forced);
 
+    /* --enhanced wanted themed art and there is none. Take the CGA tiles and keep
+     * the enhanced layout: the layout is a canvas decision (core/layout.h) and does
+     * not depend on the art axis, so a 640x480 window drawing 4-colour tiles is a
+     * working game rather than a refusal. The ruling that made --ega redundant under
+     * --enhanced was about the canvas having room for a 32px theme, not about
+     * demanding that one exist. An explicit --ega still refuses, which is the
+     * 2026-11-04 ruling and unchanged. */
+    if (ctx.art_mode == U2_ART_EGA && !ega_required && !art_auto) {
+        ctx.art_mode = U2_ART_CGA;
+        fprintf(stderr, "u2: no EGA theme installed, so --enhanced draws the original "
+                        "CGA art (the enhanced layout is unaffected)\n");
+    }
+
     /* --ega is strict (owner, 2026-11-04): if the themes directory does not exist
      * or the chosen theme is not in it, refuse to start rather than fall back to
      * CGA. This supersedes the plan's original "never fail a launch" default; the
      * point is that asking for EGA art and quietly getting CGA is the failure mode
      * worth avoiding, and it is checked here at launch so the run dies before any
      * screen is drawn, not after the title flow. */
-    if (ctx.art_mode == U2_ART_EGA) {
+    if (ctx.art_mode == U2_ART_EGA && ega_required) {
         char ega_err[512];
         if (u2_tiles_ega_validate(&ctx, ega_err, sizeof ega_err) != U2_TILES_EGA_OK) {
             fprintf(stderr, "u2: --ega refused: %s\n", ega_err);
